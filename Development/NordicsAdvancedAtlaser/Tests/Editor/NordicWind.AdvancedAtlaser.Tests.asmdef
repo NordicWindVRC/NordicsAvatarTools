@@ -1,0 +1,19 @@
+{
+  "name": "NordicWind.AdvancedAtlaser.Tests",
+  "rootNamespace": "NordicWind.AdvancedAtlaser.Tests",
+  "references": [
+    "NordicWind.AdvancedAtlaser.Runtime",
+    "NordicWind.AdvancedAtlaser.Editor",
+    "NordicWind.TextureWrapper.Runtime"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ]
+}

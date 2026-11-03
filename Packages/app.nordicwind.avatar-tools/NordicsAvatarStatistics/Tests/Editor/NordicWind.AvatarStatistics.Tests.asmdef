@@ -1,0 +1,18 @@
+{
+  "name": "NordicWind.AvatarStatistics.Tests",
+  "rootNamespace": "NordicWind.AvatarStatistics.Tests",
+  "references": [
+    "NordicWind.AvatarStatistics.Runtime",
+    "NordicWind.AvatarStatistics.Editor"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "NordicWind.AdvancedAtlaser.NDMF",
+  "rootNamespace": "NordicWind.AdvancedAtlaser.Editor",
+  "references": [
+    "NordicWind.AdvancedAtlaser.Runtime",
+    "NordicWind.AdvancedAtlaser.Editor",
+    "nadena.dev.ndmf"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": true
+}

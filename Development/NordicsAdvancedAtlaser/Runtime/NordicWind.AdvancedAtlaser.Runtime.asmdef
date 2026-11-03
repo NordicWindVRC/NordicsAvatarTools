@@ -1,0 +1,8 @@
+{
+  "name": "NordicWind.AdvancedAtlaser.Runtime",
+  "rootNamespace": "NordicWind.AdvancedAtlaser",
+  "references": [
+    "nadena.dev.ndmf.runtime"
+  ],
+  "autoReferenced": true
+}

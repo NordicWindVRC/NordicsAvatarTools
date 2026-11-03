@@ -1,0 +1,11 @@
+{
+  "name": "NordicWind.TextureWrapper.Editor",
+  "rootNamespace": "NordicWind.TextureWrapper",
+  "references": [
+    "NordicWind.TextureWrapper.Runtime"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": true
+}

@@ -1,0 +1,20 @@
+{
+  "name": "app.nordicwind.avatar-tools",
+  "displayName": "NordicWind - Avatar Tools",
+  "version": "0.1.0",
+  "unity": "2022.3",
+  "description": "Non-destructive NDMF tools for VRChat avatars: Submesh Splitter, Blendshape Toggle and Avatar Statistics.",
+  "author": {
+    "name": "NordicWind"
+  },
+  "license": "MIT",
+  "vpmDependencies": {
+    "nadena.dev.ndmf": ">=1.7.0",
+    "com.vrchat.avatars": ">=3.5.0"
+  },
+  "legacyFolders": {
+    "Assets\\NordicWind\\NordicsSubmeshSplitter": "5abe1224cb5bb154eb72faf05484a3ee",
+    "Assets\\NordicWind\\NordicsBlendshapeToggle": "77d7b7bceff838c48ba9374e0b2267c7",
+    "Assets\\NordicWind\\NordicsAvatarStatistics": "f75db927190cfb9489afc2787c3db5f9"
+  }
+}

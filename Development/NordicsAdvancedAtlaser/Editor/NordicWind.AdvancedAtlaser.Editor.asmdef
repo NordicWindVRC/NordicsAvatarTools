@@ -1,0 +1,12 @@
+{
+  "name": "NordicWind.AdvancedAtlaser.Editor",
+  "rootNamespace": "NordicWind.AdvancedAtlaser.Editor",
+  "references": [
+    "NordicWind.AdvancedAtlaser.Runtime",
+    "NordicWind.TextureWrapper.Runtime"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": true
+}

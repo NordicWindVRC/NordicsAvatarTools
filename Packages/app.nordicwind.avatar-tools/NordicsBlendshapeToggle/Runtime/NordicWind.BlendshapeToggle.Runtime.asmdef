@@ -1,0 +1,9 @@
+{
+  "name": "NordicWind.BlendshapeToggle.Runtime",
+  "rootNamespace": "NordicWind.BlendshapeToggle",
+  "references": [
+    "nadena.dev.ndmf.runtime"
+  ],
+  "includePlatforms": [],
+  "autoReferenced": true
+}

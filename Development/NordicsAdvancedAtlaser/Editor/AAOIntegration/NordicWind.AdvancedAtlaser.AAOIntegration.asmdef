@@ -1,0 +1,22 @@
+{
+  "name": "NordicWind.AdvancedAtlaser.AAOIntegration",
+  "rootNamespace": "NordicWind.AdvancedAtlaser.Editor",
+  "references": [
+    "NordicWind.AdvancedAtlaser.Runtime",
+    "com.anatawa12.avatar-optimizer.api.editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": true,
+  "versionDefines": [
+    {
+      "name": "com.anatawa12.avatar-optimizer",
+      "expression": "1.0.0",
+      "define": "NORDIC_ADVANCED_ATLASER_HAS_AAO"
+    }
+  ],
+  "defineConstraints": [
+    "NORDIC_ADVANCED_ATLASER_HAS_AAO"
+  ]
+}

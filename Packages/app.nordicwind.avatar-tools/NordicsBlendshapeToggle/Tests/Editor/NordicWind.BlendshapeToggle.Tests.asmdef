@@ -1,0 +1,24 @@
+{
+  "name": "NordicWind.BlendshapeToggle.Tests",
+  "rootNamespace": "NordicWind.BlendshapeToggle.Tests",
+  "references": [
+    "NordicWind.BlendshapeToggle.Runtime",
+    "NordicWind.BlendshapeToggle.Editor",
+    "NordicWind.SubmeshSplitter.Runtime"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll",
+    "VRCSDKBase.dll"
+  ]
+}

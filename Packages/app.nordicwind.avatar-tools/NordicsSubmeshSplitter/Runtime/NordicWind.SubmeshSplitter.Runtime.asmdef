@@ -1,0 +1,14 @@
+{
+  "name": "NordicWind.SubmeshSplitter.Runtime",
+  "rootNamespace": "NordicWind.SubmeshSplitter",
+  "references": [],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

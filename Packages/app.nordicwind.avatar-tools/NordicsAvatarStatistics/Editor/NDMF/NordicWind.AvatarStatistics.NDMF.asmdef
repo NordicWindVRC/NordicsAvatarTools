@@ -1,0 +1,13 @@
+{
+  "name": "NordicWind.AvatarStatistics.NDMF",
+  "rootNamespace": "NordicWind.AvatarStatistics.Editor",
+  "references": [
+    "NordicWind.AvatarStatistics.Runtime",
+    "NordicWind.AvatarStatistics.Editor",
+    "nadena.dev.ndmf"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": true
+}

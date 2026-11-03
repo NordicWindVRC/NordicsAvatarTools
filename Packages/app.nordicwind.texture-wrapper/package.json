@@ -1,0 +1,14 @@
+{
+  "name": "app.nordicwind.texture-wrapper",
+  "version": "0.9.0",
+  "displayName": "Nordic's Texture Wrapper",
+  "description": "Composable float-precision Unity texture processing and Editor texture import/export.",
+  "unity": "2022.3",
+  "author": {
+    "name": "NordicWind"
+  },
+  "legacyFolders": {
+    "Assets\\NordicWind\\NordicsTextureWrapper": "16bc4af31a124bd42bdbeb686d66dc5b"
+  },
+  "license": "MIT"
+}

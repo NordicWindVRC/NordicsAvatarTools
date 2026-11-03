@@ -1,0 +1,22 @@
+{
+  "name": "NordicWind.AvatarStatistics.AAOIntegration",
+  "rootNamespace": "NordicWind.AvatarStatistics.Editor",
+  "references": [
+    "NordicWind.AvatarStatistics.Runtime",
+    "com.anatawa12.avatar-optimizer.api.editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": true,
+  "versionDefines": [
+    {
+      "name": "com.anatawa12.avatar-optimizer",
+      "expression": "1.0.0",
+      "define": "NORDIC_AVATAR_STATISTICS_HAS_AAO"
+    }
+  ],
+  "defineConstraints": [
+    "NORDIC_AVATAR_STATISTICS_HAS_AAO"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "app.nordicwind.advanced-atlaser",
+  "displayName": "Nordic's Advanced Atlaser",
+  "version": "0.40.0",
+  "unity": "2022.3",
+  "description": "Non-destructive NDMF material processor: parses source materials into a shader-agnostic model for atlasing, optimization and normal baking (work in progress).",
+  "author": {
+    "name": "NordicWind"
+  },
+  "vpmDependencies": {
+    "nadena.dev.ndmf": ">=1.7.0",
+    "app.nordicwind.texture-wrapper": ">=0.9.0"
+  },
+  "legacyFolders": {
+    "Assets\\NordicWind\\NordicsAdvancedAtlaser": "6622652757773e24cbb5e0614164dd7c"
+  },
+  "license": "MIT"
+}

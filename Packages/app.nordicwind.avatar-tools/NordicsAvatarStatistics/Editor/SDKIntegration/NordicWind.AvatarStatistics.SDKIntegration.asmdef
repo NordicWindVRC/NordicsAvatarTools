@@ -1,0 +1,12 @@
+{
+  "name": "NordicWind.AvatarStatistics.SDKIntegration",
+  "rootNamespace": "NordicWind.AvatarStatistics.Editor",
+  "references": [
+    "NordicWind.AvatarStatistics.Editor",
+    "VRC.SDKBase.Editor.BuildPipeline"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": true
+}

@@ -1,0 +1,24 @@
+{
+  "name": "NordicWind.SubmeshSplitter.Tests",
+  "rootNamespace": "NordicWind.SubmeshSplitter.Tests",
+  "references": [
+    "NordicWind.SubmeshSplitter.Runtime",
+    "NordicWind.SubmeshSplitter.Editor",
+    "nadena.dev.ndmf"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll",
+    "VRCSDKBase.dll"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "NordicWind.AvatarStatistics.Runtime",
+  "rootNamespace": "NordicWind.AvatarStatistics",
+  "references": [
+    "nadena.dev.ndmf.runtime"
+  ],
+  "autoReferenced": true
+}
