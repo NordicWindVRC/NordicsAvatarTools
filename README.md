@@ -1,4 +1,4 @@
-# NordicWind - Avatar Tools
+# Nordic's Avatar Tools
 
 Free, non-destructive NDMF tools for building and optimizing VRChat avatars in Unity. They
 work together with Modular Avatar, VRCFury, Avatar Optimizer and Meshia without depending
