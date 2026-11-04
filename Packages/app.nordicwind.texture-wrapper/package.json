@@ -1,6 +1,6 @@
 {
   "name": "app.nordicwind.texture-wrapper",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "displayName": "Nordic's Texture Wrapper",
   "description": "Composable float-precision Unity texture processing and Editor texture import/export.",
   "unity": "2022.3",

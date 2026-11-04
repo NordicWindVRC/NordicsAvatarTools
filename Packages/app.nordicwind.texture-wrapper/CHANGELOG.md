@@ -2,6 +2,10 @@
 
 Newest first. Versions follow [SemVer](https://semver.org).
 
+## 0.9.1 — 2026-11-04
+
+New naming convension on the package name in VCC.
+
 ## 0.9.0 — 2026-11-04
 
 EditMode tests pass in Unity 2022.3.22 (2026-11-03).
