@@ -83,15 +83,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         }
                         // Tangent-space correction must be expressed in the surviving mesh basis.
                         Rasterize(section,null,null,tangent,bitangent,normalBasis);
+                        // The bake inverts the frame exactly as interpolated, so it must run
+                        // before the debug export, which normalizes the maps in place.
+                        bake.TangentNormalCorrection=bake.OriginalWorldNormals.BakeNormalDifference(
+                            bake.CurrentWorldNormals,
+                            new TangentBasisData { Tangent=tangent,Bitangent=bitangent,Normal=normalBasis });
                         if(debugFolder!=null)
                         {
                             TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Tangent",tangent),diagnostics);
                             TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Bitangent",bitangent),diagnostics);
                             TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Normal",normalBasis),diagnostics);
                         }
-                        bake.TangentNormalCorrection=bake.OriginalWorldNormals.BakeNormalDifference(
-                            bake.CurrentWorldNormals,
-                            new TangentBasisData { Tangent=tangent,Bitangent=bitangent,Normal=normalBasis });
                         // Preserve the raw correction for debug inspection before padding.
                         // Both coverage masks remain untouched by padding.
                         if (debugFolder != null)

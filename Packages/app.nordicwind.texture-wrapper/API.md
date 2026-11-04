@@ -75,7 +75,7 @@ modes require both to be unset.
 | Member | Description |
 |---|---|
 | `void PaintTriangle(Vector2 uv0, Vector2 uv1, Vector2 uv2, Color color0, Color color1, Color color2, TrianglePaintOptions options = null)` | Rasterizes a UV-space triangle, interpolating the corner values. Each pixel **adds** value × covered fraction (no clamping), and is marked used if any part is covered. For normal maps, paint every triangle before reading, because reading normalizes. |
-| `NordicsTextureWrapper BakeNormalDifference(NordicsTextureWrapper targetNormals, TangentBasisData basis)` | `this` and `targetNormals` must be `NormalWorld` maps of the same size. Returns a new `NormalTangent` map: this texture's normals expressed in `basis`, the **target** mesh's tangent frame. Only pixels used in both maps are used in the result. |
+| `NordicsTextureWrapper BakeNormalDifference(NordicsTextureWrapper targetNormals, TangentBasisData basis)` | `this` and `targetNormals` must be `NormalWorld` maps of the same size. Returns a new `NormalTangent` map: this texture's normals expressed in `basis`, the **target** mesh's tangent frame. The result decodes back exactly the way shaders combine an interpolated frame, `normalize(T·x + B·y + N·z)`, with `basis` used as given: it inverts the frame instead of projecting onto it, so the frame doesn't need to be unit length or orthogonal. Pixels whose frame is (nearly) flat are left unused. Only pixels used in all maps are used in the result. |
 | `void Dilate(Rect? region = null)` | Fills every unused pixel in the region with the nearest used pixel and marks it used. Normal maps get alpha 1. When two source pixels are equally near, the lower x wins, then the lower y. A region with no used pixels is left unchanged. |
 | `void FillUnused(Color color, bool markUsed = false, Rect? region = null)` | Writes `color` only to unused pixels, without marking them used unless `markUsed` is set. For example, use `(0, 0, 1, 1)` for flat normals outside UV islands. |
 
@@ -162,7 +162,7 @@ that take a `Color`.
 | Type | Members |
 |---|---|
 | `TrianglePaintOptions` | `TriangleRasterizationMode Mode` (`Quality` default, or `Fast`); `int SamplesPerAxis` (default 4, so 4×4 sub-samples per pixel in `Quality` mode). |
-| `TangentBasisData` | `Tangent`, `Bitangent`, `Normal`: three wrappers holding the target mesh's tangent frame, for example painted with `PaintTriangle`. |
+| `TangentBasisData` | `Tangent`, `Bitangent`, `Normal`: three wrappers holding the target mesh's tangent frame as the shader interpolates it, for example painted with `PaintTriangle` from vertex values. Don't normalize them per pixel (reading them with `GetPixel` or exporting them does), and let the bitangent carry the handedness. |
 | `INordicsTextureExporter` | `Texture2D Synchronize(NordicsTextureWrapper wrapper, string name, bool pixelsChanged, bool settingsChanged)`: implement this to add your own export target. |
 
 ### Enums

@@ -31,6 +31,9 @@ Newest first. Versions follow [SemVer](https://semver.org).
   or BC5/RGB with X in red) and Z is rebuilt. Object and world-space normals decode RGB as XYZ.
 - `TextureAssetUtility` (Editor): `GetDataType` reads a texture's data type from its import
   settings, and `Load` loads it with that type.
+- Normal bake tests: round trips for random orthonormal frames in both handednesses, for
+  interpolated (not unit, not orthogonal) frames with either bitangent convention, and a flat
+  frame that is skipped.
 - Loading tests: the GPU path and its orientation, sRGB decoding through the GPU, both normal
   packings readable and not, object-space normals, and a real imported normal map.
 - `Colorize` color operation: a perceptual tint that keeps the pixel's lightness, takes the
@@ -43,6 +46,10 @@ Newest first. Versions follow [SemVer](https://semver.org).
   `Brightness`, and color maps.
 
 ### Fixed
+- **`BakeNormalDifference` matches how shaders decode.** It used to straighten the tangent
+  frame per pixel (normalize, orthogonalize) before projecting. Shaders use the interpolated
+  frame as it is, so on curved triangles of a reduced mesh the correction drifted. It now
+  inverts the supplied frame exactly. Orthonormal frames give the same result as before.
 - Loading a linear (non-sRGB) texture left `Settings.SRGB` on. It now follows the source's
   format.
 

@@ -21,6 +21,9 @@ EditMode tests pass in Unity 2022.3.22 (2026-11-03).
   Poiyomi 10's tint is perceptual.
 
 ### Fixed
+- With *Export Intermediate Maps* on, the tangent-frame maps were exported (which normalizes
+  them) before the normal correction bake, so debug builds baked slightly different
+  corrections. They're now exported after the bake.
 - Poiyomi saturation was copied unconverted, so an untouched material (saturation 0) read as
   fully grey. It is now `1 + value`, the unified scale.
 - Poiyomi brightness is mapped per version: additive for 7.x and 8.x, a multiplier of

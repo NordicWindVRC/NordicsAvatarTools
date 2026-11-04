@@ -657,11 +657,12 @@ namespace NordicWind.TextureWrapper
             });
             _normalized=true;_pixelsDirty=true;
         }
-        /// <summary>Returns the reference world normal (this wrapper) expressed in
-        /// the supplied destination/target mesh tangent basis. The targetNormals map
-        /// is retained for API compatibility and used as the destination geometry
-        /// coverage domain; its normal direction is not the value being reconstructed.
-        /// B = cross(N,T) * handedness must be supplied by the caller.</summary>
+        /// <summary>Returns the reference world normal (this wrapper) expressed in the
+        /// supplied target tangent frame. The result decodes back to the reference exactly
+        /// as shaders combine an interpolated frame: normalize(T·x + B·y + N·z), with T, B
+        /// and N used as given. So supply the frame as the shader interpolates it (not
+        /// normalized or orthogonalized per pixel); the bitangent carries the handedness.
+        /// The targetNormals map is the coverage domain only.</summary>
         public NordicsTextureWrapper BakeNormalDifference(NordicsTextureWrapper targetNormals, TangentBasisData basis)
         {
             Check();
@@ -702,16 +703,15 @@ namespace NordicWind.TextureWrapper
                         continue;
                     if (n.sqrMagnitude<1e-12f || t.sqrMagnitude<1e-12f || b.sqrMagnitude<1e-12f)
                         continue;
-                    n.Normalize();
-                    // Orthogonalize the tangent to obtain a valid basis for projection.
-                    t -= n*Vector3.Dot(t,n);
-                    if (t.sqrMagnitude<1e-12f) continue;
-                    t.Normalize();
-                    // Preserve the supplied bitangent sign (mirrored UV handedness).
-                    float handedness=Vector3.Dot(Vector3.Cross(n,t),b)<0f ? -1f : 1f;
-                    b=Vector3.Cross(n,t)*handedness;
+                    // Solve T·x + B·y + N·z = reference with the inverse of the frame, using
+                    // its adjugate: rows B×N, N×T and T×B divided by the determinant. For an
+                    // orthonormal frame this is the same as projecting onto T, B and N.
+                    Vector3 bn=Vector3.Cross(b,n), nt=Vector3.Cross(n,t), tb=Vector3.Cross(t,b);
+                    float det=Vector3.Dot(t,bn);
+                    // Skip frames that are (nearly) flat, for example a tangent along the normal.
+                    if (Mathf.Abs(det)<1e-6f*t.magnitude*b.magnitude*n.magnitude) continue;
                     Vector3 tangentSpace=MathUtil.SafeNormal(new Vector3(
-                        Vector3.Dot(reference,t), Vector3.Dot(reference,b), Vector3.Dot(reference,n)));
+                        Vector3.Dot(reference,bn), Vector3.Dot(reference,nt), Vector3.Dot(reference,tb))/det);
                     output._pixels[i]=MathUtil.Pack(tangentSpace,Mathf.Clamp01(_pixels[i].a));
                     output._usage[i]=1;
                 }

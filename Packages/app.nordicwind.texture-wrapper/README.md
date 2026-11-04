@@ -88,8 +88,8 @@ Texture2D preview = atlas.GetTexture2D();                                       
 Known gaps, in no particular order:
 
 - **RNM normal blending** needs a numerical comparison against a reference implementation.
-- **Normal correction:** `BakeNormalDifference` needs validation against a reference
-  implementation on real meshes.
+- **Normal correction:** a whole-mesh test (curved original, flat reduced mesh). Where UV
+  islands overlap, their normals are added together.
 - **Accuracy:** area downsampling and triangle coverage use bounded supersampling, not exact
   area integration. Padding extends border pixels and doesn't sample outside the UV island.
 - **Loading with mipmap streaming:** textures without Read/Write are read from the GPU. When
@@ -127,8 +127,9 @@ These are part of the API and covered by tests:
   `GetPixel` returns raw values.
 - **`BakeNormalDifference(targetNormals, basis)`:** `this` is the original world-normal map,
   and `targetNormals` is the target (for example simplified) world-normal map whose coverage
-  limits the result. `basis` must be the **target** mesh's tangent frame. The result is the
-  original normal expressed in that frame.
+  limits the result. `basis` must be the **target** mesh's tangent frame, as interpolated. The
+  result is the original normal expressed in that frame, and decodes back to it exactly with
+  `normalize(T·x + B·y + N·z)`.
 - **`FillUnused(color, markUsed = false, region = null)`:** writes only where usage is 0, and by
   default leaves usage unchanged.
 - **`Dilate(region = null)`:** copies the nearest originally used pixel into every unused pixel
