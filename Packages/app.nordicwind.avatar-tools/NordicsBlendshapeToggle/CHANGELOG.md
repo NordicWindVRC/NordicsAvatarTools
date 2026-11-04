@@ -3,7 +3,7 @@
 Newest first. Versions follow [SemVer](https://semver.org). This tool's version is independent
 of the *NordicWind - Avatar Tools* bundle version.
 
-## 0.2.0 — unreleased
+## 0.2.0 — 2026-11-04
 
 EditMode tests pass in Unity 2022.3.22 (2026-11-03). Verified on a build of a test avatar
 using VRCFury (Armature Link, face tracking, toggles), MA Mesh Cutter, Meshia and AAO Merge

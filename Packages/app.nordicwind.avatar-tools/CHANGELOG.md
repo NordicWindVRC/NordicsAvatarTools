@@ -3,7 +3,7 @@
 Newest first. Versions follow [SemVer](https://semver.org). The bundle version changes
 whenever an included tool changes. Each tool's own changes are in its `CHANGELOG.md`.
 
-## 0.1.0 — unreleased
+## 0.1.0 — 2026-11-04
 
 First bundle release.
 

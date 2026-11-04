@@ -3,7 +3,7 @@
 Newest first. Versions follow [SemVer](https://semver.org). This tool's version is independent
 of the *NordicWind - Avatar Tools* bundle version.
 
-## 0.1.36 — unreleased
+## 0.1.36 — 2026-11-04
 
 EditMode tests pass in Unity 2022.3.22 (2026-11-03). Not yet verified on an upload.
 
