@@ -45,9 +45,16 @@ The component has no settings and is removed from the uploaded avatar.
 ### Face tracking rows
 
 *Face Tracking Operations* and *Forwarded Parameters* appear when the built avatar has native
-face tracking turned on. Some tools turn it on during the build even when it's off on your
-avatar descriptor, for example VRCFury's *Visemes* and *BlendShape Link* features. The row then
-says so. The cost is real in-game, so it still counts.
+face tracking turned on. Some tools turn it on during the build, even when it's off on your
+avatar descriptor. They change only the build copy, so your avatar in the scene still shows it
+as off. For example:
+
+- VRCFury's *Visemes* feature, and its *BlendShape Link* feature when the linked blendshapes
+  include your avatar's visemes or eyelid blendshapes.
+- VRCFury's *Full Controller*, when it adds face tracking blendshape sets or parameters.
+- Face tracking setup tools, such as Pawlygon's VRC Face Tracking.
+
+When this happens, the row says so. The cost is real in-game, so it still counts.
 
 ## How accurate is it?
 
@@ -56,6 +63,11 @@ checks, constraints, face tracking and bounds. Everything else is counted from t
 avatar, the same way VRChat counts it. In testing, every category matches what VRChat shows
 except **texture memory**. That one is very close but not exact, because VRChat's
 calculation includes overhead it doesn't document.
+
+Like VRChat, the report counts:
+
+- **Inactive objects.** Everything uploaded with the avatar counts, even if it's turned off.
+- **Every texture assigned to a material**, even if the shader doesn't use it.
 
 ## Troubleshooting
 
@@ -67,8 +79,6 @@ calculation includes overhead it doesn't document.
 
 ## Limitations
 
-- Inactive objects are counted too.
-- Every texture assigned to a material counts, even if the shader doesn't use it.
 - Tools that change the avatar at the very end of the build, after this report, aren't
   included.
 
