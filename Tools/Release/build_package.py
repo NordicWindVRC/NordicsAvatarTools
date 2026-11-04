@@ -139,7 +139,7 @@ def main():
 
     prerelease = bool(SEMVER.match(version).group(4))
     tag = f"{args.package.split('.')[-1]}-v{version}"
-    shown = zip_path.relative_to(ROOT) if zip_path.is_relative_to(ROOT) else zip_path
+    shown = zip_path.relative_to(ROOT) if ROOT in zip_path.parents else zip_path
     print(f"{args.package} {version}: {len(files)} files -> {shown} (sha256 {sha})")
 
     if os.environ.get("GITHUB_OUTPUT"):
