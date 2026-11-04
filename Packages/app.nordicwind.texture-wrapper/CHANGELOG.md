@@ -44,6 +44,8 @@ Newest first. Versions follow [SemVer](https://semver.org).
 - Normal bake tests: round trips for random orthonormal frames in both handednesses, for
   interpolated (not unit, not orthogonal) frames with either bitangent convention, and a flat
   frame that is skipped.
+- RNM normal blending tests against an independent reference (rotating the detail onto the
+  base), including flat inputs and preserved angles.
 - Safety rule tests: overlap by winding and by stacking, the angle fade, and default options
   never storing a correction into the surface. A whole-mesh test with two mirrored halves
   sharing UVs: neither is ever shaded worse than without correction.

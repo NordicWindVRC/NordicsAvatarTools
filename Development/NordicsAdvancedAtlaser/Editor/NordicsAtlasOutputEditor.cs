@@ -123,6 +123,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     }
                 }
                 EditorGUILayout.PropertyField(item.FindPropertyRelative("UVRegion"), new GUIContent("UV Region"));
+                EditorGUILayout.PropertyField(item.FindPropertyRelative("NormalCorrection"), new GUIContent("Normal Correction"));
                 EditorGUILayout.EndVertical();
             }
             var available = discovery.Materials.Where(m => !assignedElsewhere.Contains(m) && !selectedHere.Contains(m)).ToList();
@@ -150,6 +151,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         var item = sources.GetArrayElementAtIndex(index);
                         item.FindPropertyRelative("Material").objectReferenceValue = material;
                         item.FindPropertyRelative("UVRegion").rectValue = new Rect(0, 0, 1, 1);
+                        // New array elements copy the previous one, so set the default explicitly.
+                        item.FindPropertyRelative("NormalCorrection").boolValue = true;
                     }
                 }
                 EditorGUI.EndDisabledGroup();

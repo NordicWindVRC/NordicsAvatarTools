@@ -10,6 +10,9 @@ namespace NordicWind.AdvancedAtlaser
     {
         public Material Material;
         public Rect UVRegion = new Rect(0, 0, 1, 1);
+        [Tooltip("Bake a normal map that restores the original mesh's shading on the reduced mesh. " +
+                 "Turn off to skip it for this material, for example when its mesh isn't reduced.")]
+        public bool NormalCorrection = true;
     }
 
     [Serializable]

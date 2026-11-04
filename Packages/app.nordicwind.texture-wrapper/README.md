@@ -89,7 +89,6 @@ Texture2D preview = atlas.GetTexture2D();                                       
 
 Known gaps, in no particular order:
 
-- **RNM normal blending** needs a numerical comparison against a reference implementation.
 - **Normal correction on overlapping UVs:** texels where surfaces overlap (mirrored halves,
   stacked copies) get no correction, which is safe but leaves them unimproved. Mirrored halves
   that were reduced symmetrically need the same correction, so it could be kept where they agree.

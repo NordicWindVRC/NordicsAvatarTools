@@ -16,6 +16,16 @@ EditMode tests pass in Unity 2022.3.22 (2026-11-03).
 - Build errors start with `[Nordic's Advanced Atlaser]`.
 
 ### Added
+- **Normal Correction per source material**, on by default. Turned off, the bake keeps only
+  the fast UV usage mask and a flat correction.
+- **Skips the normal-correction bake when nothing changed.** When every surviving triangle is
+  an original triangle with unchanged corners (removed submeshes or triangles only), the
+  correction would be flat, so only the fast usage mask is made. The check compares triangles,
+  not just vertices, and runs in time proportional to the mesh size.
+- `AtlasSubmeshBake.CorrectionIsFlat`, so output writers can skip a flat correction.
+- Tests for the unchanged-geometry check: removed submeshes and triangles across two merged
+  renderers, rounding noise, new triangles from existing vertices, moved vertices, recalculated
+  normals, and missing data.
 - **Normal correction never makes shading worse.** The bake paints a coverage map per UV
   winding and uses the Texture Wrapper's safety rules: overlapping UVs (mirrored halves, stacked
   copies) get no correction, and corrections above 60° fade out. One summary line per material

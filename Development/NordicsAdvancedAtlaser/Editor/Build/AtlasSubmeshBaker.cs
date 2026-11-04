@@ -46,7 +46,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static AtlasBakedInputSet Bake(Material material,int width,int height,
             IReadOnlyList<AtlasMeshSection> originalSections,
             IReadOnlyList<SkinnedMeshRenderer> currentRenderers,
-            Transform avatarRoot, List<string> diagnostics, string debugFolder = null)
+            Transform avatarRoot, List<string> diagnostics, string debugFolder = null, bool normalCorrection = true)
         {
             if(material==null) throw new ArgumentNullException(nameof(material));
             if(width<1 || height<1) throw new ArgumentOutOfRangeException(nameof(width));
@@ -75,12 +75,29 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 var bake=new AtlasSubmeshBake { RendererName=section.RendererPath,SubmeshIndex=section.SubmeshIndex };
                 result.Submeshes.Add(bake);
                 bake.CurrentMask=new NordicsTextureWrapper(width,height,Masks());
+                bool hasOriginals=originalSections!=null && originalSections.Count>0;
+                string skip=!normalCorrection ? "it is turned off for this material"
+                    : hasOriginals && AtlasGeometryComparison.SurvivingTrianglesUnchanged(originalSections,section)
+                        ? "the surviving triangles are unchanged from the original" : null;
+                if(skip!=null)
+                {
+                    // Only the fast UV usage mask is needed; the correction is flat.
+                    Rasterize(section,null,bake.CurrentMask,null,null,null);
+                    bake.OriginalWorldNormals=Flat(width,height,TextureDataType.NormalWorld);
+                    bake.CurrentWorldNormals=Flat(width,height,TextureDataType.NormalWorld);
+                    bake.TangentNormalCorrection=Flat(width,height,TextureDataType.NormalTangent);
+                    bake.CorrectionIsFlat=true;
+                    diagnostics.Add(material.name+": normal correction skipped because "+skip+"; the correction is flat.");
+                    ExportDebug(debugFolder,material,bake,originalSections==null?0:originalSections.Count,current.Count,diagnostics);
+                    return result;
+                }
                 bake.CurrentWorldNormals=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld));
                 Rasterize(section,bake.CurrentWorldNormals,bake.CurrentMask,null,null,null);
                 if(originalSections==null || originalSections.Count==0)
                 {
                     bake.OriginalWorldNormals=Flat(width,height,TextureDataType.NormalWorld);
                     bake.TangentNormalCorrection=Flat(width,height,TextureDataType.NormalTangent);
+                    bake.CorrectionIsFlat=true;
                     diagnostics.Add(material.name+": original source geometry unavailable; tangent correction is flat.");
                 }
                 else
@@ -206,7 +223,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
         private static AtlasSubmeshBake Missing(int width,int height,int index,string path)
         {
-            return new AtlasSubmeshBake { CurrentSubmeshMissing=true,SubmeshIndex=index,
+            return new AtlasSubmeshBake { CurrentSubmeshMissing=true,CorrectionIsFlat=true,SubmeshIndex=index,
                 RendererName=path,
                 CurrentMask=new NordicsTextureWrapper(width,height,Masks()),
                 OriginalWorldNormals=Flat(width,height,TextureDataType.NormalWorld),

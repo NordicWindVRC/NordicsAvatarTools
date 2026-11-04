@@ -48,6 +48,8 @@ unified model and never see the source shader. See `UNIFIED_MATERIAL.md` for the
    output shader, the main texture size and region padding, and assign source materials with
    their UV rectangles. **Auto Setup** picks the largest base texture, then lets the chosen
    output shader configure itself. Each source material may be assigned to only one output.
+   Turn off **Normal Correction** on a source to skip its normal-correction bake, for example
+   when that material's mesh isn't reduced.
 4. Optional, **Blend Shape Geometry Exclusion:** leave out geometry moved by selected
    blendshapes from the *original* geometry used for normal correction.
    - **Threshold:** the minimum vertex movement that counts, in mesh units (default 0.001).
@@ -75,7 +77,12 @@ Exporting 4096² float maps is slow, so leave it off for everyday builds.
      - a usage mask
      - original and surviving world normals
      - a tangent-space normal correction that reconstructs the original shading on the
-       surviving (for example reduced) mesh
+       surviving (for example reduced) mesh. It never makes shading worse: overlapping UVs
+       and implausibly large corrections (above 60°) get no correction.
+   - Skips the normal-correction bake, keeping only the fast usage mask and a flat correction,
+     when it's turned off for the material, or when every surviving triangle is an unchanged
+     original triangle (removed submeshes or triangles only). A reducer that removes vertices
+     creates new triangles, so its result is always baked.
    - Hands output jobs to the output generators, which are placeholders for now.
 3. Removes both components from the build copy. Scene components and source assets are never changed.
 

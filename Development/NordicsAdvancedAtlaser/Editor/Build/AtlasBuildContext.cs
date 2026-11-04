@@ -41,6 +41,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasInputMaterialJob Input;
         public Rect UVRegion;
         public string SourceKey;
+        public bool NormalCorrection = true;
         // Null if baking is disabled; non-null empty/flat buffers mean missing geometry.
         public AtlasBakedInputSet Bakes;
     }
@@ -62,6 +63,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public string RendererName;
         public int SubmeshIndex;
         public bool CurrentSubmeshMissing;
+        // True when TangentNormalCorrection is flat (no correction), for example because it was
+        // turned off or the surviving triangles are unchanged. Writers can skip it then.
+        public bool CorrectionIsFlat;
         public NordicsTextureWrapper CurrentMask;
         public NordicsTextureWrapper OriginalWorldNormals;
         public NordicsTextureWrapper CurrentWorldNormals;

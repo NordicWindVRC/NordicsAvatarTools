@@ -82,7 +82,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             context.Diagnostics.Add(source.Material.name+": no current renderer uses this material; an empty bake will be supplied.");
                     }
                     job.Sources.Add(new AtlasOutputSourceJob { Input=input,UVRegion=source.UVRegion,
-                        SourceKey=AtlasOriginalGeometry.SourceKey(atlaserIndex,outputIndex,sourceIndex) });
+                        SourceKey=AtlasOriginalGeometry.SourceKey(atlaserIndex,outputIndex,sourceIndex),
+                        NormalCorrection=source.NormalCorrection });
                 }
             }
             // Normalize each unique source material once, irrespective of how many outputs use it.
@@ -142,7 +143,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                                 catch(Exception e) { context.Diagnostics.Add("Debug directory creation failed: "+e.Message); }
                             }
                             baked=AtlasSubmeshBaker.Bake(source.Input.SourceMaterial,resolution,resolution,
-                                originalSections,renderers,context.AvatarRoot.transform,context.Diagnostics,debugFolder);
+                                originalSections,renderers,context.AvatarRoot.transform,context.Diagnostics,debugFolder,
+                                source.NormalCorrection);
                             source.Input.Bakes.Add(key,baked);
                         }
                         source.Bakes=baked;
