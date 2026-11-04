@@ -662,10 +662,32 @@ namespace NordicWind.TextureWrapper
         /// as shaders combine an interpolated frame: normalize(T·x + B·y + N·z), with T, B
         /// and N used as given. So supply the frame as the shader interpolates it (not
         /// normalized or orthogonalized per pixel); the bitangent carries the handedness.
-        /// The targetNormals map is the coverage domain only.</summary>
+        /// The targetNormals map is the coverage domain only. This overload applies no
+        /// safety rules; see the overload with <see cref="NormalDifferenceOptions"/>.</summary>
         public NordicsTextureWrapper BakeNormalDifference(NordicsTextureWrapper targetNormals, TangentBasisData basis)
+            => BakeNormalDifference(targetNormals, basis, null, out _);
+        /// <summary>Like the overload without options, but where the safety rules in
+        /// <paramref name="options"/> apply, the correction fades to flat (no correction), so it
+        /// never makes shading worse. <paramref name="statistics"/> says how often that happened.
+        /// <c>null</c> options apply no rules.</summary>
+        public NordicsTextureWrapper BakeNormalDifference(NordicsTextureWrapper targetNormals, TangentBasisData basis,
+            NormalDifferenceOptions options, out NormalDifferenceStatistics statistics)
         {
             Check();
+            var coverage = options?.Coverage;
+            if (options != null && (!MathUtil.Finite(options.MaxAngle) || options.MaxAngle < 0f))
+                throw new ArgumentOutOfRangeException(nameof(options), "MaxAngle must be finite and not negative.");
+            if (coverage != null)
+            {
+                coverage.Check();
+                if (coverage.Width != Width || coverage.Height != Height)
+                    throw new ArgumentException("The coverage map must match the bake's dimensions.", nameof(options));
+            }
+            // Corrections fade to flat over the last FadeAngle degrees before the limit.
+            const float FadeAngle = 10f;
+            float maxAngle = options == null ? float.PositiveInfinity : Mathf.Min(options.MaxAngle, 90f);
+            var baked = new int[Height]; var overlapping = new int[Height]; var limited = new int[Height];
+            var largest = new float[Height];
             if (targetNormals == null) throw new ArgumentNullException(nameof(targetNormals));
             if (basis == null) throw new ArgumentNullException(nameof(basis));
             if (basis.Tangent == null || basis.Bitangent == null || basis.Normal == null)
@@ -693,31 +715,77 @@ namespace NordicWind.TextureWrapper
                     if (_usage[i]==0 || targetNormals._usage[i]==0 ||
                         basis.Tangent._usage[i]==0 || basis.Bitangent._usage[i]==0 ||
                         basis.Normal._usage[i]==0) continue;
+                    float overlap = coverage != null ? OverlapKeep(coverage._pixels[i]) : 1f;
                     Vector3 reference=MathUtil.SafeNormal(MathUtil.Normal(_pixels[i]));
                     Vector3 n=MathUtil.Normal(basis.Normal._pixels[i]);
                     Vector3 t=MathUtil.Normal(basis.Tangent._pixels[i]);
                     Vector3 b=MathUtil.Normal(basis.Bitangent._pixels[i]);
-                    if (!MathUtil.Finite(n.x) || !MathUtil.Finite(n.y) || !MathUtil.Finite(n.z) ||
-                        !MathUtil.Finite(t.x) || !MathUtil.Finite(t.y) || !MathUtil.Finite(t.z) ||
-                        !MathUtil.Finite(b.x) || !MathUtil.Finite(b.y) || !MathUtil.Finite(b.z))
-                        continue;
-                    if (n.sqrMagnitude<1e-12f || t.sqrMagnitude<1e-12f || b.sqrMagnitude<1e-12f)
-                        continue;
                     // Solve T·x + B·y + N·z = reference with the inverse of the frame, using
                     // its adjugate: rows B×N, N×T and T×B divided by the determinant. For an
                     // orthonormal frame this is the same as projecting onto T, B and N.
                     Vector3 bn=Vector3.Cross(b,n), nt=Vector3.Cross(n,t), tb=Vector3.Cross(t,b);
                     float det=Vector3.Dot(t,bn);
-                    // Skip frames that are (nearly) flat, for example a tangent along the normal.
-                    if (Mathf.Abs(det)<1e-6f*t.magnitude*b.magnitude*n.magnitude) continue;
+                    // Frames that are missing, invalid or (nearly) flat have no correction, for
+                    // example a tangent along the normal.
+                    bool valid = MathUtil.Finite(n.x) && MathUtil.Finite(n.y) && MathUtil.Finite(n.z) &&
+                        MathUtil.Finite(t.x) && MathUtil.Finite(t.y) && MathUtil.Finite(t.z) &&
+                        MathUtil.Finite(b.x) && MathUtil.Finite(b.y) && MathUtil.Finite(b.z) &&
+                        n.sqrMagnitude>=1e-12f && t.sqrMagnitude>=1e-12f && b.sqrMagnitude>=1e-12f &&
+                        Mathf.Abs(det)>=1e-6f*t.magnitude*b.magnitude*n.magnitude;
+                    if (!valid)
+                    {
+                        // Overlapping surfaces' frames often cancel out (mirrored halves). Store
+                        // no correction there rather than leaving the texel for dilation to fill
+                        // from a neighbouring island.
+                        if (overlap < 1f)
+                        {
+                            output._pixels[i]=MathUtil.Pack(Vector3.forward,1f);output._usage[i]=1;
+                            overlapping[y]++;baked[y]++;
+                        }
+                        continue;
+                    }
                     Vector3 tangentSpace=MathUtil.SafeNormal(new Vector3(
                         Vector3.Dot(reference,bn), Vector3.Dot(reference,nt), Vector3.Dot(reference,tb))/det);
+                    if (options != null)
+                    {
+                        float keep = 1f;
+                        if (overlap < 1f) { keep *= overlap; overlapping[y]++; }
+                        float angle = Mathf.Atan2(new Vector2(tangentSpace.x, tangentSpace.y).magnitude, tangentSpace.z) * Mathf.Rad2Deg;
+                        float angleKeep = 1f - Mathf.Clamp01((angle - (maxAngle - FadeAngle)) / FadeAngle);
+                        if (angleKeep < 1f) { keep *= angleKeep; limited[y]++; }
+                        if (keep < 1f) tangentSpace = MathUtil.SafeNormal(Vector3.Lerp(Vector3.forward, tangentSpace, keep));
+                        largest[y] = Mathf.Max(largest[y], Mathf.Atan2(new Vector2(tangentSpace.x, tangentSpace.y).magnitude, tangentSpace.z) * Mathf.Rad2Deg);
+                    }
+                    baked[y]++;
                     output._pixels[i]=MathUtil.Pack(tangentSpace,Mathf.Clamp01(_pixels[i].a));
                     output._usage[i]=1;
                 }
             });
             output._normalized=true;
+            statistics = new NormalDifferenceStatistics();
+            for (int y = 0; y < Height; y++)
+            {
+                statistics.Baked += baked[y]; statistics.Overlapping += overlapping[y]; statistics.Limited += limited[y];
+                statistics.LargestAngle = Mathf.Max(statistics.LargestAngle, largest[y]);
+            }
             return output;
+        }
+        /// <summary>How much of the correction to keep at a texel, from its coverage
+        /// (R, G = reference by winding; B, A = target by winding): 1 = covered by one surface.</summary>
+        private static float OverlapKeep(Color coverage)
+        {
+            return Unambiguous(coverage.r, coverage.g) * Unambiguous(coverage.b, coverage.a);
+        }
+        private static float Unambiguous(float counterClockwise, float clockwise)
+        {
+            // One winding covered more than once: stacked copies. Up to about 1.25 can come
+            // from sub-samples exactly on an edge shared by two triangles, so fade from 1.3 to 1.7.
+            float stacked = 1f - Mathf.Clamp01((Mathf.Max(counterClockwise, clockwise) - 1.3f) / .4f);
+            // Both windings at one texel, even partly: mirrored copies. Already at the islands'
+            // edges both may touch only a sub-sample or two (1/16 each with 4×4 sampling), so
+            // fade to no correction by 0.125.
+            float mirrored = 1f - Mathf.Clamp01(Mathf.Min(counterClockwise, clockwise) / .125f);
+            return stacked * mirrored;
         }
         public Texture2D GetTexture2D()
         {

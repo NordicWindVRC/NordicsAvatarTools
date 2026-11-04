@@ -18,6 +18,24 @@ namespace NordicWind.AdvancedAtlaser.Editor
             DataType=TextureDataType.Mask, SRGB=false, Mipmaps=false, Compression=TextureCompression.None,
             WrapMode=TextureWrapMode.Clamp, OutputChannels=TextureOutputChannels.RGB
         };
+        // Corrections larger than this more likely come from a mismatch between the original
+        // and reduced mesh than from real shape, so they fade out (see NormalDifferenceOptions).
+        private const float MaxCorrectionAngle = 60f;
+        // One summary line per material, never one per texel. Overlapping UVs are a normal
+        // modelling choice and are handled safely, so they are information only. Corrections
+        // cut by the angle limit point to a mismatch: one warning when they reach 1%.
+        private static void ReportCorrection(string material,NormalDifferenceStatistics stats,List<string> diagnostics)
+        {
+            if(stats.Baked==0) return;
+            string Share(int count) => (100.0*count/stats.Baked).ToString("F1")+"%";
+            diagnostics.Add(material+": normal correction on "+stats.Baked+" texels; overlapping UVs left uncorrected on "+
+                Share(stats.Overlapping)+"; corrections reduced by the "+MaxCorrectionAngle+"° limit on "+Share(stats.Limited)+
+                "; largest correction kept "+stats.LargestAngle.ToString("F1")+"°.");
+            if(stats.Limited*100>=stats.Baked)
+                diagnostics.Add("[Warning] "+material+": "+Share(stats.Limited)+" of the normal correction is larger than "+
+                    MaxCorrectionAngle+"° and was reduced or left out. The original and reduced meshes may not match there, " +
+                    "for example if UVs moved during reduction.");
+        }
         private static NordicsTextureWrapper Flat(int width,int height,TextureDataType kind)
         {
             var map = new NordicsTextureWrapper(width,height,Normals(kind));
@@ -71,9 +89,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     using(var tangent=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
                     using(var bitangent=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
                     using(var normalBasis=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
+                    using(var coverage=new NordicsTextureWrapper(width,height,Masks()))
                     {
+                        // Coverage per UV winding finds overlapping UVs (mirrored halves, stacked
+                        // copies), which get no correction rather than a wrong one.
                         foreach(var src in originalSections)
-                            Rasterize(src,bake.OriginalWorldNormals,null,null,null,null);
+                            Rasterize(src,bake.OriginalWorldNormals,null,null,null,null,coverage,false);
+                        Rasterize(section,null,null,null,null,null,coverage,true);
                         // Export excluded original triangles separately; they must never
                         // contribute to the original normal or current-coverage textures.
                         if (debugFolder != null && originalSections.Any(s =>
@@ -87,7 +109,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         // before the debug export, which normalizes the maps in place.
                         bake.TangentNormalCorrection=bake.OriginalWorldNormals.BakeNormalDifference(
                             bake.CurrentWorldNormals,
-                            new TangentBasisData { Tangent=tangent,Bitangent=bitangent,Normal=normalBasis });
+                            new TangentBasisData { Tangent=tangent,Bitangent=bitangent,Normal=normalBasis },
+                            new NormalDifferenceOptions { Coverage=coverage, MaxAngle=MaxCorrectionAngle },
+                            out var statistics);
+                        ReportCorrection(material.name,statistics,diagnostics);
                         if(debugFolder!=null)
                         {
                             TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Tangent",tangent),diagnostics);
@@ -226,7 +251,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static readonly TrianglePaintOptions Quality = new TrianglePaintOptions { Mode=TriangleRasterizationMode.Quality,SamplesPerAxis=2 };
         private static readonly TrianglePaintOptions Fast = new TrianglePaintOptions { Mode=TriangleRasterizationMode.Fast };
         private static void Rasterize(AtlasMeshSection section,NordicsTextureWrapper normals,NordicsTextureWrapper mask,
-            NordicsTextureWrapper tangent,NordicsTextureWrapper bitangent,NordicsTextureWrapper basisNormal)
+            NordicsTextureWrapper tangent,NordicsTextureWrapper bitangent,NordicsTextureWrapper basisNormal,
+            NordicsTextureWrapper coverage=null,bool target=false)
         {
             if(section.UV==null || section.Vertices==null || section.Triangles==null) return;
             int count=section.Vertices.Length;
@@ -245,6 +271,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 var n0=WorldNormal(section,a,nMat,face);var n1=WorldNormal(section,b,nMat,face);var n2=WorldNormal(section,c,nMat,face);
                 normals?.PaintTriangle(uv0,uv1,uv2,Pack(n0),Pack(n1),Pack(n2),Quality);
                 mask?.PaintTriangle(uv0,uv1,uv2,Color.white,Color.white,Color.white,Fast);
+                if(coverage!=null)
+                {
+                    Color cover=NormalDifferenceOptions.CoverageColor(uv0,uv1,uv2,target);
+                    coverage.PaintTriangle(uv0,uv1,uv2,cover,cover,cover,Quality);
+                }
                 if(tangent==null || bitangent==null || basisNormal==null) continue;
                 Vector3 t0=Tangent(section,a,n0,sign),t1=Tangent(section,b,n1,sign),t2=Tangent(section,c,n2,sign);
                 tangent.PaintTriangle(uv0,uv1,uv2,Pack(t0),Pack(t1),Pack(t2),Quality);

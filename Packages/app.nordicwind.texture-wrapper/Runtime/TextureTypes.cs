@@ -88,6 +88,44 @@ namespace NordicWind.TextureWrapper
         public TriangleRasterizationMode Mode = TriangleRasterizationMode.Quality;
         public int SamplesPerAxis = 4;
     }
+    /// <summary>Safety rules for <c>BakeNormalDifference</c>, so a correction never makes
+    /// shading worse than no correction. Where a rule applies, the correction fades to flat
+    /// (0, 0, 1), which keeps the target mesh's own shading.</summary>
+    public sealed class NormalDifferenceOptions
+    {
+        /// <summary>Optional coverage map, the same size as the bake: how often each texel is
+        /// covered, counted per UV winding. R and G hold the reference mesh's counter-clockwise
+        /// and clockwise triangles, B and A the target's. Paint each triangle with
+        /// <c>PaintTriangle</c> and <see cref="CoverageColor"/>. Texels covered by more than one
+        /// surface (overlapping UVs, such as mirrored halves or stacked copies) get no correction,
+        /// because one texel can't hold the right value for both.</summary>
+        public NordicsTextureWrapper Coverage;
+        /// <summary>Largest correction kept, in degrees from no correction. Larger ones more
+        /// likely come from a mismatch than from real shape, so they fade out over the last 10°.
+        /// Never above 90°: a normal map can't store a correction pointing into the surface.</summary>
+        public float MaxAngle = 90f;
+
+        /// <summary>The color to paint a triangle with into <see cref="Coverage"/>.</summary>
+        public static Color CoverageColor(Vector2 uv0, Vector2 uv1, Vector2 uv2, bool target)
+        {
+            bool counterClockwise = (uv1.x - uv0.x) * (uv2.y - uv0.y) - (uv1.y - uv0.y) * (uv2.x - uv0.x) >= 0f;
+            if (target) return counterClockwise ? new Color(0, 0, 1, 0) : new Color(0, 0, 0, 1);
+            return counterClockwise ? new Color(1, 0, 0, 0) : new Color(0, 1, 0, 0);
+        }
+    }
+    /// <summary>What <c>BakeNormalDifference</c> did, for one summary line per bake.</summary>
+    public struct NormalDifferenceStatistics
+    {
+        /// <summary>Texels that got a value.</summary>
+        public int Baked;
+        /// <summary>Texels whose correction was reduced or removed because surfaces overlap.</summary>
+        public int Overlapping;
+        /// <summary>Texels whose correction was reduced or removed by <c>MaxAngle</c>, including
+        /// ones that would point into the surface.</summary>
+        public int Limited;
+        /// <summary>The largest correction kept, in degrees.</summary>
+        public float LargestAngle;
+    }
     // TBN vectors may be baked from mesh vertices by a higher-level caller.
     public sealed class TangentBasisData
     {

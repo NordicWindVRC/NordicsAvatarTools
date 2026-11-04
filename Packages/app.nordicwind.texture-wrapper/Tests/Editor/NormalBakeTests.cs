@@ -107,6 +107,82 @@ namespace NordicWind.TextureWrapper.Tests
             AssertRoundTrip(reference, t, b, n);
         }
 
+        // Safety rules: an identity frame (T = X, B = Y, N = Z), so the correction equals the
+        // reference, and the rules' effect is easy to check.
+        private static Vector3 Tilted(float degrees) =>
+            new Vector3(Mathf.Sin(degrees * Mathf.Deg2Rad), 0f, Mathf.Cos(degrees * Mathf.Deg2Rad));
+        private static NordicsTextureWrapper BakeIdentity(Vector3[] reference, Color[] coverage, NormalDifferenceOptions options,
+            out NormalDifferenceStatistics statistics)
+        {
+            int count = reference.Length;
+            using (var original = Map(count)) using (var target = Map(count))
+            using (var tangent = Map(count)) using (var bitangent = Map(count)) using (var normal = Map(count))
+            using (var cover = new NordicsTextureWrapper(count, 1, new TextureSettings { DataType = TextureDataType.Mask, SRGB = false, Mipmaps = false }))
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    original.SetPixel(i, 0, V(reference[i])); target.SetPixel(i, 0, V(Vector3.forward));
+                    tangent.SetPixel(i, 0, V(Vector3.right)); bitangent.SetPixel(i, 0, V(Vector3.up)); normal.SetPixel(i, 0, V(Vector3.forward));
+                    if (coverage != null) cover.SetPixel(i, 0, coverage[i]);
+                }
+                if (options != null && coverage != null) options.Coverage = cover;
+                return original.BakeNormalDifference(target,
+                    new TangentBasisData { Tangent = tangent, Bitangent = bitangent, Normal = normal }, options, out statistics);
+            }
+        }
+        private static void AssertFlat(Color c) { Assert.AreEqual(0f, c.r, 1e-4f); Assert.AreEqual(0f, c.g, 1e-4f); Assert.AreEqual(1f, c.b, 1e-4f); }
+        private static float AngleFromFlat(Color c) => Vector3.Angle(Vector3.forward, new Vector3(c.r, c.g, c.b));
+
+        [Test] public void OverlappingCoverage_GetsNoCorrection()
+        {
+            var reference = new Vector3[5];
+            for (int i = 0; i < reference.Length; i++) reference[i] = Tilted(20f);
+            var coverage = new[]
+            {
+                new Color(1f, 0f, 1f, 0f),    // covered once by each mesh
+                new Color(1.1f, 0f, 1f, 0f),  // edge sub-samples counted twice: still one surface
+                new Color(2f, 0f, 1f, 0f),    // two stacked reference copies
+                new Color(.5f, .5f, 1f, 0f),  // mirrored reference halves, partly covering
+                new Color(1f, 0f, .6f, .4f),  // mirrored target halves
+            };
+            using (var correction = BakeIdentity(reference, coverage, new NormalDifferenceOptions(), out var stats))
+            {
+                Assert.AreEqual(20f, AngleFromFlat(correction.GetPixel(0, 0)), .05f);
+                Assert.AreEqual(20f, AngleFromFlat(correction.GetPixel(1, 0)), .05f);
+                AssertFlat(correction.GetPixel(2, 0)); AssertFlat(correction.GetPixel(3, 0)); AssertFlat(correction.GetPixel(4, 0));
+                Assert.AreEqual(5, stats.Baked); Assert.AreEqual(3, stats.Overlapping); Assert.AreEqual(0, stats.Limited);
+            }
+        }
+
+        [Test] public void LargeCorrections_FadeOutAtTheAngleLimit()
+        {
+            var reference = new[] { Tilted(30f), Tilted(55f), Tilted(65f), Tilted(120f) };
+            using (var correction = BakeIdentity(reference, null, new NormalDifferenceOptions { MaxAngle = 60f }, out var stats))
+            {
+                Assert.AreEqual(30f, AngleFromFlat(correction.GetPixel(0, 0)), .05f); // kept
+                float faded = AngleFromFlat(correction.GetPixel(1, 0));              // halfway through the fade
+                Assert.That(faded, Is.GreaterThan(1f).And.LessThan(54f));
+                AssertFlat(correction.GetPixel(2, 0));                                 // beyond the limit
+                AssertFlat(correction.GetPixel(3, 0));                                 // would point into the surface
+                Assert.AreEqual(3, stats.Limited);
+                Assert.AreEqual(30f, stats.LargestAngle, .05f);
+            }
+        }
+
+        [Test] public void DefaultOptions_NeverStoreACorrectionIntoTheSurface()
+        {
+            var reference = new[] { Tilted(45f), Tilted(100f) };
+            using (var safe = BakeIdentity(reference, null, new NormalDifferenceOptions(), out var stats))
+            {
+                Assert.AreEqual(45f, AngleFromFlat(safe.GetPixel(0, 0)), .05f);
+                AssertFlat(safe.GetPixel(1, 0));
+                Assert.AreEqual(1, stats.Limited);
+            }
+            // Without options, no rules apply.
+            using (var raw = BakeIdentity(reference, null, null, out _))
+                Assert.That(raw.GetPixel(1, 0).b, Is.LessThan(0f));
+        }
+
         [Test] public void FlatFrame_IsSkippedWithoutInvalidValues()
         {
             using (var original = Map(1)) using (var target = Map(1))

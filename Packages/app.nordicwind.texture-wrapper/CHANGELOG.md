@@ -24,6 +24,16 @@ Newest first. Versions follow [SemVer](https://semver.org).
 - The `Mixed` blend mode is now `base + base × blend` instead of a copy of `Average`.
 
 ### Added
+- **Safety rules for normal correction.** A `BakeNormalDifference` overload takes
+  `NormalDifferenceOptions` and returns `NormalDifferenceStatistics`. Where a rule applies, the
+  correction fades to flat, so it never makes shading worse than no correction:
+  - With a coverage map counted per UV winding (`CoverageColor`), texels covered by more than
+    one surface get no correction: mirrored halves (both windings) and stacked copies (one
+    winding twice). This includes texels where the overlapping frames cancel out, which used to
+    be left for dilation to fill from a neighbouring island.
+  - Corrections beyond `MaxAngle` fade out over its last 10°, and corrections that would point
+    into the surface are never stored.
+  The overload without options is unchanged.
 - **Loading any texture.** Textures without Read/Write, compressed or not, are read through
   the GPU instead of throwing.
 - **Normal map decoding.** A new constructor overload takes a `TextureDataType`. For
@@ -34,6 +44,12 @@ Newest first. Versions follow [SemVer](https://semver.org).
 - Normal bake tests: round trips for random orthonormal frames in both handednesses, for
   interpolated (not unit, not orthogonal) frames with either bitangent convention, and a flat
   frame that is skipped.
+- Safety rule tests: overlap by winding and by stacking, the angle fade, and default options
+  never storing a correction into the surface. A whole-mesh test with two mirrored halves
+  sharing UVs: neither is ever shaded worse than without correction.
+- Whole-mesh normal correction tests, with normal and mirrored UVs: a curved original and a
+  flat reduced mesh, painted and baked, then decoded at every texel. The corrected shading is
+  within 0.5° of the original everywhere (about 0.02° on average, against 16° uncorrected).
 - Loading tests: the GPU path and its orientation, sRGB decoding through the GPU, both normal
   packings readable and not, object-space normals, and a real imported normal map.
 - `Colorize` color operation: a perceptual tint that keeps the pixel's lightness, takes the

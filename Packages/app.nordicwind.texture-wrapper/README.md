@@ -77,7 +77,9 @@ Texture2D preview = atlas.GetTexture2D();                                       
   `TextureAssetUtility.Load` reads the data type from the import settings.
 - **Mesh baking:** rasterize triangles with interpolated vertex values, with sub-pixel coverage.
 - **Normal correction:** express one normal field in another mesh's tangent frame
-  (`BakeNormalDifference`), for correcting simplified meshes.
+  (`BakeNormalDifference`), for correcting simplified meshes. Optional safety rules make sure
+  a correction never makes shading worse: overlapping UVs and implausibly large corrections get
+  no correction, with counts for reporting.
 - **Finishing:** dilate edges outward (nearest-pixel padding), and fill uncovered pixels.
 - **Output:** in-memory `Texture2D` or PNG assets with importer settings applied. RGB or
   RGBA output can be chosen automatically.
@@ -88,8 +90,9 @@ Texture2D preview = atlas.GetTexture2D();                                       
 Known gaps, in no particular order:
 
 - **RNM normal blending** needs a numerical comparison against a reference implementation.
-- **Normal correction:** a whole-mesh test (curved original, flat reduced mesh). Where UV
-  islands overlap, their normals are added together.
+- **Normal correction on overlapping UVs:** texels where surfaces overlap (mirrored halves,
+  stacked copies) get no correction, which is safe but leaves them unimproved. Mirrored halves
+  that were reduced symmetrically need the same correction, so it could be kept where they agree.
 - **Accuracy:** area downsampling and triangle coverage use bounded supersampling, not exact
   area integration. Padding extends border pixels and doesn't sample outside the UV island.
 - **Loading with mipmap streaming:** textures without Read/Write are read from the GPU. When

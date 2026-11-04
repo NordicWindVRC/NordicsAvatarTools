@@ -8,14 +8,19 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22 (2026-11-03).
 
 ### Changed
-- Package and NDMF name `app.nordicwind.advanced-atlaser`. Requires Texture Wrapper 0.9.0 or
-  later, because of the renamed runtime assembly.
+- Package and NDMF name `app.nordicwind.advanced-atlaser`. Requires Texture Wrapper 0.10.0 or
+  later, for the renamed runtime assembly and the normal correction safety rules.
 - The NDMF plugin class is renamed `NordicsAdvancedAtlaserPlugin`. The AAO integration define
   is renamed `NORDIC_ADVANCED_ATLASER_HAS_AAO`. Tests use namespace
   `NordicWind.AdvancedAtlaser.Tests`. MIT license.
 - Build errors start with `[Nordic's Advanced Atlaser]`.
 
 ### Added
+- **Normal correction never makes shading worse.** The bake paints a coverage map per UV
+  winding and uses the Texture Wrapper's safety rules: overlapping UVs (mirrored halves, stacked
+  copies) get no correction, and corrections above 60° fade out. One summary line per material
+  says how much was left uncorrected. One warning per material only when at least 1% of the
+  correction hit the 60° limit, which points to a mismatch between the meshes.
 - `AtlasColorProcessingDefinition.TintMode`: *Multiply* or *Perceptual* (keeps lightness,
   takes the tint's hue, scales chroma by the tint's saturation, mixes in by its alpha).
   Poiyomi 10's tint is perceptual.

@@ -9,7 +9,7 @@
   },
   "vpmDependencies": {
     "nadena.dev.ndmf": ">=1.7.0",
-    "app.nordicwind.texture-wrapper": ">=0.9.0"
+    "app.nordicwind.texture-wrapper": ">=0.10.0"
   },
   "legacyFolders": {
     "Assets\\NordicWind\\NordicsAdvancedAtlaser": "6622652757773e24cbb5e0614164dd7c"
