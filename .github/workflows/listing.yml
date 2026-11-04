@@ -1,0 +1,41 @@
+# Rebuilds the VCC listing (index.json and its landing page) from all GitHub releases and
+# deploys it to GitHub Pages. Runs after every release, when a release is edited or deleted
+# on GitHub, or by hand: Actions → Build VCC listing → Run workflow.
+name: Build VCC listing
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published, edited, deleted]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the listing from all releases
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 Tools/Release/build_listing.py --out site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

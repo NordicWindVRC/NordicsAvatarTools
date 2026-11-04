@@ -1,0 +1,14 @@
+{
+  "listing": {
+    "name": "NordicWind",
+    "id": "app.nordicwind.vpm",
+    "author": "NordicWind",
+    "url": "https://vpm.nordicwind.app/index.json",
+    "infoLink": "https://github.com/NordicWindVRC/NordicsAvatarTools"
+  },
+  "packages": {
+    "app.nordicwind.avatar-tools": "Packages/app.nordicwind.avatar-tools",
+    "app.nordicwind.texture-wrapper": "Packages/app.nordicwind.texture-wrapper"
+  },
+  "excludeFolders": ["Tests"]
+}

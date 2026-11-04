@@ -1,0 +1,67 @@
+# Builds one package's VPM zip and publishes it as a GitHub release, then rebuilds the
+# VCC listing. Started by hand: Actions → Release package → Run workflow.
+# See RELEASING.md for the full process.
+name: Release package
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package to release (its version comes from its package.json)
+        type: choice
+        options:
+          - app.nordicwind.avatar-tools
+          - app.nordicwind.texture-wrapper
+
+permissions:
+  contents: write   # create the tag and the release
+  actions: write    # start the listing workflow
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only release from master
+        if: github.ref != 'refs/heads/master'
+        run: |
+          echo "::error::Releases are made from master, not ${GITHUB_REF_NAME}."
+          exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # all tags, to refuse reusing a version
+
+      - name: Validate and build the package
+        id: build
+        env:
+          PACKAGE: ${{ inputs.package }}
+        run: python3 Tools/Release/build_package.py --package "$PACKAGE" --out dist
+
+      - name: Refuse to publish a version twice
+        env:
+          TAG: ${{ steps.build.outputs.tag }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "::error::${TAG} already exists. Bump the version in package.json; a released version must never change."
+            exit 1
+          fi
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.build.outputs.tag }}
+          TITLE: ${{ steps.build.outputs.title }}
+          ZIP: ${{ steps.build.outputs.zip }}
+          NOTES: ${{ steps.build.outputs.notes }}
+          PRERELEASE: ${{ steps.build.outputs.prerelease }}
+        run: |
+          flags=()
+          if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); else flags+=(--latest); fi
+          gh release create "$TAG" "$ZIP" --target "$GITHUB_SHA" --title "$TITLE" --notes-file "$NOTES" "${flags[@]}"
+
+      # Releases created with this workflow's token don't trigger other workflows,
+      # so the listing is started explicitly.
+      - name: Rebuild the VCC listing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run listing.yml --ref master
