@@ -15,7 +15,18 @@ EditMode tests pass in Unity 2022.3.22 (2026-11-03).
   `NordicWind.AdvancedAtlaser.Tests`. MIT license.
 - Build errors start with `[Nordic's Advanced Atlaser]`.
 
+### Added
+- `AtlasColorProcessingDefinition.TintMode`: *Multiply* or *Perceptual* (keeps lightness,
+  takes the tint's hue, scales chroma by the tint's saturation, mixes in by its alpha).
+  Poiyomi 10's tint is perceptual.
+
 ### Fixed
+- Poiyomi saturation was copied unconverted, so an untouched material (saturation 0) read as
+  fully grey. It is now `1 + value`, the unified scale.
+- Poiyomi brightness is mapped per version: additive for 7.x and 8.x, a multiplier of
+  `1 + value` for 9.x and later. 7.x to 9.x always clamp after brightness, so `ClampOutput` is
+  set for them.
+- Poiyomi saturation was read twice, by two parsers. Only the version-aware one is left.
 - Global mask textures were reported as ordinary masks and missing from the global masks.
 - `AtlasGlobalMaskResource.MappingFor()` returned null for a resource without a texture.
 

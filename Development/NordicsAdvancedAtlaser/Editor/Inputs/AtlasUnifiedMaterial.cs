@@ -121,6 +121,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public enum AtlasAudioEffectMode { Pulse, Scroll, Bar, UVHorizontal, Unknown }
     public enum AtlasColorMaskBlendMode { Multiply, Add, Unknown }
     public enum AtlasHueColorSpace { HSV, Oklab, Other }
+    // Multiply: RGB × tint. Perceptual: keeps lightness, takes the tint's hue, scales chroma by
+    // the tint's saturation, and mixes in by the tint's alpha.
+    public enum AtlasTintMode { Multiply, Perceptual }
     public enum AtlasMatcapUVMode { ViewNormal, UTSStyle, TopPinch, DoubleSided, Gradient, LightDirection, Unknown }
 
     public enum AtlasSurfaceMode { Opaque, Cutout, Transparent, Premultiplied, Additive, Unknown }
@@ -468,6 +471,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float DetailHueShift;
         public float EmissionHueShift;
         public AtlasHueColorSpace HueColorSpace = AtlasHueColorSpace.HSV;
+        // 1 = unchanged, 0 = grey (mixed toward luminance).
         public float Saturation = 1f;
         // Brightness is an additive offset; multiplier is a separate, shared semantic.
         public float Brightness;
@@ -479,6 +483,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool ClampOutput;
         public float Chromatize;
         public AtlasColorInput Tint = new AtlasColorInput();
+        public AtlasTintMode TintMode = AtlasTintMode.Multiply;
     }
     public sealed class AtlasAudioReactiveDefinition
     {

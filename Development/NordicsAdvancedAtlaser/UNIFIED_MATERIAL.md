@@ -31,7 +31,7 @@ The source `Material`, shader, parser, and raw shader property names never enter
 | `Matcaps[]` | Texture, blend operation and simultaneous blend weights, mask/channel, projection, UV mode, border, rotation, intensity, custom normal, lighting interaction |
 | `Details[]` / `Decals[]` | Texture, UV, blend, mask, tint, strength and normal effect |
 | `ColorMasks[]` | RGBA-selectable masks, tint, emission strength and canonical blend mode |
-| `ColorProcessing` | Hue, brightness, contrast, saturation, gamma, and masks |
+| `ColorProcessing` | Hue, brightness (additive offset and multiplier), contrast, saturation (1 = unchanged), gamma, chromatize, tint with its mode (*Multiply* or *Perceptual*), clamp, and masks |
 | `AudioReactive` | Pulse/scroll/bar modes, band, blend, masks, intensity, fallback controls |
 | `ExternalLighting` | Light volumes, AreaLit and LTCGI activation/intensity |
 | `Rims[]`, `Subsurfaces[]`, `Reflections[]` | Typed effect layers, each extendable independently |

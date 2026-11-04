@@ -15,11 +15,29 @@ namespace NordicWind.AdvancedAtlaser.Editor
             Matcaps(m,d);
             Emissions(m,d);
             Surface(m,d);
-            ColorProcessing(m,d);
+            ColorProcessing(m,d,major);
             d.ExternalLighting.EnableLightVolumes=AtlasSemanticReader.Toggle(m,"_LightingEnableLightVolumes");
             var external=AtlasSemanticReader.Feature(d,"lighting.external");
             AtlasSemanticReader.ToggleSet(m,external,"lightVolumeSpecular","_LightingLightVolumesSpecular");
             AtlasSemanticReader.NumberSet(m,external,"lightVolumeNormalBias","_LightingLightVolumesNormalBias");
+        }
+        /// <summary>
+        /// Converts Poiyomi's saturation and brightness to the unified scales. Verified against the
+        /// 7.3, 8.1, 9.3 and 10.0 shader sources:
+        /// - Saturation (all versions): 0 = unchanged, mixed toward luminance by -value.
+        ///   Unified: 1 = unchanged, so 1 + value.
+        /// - Brightness: 7.x and 8.x add it (color + value); 9.x and later multiply by
+        ///   (1 + value). Unknown versions (0) use the newest convention.
+        /// - 7.x to 9.x always clamp to 0–1 after brightness. 10.x clamps only when its
+        ///   clamp toggle is on, which the advanced parser reads.
+        /// </summary>
+        public static void MapSaturationAndBrightness(AtlasColorProcessingDefinition color,int major,float saturation,float brightness)
+        {
+            color.Saturation=1f+saturation;
+            bool additive=major==7||major==8;
+            color.Brightness=additive?brightness:0f;
+            color.BrightnessMultiplier=additive?1f:1f+brightness;
+            if(major>=7&&major<=9)color.ClampOutput=true;
         }
         // Literal enum mappings verified against Poiyomi 7.3 and 8.1/9.3/10.0 shader sources.
         // Kept outside the unified model: only the parser knows the source numeric values.
@@ -231,11 +249,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
             AtlasSemanticReader.Texture(m,d,reflections,"cubemap","_CubeMap");
             AtlasSemanticReader.NumberSet(m,reflections,"cubemapSmoothness","_CubeMapSmoothness");
         }
-        private static void ColorProcessing(Material m,AtlasUnifiedMaterial d)
+        private static void ColorProcessing(Material m,AtlasUnifiedMaterial d,int major)
         {
             d.ColorProcessing.HueShift=AtlasMaterialReader.Float(m,"_MainHueShift",0f);
-            d.ColorProcessing.Saturation=AtlasMaterialReader.Float(m,"_Saturation",1f);
-            d.ColorProcessing.Brightness=AtlasMaterialReader.Float(m,"_MainBrightness",0f);
+            MapSaturationAndBrightness(d.ColorProcessing,major,
+                AtlasMaterialReader.Float(m,"_Saturation",0f),AtlasMaterialReader.Float(m,"_MainBrightness",0f));
             d.ColorProcessing.Gamma=AtlasMaterialReader.Float(m,"_MainGamma",1f);
             var feature=AtlasSemanticReader.Feature(d,"color.adjustment",AtlasSemanticReader.Toggle(m,"_MainColorAdjustToggle"));
             AtlasSemanticReader.Texture(m,d,feature,"mask","_MainColorAdjustTexture");

@@ -330,10 +330,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var color=d.ColorProcessing;
             color.Enabled=B(m,"_MainColorAdjustToggle");
-            color.Saturation=F(m,"_Saturation",color.Saturation);
+            // Saturation and brightness are version-dependent; the unified parser maps them.
             color.Chromatize=F(m,"_MainChromatize");
-            color.ClampOutput=B(m,"_MainColorAdjustClamp");
-            color.Tint.Color=C(m,"_MainTintColor",Color.white);
+            // Keep the clamp that older versions always apply (set by the unified parser).
+            color.ClampOutput|=B(m,"_MainColorAdjustClamp");
+            // Poiyomi 10's tint is perceptual, mixed in by its alpha (default 0 = off). Older
+            // versions have no tint, so the default white multiply leaves colors unchanged.
+            if(m.HasProperty("_MainTintColor"))
+            {
+                color.Tint.Color=C(m,"_MainTintColor",new Color(1f,1f,1f,0f));
+                color.TintMode=AtlasTintMode.Perceptual;
+            }
             color.Tint.Map=AtlasMaterialReader.Sample(m,"_MainTintTexture",AtlasColorInterpretation.ColorSRGB,d);
             var f=Feature(d,"color.adjustment",color.Enabled);
             N(m,f,"bakeMode","_BakeColorAdjust");
