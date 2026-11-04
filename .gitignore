@@ -1,0 +1,15 @@
+# Release build output (Tools/Release)
+dist/
+site/
+__pycache__/
+
+# Windows download markers that WSL turns into real files, and the .meta files Unity
+# generates for them
+*Zone.Identifier*
+
+# OS and editor clutter
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
