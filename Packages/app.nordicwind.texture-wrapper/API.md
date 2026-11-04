@@ -28,7 +28,8 @@ A texture held in memory as float RGBA plus a per-pixel *usage* flag.
 | Member | Description |
 |---|---|
 | `NordicsTextureWrapper(int width, int height, TextureSettings settings = null)` | Creates an empty, writable texture. All pixels are clear and unused. `settings` is copied; `null` uses default settings. |
-| `NordicsTextureWrapper(Texture2D source, bool readOnly = true)` | Loads a readable `Texture2D` (Read/Write enabled). Every pixel is marked used. Wrap mode, filter mode, anisotropic level and mipmaps are copied from the source. `Settings.SRGB` is set from the source's format: an sRGB texture's colors are decoded to linear, a linear texture's values are kept as stored. The data type is **not** detected: for normal maps, create the wrapper with normal settings or convert the data yourself. |
+| `NordicsTextureWrapper(Texture2D source, bool readOnly = true)` | Loads a texture as `Color` data. Same as the overload below. |
+| `NordicsTextureWrapper(Texture2D source, TextureDataType dataType, bool readOnly = true)` | Loads level 0 of a texture, any format. Read/Write doesn't need to be enabled: textures without it are read through the GPU (not available in `-nographics` batch mode). Every pixel is marked used. Wrap mode, filter mode, anisotropic level and mipmaps are copied from the source. `Settings.SRGB` is set from the source's format: an sRGB texture's colors are decoded to linear, a linear texture's values are kept as stored. For `NormalTangent`, the stored packing is decoded into vectors and Z is rebuilt from X and Y: X is read from alpha when the alpha channel varies (DXT5nm style), otherwise from red (BC5 or plain RGB). `NormalObject` and `NormalWorld` decode RGB as XYZ. Decoded normals have alpha 1. In the Editor, `TextureAssetUtility.Load` picks the data type for you. |
 | `NordicsTextureWrapper Clone()` | Deep copy of settings, pixels and usage. The copy is writable and has no cached texture or export target. |
 | `NordicsTextureWrapper CloneEmpty(int? width = null, int? height = null)` | Same settings, empty buffers, optionally a different size. |
 | `void Dispose()` | Frees the buffers and any texture the wrapper created itself. Textures it didn't create (sources, exported assets) are left alone. |
@@ -179,7 +180,16 @@ that take a `Color`.
 | `TextureColorSpace` | `LinearRGB`, `SRGB`, `HSV`, `OKLab` |
 | `ColorOperationCode` | See the color operation table above. |
 
-## Exporters (Editor assembly)
+## Editor assembly
+
+### Loading
+
+| Member | Description |
+|---|---|
+| `TextureAssetUtility.GetDataType(Texture2D texture)` | `NormalTangent` when the texture's importer marks it as a normal map, otherwise `Color` for sRGB textures and `LinearData` for linear ones. |
+| `TextureAssetUtility.Load(Texture2D texture, bool readOnly = true)` | Loads a texture with the data type from `GetDataType`. |
+
+### Exporters
 
 | Type | Description |
 |---|---|

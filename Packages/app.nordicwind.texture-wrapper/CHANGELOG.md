@@ -24,6 +24,15 @@ Newest first. Versions follow [SemVer](https://semver.org).
 - The `Mixed` blend mode is now `base + base × blend` instead of a copy of `Average`.
 
 ### Added
+- **Loading any texture.** Textures without Read/Write, compressed or not, are read through
+  the GPU instead of throwing.
+- **Normal map decoding.** A new constructor overload takes a `TextureDataType`. For
+  `NormalTangent`, the stored packing is decoded into vectors (DXT5nm style with X in alpha,
+  or BC5/RGB with X in red) and Z is rebuilt. Object and world-space normals decode RGB as XYZ.
+- `TextureAssetUtility` (Editor): `GetDataType` reads a texture's data type from its import
+  settings, and `Load` loads it with that type.
+- Loading tests: the GPU path and its orientation, sRGB decoding through the GPU, both normal
+  packings readable and not, object-space normals, and a real imported normal map.
 - `Colorize` color operation: a perceptual tint that keeps the pixel's lightness, takes the
   hue from the color, and scales chroma by the color's saturation.
 - `ColorOperationParameters.ColorMap`: varies an operation's color per pixel, for example a

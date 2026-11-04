@@ -36,39 +36,98 @@ namespace NordicWind.TextureWrapper
             _pixels=new Color[checked(width*height)];_usage=new byte[_pixels.Length];
             _normalized=true;
         }
-        public NordicsTextureWrapper(Texture2D source,bool readOnly=true)
-            : this(source!=null?source.width:throw new ArgumentNullException(nameof(source)),source.height,InferSettings(source),readOnly)
+        /// <summary>Loads a texture as color or data. See the overload with a data type.</summary>
+        public NordicsTextureWrapper(Texture2D source,bool readOnly=true) : this(source,TextureDataType.Color,readOnly) { }
+        /// <summary>Loads a texture. Textures without Read/Write are read through the GPU.
+        /// sRGB textures are decoded to linear. Normal data types decode the stored packing
+        /// into signed vectors.</summary>
+        public NordicsTextureWrapper(Texture2D source,TextureDataType dataType,bool readOnly=true)
+            : this(source!=null?source.width:throw new ArgumentNullException(nameof(source)),source.height,InferSettings(source,dataType),readOnly)
         {
-            if(!source.isReadable) throw new ArgumentException("Source texture is not readable. Enable Read/Write or provide a GPU-readback texture.",nameof(source));
-            if(Settings.SRGB && !Normal)
+            bool srgb=GraphicsFormatUtility.IsSRGBFormat(source.graphicsFormat);
+            Color[] colors;
+            if(!source.isReadable)
+            {
+                // The GPU decodes sRGB textures when sampling, but only in a linear-color-space
+                // project. Decode here otherwise, so the result is the same either way.
+                colors=ReadThroughGpu(source);
+                if(srgb && QualitySettings.activeColorSpace!=ColorSpace.Linear)
+                    for(int i=0;i<colors.Length;i++){Color c=colors[i];colors[i]=new Color(MathUtil.SRGBToLinear(c.r),MathUtil.SRGBToLinear(c.g),MathUtil.SRGBToLinear(c.b),c.a);}
+            }
+            else if(srgb)
             {
                 // The buffer holds what a shader reads: the GPU decodes sRGB textures to
                 // linear when sampling, so decode here too. sRGB formats are 8-bit, so a
                 // lookup table is exact. Alpha is never sRGB-encoded.
                 Color32[] bytes=source.GetPixels32();
                 float[] lut=MathUtil.SRGBByteToLinear;
-                for(int i=0;i<bytes.Length;i++)
-                {
-                    Color32 b=bytes[i];
-                    _pixels[i]=new Color(lut[b.r],lut[b.g],lut[b.b],b.a/255f);_usage[i]=1;
-                }
+                colors=new Color[bytes.Length];
+                for(int i=0;i<bytes.Length;i++){Color32 b=bytes[i];colors[i]=new Color(lut[b.r],lut[b.g],lut[b.b],b.a/255f);}
             }
-            else
-            {
-                Color[] colors=source.GetPixels();
-                for(int i=0;i<colors.Length;i++)
-                {
-                    Color c=colors[i];
-                    if(Normal) c=new Color(c.r*2f-1f,c.g*2f-1f,c.b*2f-1f,c.a);
-                    _pixels[i]=c;_usage[i]=1;
-                }
-            }
+            else colors=source.GetPixels();
+            if(Normal) DecodeNormals(colors,dataType==TextureDataType.NormalTangent);
+            Array.Copy(colors,_pixels,colors.Length);
+            for(int i=0;i<_usage.Length;i++)_usage[i]=1;
             _normalized=!Normal;
         }
-        private static TextureSettings InferSettings(Texture2D tex)
+        private static TextureSettings InferSettings(Texture2D tex,TextureDataType dataType)
         {
-            return new TextureSettings { WrapMode=tex.wrapMode,FilterMode=tex.filterMode,AnisoLevel=tex.anisoLevel, Mipmaps=tex.mipmapCount>1,
+            return new TextureSettings { DataType=dataType, WrapMode=tex.wrapMode,FilterMode=tex.filterMode,AnisoLevel=tex.anisoLevel, Mipmaps=tex.mipmapCount>1,
                 SRGB=GraphicsFormatUtility.IsSRGBFormat(tex.graphicsFormat) };
+        }
+        /// <summary>Reads level 0 as the GPU samples it: renders the texture into a float
+        /// render texture and reads that back. Works for any format, compressed or not.</summary>
+        private static Color[] ReadThroughGpu(Texture2D source)
+        {
+            int w=source.width,h=source.height;
+            var format=SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.ARGBFloat)?RenderTextureFormat.ARGBFloat:RenderTextureFormat.ARGBHalf;
+            var target=RenderTexture.GetTemporary(w,h,0,format,RenderTextureReadWrite.Linear);
+            var previous=RenderTexture.active;
+            Texture2D readback=null;
+            try
+            {
+                // Same size, so every pixel samples exactly one texel of level 0.
+                Graphics.Blit(source,target);
+                RenderTexture.active=target;
+                readback=new Texture2D(w,h,TextureFormat.RGBAFloat,false,true);
+                readback.ReadPixels(new Rect(0,0,w,h),0,0,false);
+                return readback.GetPixels();
+            }
+            finally
+            {
+                RenderTexture.active=previous;
+                RenderTexture.ReleaseTemporary(target);
+                if(readback!=null) DestroyTexture(readback);
+            }
+        }
+        private static void DestroyTexture(Texture2D texture)
+        {
+#if UNITY_EDITOR
+            if(!Application.isPlaying){UnityEngine.Object.DestroyImmediate(texture);return;}
+#endif
+            UnityEngine.Object.Destroy(texture);
+        }
+        /// <summary>Turns stored normal-map values into signed vectors, with alpha 1.
+        /// Tangent-space maps rebuild Z from X and Y, which covers every common packing:
+        /// X in alpha and Y in green (DXT5nm style) when the alpha channel varies, otherwise
+        /// X in red and Y in green (BC5, or uncompressed RGB, whose stored Z is ignored).
+        /// Object and world-space maps decode RGB as XYZ.</summary>
+        private static void DecodeNormals(Color[] colors,bool tangentSpace)
+        {
+            if(!tangentSpace)
+            {
+                for(int i=0;i<colors.Length;i++){Color c=colors[i];colors[i]=new Color(c.r*2f-1f,c.g*2f-1f,c.b*2f-1f,1f);}
+                return;
+            }
+            bool xInAlpha=false;
+            for(int i=0;i<colors.Length&&!xInAlpha;i++)xInAlpha=colors[i].a<.99f;
+            for(int i=0;i<colors.Length;i++)
+            {
+                Color c=colors[i];
+                float x=(xInAlpha?c.a:c.r)*2f-1f,y=c.g*2f-1f;
+                float z=Mathf.Sqrt(Mathf.Max(0f,1f-x*x-y*y));
+                colors[i]=new Color(x,y,z,1f);
+            }
         }
         private void Check() {if(_disposed)throw new ObjectDisposedException(nameof(NordicsTextureWrapper));}
         private void Writable() {Check();if(IsReadOnly)throw new InvalidOperationException("Wrapper is read-only. Clone it before editing.");}

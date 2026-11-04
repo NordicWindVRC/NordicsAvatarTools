@@ -37,7 +37,7 @@ anything removed is marked `[Obsolete]` for at least one minor version first.
 using NordicWind.TextureWrapper;
 using UnityEngine;
 
-// Load two textures (they must have Read/Write enabled), and tile the detail 8×8.
+// Load two textures (Read/Write isn't needed), and tile the detail 8×8.
 using var baseColor = new NordicsTextureWrapper(baseTexture);
 using var detailSource = new NordicsTextureWrapper(detailTexture);
 using var detail = detailSource.Resize(512, 512, scale: new Vector2(8, 8));
@@ -72,6 +72,9 @@ Texture2D preview = atlas.GetTexture2D();                                       
   color can vary it per pixel with a color map, such as a tint texture.
 - **Normal maps:** signed vector storage, lazy normalization, and RNM, Whiteout and lerp
   blending.
+- **Loading:** any `Texture2D`, with or without Read/Write and compressed or not. Normal maps
+  are decoded from their stored packing (DXT5nm, BC5 or RGB). In the Editor,
+  `TextureAssetUtility.Load` reads the data type from the import settings.
 - **Mesh baking:** rasterize triangles with interpolated vertex values, with sub-pixel coverage.
 - **Normal correction:** express one normal field in another mesh's tangent frame
   (`BakeNormalDifference`), for correcting simplified meshes.
@@ -89,9 +92,9 @@ Known gaps, in no particular order:
   implementation on real meshes.
 - **Accuracy:** area downsampling and triangle coverage use bounded supersampling, not exact
   area integration. Padding extends border pixels and doesn't sample outside the UV island.
-- **Loading:** creating a wrapper from a `Texture2D` needs Read/Write enabled, and doesn't
-  detect or unpack normal maps (DXT5nm and BC5 store their channels differently). Set the
-  data type yourself.
+- **Loading with mipmap streaming:** textures without Read/Write are read from the GPU. When
+  mipmap streaming is active (it's off in edit mode by default), the full-resolution level
+  may not be loaded yet, and a lower level is read instead.
 - **GPU acceleration** for large textures.
 - **Performance benchmarks.**
 
