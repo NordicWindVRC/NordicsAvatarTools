@@ -2,6 +2,27 @@
 
 Newest first. Versions follow [SemVer](https://semver.org).
 
+## 0.10.0 — unreleased
+
+### Changed
+- **Behaviour change: colors are linear inside the wrapper.** The C# API is unchanged, but
+  results differ for sRGB textures and sRGB output:
+  - Loading an sRGB `Texture2D` decodes its colors to linear. A linear texture's values are
+    kept as stored.
+  - Output with `Settings.SRGB = true` is sRGB-encoded, in `GetEncodedPixels`, `GetTexture2D`
+    and both exporters.
+  - Blending, filtering and color operations now work on linear values, like shaders and
+    GPU filtering do. An unchanged sRGB texture still round-trips byte for byte.
+  - Colors passed in must be linear. Convert material colors with `Color.linear`.
+
+### Fixed
+- Loading a linear (non-sRGB) texture left `Settings.SRGB` on. It now follows the source's
+  format.
+
+### Added
+- Color space tests: sRGB and linear loading, an exact round trip of all 256 values,
+  encoding on output, normal maps never encoded, and filtering in linear space.
+
 ## 0.9.1 — 2026-11-04
 
 New naming convension on the package name in VCC.

@@ -90,7 +90,8 @@ namespace NordicWind.TextureWrapper.Tests
         }
         [Test] public void TriangleColorAccumulation_PreservesOverbrightRgbAndCoverageUntilEncoding()
         {
-            using(var w=new NordicsTextureWrapper(8,8,new TextureSettings { DataType=TextureDataType.Color, Mipmaps=false }))
+            // Linear output, so the encoded values show clamping only, without sRGB encoding.
+            using(var w=new NordicsTextureWrapper(8,8,new TextureSettings { DataType=TextureDataType.Color, SRGB=false, Mipmaps=false }))
             {
                 var color=new Color(.7f,.4f,.2f,.75f);
                 for(int i=0;i<3;i++) Paint(w,color);

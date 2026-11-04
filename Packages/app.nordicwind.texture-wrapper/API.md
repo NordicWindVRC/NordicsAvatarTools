@@ -10,6 +10,10 @@ Conventions used throughout:
   axes, with the origin bottom-left like Unity textures. `null` means the whole texture.
 - **Pixel coordinates** `(x, y)` are integers from `0` to `Width - 1` / `Height - 1`.
 - **Rotation** is in **degrees**, around the center of the selected region.
+- **Colors are linear.** Pixel values, and every color you pass in (`Fill`, `SetPixel`, color
+  operations), are the linear values a shader reads. Convert colors read from a material or
+  picked in the editor with `Color.linear`. sRGB is applied only when loading and saving
+  sRGB textures. Alpha is never converted.
 - Methods validate their input. Non-finite numbers, out-of-range pixels, negative padding
   and undefined enum values throw `ArgumentException` or `ArgumentOutOfRangeException`.
   Writing to a read-only wrapper throws `InvalidOperationException`, and using a disposed
@@ -24,7 +28,7 @@ A texture held in memory as float RGBA plus a per-pixel *usage* flag.
 | Member | Description |
 |---|---|
 | `NordicsTextureWrapper(int width, int height, TextureSettings settings = null)` | Creates an empty, writable texture. All pixels are clear and unused. `settings` is copied; `null` uses default settings. |
-| `NordicsTextureWrapper(Texture2D source, bool readOnly = true)` | Loads a readable `Texture2D` (Read/Write enabled). Every pixel is marked used. Wrap mode, filter mode, anisotropic level and mipmaps are copied from the source. The data type is **not** detected: for normal maps, create the wrapper with normal settings or convert the data yourself. |
+| `NordicsTextureWrapper(Texture2D source, bool readOnly = true)` | Loads a readable `Texture2D` (Read/Write enabled). Every pixel is marked used. Wrap mode, filter mode, anisotropic level and mipmaps are copied from the source. `Settings.SRGB` is set from the source's format: an sRGB texture's colors are decoded to linear, a linear texture's values are kept as stored. The data type is **not** detected: for normal maps, create the wrapper with normal settings or convert the data yourself. |
 | `NordicsTextureWrapper Clone()` | Deep copy of settings, pixels and usage. The copy is writable and has no cached texture or export target. |
 | `NordicsTextureWrapper CloneEmpty(int? width = null, int? height = null)` | Same settings, empty buffers, optionally a different size. |
 | `void Dispose()` | Frees the buffers and any texture the wrapper created itself. Textures it didn't create (sources, exported assets) are left alone. |
@@ -42,7 +46,7 @@ A texture held in memory as float RGBA plus a per-pixel *usage* flag.
 
 | Member | Description |
 |---|---|
-| `Color GetPixel(int x, int y)` | Raw value, which may be outside 0–1. Normal maps are normalized first. |
+| `Color GetPixel(int x, int y)` | Raw linear value, which may be outside 0–1. Normal maps are normalized first. |
 | `Color GetPixel(Vector2 uv)` | Nearest-pixel value at a UV position. |
 | `void SetPixel(int x, int y, Color color)` / `SetPixel(Vector2 uv, Color color)` | Writes a value and marks the pixel used. |
 | `bool IsPixelUsed(int x, int y)` / `IsPixelUsed(Vector2 uv)` | Reads the usage flag. |
@@ -80,7 +84,7 @@ modes require both to be unset.
 |---|---|
 | `Texture2D GetTexture2D()` | Returns a Unity texture kept in sync with the wrapper: created on first call, updated when pixels or settings change. The wrapper owns it, unless an exporter is set. |
 | `TextureFormat GetOutputTextureFormat()` | `RGB24` or `RGBA32`, following `Settings.OutputChannels`. |
-| `Color[] GetEncodedPixels()` | Output values: clamped to 0–1, with normals encoded as `(n + 1) / 2`. |
+| `Color[] GetEncodedPixels()` | Output values: clamped to 0–1, then sRGB-encoded when `Settings.SRGB` is `true`. Normals are encoded as `(n + 1) / 2` instead. Alpha is only clamped. |
 | `Texture2D Export(INordicsTextureExporter exporter, string name)` | Sets an export target and synchronizes it. Later `GetTexture2D()` calls keep that target up to date. |
 
 ## `TextureSettings` (serializable class)
@@ -88,7 +92,7 @@ modes require both to be unset.
 | Field | Default | Description |
 |---|---|---|
 | `TextureDataType DataType` | `Color` | What the pixels mean. The `Normal*` types store signed vectors. |
-| `bool SRGB` | `true` | Output as sRGB color. Ignored for normal maps. |
+| `bool SRGB` | `true` | sRGB output: RGB is encoded on output, and the texture is marked sRGB, so a shader reads the wrapper's linear values back. Use `false` for masks and data. Ignored for normal maps. |
 | `bool Mipmaps` | `true` | Generate mipmaps on output. |
 | `FilterMode FilterMode` | `Bilinear` | Output filter mode. |
 | `TextureWrapMode WrapMode` | `Repeat` | Default wrap for sampling and output. |

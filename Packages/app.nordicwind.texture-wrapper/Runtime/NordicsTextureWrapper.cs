@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 
 namespace NordicWind.TextureWrapper
 {
@@ -39,18 +40,35 @@ namespace NordicWind.TextureWrapper
             : this(source!=null?source.width:throw new ArgumentNullException(nameof(source)),source.height,InferSettings(source),readOnly)
         {
             if(!source.isReadable) throw new ArgumentException("Source texture is not readable. Enable Read/Write or provide a GPU-readback texture.",nameof(source));
-            Color[] colors=source.GetPixels();
-            for(int i=0;i<colors.Length;i++)
+            if(Settings.SRGB && !Normal)
             {
-                Color c=colors[i];
-                if(Normal) c=new Color(c.r*2f-1f,c.g*2f-1f,c.b*2f-1f,c.a);
-                _pixels[i]=c;_usage[i]=1;
+                // The buffer holds what a shader reads: the GPU decodes sRGB textures to
+                // linear when sampling, so decode here too. sRGB formats are 8-bit, so a
+                // lookup table is exact. Alpha is never sRGB-encoded.
+                Color32[] bytes=source.GetPixels32();
+                float[] lut=MathUtil.SRGBByteToLinear;
+                for(int i=0;i<bytes.Length;i++)
+                {
+                    Color32 b=bytes[i];
+                    _pixels[i]=new Color(lut[b.r],lut[b.g],lut[b.b],b.a/255f);_usage[i]=1;
+                }
+            }
+            else
+            {
+                Color[] colors=source.GetPixels();
+                for(int i=0;i<colors.Length;i++)
+                {
+                    Color c=colors[i];
+                    if(Normal) c=new Color(c.r*2f-1f,c.g*2f-1f,c.b*2f-1f,c.a);
+                    _pixels[i]=c;_usage[i]=1;
+                }
             }
             _normalized=!Normal;
         }
         private static TextureSettings InferSettings(Texture2D tex)
         {
-            return new TextureSettings { WrapMode=tex.wrapMode,FilterMode=tex.filterMode,AnisoLevel=tex.anisoLevel, Mipmaps=tex.mipmapCount>1 };
+            return new TextureSettings { WrapMode=tex.wrapMode,FilterMode=tex.filterMode,AnisoLevel=tex.anisoLevel, Mipmaps=tex.mipmapCount>1,
+                SRGB=GraphicsFormatUtility.IsSRGBFormat(tex.graphicsFormat) };
         }
         private void Check() {if(_disposed)throw new ObjectDisposedException(nameof(NordicsTextureWrapper));}
         private void Writable() {Check();if(IsReadOnly)throw new InvalidOperationException("Wrapper is read-only. Clone it before editing.");}
@@ -660,8 +678,13 @@ namespace NordicWind.TextureWrapper
             // Only the output representation is bounded. The authoritative float
             // buffer retains unsaturated RGBA/coverage and signed normals.
             if (!Normal)
-                return new Color(Mathf.Clamp01(c.r), Mathf.Clamp01(c.g),
-                    Mathf.Clamp01(c.b), Mathf.Clamp01(c.a));
+            {
+                float r=Mathf.Clamp01(c.r), g=Mathf.Clamp01(c.g), b=Mathf.Clamp01(c.b);
+                // The buffer is linear. sRGB output stores encoded values, which the GPU
+                // decodes back to the buffer's values when a shader samples it.
+                if (Settings.SRGB) { r=MathUtil.LinearToSRGB(r); g=MathUtil.LinearToSRGB(g); b=MathUtil.LinearToSRGB(b); }
+                return new Color(r, g, b, Mathf.Clamp01(c.a));
+            }
             Vector3 n=MathUtil.SafeNormal(MathUtil.Normal(c));
             return new Color(Mathf.Clamp01((n.x+1f)*.5f),
                 Mathf.Clamp01((n.y+1f)*.5f),

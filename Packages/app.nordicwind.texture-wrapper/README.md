@@ -56,6 +56,9 @@ Texture2D preview = atlas.GetTexture2D();                                       
 
 - **Lossless working buffer:** RGBA in 32-bit float per channel, with no 8-bit rounding
   until export. Values outside 0–1 are kept until export.
+- **Linear color:** colors are processed as the linear values a shader reads. sRGB textures
+  are decoded when loaded and encoded again when saved, so an unchanged texture round-trips
+  exactly.
 - **Coverage tracking:** a separate per-pixel *usage* mask records which pixels contain real
   data, independent of alpha.
 - **Transforms:** resize, crop, tile, offset and rotate, with nearest, bilinear, bicubic and
@@ -88,15 +91,17 @@ Known gaps, in no particular order:
   implementation on real meshes.
 - **Accuracy:** area downsampling and triangle coverage use bounded supersampling, not exact
   area integration. Padding extends border pixels and doesn't sample outside the UV island.
-- **Loading:** creating a wrapper from a `Texture2D` doesn't detect that the texture is a
-  normal map. Set the data type yourself.
-- **Colour space:** linear/sRGB behaviour and normal-map packing need checking against
-  Unity's importer in more setups.
+- **Loading:** creating a wrapper from a `Texture2D` needs Read/Write enabled, and doesn't
+  detect or unpack normal maps (DXT5nm and BC5 store their channels differently). Set the
+  data type yourself.
 - **GPU acceleration** for large textures.
 - **Performance benchmarks.**
 
 ## Key concepts
 
+- **Colors are linear.** The buffer holds what a shader reads. Every color you pass in must be
+  linear too: convert material and editor colors with `Color.linear`. `Settings.SRGB` only
+  decides how the output is stored. Alpha is never converted.
 - **Pixels are data, alpha is data.** Blending strength comes from masks and the `strength`
   argument, never implicitly from the source alpha.
 - **Usage is coverage.** Usage is 0 or 1 per pixel. Painting, `Fill`, and padded `Blit`s

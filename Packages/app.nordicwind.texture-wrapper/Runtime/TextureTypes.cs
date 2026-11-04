@@ -104,5 +104,26 @@ namespace NordicWind.TextureWrapper
         internal static Vector3 Normal(Color c) => new Vector3(c.r, c.g, c.b);
         internal static Color Pack(Vector3 v, float alpha) => new Color(v.x, v.y, v.z, alpha);
         internal static Vector3 SafeNormal(Vector3 n) => n.sqrMagnitude > 1e-12f ? n.normalized : Vector3.forward;
+
+        // sRGB transfer functions (IEC 61966-2-1), computed in double precision so every
+        // 8-bit value survives a decode/encode round trip exactly.
+        internal static float SRGBToLinear(float v)
+        {
+            double d = v;
+            return (float)(d <= 0.04045 ? d / 12.92 : Math.Pow((d + 0.055) / 1.055, 2.4));
+        }
+        internal static float LinearToSRGB(float v)
+        {
+            double d = v;
+            return (float)(d <= 0.0031308 ? d * 12.92 : 1.055 * Math.Pow(d, 1.0 / 2.4) - 0.055);
+        }
+        /// <summary>Linear value of each 8-bit sRGB code, for decoding sRGB textures.</summary>
+        internal static readonly float[] SRGBByteToLinear = BuildSRGBTable();
+        private static float[] BuildSRGBTable()
+        {
+            var table = new float[256];
+            for (int i = 0; i < table.Length; i++) table[i] = SRGBToLinear(i / 255f);
+            return table;
+        }
     }
 }
