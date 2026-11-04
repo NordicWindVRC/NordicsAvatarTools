@@ -64,7 +64,7 @@ namespace NordicWind.TextureWrapper
                 case TextureBlendMode.Subtract: return a-b;
                 case TextureBlendMode.Add: return a+b;
                 case TextureBlendMode.Overlay: return a<=.5f ? 2f*a*b : 1f-2f*(1f-a)*(1f-b);
-                case TextureBlendMode.Mixed: return (a+b)*.5f;
+                case TextureBlendMode.Mixed: return a+a*b; // brightens by the blend value, scaled by the base
                 case TextureBlendMode.Divide: return a/Mathf.Max(Mathf.Abs(b),.0001f);
                 case TextureBlendMode.Average: return (a+b)*.5f;
                 default: throw new ArgumentOutOfRangeException(nameof(mode));
@@ -84,38 +84,40 @@ namespace NordicWind.TextureWrapper
             }
             throw new ArgumentOutOfRangeException(nameof(mode));
         }
-        internal static Color Apply(Color input,ColorOperation op)
+        /// <summary>Applies one operation. <paramref name="color"/> is the operation's color
+        /// for this pixel: <c>Parameters.Color</c>, multiplied by <c>Parameters.ColorMap</c> when set.</summary>
+        internal static Color Apply(Color input,ColorOperation op,Color color)
         {
             var p=op.Parameters ?? throw new ArgumentException("Color operation parameters are null.");
             float a=p.Amount;
             Color o=input;
             switch(op.Opcode)
             {
-                case ColorOperationCode.Multiply: o = new Color(input.r*p.Color.r,input.g*p.Color.g,input.b*p.Color.b,input.a*p.Color.a); break;
-                case ColorOperationCode.Tint:
-                    if(p.PoiyomiCompatibility)
-                    {
-                        Vector3 lab=ToOKLab(new Vector3(input.r,input.g,input.b));
-                        Vector3 tintLab=ToOKLab(new Vector3(p.Color.r,p.Color.g,p.Color.b));
-                        float mag=new Vector2(lab.y,lab.z).magnitude;
-                        float tintAngle=Mathf.Atan2(tintLab.z,tintLab.y);
-                        float tintChromatic=new Vector2(tintLab.y,tintLab.z).magnitude;
-                        lab.y=Mathf.Cos(tintAngle)*mag*tintChromatic;
-                        lab.z=Mathf.Sin(tintAngle)*mag*tintChromatic;
-                        Vector3 rgb=FromOKLab(lab);
-                        o=new Color(rgb.x,rgb.y,rgb.z,input.a);
-                        o=MathUtil.Lerp(input,o,p.Color.a);
-                    }
-                    else o = new Color(input.r*p.Color.r,input.g*p.Color.g,input.b*p.Color.b,input.a);
+                case ColorOperationCode.Multiply: o = new Color(input.r*color.r,input.g*color.g,input.b*color.b,input.a*color.a); break;
+                case ColorOperationCode.Tint: o = new Color(input.r*color.r,input.g*color.g,input.b*color.b,input.a); break;
+                case ColorOperationCode.Colorize: {
+                    // Perceptual tint in OKLab: keeps the pixel's lightness, takes the hue from
+                    // the color, and keeps as much of the pixel's chroma as the color is
+                    // saturated (a grey color makes the pixel grey). Mixed in by color.a.
+                    Vector3 lab=ToOKLab(new Vector3(input.r,input.g,input.b));
+                    Vector3 tintLab=ToOKLab(new Vector3(color.r,color.g,color.b));
+                    float hue=Mathf.Atan2(tintLab.z,tintLab.y);
+                    float tintMin=Mathf.Min(color.r,Mathf.Min(color.g,color.b)),tintMax=Mathf.Max(color.r,Mathf.Max(color.g,color.b));
+                    float tintSaturation=tintMax>.0001f?1f-tintMin/tintMax:0f;
+                    float chroma=new Vector2(lab.y,lab.z).magnitude*tintSaturation;
+                    lab.y=Mathf.Cos(hue)*chroma;lab.z=Mathf.Sin(hue)*chroma;
+                    Vector3 rgb=NonNegative(FromOKLab(lab));
+                    o=MathUtil.Lerp(input,new Color(rgb.x,rgb.y,rgb.z,input.a),color.a);
                     break;
-                case ColorOperationCode.Add: o=input+p.Color; break;
+                }
+                case ColorOperationCode.Add: o=input+color; break;
                 case ColorOperationCode.Invert: o=new Color(1-input.r,1-input.g,1-input.b,input.a); break;
                 case ColorOperationCode.Clamp: o=new Color(Mathf.Clamp(input.r,a,p.Amount2),Mathf.Clamp(input.g,a,p.Amount2),Mathf.Clamp(input.b,a,p.Amount2),input.a);break;
                 case ColorOperationCode.Gamma: o=new Color(PowSigned(input.r,a),PowSigned(input.g,a),PowSigned(input.b,a),input.a);break;
                 case ColorOperationCode.Exposure: {float m=Mathf.Pow(2,a);o=new Color(input.r*m,input.g*m,input.b*m,input.a);break;}
-                case ColorOperationCode.Brightness: {float m=p.PoiyomiCompatibility ? 1f+a : a;o=new Color(input.r*m,input.g*m,input.b*m,input.a);break;}
+                case ColorOperationCode.Brightness: o=new Color(input.r*a,input.g*a,input.b*a,input.a);break;
                 case ColorOperationCode.Contrast: o=new Color((input.r-.5f)*a+.5f,(input.g-.5f)*a+.5f,(input.b-.5f)*a+.5f,input.a);break;
-                case ColorOperationCode.Saturation: {float l=input.r*.30f+input.g*.59f+input.b*.11f;float k=p.PoiyomiCompatibility ? -a : 1f-a;o=new Color(Mathf.LerpUnclamped(input.r,l,k),Mathf.LerpUnclamped(input.g,l,k),Mathf.LerpUnclamped(input.b,l,k),input.a);break;}
+                case ColorOperationCode.Saturation: {float l=input.r*.30f+input.g*.59f+input.b*.11f;float k=1f-a;o=new Color(Mathf.LerpUnclamped(input.r,l,k),Mathf.LerpUnclamped(input.g,l,k),Mathf.LerpUnclamped(input.b,l,k),input.a);break;}
                 case ColorOperationCode.HueShift:
                 case ColorOperationCode.HueReplace: {
                     if(p.ColorSpace==TextureColorSpace.OKLab)
@@ -137,22 +139,20 @@ namespace NordicWind.TextureWrapper
                 case ColorOperationCode.Posterize: {float count=Mathf.Max(1,Mathf.Round(a));o=new Color(Mathf.Floor(input.r*count)/count,Mathf.Floor(input.g*count)/count,Mathf.Floor(input.b*count)/count,input.a);break;}
                 case ColorOperationCode.Levels: {float range=Mathf.Max(1e-6f,p.Amount2-a);o=new Color((input.r-a)/range,(input.g-a)/range,(input.b-a)/range,input.a);break;}
                 case ColorOperationCode.Chromatize: {
-                    if(p.PoiyomiCompatibility)
-                    {
-                        Vector3 linear=new Vector3(input.r,input.g,input.b);
-                        float min=Mathf.Min(linear.x,Mathf.Min(linear.y,linear.z));
-                        float max=Mathf.Max(linear.x,Mathf.Max(linear.y,linear.z));
-                        Vector3 reference=max-min>.0001f?(linear-Vector3.one*min)/(max-min):Vector3.right;
-                        Vector3 maxLab=ToOKLab(reference);
-                        float maxChroma=new Vector2(maxLab.y,maxLab.z).magnitude;
-                        Vector3 lab=ToOKLab(linear);
-                        float current=new Vector2(lab.y,lab.z).magnitude;
-                        float angle=Mathf.Atan2(lab.z,lab.y);
-                        float chroma=Mathf.Min(current*(1f+a),maxChroma);
-                        lab.y=chroma*Mathf.Cos(angle);lab.z=chroma*Mathf.Sin(angle);
-                        Vector3 rgb=FromOKLab(lab);o=new Color(rgb.x,rgb.y,rgb.z,input.a);
-                    }
-                    else {float l=(input.r+input.g+input.b)/3f;o=new Color(l+(input.r-l)*(1+a),l+(input.g-l)*(1+a),l+(input.b-l)*(1+a),input.a);}
+                    // Raises OKLab chroma by (1 + Amount), limited to the chroma of the fully
+                    // saturated color with the same hue, so colors never pass full saturation.
+                    Vector3 linear=new Vector3(input.r,input.g,input.b);
+                    float min=Mathf.Min(linear.x,Mathf.Min(linear.y,linear.z));
+                    float max=Mathf.Max(linear.x,Mathf.Max(linear.y,linear.z));
+                    Vector3 reference=max-min>.0001f?(linear-Vector3.one*min)/(max-min):Vector3.right;
+                    Vector3 maxLab=ToOKLab(reference);
+                    float maxChroma=new Vector2(maxLab.y,maxLab.z).magnitude;
+                    Vector3 lab=ToOKLab(linear);
+                    float current=new Vector2(lab.y,lab.z).magnitude;
+                    float angle=Mathf.Atan2(lab.z,lab.y);
+                    float chroma=Mathf.Min(current*(1f+a),maxChroma);
+                    lab.y=chroma*Mathf.Cos(angle);lab.z=chroma*Mathf.Sin(angle);
+                    Vector3 rgb=NonNegative(FromOKLab(lab));o=new Color(rgb.x,rgb.y,rgb.z,input.a);
                     break;
                 }
                 case ColorOperationCode.GradientMap: {
@@ -164,6 +164,8 @@ namespace NordicWind.TextureWrapper
             }
             return o;
         }
+        // OKLab results can fall slightly outside the RGB gamut; negative light isn't meaningful.
+        private static Vector3 NonNegative(Vector3 c) => new Vector3(Mathf.Max(0f,c.x),Mathf.Max(0f,c.y),Mathf.Max(0f,c.z));
         private static float Cbrt(float x) => Mathf.Sign(x)*Mathf.Pow(Mathf.Abs(x),1f/3f);
         private static Vector3 ToOKLab(Vector3 c)
         {

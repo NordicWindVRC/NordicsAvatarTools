@@ -117,7 +117,7 @@ out-of-range values.
 
 ## `TextureMaskOptions` (class)
 
-The mask value is computed in this order, following Poiyomi Toon 10's mask math:
+The mask value is computed in this order:
 
 1. **Channel:** `Channel` (default `AverageRGB`). If `UseChannelBlending` is set, R × `ChannelStrengths.x`
    is combined with G, B and A in turn using `ChannelBlendMode`, each weighted by its strength.
@@ -130,26 +130,31 @@ The mask value is computed in this order, following Poiyomi Toon 10's mask math:
 
 `ColorOperation` has `Opcode`, an optional `Mask` and `MaskOptions`, and `Parameters`.
 `ColorOperationParameters` has `Amount` (default 0), `Amount2` (default 1), `Amount3`, `Color`
-(default white), `ColorSpace` (default `HSV`), `PoiyomiCompatibility`, and `Gradient` (a wrapper).
+(default white), `ColorSpace` (default `HSV`), `Gradient` (a wrapper), and `ColorMap` (a wrapper).
+
+`ColorMap` is optional. When set, the operation's color for each pixel is `Color` multiplied by
+`ColorMap` sampled at that pixel (RGBA), for example a tint texture. It is used by the operations
+that take a `Color`.
 
 | `ColorOperationCode` | Uses | Effect (alpha is unchanged unless stated) |
 |---|---|---|
 | `HueShift` | `Amount`, `ColorSpace` | Rotates hue by `Amount` turns (1 = 360°), in HSV or OKLab. |
 | `HueReplace` | `Amount`, `ColorSpace` | Sets hue to `Amount` turns. |
-| `Saturation` | `Amount` | Standard: 1 = unchanged, 0 = grey. Poiyomi mode: 0 = unchanged, positive = more saturated. |
-| `Brightness` | `Amount` | Standard: multiplies by `Amount`. Poiyomi mode: multiplies by `1 + Amount`. |
+| `Saturation` | `Amount` | Mixes toward luminance (0.30, 0.59, 0.11). 1 = unchanged, 0 = grey, above 1 = more saturated. |
+| `Brightness` | `Amount` | Multiplies RGB by `Amount`. 1 = unchanged. |
 | `Contrast` | `Amount` | Scales around 0.5. 1 = unchanged. |
 | `Gamma` | `Amount` | Signed power: `sign(c) × abs(c) ^ Amount`. |
 | `Exposure` | `Amount` | Multiplies by `2 ^ Amount`. |
-| `Tint` | `Color` | Standard: multiplies RGB by `Color`. Poiyomi mode: OKLab tint, mixed in by `Color.a`. |
-| `Multiply` | `Color` | Multiplies RGBA by `Color`. |
-| `Add` | `Color` | Adds `Color` to RGBA. |
+| `Tint` | `Color`, `ColorMap` | Multiplies RGB by the color. |
+| `Colorize` | `Color`, `ColorMap` | Perceptual tint in OKLab: keeps the pixel's lightness, takes the hue from the color, and scales the pixel's chroma by the color's saturation (`1 - min/max` of its RGB), so a grey color gives grey. Mixed in by the color's alpha. Negative results are clipped to 0. |
+| `Multiply` | `Color`, `ColorMap` | Multiplies RGBA by the color. |
+| `Add` | `Color`, `ColorMap` | Adds the color to RGBA. |
 | `Invert` | — | `1 - c` for RGB. |
 | `Clamp` | `Amount`, `Amount2` | Clamps RGB to `[Amount, Amount2]`. |
 | `Levels` | `Amount`, `Amount2` | Remaps `[Amount, Amount2]` to `[0, 1]`. |
 | `Posterize` | `Amount` | Rounds RGB to `Amount` steps. |
 | `GradientMap` | `Gradient` | Replaces RGB with `Gradient` sampled at the pixel's luminance (0.30, 0.59, 0.11). |
-| `Chromatize` | `Amount` | Raises chroma by `1 + Amount`. Poiyomi mode works in OKLab and is limited to the maximum chroma for the hue. |
+| `Chromatize` | `Amount` | Raises OKLab chroma by `1 + Amount`, keeping hue and lightness, limited to the chroma of the fully saturated color with the same hue. Negative results are clipped to 0. |
 
 ## Other types
 
@@ -166,7 +171,7 @@ The mask value is computed in this order, following Poiyomi Toon 10's mask math:
 | `TextureDataType` | `Color`, `LinearData`, `Mask`, `NormalTangent`, `NormalObject`, `NormalWorld` |
 | `TextureSamplingMode` | `Nearest`, `Bilinear`, `Bicubic`, `Area` |
 | `TextureChannel` | `R`, `G`, `B`, `A`, `AverageRGB`, `Usage` |
-| `TextureBlendMode` | `Replace`, `Darken`, `Multiply`, `Lighten`, `Screen`, `Subtract`, `Add`, `Overlay`, `Mixed`, `Divide`, `Average`, `NormalLerp`, `NormalRNM`, `NormalWhiteout` |
+| `TextureBlendMode` | `Replace`, `Darken`, `Multiply`, `Lighten`, `Screen`, `Subtract`, `Add`, `Overlay`, `Mixed`, `Divide`, `Average`, `NormalLerp`, `NormalRNM`, `NormalWhiteout`. `Mixed` brightens by the blend scaled by the base: `base + base × blend`, so black stays black. |
 | `TextureMaskBlendMode` | `Replace`, `Subtract`, `Multiply`, `Divide`, `Min`, `Max`, `Average`, `Add` |
 | `TriangleRasterizationMode` | `Fast`, `Quality` |
 | `TextureCompression` | `None`, `Low`, `Normal`, `High` |

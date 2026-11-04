@@ -32,7 +32,7 @@ namespace NordicWind.TextureWrapper.Tests
                 Assert.IsFalse(dst.IsPixelUsed(0,0));
             }
         }
-        [Test] public void MaskRemap_RespectsPoiyomiFormula()
+        [Test] public void MaskRemap_MapsMinMaxToZeroOne()
         {
             var mask=new TextureMaskOptions{Channel=TextureChannel.R,Min=.25f,Max=.75f};
             Assert.AreEqual(.5f,TextureMaskCheck(new Color(.5f,0,0,1),mask),.0001f);

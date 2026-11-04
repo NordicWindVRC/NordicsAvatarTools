@@ -12,7 +12,7 @@ namespace NordicWind.TextureWrapper
     public enum TriangleRasterizationMode { Fast, Quality }
     public enum TextureCompression { None, Low, Normal, High }
     public enum TextureOutputChannels { Auto, RGB, RGBA }
-    public enum ColorOperationCode { HueShift, HueReplace, Saturation, Brightness, Contrast, Gamma, Exposure, Tint, Multiply, Add, Invert, Clamp, Levels, Posterize, GradientMap, Chromatize }
+    public enum ColorOperationCode { HueShift, HueReplace, Saturation, Brightness, Contrast, Gamma, Exposure, Tint, Multiply, Add, Invert, Clamp, Levels, Posterize, GradientMap, Chromatize, Colorize }
     public enum TextureColorSpace { LinearRGB, SRGB, HSV, OKLab }
 
     [Serializable]
@@ -71,8 +71,10 @@ namespace NordicWind.TextureWrapper
         public float Amount3 = 0f;
         public Color Color = Color.white;
         public TextureColorSpace ColorSpace = TextureColorSpace.HSV;
-        public bool PoiyomiCompatibility;
         public NordicsTextureWrapper Gradient;
+        /// <summary>Optional. Multiplies <see cref="Color"/> per pixel (RGBA), sampled at the
+        /// pixel's position, for operations that use a color: Tint, Colorize, Multiply, Add.</summary>
+        public NordicsTextureWrapper ColorMap;
     }
     public sealed class ColorOperation
     {

@@ -236,8 +236,18 @@ namespace NordicWind.TextureWrapper
                 op.MaskOptions?.Validate();
             }
         }
+        // Prepares every texture an operation reads before the parallel loop, so worker
+        // threads only read them.
         private static void PrepareOperationMasks(IReadOnlyList<ColorOperation> operations)
-        {if(operations!=null)foreach(var op in operations)if(op.Mask!=null){op.Mask.Check();if(op.Mask.Normal)op.Mask.EnsureNormalized();}}
+        {
+            if(operations==null)return;
+            foreach(var op in operations)
+            {
+                if(op.Mask!=null){op.Mask.Check();if(op.Mask.Normal)op.Mask.EnsureNormalized();}
+                var map=op.Parameters.ColorMap;
+                if(map!=null){map.Check();if(map.Normal)map.EnsureNormalized();}
+            }
+        }
         private static Color ApplyOperations(Color original,Vector2 local,IReadOnlyList<ColorOperation> operations)
         {
             if(operations==null)return original;
@@ -251,7 +261,11 @@ namespace NordicWind.TextureWrapper
                     bool used=op.Mask.SampleUsage(local,TextureSamplingMode.Nearest,op.Mask.Settings.WrapMode);
                     influence=TextureMath.EvaluateMask(sample,used,op.MaskOptions);
                 }
-                if(influence>0f)c=MathUtil.Lerp(c,TextureMath.Apply(c,op),influence);
+                if(influence<=0f)continue;
+                Color color=op.Parameters.Color;
+                var map=op.Parameters.ColorMap;
+                if(map!=null)color*=map.SampleRaw(local,TextureSamplingMode.Bilinear,map.Settings.WrapMode);
+                c=MathUtil.Lerp(c,TextureMath.Apply(c,op,color),influence);
             }
             return c;
         }
@@ -259,7 +273,9 @@ namespace NordicWind.TextureWrapper
         public void ApplyColor(IReadOnlyList<ColorOperation> operations,Rect? region=null)
         {
             Writable();ValidateOperations(operations);ValidateRect(region);if(operations==null||operations.Count==0)return;
-            foreach(var operation in operations)if(ReferenceEquals(operation.Mask,this))throw new ArgumentException("An operation mask cannot be the mutable destination. Clone it first.");
+            foreach(var operation in operations)
+                if(ReferenceEquals(operation.Mask,this)||ReferenceEquals(operation.Parameters.ColorMap,this))
+                    throw new ArgumentException("An operation mask or color map cannot be the mutable destination. Clone it first.");
             PrepareOperationMasks(operations);if(Normal)EnsureNormalized();
             PixelBounds(region,out int x0,out int y0,out int x1,out int y1);
             ForRows(x1-x0,y1-y0,dy=>

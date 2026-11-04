@@ -65,11 +65,11 @@ Texture2D preview = atlas.GetTexture2D();                                       
   area sampling and per-operation wrap modes.
 - **Composition:** `Blit` with 14 blend modes, including three for normal maps, plus
   channel routing, masks, strength and padding.
-- **Poiyomi-compatible masks:** channel blending, remap, gamma, strength, offset and invert,
-  following Poiyomi Toon 10's mask math.
+- **Masks:** channel blending, remap, gamma, strength, offset and invert.
 - **Color operations:** hue shift and replace (HSV or OKLab), saturation, brightness, contrast,
-  gamma, exposure, tint, multiply, add, invert, clamp, levels, posterize, gradient map and
-  chromatize, each optionally masked.
+  gamma, exposure, tint, colorize (perceptual tint), multiply, add, invert, clamp, levels,
+  posterize, gradient map and chromatize, each optionally masked. Operations that take a
+  color can vary it per pixel with a color map, such as a tint texture.
 - **Normal maps:** signed vector storage, lazy normalization, and RNM, Whiteout and lerp
   blending.
 - **Mesh baking:** rasterize triangles with interpolated vertex values, with sub-pixel coverage.
@@ -84,9 +84,7 @@ Texture2D preview = atlas.GetTexture2D();                                       
 
 Known gaps, in no particular order:
 
-- **Poiyomi parity:** the per-channel gradient map, the full Tint formula, and the *Mixed*
-  blend mode don't match Poiyomi exactly yet. RNM normal blending needs a numerical
-  comparison against a reference implementation.
+- **RNM normal blending** needs a numerical comparison against a reference implementation.
 - **Normal correction:** `BakeNormalDifference` needs validation against a reference
   implementation on real meshes.
 - **Accuracy:** area downsampling and triangle coverage use bounded supersampling, not exact
@@ -138,13 +136,16 @@ These are part of the API and covered by tests:
 ## Tests
 
 In Unity, open **Window → General → Test Runner → EditMode** and run
-`NordicWind.TextureWrapper.Tests`. Before relying on Poiyomi parity, compare mask and normal
-output with Poiyomi Toon 10 reference images in a controlled linear/sRGB setup.
+`NordicWind.TextureWrapper.Tests`.
 
 ## Design decisions
 
 - The wrapper is one step in a pipeline, never an all-in-one material converter. Callers
   decide the order of operations, atlas layout and asset lifetime.
+- **Shader-neutral.** The wrapper knows no shaders or shader versions. Operations are named
+  by what they do, and callers map shader features onto them. Ideas from a particular shader
+  are welcome when they're useful in general, but results aren't meant to match any shader
+  exactly.
 - The float buffer is authoritative. 8-bit rounding happens only at output.
 - Changing data or normalization invalidates cached output. Changed disk output is saved
   again, and importer settings are re-applied.
@@ -153,9 +154,10 @@ output with Poiyomi Toon 10 reference images in a controlled linear/sRGB setup.
 
 ## Attribution
 
-No Poiyomi source files are included. The compatible algorithms were written by comparison
-with the Poiyomi Toon 10 shader source (MIT license). Poiyomi is a separate project, and its
-shader source and license remain with its authors.
+The *Mixed* blend mode, `Colorize`, `Chromatize` and the mask channel blending are based on
+formulas in the Poiyomi Toon 10 shader source (MIT license). No Poiyomi source files are
+included. Poiyomi is a separate project, and its shader source and license remain with its
+authors.
 
 ## Version and status
 

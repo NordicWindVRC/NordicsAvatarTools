@@ -14,14 +14,28 @@ Newest first. Versions follow [SemVer](https://semver.org).
   - Blending, filtering and color operations now work on linear values, like shaders and
     GPU filtering do. An unchanged sRGB texture still round-trips byte for byte.
   - Colors passed in must be linear. Convert material colors with `Color.linear`.
+- **Breaking: the wrapper is shader-neutral.** `ColorOperationParameters.PoiyomiCompatibility`
+  is removed, and with it the alternative operation modes:
+  - `Saturation` and `Brightness` always use their standard scales (1 = unchanged). Pass
+    `1 + amount` where a shader uses 0 = unchanged.
+  - `Tint` always multiplies. The perceptual tint is the new `Colorize` operation.
+  - `Chromatize` always uses the OKLab version, limited to the chroma of the fully saturated
+    color with the same hue. The simple RGB version is gone.
+- The `Mixed` blend mode is now `base + base × blend` instead of a copy of `Average`.
+
+### Added
+- `Colorize` color operation: a perceptual tint that keeps the pixel's lightness, takes the
+  hue from the color, and scales chroma by the color's saturation.
+- `ColorOperationParameters.ColorMap`: varies an operation's color per pixel, for example a
+  tint texture. Used by `Tint`, `Colorize`, `Multiply` and `Add`.
+- Color space tests: sRGB and linear loading, an exact round trip of all 256 values,
+  encoding on output, normal maps never encoded, and filtering in linear space.
+- Color operation tests: `Mixed`, `Colorize`, `Chromatize`, standard `Saturation` and
+  `Brightness`, and color maps.
 
 ### Fixed
 - Loading a linear (non-sRGB) texture left `Settings.SRGB` on. It now follows the source's
   format.
-
-### Added
-- Color space tests: sRGB and linear loading, an exact round trip of all 256 values,
-  encoding on output, normal maps never encoded, and filtering in linear space.
 
 ## 0.9.1 — 2026-11-04
 
