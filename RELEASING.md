@@ -137,6 +137,19 @@ The contents of the package folder, with `package.json` at the top. Excluded:
 
 The zip is reproducible: the same files always produce the same zip and checksum.
 
+### Release-only names
+
+`releaseOverrides` in `vpm.json` replaces fields of a package's `package.json` in the release
+zip and in the listing only. The repository's `package.json` isn't changed. It's used to give
+every package a "NordicWind - …" name in VCC while the tool itself keeps its own name, for
+example "Nordic's Texture Wrapper".
+
+- The listing applies the override to every version, including ones released before the
+  override was added. VCC shows the new name as soon as the listing is rebuilt.
+- Projects that installed an older zip still show the old name in Unity's Package Manager
+  until they update to a version released with the override.
+- `name` and `version` can't be overridden.
+
 ## Troubleshooting
 
 | Problem | Fix |

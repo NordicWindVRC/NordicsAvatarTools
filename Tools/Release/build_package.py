@@ -7,8 +7,9 @@ releasing:
     python3 Tools/Release/build_package.py --package app.nordicwind.avatar-tools --out dist --local
 
 The zip contains the package folder's contents with package.json at the top, every .meta
-file, and no test folders. It is reproducible: the same files always give the same zip and
-the same SHA-256, which the VPM listing records.
+file, and no test folders. Fields under "releaseOverrides" in vpm.json replace those in the
+zip's package.json (the repository's package.json stays as it is). The zip is reproducible:
+the same files always give the same zip and the same SHA-256, which the VPM listing records.
 """
 import argparse
 import hashlib
@@ -93,14 +94,16 @@ def changelog_section(package_dir, version, release):
          (f" (or '## {base}' for a prerelease)" if base != version else ""))
 
 
-def build_zip(package_dir, files, out_path):
+def build_zip(package_dir, files, out_path, replacements):
+    """replacements maps a relative path to the bytes to ship instead of the file's own."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for rel in files:
             info = zipfile.ZipInfo(rel.as_posix(), FIXED_TIME)
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o644 << 16
-            archive.writestr(info, (package_dir / rel).read_bytes())
+            data = replacements.get(rel.as_posix())
+            archive.writestr(info, data if data is not None else (package_dir / rel).read_bytes())
     return hashlib.sha256(out_path.read_bytes()).hexdigest()
 
 
@@ -131,9 +134,19 @@ def main():
     check_meta_files(package_dir, files)
     heading, notes = changelog_section(package_dir, version, release=not args.local)
 
+    # Release-only fields, such as the name VCC shows. Only rewrite package.json when there
+    # are overrides, so other packages ship their package.json byte for byte.
+    overrides = config.get("releaseOverrides", {}).get(args.package, {})
+    if {"name", "version"} & set(overrides):
+        fail("releaseOverrides can't change 'name' or 'version'; change them in package.json")
+    replacements = {}
+    if overrides:
+        manifest = {**manifest, **overrides}
+        replacements["package.json"] = (json.dumps(manifest, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+
     out = (ROOT / args.out).resolve()
     zip_path = out / f"{args.package}-{version}.zip"
-    sha = build_zip(package_dir, files, zip_path)
+    sha = build_zip(package_dir, files, zip_path, replacements)
     notes_path = out / f"{args.package}-{version}.md"
     notes_path.write_text(f"## {manifest.get('displayName', args.package)} {heading}\n\n{notes}\n", encoding="utf-8")
 

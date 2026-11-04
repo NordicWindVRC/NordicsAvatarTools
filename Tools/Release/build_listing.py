@@ -57,7 +57,7 @@ def local_zips(folder):
         yield path.resolve().as_uri(), path.read_bytes()
 
 
-def add_version(packages, known, url, data):
+def add_version(packages, known, overrides, url, data):
     with zipfile.ZipFile(BytesIO(data)) as archive:
         if "package.json" not in archive.namelist():
             print(f"skipping {url}: no package.json at the top of the zip", file=sys.stderr)
@@ -71,7 +71,10 @@ def add_version(packages, known, url, data):
     if version in versions:
         fail(f"{name} {version} is published twice ({versions[version]['url']} and {url}). "
              "A version must never be republished; delete one of the releases.")
-    versions[version] = {**manifest, "url": url, "zipSHA256": hashlib.sha256(data).hexdigest()}
+    # Overrides also apply to versions released before the override was added. VCC only
+    # checks the zip's checksum, so the listing can name a package differently from its zip.
+    versions[version] = {**manifest, **overrides.get(name, {}),
+                         "url": url, "zipSHA256": hashlib.sha256(data).hexdigest()}
 
 
 def semver_key(version):
@@ -137,7 +140,7 @@ def main():
         repository = os.environ.get("GITHUB_REPOSITORY") or fail("GITHUB_REPOSITORY is not set")
         source = released_zips(repository, os.environ.get("GITHUB_TOKEN"))
     for url, data in source:
-        add_version(listing["packages"], known, url, data)
+        add_version(listing["packages"], known, config.get("releaseOverrides", {}), url, data)
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

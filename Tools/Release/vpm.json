@@ -10,5 +10,10 @@
     "app.nordicwind.avatar-tools": "Packages/app.nordicwind.avatar-tools",
     "app.nordicwind.texture-wrapper": "Packages/app.nordicwind.texture-wrapper"
   },
+  "releaseOverrides": {
+    "app.nordicwind.texture-wrapper": {
+      "displayName": "NordicWind - Texture Wrapper"
+    }
+  },
   "excludeFolders": ["Tests"]
 }
