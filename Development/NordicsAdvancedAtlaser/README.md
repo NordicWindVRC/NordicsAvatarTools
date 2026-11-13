@@ -71,6 +71,14 @@ unified model and never see the source shader. See `UNIFIED_MATERIAL.md` for the
    When sources with different normal strengths share an atlas, all of them are rescaled to the
    largest strength.
 
+### Normal Baker
+
+**Tools → NordicWind → Advanced Atlaser → Normal Baker** bakes a normal map for a lower-detail
+mesh, for example a Quest version of a PC mesh, from the detailed original. Drag both meshes
+(assets or scene objects) into the window, pick a submesh for each, and click **Generate…** to
+choose where to save the PNG. Use it as a source's **Pre-baked Normal Map**. Both meshes must use
+the same UV layout. See `NORMAL_BAKER.md`.
+
 ### Debug options
 
 These are per-editor settings under **Tools → NordicWind → Advanced Atlaser**:

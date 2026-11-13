@@ -598,6 +598,9 @@ namespace NordicWind.TextureWrapper
             int y0=Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.y,Mathf.Min(b.y,c.y))),0,Height),y1=Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.y,Mathf.Max(b.y,c.y))),0,Height);
             int samples=options.Mode==TriangleRasterizationMode.Fast?1:options.SamplesPerAxis;
             int orient=cross>0f?1:-1;
+            // The fill rule's edges are set up once per triangle; each sample then needs only a
+            // few multiplications per edge.
+            FillEdge e0=new FillEdge(a,b,orient),e1=new FillEdge(b,c,orient),e2=new FillEdge(c,a,orient);
             ForRows(x1-x0,y1-y0,dy=>
             {
                 int y=y0+dy;
@@ -607,7 +610,10 @@ namespace NordicWind.TextureWrapper
                     for(int j=0;j<samples;j++)for(int i=0;i<samples;i++)
                     {
                         Vector2 p=new Vector2(x+(i+.5f)/samples,y+(j+.5f)/samples);
-                        if(!InsideEdge(a,b,p,orient)||!InsideEdge(b,c,p,orient)||!InsideEdge(c,a,p,orient))continue;
+                        double px=p.x,py=p.y;
+                        double v0=(e0.Dx*(py-e0.Fy)-e0.Dy*(px-e0.Fx))*e0.Side;if(v0<0||(v0==0&&e0.Side<0))continue;
+                        double v1=(e1.Dx*(py-e1.Fy)-e1.Dy*(px-e1.Fx))*e1.Side;if(v1<0||(v1==0&&e1.Side<0))continue;
+                        double v2=(e2.Dx*(py-e2.Fy)-e2.Dy*(px-e2.Fx))*e2.Side;if(v2<0||(v2==0&&e2.Side<0))continue;
                         float wb=((p.x-a.x)*(c.y-a.y)-(p.y-a.y)*(c.x-a.x))/cross;
                         float wc=((b.x-a.x)*(p.y-a.y)-(b.y-a.y)*(p.x-a.x))/cross;
                         float wa=1f-wb-wc;
@@ -624,22 +630,24 @@ namespace NordicWind.TextureWrapper
             });
             Changed();
         }
-        /// <summary>Fill rule: whether sample p is inside triangle edge p0→p1, for a triangle with
-        /// orientation <paramref name="orient"/> (+1 counter-clockwise). Every triangle sharing an
-        /// edge evaluates it in the same canonical direction, so they compute exactly the same
-        /// value, and a sample exactly on the edge belongs to the one triangle on the left of that
-        /// direction. So each sample of a mesh belongs to exactly one triangle, also on shared
-        /// edges and vertices, and nothing is painted twice.</summary>
-        private static bool InsideEdge(Vector2 p0,Vector2 p1,Vector2 p,int orient)
+        /// <summary>Fill rule for one triangle edge p0→p1, for a triangle with orientation
+        /// <c>orient</c> (+1 counter-clockwise). Every triangle sharing an edge evaluates it in the
+        /// same canonical direction, so they compute exactly the same value, and a sample exactly
+        /// on the edge belongs to the one triangle on the left of that direction. So each sample of
+        /// a mesh belongs to exactly one triangle, also on shared edges and vertices, and nothing
+        /// is painted twice. A sample p is inside when v = (Dx·(p.y−Fy) − Dy·(p.x−Fx))·Side is
+        /// positive, or zero with Side positive.</summary>
+        private readonly struct FillEdge
         {
-            bool swap=p1.x<p0.x||(p1.x==p0.x&&p1.y<p0.y);
-            Vector2 from=swap?p1:p0,to=swap?p0:p1;
-            double e=((double)to.x-from.x)*((double)p.y-from.y)-((double)to.y-from.y)*((double)p.x-from.x);
-            int side=swap?-orient:orient;   // +1: the triangle lies left of the canonical direction
-            double v=e*side;
-            if(v>0)return true;
-            if(v<0)return false;
-            return side>0;                  // exactly on the edge: owned by the left-hand triangle
+            public readonly double Fx,Fy,Dx,Dy;
+            public readonly int Side;   // +1: the triangle lies left of the canonical direction
+            public FillEdge(Vector2 p0,Vector2 p1,int orient)
+            {
+                bool swap=p1.x<p0.x||(p1.x==p0.x&&p1.y<p0.y);
+                Vector2 from=swap?p1:p0,to=swap?p0:p1;
+                Fx=from.x;Fy=from.y;Dx=(double)to.x-from.x;Dy=(double)to.y-from.y;
+                Side=swap?-orient:orient;
+            }
         }
         /// <summary>Sets RGBA only on currently unused pixels. By default, preserves
         /// the usage mask, allowing coverage to be exported separately from a fully

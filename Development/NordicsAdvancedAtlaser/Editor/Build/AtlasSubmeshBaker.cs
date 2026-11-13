@@ -92,49 +92,27 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     ExportDebug(debugFolder,material,bake,hasOriginals?originalSections.Count:0,current.Count,diagnostics);
                     return result;
                 }
-                // Only the maps the bake needs exist at the same time, and they're released as soon
-                // as it's done; the usage mask is painted afterwards. The frame-normal map covers
-                // exactly the current triangles, so it also serves as the bake's coverage area.
-                using(var originalNormals=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
-                using(var tangent=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
-                using(var bitangent=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
-                using(var normalBasis=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
-                using(var coverage=new NordicsTextureWrapper(width,height,Masks()))
+                // Export excluded original triangles separately; they must never
+                // contribute to the original normal or current-coverage textures.
+                if (debugFolder != null && originalSections.Any(s =>
+                    s.ExcludedBlendShapeTriangles != null && s.ExcludedBlendShapeTriangles.Length > 0))
                 {
-                    // Coverage per UV winding finds overlapping UVs (mirrored halves, stacked
-                    // copies), which get no correction rather than a wrong one.
-                    foreach(var src in originalSections)
-                        Rasterize(src,originalNormals,null,null,null,null,coverage,false);
-                    // Export excluded original triangles separately; they must never
-                    // contribute to the original normal or current-coverage textures.
-                    if (debugFolder != null && originalSections.Any(s =>
-                        s.ExcludedBlendShapeTriangles != null && s.ExcludedBlendShapeTriangles.Length > 0))
+                    TryExport(() => ExportExcludedTriangles(debugFolder, originalSections, width, height), diagnostics);
+                }
+                bake.TangentNormalCorrection=BakeCorrection(originalSections,section,width,height,MaxCorrectionAngle,
+                    out var statistics, maps =>
                     {
-                        TryExport(() => ExportExcludedTriangles(debugFolder, originalSections, width, height), diagnostics);
-                    }
-                    // Tangent-space correction must be expressed in the surviving mesh basis.
-                    Rasterize(section,null,null,tangent,bitangent,normalBasis,coverage,true);
-                    // The bake inverts the frame exactly as interpolated, so it must run before
-                    // anything reads the frame maps: reading normalizes them in place.
-                    bake.TangentNormalCorrection=originalNormals.BakeNormalDifference(
-                        normalBasis,
-                        new TangentBasisData { Tangent=tangent,Bitangent=bitangent,Normal=normalBasis },
-                        new NormalDifferenceOptions { Coverage=coverage, MaxAngle=MaxCorrectionAngle },
-                        out var statistics);
-                    ReportCorrection(material.name,statistics,diagnostics);
-                    SampleNormalAgreement(originalNormals,normalBasis,diagnostics,material.name);
-                    if(debugFolder!=null)
-                    {
-                        TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Tangent",tangent),diagnostics);
-                        TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Bitangent",bitangent),diagnostics);
-                        TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Normal",normalBasis),diagnostics);
-                        ExportGeometryDebug(debugFolder,material,originalNormals,normalBasis,diagnostics);
+                        SampleNormalAgreement(maps.Original,maps.FrameNormal,diagnostics,material.name);
+                        if(debugFolder==null) return;
+                        TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Tangent",maps.Tangent),diagnostics);
+                        TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Bitangent",maps.Bitangent),diagnostics);
+                        TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Normal",maps.FrameNormal),diagnostics);
+                        ExportGeometryDebug(debugFolder,material,maps.Original,maps.FrameNormal,diagnostics);
                         // Preserve the raw correction for debug inspection before padding.
                         TryExport(() => AtlasDebugExporter.Normal(debugFolder,
-                            "TangentNormalCorrection_PreDilation", bake.TangentNormalCorrection), diagnostics);
-                    }
-                }
-                AtlasNormalPadding.DilateAndFinalize(bake.TangentNormalCorrection);
+                            "TangentNormalCorrection_PreDilation", maps.Correction), diagnostics);
+                    });
+                ReportCorrection(material.name,statistics,diagnostics);
                 diagnostics.Add(material.name+": full correction dilation completed; original coverage unchanged.");
                 diagnostics.Add(material.name+": combined "+originalSections.Count+
                     " original section(s) into one material bake; current submeshes=1.");
@@ -145,6 +123,53 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 return result;
             }
             catch { result.Dispose(); throw; }
+        }
+        /// <summary>The maps of one bake, handed to the inspect callback of BakeCorrection.</summary>
+        internal sealed class CorrectionMaps
+        {
+            public NordicsTextureWrapper Original, Tangent, Bitangent, FrameNormal, Correction;
+            public NormalDifferenceStatistics Statistics;
+        }
+        /// <summary>
+        /// Bakes the tangent-space normal correction that restores the originals' shading on the
+        /// current section, with the safety rules, and dilates it. Used by the build and by the
+        /// Normal Baker. Only the maps the bake needs exist at the same time; they're released
+        /// before it returns. <paramref name="inspect"/> runs after the bake, before dilation and
+        /// release, for diagnostics and debug exports. Reading a map normalizes it in place, so
+        /// nothing may read the frame maps before the bake.
+        /// </summary>
+        internal static NordicsTextureWrapper BakeCorrection(IReadOnlyList<AtlasMeshSection> originals,
+            AtlasMeshSection current,int width,int height,float maxAngle,out NormalDifferenceStatistics statistics,
+            Action<CorrectionMaps> inspect=null)
+        {
+            NordicsTextureWrapper correction;
+            using(var originalNormals=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
+            using(var tangent=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
+            using(var bitangent=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
+            using(var normalBasis=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
+            using(var coverage=new NordicsTextureWrapper(width,height,Masks()))
+            {
+                // Coverage per UV winding finds overlapping UVs (mirrored halves, stacked
+                // copies), which get no correction rather than a wrong one.
+                foreach(var src in originals)
+                    Rasterize(src,originalNormals,null,null,null,null,coverage,false);
+                // Tangent-space correction must be expressed in the current mesh's frame. The
+                // frame-normal map covers exactly the current triangles, so it also serves as
+                // the bake's coverage area.
+                Rasterize(current,null,null,tangent,bitangent,normalBasis,coverage,true);
+                correction=originalNormals.BakeNormalDifference(normalBasis,
+                    new TangentBasisData { Tangent=tangent,Bitangent=bitangent,Normal=normalBasis },
+                    new NormalDifferenceOptions { Coverage=coverage, MaxAngle=maxAngle },
+                    out statistics);
+                try
+                {
+                    inspect?.Invoke(new CorrectionMaps { Original=originalNormals,Tangent=tangent,Bitangent=bitangent,
+                        FrameNormal=normalBasis,Correction=correction,Statistics=statistics });
+                }
+                catch { correction.Dispose(); throw; }
+            }
+            AtlasNormalPadding.DilateAndFinalize(correction);
+            return correction;
         }
         // Bounded CPU diagnostic: detects systematic coordinate mismatches without
         // allocating another full-resolution float texture. Only compare overlapping UVs.

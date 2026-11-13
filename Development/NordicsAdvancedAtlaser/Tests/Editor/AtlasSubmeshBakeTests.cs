@@ -12,11 +12,11 @@ namespace NordicWind.AdvancedAtlaser.Tests
     // the current mesh's interpolated frame and compared with the original's shading.
     public sealed class AtlasSubmeshBakeTests
     {
-        private const int Size = 128, Grid = 24;
-        private const float U0 = .1f, U1 = .9f;
+        internal const int Size = 128, Grid = 24;
+        internal const float U0 = .1f, U1 = .9f;
 
-        private struct Frame { public Vector3 N, T, B; }
-        private static Frame Surface(float s, float t)
+        internal struct Frame { public Vector3 N, T, B; }
+        internal static Frame Surface(float s, float t)
         {
             float pi3 = 3f * Mathf.PI;
             float dhs = (s - .5f) + .05f * pi3 * Mathf.Cos(pi3 * s) * Mathf.Sin(pi3 * t);
@@ -26,11 +26,11 @@ namespace NordicWind.AdvancedAtlaser.Tests
             tangent = (tangent - n * Vector3.Dot(tangent, n)).normalized;
             return new Frame { N = n, T = tangent, B = Vector3.Cross(n, tangent) };
         }
-        private static float Height(float s, float t) =>
+        internal static float Height(float s, float t) =>
             .5f * (s - .5f) * (s - .5f) + .05f * Mathf.Sin(3f * Mathf.PI * s) * Mathf.Sin(3f * Mathf.PI * t);
 
         // A grid mesh: (grid + 1)² vertices, each cell split into a lower-left and upper-right triangle.
-        private static void GridData(int grid, out Vector3[] vertices, out Vector3[] normals, out Vector4[] tangents,
+        internal static void GridData(int grid, out Vector3[] vertices, out Vector3[] normals, out Vector4[] tangents,
             out Vector2[] uv, out int[] triangles)
         {
             int row = grid + 1, count = row * row;
@@ -51,7 +51,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             }
             triangles = tri.ToArray();
         }
-        private static Frame Interpolated(int grid, float s, float t)
+        internal static Frame Interpolated(int grid, float s, float t)
         {
             int i = Mathf.Min(grid - 1, (int)(s * grid)), j = Mathf.Min(grid - 1, (int)(t * grid));
             float fs = s * grid - i, ft = t * grid - j;
@@ -62,7 +62,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 ? Mix(At(0, 0), 1f - fs - ft, At(1, 0), fs, At(0, 1), ft)
                 : Mix(At(1, 1), fs + ft - 1f, At(0, 1), 1f - fs, At(1, 0), 1f - ft);
         }
-        private static double Angle(Vector3 a, Vector3 b)
+        internal static double Angle(Vector3 a, Vector3 b)
         {
             a.Normalize(); b.Normalize();
             return Math.Atan2(Vector3.Cross(a, b).magnitude, Vector3.Dot(a, b)) * 180.0 / Math.PI;

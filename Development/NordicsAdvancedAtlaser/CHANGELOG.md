@@ -36,6 +36,13 @@ EditMode tests pass in Unity 2022.3.22 (2026-11-03).
   `CurrentWorldNormals`; debug exports still write them.
 
 ### Added
+- **Normal Baker** (**Tools → NordicWind → Advanced Atlaser → Normal Baker**): a dockable window
+  that bakes the shading of an original mesh onto a current, for example lower-detail, mesh and
+  saves it as a PNG normal map, for a source's *Pre-baked Normal Map*. Slots accept mesh assets
+  and scene objects, with a submesh dropdown each; sizes up to 4096. It refuses to save when the
+  two UV layouts evidently don't match, and warns when the meshes face different ways. It uses
+  the build's bake (`AtlasSubmeshBaker.BakeCorrection`, now shared). Tests cover the slots,
+  identical meshes, a lower-detail mesh, mismatched UVs and transforms.
 - An end-to-end test through `AtlasSubmeshBaker.Bake`: a curved original and a flat reduced
   mesh, checked texel by texel against the original shading.
 - **Pre-baked Normal Map** per source material: an optional, author-supplied normal map for the

@@ -1,6 +1,6 @@
-# Nordic's Advanced Atlaser — Normal Baker (design draft)
+# Nordic's Advanced Atlaser — Normal Baker
 
-> **Status: draft, not built.** A small editor utility for later.
+> **Status: built** (`Editor/NormalBaker/`). Tested in EditMode; see *Tests* below.
 
 ## Purpose
 
@@ -34,10 +34,13 @@ It never uses the current selection: everything is set in the window.
 
 - **Original** and **Current** are slots. Drag in a mesh from the Project window (a `Mesh`
   asset, or a model such as an FBX) or from the scene (an object with a `SkinnedMeshRenderer`
-  or a `MeshRenderer`). The object picker (◉) works too.
+  or a `MeshRenderer`). The object picker (◉) works too. An object with several meshes below
+  it is refused: drag in the object with the mesh you want, or the mesh itself. A mesh needs
+  UVs, normals and tangents.
 - Each slot has a **Submesh** dropdown listing that mesh's submeshes. For a scene object the
   material name is shown next to each submesh.
-- **Size** defaults to 4096 × 4096 (512 to 8192).
+- **Size** defaults to 4096 × 4096 (512 to 4096). A 4096² bake uses about 1.7 GB while it
+  runs; 8192 would need about 6.8 GB, so it's left out until the bake keeps fewer maps.
 - **Max correction angle** defaults to 60°; larger corrections fade out, as in the build.
 - **Generate…** bakes, then opens a **save dialog** where you pick the PNG's location and name.
   - Inside `Assets`, the PNG is imported as a normal map.
@@ -55,7 +58,8 @@ It reuses the build's bake, so the results match what the build would do.
 1. **Capture both meshes** as mesh sections: vertices, normals and tangents.
    - A **scene object** is captured the way the build does it (`AtlasGeometryPose.Capture`),
      with its transform and current pose applied.
-   - A **mesh asset** is used as it is, in its own mesh space, without a pose.
+   - A **mesh asset**, or a model or prefab from the Project window, is used as it is, in its
+  own mesh space, without a transform or pose.
    - Position doesn't matter, only orientation. Two scene objects can stand anywhere, but must
      be in the same pose. Mixing a scene object with a mesh asset works only when the object
      isn't rotated or posed differently from the asset; the window warns when the transforms
@@ -64,23 +68,26 @@ It reuses the build's bake, so the results match what the build would do.
    current mesh's tangent frame into UV space with the Texture Wrapper, then
    `BakeNormalDifference` with the safety rules (overlapping UVs and corrections beyond the
    angle limit get no correction).
-3. **Dilate** the result over the whole texture, then **export** it with the Texture Wrapper's
-   PNG exporter, imported as a normal map.
+3. **Dilate** the result over the whole texture, then write it as a PNG. Inside `Assets` it's
+   imported as a normal map.
 
-**Refactoring this needs:** the core of `AtlasSubmeshBaker` (from mesh sections to a dilated
-correction) becomes one shared function, used by both the build and the Normal Baker. The build's
-behaviour stays the same.
+The bake is `AtlasSubmeshBaker.BakeCorrection`, shared with the build. When the current mesh's
+triangles are unchanged from the original, the map is flat without baking.
+
+**Code:** `AtlasNormalBaker` holds the logic (slots, capture, bake, checks, saving), and
+`AtlasNormalBakerWindow` only the window.
 
 ## Requirements and limits
 
 - **The UVs must match.** Baking by UV correspondence works when the current mesh keeps the
   original's UV layout, which most decimation tools do. If the lower-detail mesh was unwrapped
   again, UV correspondence can't work, and a different bake (ray casting from one surface to the
-  other) would be needed. That's out of scope. The baker detects it when the two meshes' UV
-  coverage differs a lot, and says so instead of saving a misleading map.
+  other) would be needed. That's out of scope. The baker refuses to save when more than 10% of
+  the current mesh has no original geometry at the same UV, or more than 25% of the correction is
+  above the angle limit. Both point to layouts that don't match.
 - UV0 is used, like the build.
-- The save dialog starts in the shared NordicWind *generated assets folder*
-  (`ProjectSettings/NordicWindSettings.json`), with `<current mesh>_<submesh>_Normal.png` as the
+- The save dialog starts in `<generated assets folder>/AdvancedAtlaser` if it exists, otherwise
+  the shared NordicWind *generated assets folder* (`ProjectSettings/NordicWindSettings.json`), with `<current mesh>_<submesh>_Normal.png` as the
   suggested name. The Atlaser reads that settings file itself, because the existing settings
   code belongs to another package.
 
@@ -90,9 +97,11 @@ behaviour stays the same.
 - A curved original and a flat lower-detail mesh with the same UVs: decoding the map on the
   current mesh reproduces the original shading (as in the whole-mesh tests).
 - Different UV layouts: detected and reported, nothing saved.
-- Transforms: rotated, mirrored and differently scaled renderers give the same map.
-- Slots: mesh assets, models, skinned and static scene objects are all accepted; anything
-  else is refused. The submesh lists match the meshes.
+- Transforms: rotating, mirroring, scaling and moving both meshes gives the same map. A mesh asset
+  against a rotated scene object gives the orientation warning.
+- Slots: mesh assets, skinned and static scene objects, and an object with one mesh below it
+  are accepted; anything else, an object with several meshes, and a mesh without tangents are
+  refused.
 
 ## Decisions
 
