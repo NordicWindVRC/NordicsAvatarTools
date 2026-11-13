@@ -67,14 +67,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // True when TangentNormalCorrection is flat (no correction), for example because it was
         // turned off or the surviving triangles are unchanged. Writers can skip it then.
         public bool CorrectionIsFlat;
+        // Which texels the current submesh covers (painted fast, without sub-samples).
         public NordicsTextureWrapper CurrentMask;
-        public NordicsTextureWrapper OriginalWorldNormals;
-        public NordicsTextureWrapper CurrentWorldNormals;
+        // The tangent-space normal correction. The original and current world normals used to
+        // make it exist only during the bake.
         public NordicsTextureWrapper TangentNormalCorrection;
         public void Dispose()
         {
-            CurrentMask?.Dispose(); OriginalWorldNormals?.Dispose();
-            CurrentWorldNormals?.Dispose(); TangentNormalCorrection?.Dispose();
+            CurrentMask?.Dispose(); TangentNormalCorrection?.Dispose();
         }
     }
 }

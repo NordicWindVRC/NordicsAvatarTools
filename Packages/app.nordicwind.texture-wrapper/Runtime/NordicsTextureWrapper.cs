@@ -597,6 +597,7 @@ namespace NordicWind.TextureWrapper
             int x0=Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.x,Mathf.Min(b.x,c.x))),0,Width),x1=Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.x,Mathf.Max(b.x,c.x))),0,Width);
             int y0=Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.y,Mathf.Min(b.y,c.y))),0,Height),y1=Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.y,Mathf.Max(b.y,c.y))),0,Height);
             int samples=options.Mode==TriangleRasterizationMode.Fast?1:options.SamplesPerAxis;
+            int orient=cross>0f?1:-1;
             ForRows(x1-x0,y1-y0,dy=>
             {
                 int y=y0+dy;
@@ -606,10 +607,10 @@ namespace NordicWind.TextureWrapper
                     for(int j=0;j<samples;j++)for(int i=0;i<samples;i++)
                     {
                         Vector2 p=new Vector2(x+(i+.5f)/samples,y+(j+.5f)/samples);
+                        if(!InsideEdge(a,b,p,orient)||!InsideEdge(b,c,p,orient)||!InsideEdge(c,a,p,orient))continue;
                         float wb=((p.x-a.x)*(c.y-a.y)-(p.y-a.y)*(c.x-a.x))/cross;
                         float wc=((b.x-a.x)*(p.y-a.y)-(b.y-a.y)*(p.x-a.x))/cross;
                         float wa=1f-wb-wc;
-                        if(wa < -1e-6f||wb < -1e-6f||wc < -1e-6f)continue;
                         sum+=color0*wa+color1*wb+color2*wc;hits++;
                     }
                     if(hits==0)continue;
@@ -622,6 +623,23 @@ namespace NordicWind.TextureWrapper
                 }
             });
             Changed();
+        }
+        /// <summary>Fill rule: whether sample p is inside triangle edge p0→p1, for a triangle with
+        /// orientation <paramref name="orient"/> (+1 counter-clockwise). Every triangle sharing an
+        /// edge evaluates it in the same canonical direction, so they compute exactly the same
+        /// value, and a sample exactly on the edge belongs to the one triangle on the left of that
+        /// direction. So each sample of a mesh belongs to exactly one triangle, also on shared
+        /// edges and vertices, and nothing is painted twice.</summary>
+        private static bool InsideEdge(Vector2 p0,Vector2 p1,Vector2 p,int orient)
+        {
+            bool swap=p1.x<p0.x||(p1.x==p0.x&&p1.y<p0.y);
+            Vector2 from=swap?p1:p0,to=swap?p0:p1;
+            double e=((double)to.x-from.x)*((double)p.y-from.y)-((double)to.y-from.y)*((double)p.x-from.x);
+            int side=swap?-orient:orient;   // +1: the triangle lies left of the canonical direction
+            double v=e*side;
+            if(v>0)return true;
+            if(v<0)return false;
+            return side>0;                  // exactly on the edge: owned by the left-hand triangle
         }
         /// <summary>Sets RGBA only on currently unused pixels. By default, preserves
         /// the usage mask, allowing coverage to be exported separately from a fully
@@ -778,8 +796,8 @@ namespace NordicWind.TextureWrapper
         }
         private static float Unambiguous(float counterClockwise, float clockwise)
         {
-            // One winding covered more than once: stacked copies. Up to about 1.25 can come
-            // from sub-samples exactly on an edge shared by two triangles, so fade from 1.3 to 1.7.
+            // One winding covered more than once: stacked copies. PaintTriangle's fill rule never
+            // counts a sub-sample twice within one mesh, so fading from 1.3 to 1.7 leaves margin.
             float stacked = 1f - Mathf.Clamp01((Mathf.Max(counterClockwise, clockwise) - 1.3f) / .4f);
             // Both windings at one texel, even partly: mirrored copies. Already at the islands'
             // edges both may touch only a sub-sample or two (1/16 each with 4×4 sampling), so

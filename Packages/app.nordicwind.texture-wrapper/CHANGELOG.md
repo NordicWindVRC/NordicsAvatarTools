@@ -44,6 +44,9 @@ Newest first. Versions follow [SemVer](https://semver.org).
 - Normal bake tests: round trips for random orthonormal frames in both handednesses, for
   interpolated (not unit, not orthogonal) frames with either bitangent convention, and a flat
   frame that is skipped.
+- Fill rule tests: a quad split along a diagonal through sub-samples (both windings), a fan of
+  triangles around a vertex on a sub-sample, and a grid, with 1, 2 and 4 sub-samples per axis:
+  never covered more than once.
 - RNM normal blending tests against an independent reference (rotating the detail onto the
   base), including flat inputs and preserved angles.
 - Safety rule tests: overlap by winding and by stacking, the angle fade, and default options
@@ -64,6 +67,12 @@ Newest first. Versions follow [SemVer](https://semver.org).
   `Brightness`, and color maps.
 
 ### Fixed
+- **`PaintTriangle` counted sub-samples on shared edges twice.** A sub-sample exactly on an
+  edge shared by two triangles was painted by both, and one exactly on a vertex by every
+  triangle around it. That made coverage and painted values exceed 1 along such edges, which
+  the normal correction then read as overlapping UVs. A fill rule now gives each sub-sample to
+  exactly one triangle. A lone triangle whose edge passes exactly through sub-samples now covers
+  slightly less at that edge; meshes are unaffected.
 - **`BakeNormalDifference` matches how shaders decode.** It used to straighten the tangent
   frame per pixel (normalize, orthogonalize) before projecting. Shaders use the interpolated
   frame as it is, so on curved triangles of a reduced mesh the correction drifted. It now

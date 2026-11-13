@@ -89,11 +89,12 @@ Exporting 4096² float maps is slow, so leave it off for everyday builds.
    - Finds the surviving renderers and parses each assigned source material once into the
      unified model. Unsupported or approximate features are reported.
    - Bakes, in **source UV space** using the Texture Wrapper:
-     - a usage mask
-     - original and surviving world normals
      - a tangent-space normal correction that reconstructs the original shading on the
-       surviving (for example reduced) mesh. It never makes shading worse: overlapping UVs
-       and implausibly large corrections (above 60°) get no correction.
+       surviving (for example reduced) mesh, from the original and surviving normals and the
+       surviving mesh's tangent frame. It never makes shading worse: overlapping UVs and
+       implausibly large corrections (above 60°) get no correction. The maps used to make it
+       are released as soon as it's done.
+     - a usage mask: which texels the surviving mesh covers.
    - Skips the normal-correction bake, keeping only the fast usage mask and a flat correction,
      when it's turned off for the material, or when every surviving triangle is an unchanged
      original triangle (removed submeshes or triangles only). A reducer that removes vertices

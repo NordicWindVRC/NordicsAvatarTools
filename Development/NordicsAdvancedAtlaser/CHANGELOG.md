@@ -28,8 +28,16 @@ EditMode tests pass in Unity 2022.3.22 (2026-11-03).
   settings as its writer is built.
 - **Serialized fields are camelCase**, as the design guidelines require. Existing Atlaser
   configurations are not migrated.
+- **The bake releases its maps as soon as it's done.** Only the maps the bake needs exist at
+  the same time (6 instead of 8: about 1.7 GB instead of 2.3 GB at 4096²), and each material
+  keeps only its usage mask and correction afterwards (2 maps instead of 4). The frame-normal
+  map serves as the bake's coverage area, and the usage mask is painted after the bake. Results
+  are unchanged. `AtlasSubmeshBake` no longer has `OriginalWorldNormals` or
+  `CurrentWorldNormals`; debug exports still write them.
 
 ### Added
+- An end-to-end test through `AtlasSubmeshBaker.Bake`: a curved original and a flat reduced
+  mesh, checked texel by texel against the original shading.
 - **Pre-baked Normal Map** per source material: an optional, author-supplied normal map for the
   mesh, applied at strength 1 beneath the build's normal correction. The inspector warns when
   the texture isn't imported as a normal map. Output writers get it with the documented

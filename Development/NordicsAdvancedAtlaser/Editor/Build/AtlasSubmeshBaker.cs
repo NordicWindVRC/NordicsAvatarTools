@@ -74,82 +74,74 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             "; renderer-to-root="+src.RendererToAvatarRoot.ToString());
                 var bake=new AtlasSubmeshBake { RendererName=section.RendererPath,SubmeshIndex=section.SubmeshIndex };
                 result.Submeshes.Add(bake);
-                bake.CurrentMask=new NordicsTextureWrapper(width,height,Masks());
                 bool hasOriginals=originalSections!=null && originalSections.Count>0;
                 string skip=!normalCorrection ? "it is turned off for this material"
-                    : hasOriginals && AtlasGeometryComparison.SurvivingTrianglesUnchanged(originalSections,section)
+                    : !hasOriginals ? null
+                    : AtlasGeometryComparison.SurvivingTrianglesUnchanged(originalSections,section)
                         ? "the surviving triangles are unchanged from the original" : null;
-                if(skip!=null)
+                if(skip!=null || !hasOriginals)
                 {
-                    // Only the fast UV usage mask is needed; the correction is flat.
+                    // No bake: only the fast UV usage mask is needed, and the correction is flat.
+                    bake.CurrentMask=new NordicsTextureWrapper(width,height,Masks());
                     Rasterize(section,null,bake.CurrentMask,null,null,null);
-                    bake.OriginalWorldNormals=Flat(width,height,TextureDataType.NormalWorld);
-                    bake.CurrentWorldNormals=Flat(width,height,TextureDataType.NormalWorld);
                     bake.TangentNormalCorrection=Flat(width,height,TextureDataType.NormalTangent);
                     bake.CorrectionIsFlat=true;
-                    diagnostics.Add(material.name+": normal correction skipped because "+skip+"; the correction is flat.");
-                    ExportDebug(debugFolder,material,bake,originalSections==null?0:originalSections.Count,current.Count,diagnostics);
+                    diagnostics.Add(skip!=null
+                        ? material.name+": normal correction skipped because "+skip+"; the correction is flat."
+                        : material.name+": original source geometry unavailable; tangent correction is flat.");
+                    ExportDebug(debugFolder,material,bake,hasOriginals?originalSections.Count:0,current.Count,diagnostics);
                     return result;
                 }
-                bake.CurrentWorldNormals=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld));
-                Rasterize(section,bake.CurrentWorldNormals,bake.CurrentMask,null,null,null);
-                if(originalSections==null || originalSections.Count==0)
+                // Only the maps the bake needs exist at the same time, and they're released as soon
+                // as it's done; the usage mask is painted afterwards. The frame-normal map covers
+                // exactly the current triangles, so it also serves as the bake's coverage area.
+                using(var originalNormals=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
+                using(var tangent=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
+                using(var bitangent=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
+                using(var normalBasis=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
+                using(var coverage=new NordicsTextureWrapper(width,height,Masks()))
                 {
-                    bake.OriginalWorldNormals=Flat(width,height,TextureDataType.NormalWorld);
-                    bake.TangentNormalCorrection=Flat(width,height,TextureDataType.NormalTangent);
-                    bake.CorrectionIsFlat=true;
-                    diagnostics.Add(material.name+": original source geometry unavailable; tangent correction is flat.");
-                }
-                else
-                {
-                    bake.OriginalWorldNormals=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld));
-                    using(var tangent=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
-                    using(var bitangent=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
-                    using(var normalBasis=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
-                    using(var coverage=new NordicsTextureWrapper(width,height,Masks()))
+                    // Coverage per UV winding finds overlapping UVs (mirrored halves, stacked
+                    // copies), which get no correction rather than a wrong one.
+                    foreach(var src in originalSections)
+                        Rasterize(src,originalNormals,null,null,null,null,coverage,false);
+                    // Export excluded original triangles separately; they must never
+                    // contribute to the original normal or current-coverage textures.
+                    if (debugFolder != null && originalSections.Any(s =>
+                        s.ExcludedBlendShapeTriangles != null && s.ExcludedBlendShapeTriangles.Length > 0))
                     {
-                        // Coverage per UV winding finds overlapping UVs (mirrored halves, stacked
-                        // copies), which get no correction rather than a wrong one.
-                        foreach(var src in originalSections)
-                            Rasterize(src,bake.OriginalWorldNormals,null,null,null,null,coverage,false);
-                        Rasterize(section,null,null,null,null,null,coverage,true);
-                        // Export excluded original triangles separately; they must never
-                        // contribute to the original normal or current-coverage textures.
-                        if (debugFolder != null && originalSections.Any(s =>
-                            s.ExcludedBlendShapeTriangles != null && s.ExcludedBlendShapeTriangles.Length > 0))
-                        {
-                            TryExport(() => ExportExcludedTriangles(debugFolder, originalSections, width, height), diagnostics);
-                        }
-                        // Tangent-space correction must be expressed in the surviving mesh basis.
-                        Rasterize(section,null,null,tangent,bitangent,normalBasis);
-                        // The bake inverts the frame exactly as interpolated, so it must run
-                        // before the debug export, which normalizes the maps in place.
-                        bake.TangentNormalCorrection=bake.OriginalWorldNormals.BakeNormalDifference(
-                            bake.CurrentWorldNormals,
-                            new TangentBasisData { Tangent=tangent,Bitangent=bitangent,Normal=normalBasis },
-                            new NormalDifferenceOptions { Coverage=coverage, MaxAngle=MaxCorrectionAngle },
-                            out var statistics);
-                        ReportCorrection(material.name,statistics,diagnostics);
-                        if(debugFolder!=null)
-                        {
-                            TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Tangent",tangent),diagnostics);
-                            TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Bitangent",bitangent),diagnostics);
-                            TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Normal",normalBasis),diagnostics);
-                        }
-                        // Preserve the raw correction for debug inspection before padding.
-                        // Both coverage masks remain untouched by padding.
-                        if (debugFolder != null)
-                            TryExport(() => AtlasDebugExporter.Normal(debugFolder,
-                                "TangentNormalCorrection_PreDilation", bake.TangentNormalCorrection), diagnostics);
-                        AtlasNormalPadding.DilateAndFinalize(bake.TangentNormalCorrection);
-                        diagnostics.Add(material.name+": full correction dilation completed; original coverage unchanged.");
+                        TryExport(() => ExportExcludedTriangles(debugFolder, originalSections, width, height), diagnostics);
                     }
-                    diagnostics.Add(material.name+": combined "+originalSections.Count+
-                        " original section(s) into one material bake; current submeshes=1.");
+                    // Tangent-space correction must be expressed in the surviving mesh basis.
+                    Rasterize(section,null,null,tangent,bitangent,normalBasis,coverage,true);
+                    // The bake inverts the frame exactly as interpolated, so it must run before
+                    // anything reads the frame maps: reading normalizes them in place.
+                    bake.TangentNormalCorrection=originalNormals.BakeNormalDifference(
+                        normalBasis,
+                        new TangentBasisData { Tangent=tangent,Bitangent=bitangent,Normal=normalBasis },
+                        new NormalDifferenceOptions { Coverage=coverage, MaxAngle=MaxCorrectionAngle },
+                        out var statistics);
+                    ReportCorrection(material.name,statistics,diagnostics);
+                    SampleNormalAgreement(originalNormals,normalBasis,diagnostics,material.name);
+                    if(debugFolder!=null)
+                    {
+                        TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Tangent",tangent),diagnostics);
+                        TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Bitangent",bitangent),diagnostics);
+                        TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Normal",normalBasis),diagnostics);
+                        ExportGeometryDebug(debugFolder,material,originalNormals,normalBasis,diagnostics);
+                        // Preserve the raw correction for debug inspection before padding.
+                        TryExport(() => AtlasDebugExporter.Normal(debugFolder,
+                            "TangentNormalCorrection_PreDilation", bake.TangentNormalCorrection), diagnostics);
+                    }
                 }
-                if (originalSections!=null && originalSections.Count>0)
-                    SampleNormalAgreement(bake.OriginalWorldNormals,bake.CurrentWorldNormals,diagnostics,material.name);
-                ExportDebug(debugFolder,material,bake,originalSections==null?0:originalSections.Count,current.Count,diagnostics);
+                AtlasNormalPadding.DilateAndFinalize(bake.TangentNormalCorrection);
+                diagnostics.Add(material.name+": full correction dilation completed; original coverage unchanged.");
+                diagnostics.Add(material.name+": combined "+originalSections.Count+
+                    " original section(s) into one material bake; current submeshes=1.");
+                // The usage mask is a result, so it's painted once the bake's maps are released.
+                bake.CurrentMask=new NordicsTextureWrapper(width,height,Masks());
+                Rasterize(section,null,bake.CurrentMask,null,null,null);
+                ExportDebug(debugFolder,material,bake,originalSections.Count,current.Count,diagnostics);
                 return result;
             }
             catch { result.Dispose(); throw; }
@@ -204,18 +196,29 @@ namespace NordicWind.AdvancedAtlaser.Editor
             try { export(); }
             catch(Exception e) { diagnostics.Add("Debug map export failed: " + e.Message); }
         }
-        private static void ExportDebug(string folder,Material material,AtlasSubmeshBake bake,int originals,int current,List<string> diagnostics)
+        // The original and current world normals exist only during the bake, so they're exported
+        // just before they're released.
+        private static void ExportGeometryDebug(string folder,Material material,NordicsTextureWrapper original,
+            NordicsTextureWrapper current,List<string> diagnostics)
         {
             if (folder==null) return;
             // Export failures are debug-only and must not affect avatar processing.
             try
             {
-                AtlasDebugExporter.Normal(folder,"OriginalWorldNormals",bake.OriginalWorldNormals);
-                AtlasDebugExporter.Normal(folder,"CurrentWorldNormals",bake.CurrentWorldNormals);
+                AtlasDebugExporter.Normal(folder,"OriginalWorldNormals",original);
+                AtlasDebugExporter.Normal(folder,"CurrentWorldNormals",current);
+                AtlasDebugExporter.Coverage(folder,"OriginalCoverage",original);
+                AtlasDebugExporter.Heatmap(folder,original,current);
+            }
+            catch(Exception e) { diagnostics.Add("Debug map export failed for '"+material.name+"': "+e.Message); }
+        }
+        private static void ExportDebug(string folder,Material material,AtlasSubmeshBake bake,int originals,int current,List<string> diagnostics)
+        {
+            if (folder==null) return;
+            try
+            {
                 AtlasDebugExporter.Normal(folder,"TangentNormalCorrection",bake.TangentNormalCorrection);
-                AtlasDebugExporter.Coverage(folder,"OriginalCoverage",bake.OriginalWorldNormals);
                 AtlasDebugExporter.Coverage(folder,"CurrentCoverage",bake.CurrentMask);
-                AtlasDebugExporter.Heatmap(folder,bake.OriginalWorldNormals,bake.CurrentWorldNormals);
                 AtlasDebugExporter.Info(folder,material.name,folder,originals,current,
                     bake.CurrentMask.Width,bake.CurrentMask.Height);
             }
@@ -226,8 +229,6 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return new AtlasSubmeshBake { CurrentSubmeshMissing=true,CorrectionIsFlat=true,SubmeshIndex=index,
                 RendererName=path,
                 CurrentMask=new NordicsTextureWrapper(width,height,Masks()),
-                OriginalWorldNormals=Flat(width,height,TextureDataType.NormalWorld),
-                CurrentWorldNormals=Flat(width,height,TextureDataType.NormalWorld),
                 TangentNormalCorrection=Flat(width,height,TextureDataType.NormalTangent) };
         }
         public static int CountCurrent(Material material,IReadOnlyList<SkinnedMeshRenderer> renderers)

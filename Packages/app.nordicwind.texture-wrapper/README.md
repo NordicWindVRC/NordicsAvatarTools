@@ -127,6 +127,9 @@ These are part of the API and covered by tests:
 - **No clamping while painting:** `PaintTriangle` accumulates raw values, including values above
   1. Clamping happens only when encoding output (`GetEncodedPixels`, `GetTexture2D`, export).
   `GetPixel` returns raw values.
+- **Fill rule:** every sub-sample of a mesh belongs to exactly one triangle, including samples
+  exactly on shared edges and vertices. Painting a mesh with a constant value of 1 gives at
+  most 1 anywhere.
 - **`BakeNormalDifference(targetNormals, basis)`:** `this` is the original world-normal map,
   and `targetNormals` is the target (for example simplified) world-normal map whose coverage
   limits the result. `basis` must be the **target** mesh's tangent frame, as interpolated. The
