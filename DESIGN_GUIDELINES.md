@@ -65,9 +65,6 @@ mesh containers before 0.2.19.
 **Exceptions:**
 - **Texture Wrapper** uses one namespace, `NordicWind.TextureWrapper`, for its whole API,
   including the editor exporters, so callers need a single `using`.
-- **Advanced Atlaser** serialized fields are still `PascalCase` public fields. Convert them to
-  `camelCase`, using `[FormerlySerializedAs]` and updating every `FindProperty` string, at
-  the next structural change to its configuration model.
 
 **Renaming serialized fields or script files:** use `[FormerlySerializedAs]` and keep
 the script's `.meta` GUID. Without both, existing avatars lose their settings or the

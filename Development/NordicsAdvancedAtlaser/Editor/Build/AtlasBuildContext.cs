@@ -42,6 +42,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public Rect UVRegion;
         public string SourceKey;
         public bool NormalCorrection = true;
+        public Texture2D PrebakedNormalMap;
         // Null if baking is disabled; non-null empty/flat buffers mean missing geometry.
         public AtlasBakedInputSet Bakes;
     }

@@ -26,14 +26,6 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 AtlasBuildCleanup.RemoveBuildComponents(avatarRoot);
             }
         }
-        private static int NormalizeGeometryResolution(int value)
-        {
-            int[] options={256,512,1024,2048,4096,8192};
-            int closest=options[0];
-            foreach(int option in options)
-                if(Math.Abs(option-value)<Math.Abs(closest-value)) closest=option;
-            return closest;
-        }
 
         private static void PrepareGroup(AtlasBuildContext context,NordicsAdvancedAtlaser component,int atlaserIndex, AtlasOriginalGeometry original)
         {
@@ -56,34 +48,34 @@ namespace NordicWind.AdvancedAtlaser.Editor
             for(int outputIndex=0;outputIndex<outputs.Length;outputIndex++)
             {
                 var output=outputs[outputIndex];
-                var config=output.Configuration;
+                var config=output.configuration;
                 var job=new AtlasOutputJob {
-                    Component=output, Configuration=config, Shader=AtlasShaderRegistry.Output(config.ShaderId) };
+                    Component=output, Configuration=config, Shader=AtlasShaderRegistry.Output(config.shaderId) };
                 if(job.Shader==null)
-                    context.Diagnostics.Add(output.name+": unregistered output shader "+config.ShaderId);
+                    context.Diagnostics.Add(output.name+": unregistered output shader "+config.shaderId);
                 group.Outputs.Add(job);
-                if(config.Sources==null) continue;
-                for(int sourceIndex=0;sourceIndex<config.Sources.Count;sourceIndex++)
+                if(config.sources==null) continue;
+                for(int sourceIndex=0;sourceIndex<config.sources.Count;sourceIndex++)
                 {
-                    var source=config.Sources[sourceIndex];
-                    if(source==null||source.Material==null) continue;
-                    if(!assigned.Add(source.Material))
-                    throw new InvalidOperationException("[Nordic's Advanced Atlaser] "+config.OutputName+
-                        ": material '"+source.Material.name+"' is assigned more than once across outputs.");
+                    var source=config.sources[sourceIndex];
+                    if(source==null||source.material==null) continue;
+                    if(!assigned.Add(source.material))
+                    throw new InvalidOperationException("[Nordic's Advanced Atlaser] "+config.outputName+
+                        ": material '"+source.material.name+"' is assigned more than once across outputs.");
                     AtlasInputMaterialJob input;
-                    if(!sources.TryGetValue(source.Material,out input))
+                    if(!sources.TryGetValue(source.material,out input))
                     {
-                        input=new AtlasInputMaterialJob { SourceMaterial=source.Material,
-                            SourceShader=source.Material.shader,
-                            Parser=AtlasShaderRegistry.Detect(source.Material) };
-                        sources.Add(source.Material,input);
+                        input=new AtlasInputMaterialJob { SourceMaterial=source.material,
+                            SourceShader=source.material.shader,
+                            Parser=AtlasShaderRegistry.Detect(source.material) };
+                        sources.Add(source.material,input);
                         group.Inputs.Add(input);
-                        if(!currentlyPresent.Contains(source.Material))
-                            context.Diagnostics.Add(source.Material.name+": no current renderer uses this material; an empty bake will be supplied.");
+                        if(!currentlyPresent.Contains(source.material))
+                            context.Diagnostics.Add(source.material.name+": no current renderer uses this material; an empty bake will be supplied.");
                     }
-                    job.Sources.Add(new AtlasOutputSourceJob { Input=input,UVRegion=source.UVRegion,
+                    job.Sources.Add(new AtlasOutputSourceJob { Input=input,UVRegion=source.uvRegion,
                         SourceKey=AtlasOriginalGeometry.SourceKey(atlaserIndex,outputIndex,sourceIndex),
-                        NormalCorrection=source.NormalCorrection });
+                        NormalCorrection=source.normalCorrection, PrebakedNormalMap=source.prebakedNormalMap });
                 }
             }
             // Normalize each unique source material once, irrespective of how many outputs use it.
@@ -107,18 +99,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     throw new InvalidOperationException("[Nordic's Advanced Atlaser] '"+input.SourceMaterial.name+
                         "' occurs on "+surviving+" surviving submeshes. Exactly one is required after merging.");
             }
-            // One square source-UV bake resolution per Atlaser, shared across its outputs.
-            // When disabled, no geometry textures are allocated; null Bakes means unavailable,
-            // not an enabled bake whose submesh has been removed.
-            if(component.EnableGeometryBaking)
+            // Each source is baked at a size derived from its region in its atlas (see
+            // AtlasOutputLayout.BakeSize). When disabled, no geometry textures are allocated; null
+            // Bakes means unavailable, not an enabled bake whose submesh has been removed.
+            if(component.enableGeometryBaking)
             {
-                int resolution=NormalizeGeometryResolution(component.GeometryBakingResolution);
-                string key=resolution+"x"+resolution;
                 foreach(var job in group.Outputs)
                 {
                     if(job.Shader==null) continue;
                     foreach(var source in job.Sources)
                     {
+                        var size=AtlasOutputLayout.BakeSize(source.UVRegion,job.Configuration.mainTexture);
+                        string key=size.x+"x"+size.y;
                         AtlasBakedInputSet baked;
                         if(!source.Input.Bakes.TryGetValue(key,out baked))
                         {
@@ -142,7 +134,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                                     source.Input.SourceMaterial.name,source.SourceKey); }
                                 catch(Exception e) { context.Diagnostics.Add("Debug directory creation failed: "+e.Message); }
                             }
-                            baked=AtlasSubmeshBaker.Bake(source.Input.SourceMaterial,resolution,resolution,
+                            baked=AtlasSubmeshBaker.Bake(source.Input.SourceMaterial,size.x,size.y,
                                 originalSections,renderers,context.AvatarRoot.transform,context.Diagnostics,debugFolder,
                                 source.NormalCorrection);
                             source.Input.Bakes.Add(key,baked);

@@ -17,51 +17,56 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public override void OnInspectorGUI()
         {
             var output = (NordicsAtlasOutput)target;
-            AtlasShaderRegistry.EnsureSettings(output.Configuration, AtlasShaderRegistry.Output(output.Configuration.ShaderId));
+            AtlasShaderRegistry.EnsureSettings(output.configuration, AtlasShaderRegistry.Output(output.configuration.shaderId));
             serializedObject.Update();
-            var config = serializedObject.FindProperty("Configuration");
+            var config = serializedObject.FindProperty("configuration");
             var owner = output.gameObject;
             var main = owner.GetComponent<NordicsAdvancedAtlaser>();
             if (main == null) EditorGUILayout.HelpBox("Add Nordic's Advanced Atlaser to this GameObject to enable source discovery and coordination.", MessageType.Warning);
             EditorGUILayout.HelpBox("Configuration only. This output does not generate or modify any materials.", MessageType.Info);
-            EditorGUILayout.PropertyField(config.FindPropertyRelative("OutputName"));
+            EditorGUILayout.PropertyField(config.FindPropertyRelative("outputName"));
             EditorGUI.BeginChangeCheck();
-            DrawShaderSelection(config.FindPropertyRelative("ShaderId"));
+            DrawShaderSelection(config.FindPropertyRelative("shaderId"));
             if (EditorGUI.EndChangeCheck())
             {
                 serializedObject.ApplyModifiedProperties();
-                var selected = AtlasShaderRegistry.Output(output.Configuration.ShaderId);
-                AtlasShaderRegistry.EnsureSettings(output.Configuration, selected);
+                var selected = AtlasShaderRegistry.Output(output.configuration.shaderId);
+                AtlasShaderRegistry.EnsureSettings(output.configuration, selected);
                 if (selected != null)
-                    selected.OnConfigurationChanged(output.Configuration, AtlasConfigurationChange.ShaderSelection);
+                    selected.OnConfigurationChanged(output.configuration, AtlasConfigurationChange.ShaderSelection);
                 EditorUtility.SetDirty(output);
                 serializedObject.Update();
-                config = serializedObject.FindProperty("Configuration");
+                config = serializedObject.FindProperty("configuration");
             }
-            EditorGUILayout.PropertyField(config.FindPropertyRelative("RegionPadding"));
+            // Padding separates source regions, so it only applies with two or more sources.
+            bool padded = AtlasOutputLayout.AssignedSourceCount(output.configuration) > 1;
+            using (new EditorGUI.DisabledScope(!padded))
+                EditorGUILayout.PropertyField(config.FindPropertyRelative("regionPadding"), new GUIContent("Region Padding"));
+            if (!padded)
+                EditorGUILayout.LabelField("Padding is only used with two or more source materials.", EditorStyles.wordWrappedMiniLabel);
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Source Materials & UV Regions", EditorStyles.boldLabel);
-            var sources = config.FindPropertyRelative("Sources");
+            var sources = config.FindPropertyRelative("sources");
             var discovery = AtlasMaterialDiscovery.Discover(owner);
             var assignedElsewhere = new HashSet<Material>();
             foreach (var other in owner.GetComponents<NordicsAtlasOutput>())
             {
-                if (other == output || other.Configuration.Sources == null) continue;
-                foreach (var entry in other.Configuration.Sources)
-                    if (entry != null && entry.Material != null) assignedElsewhere.Add(entry.Material);
+                if (other == output || other.configuration.sources == null) continue;
+                foreach (var entry in other.configuration.sources)
+                    if (entry != null && entry.material != null) assignedElsewhere.Add(entry.material);
             }
             var selectedHere = new HashSet<Material>();
             for (int i = 0; i < sources.arraySize; ++i)
             {
                 var entry = sources.GetArrayElementAtIndex(i);
-                var property = entry.FindPropertyRelative("Material");
+                var property = entry.FindPropertyRelative("material");
                 var current = property.objectReferenceValue as Material;
                 if (current != null) selectedHere.Add(current);
             }
             for (int i = 0; i < sources.arraySize; ++i)
             {
                 var item = sources.GetArrayElementAtIndex(i);
-                var materialProperty = item.FindPropertyRelative("Material");
+                var materialProperty = item.FindPropertyRelative("material");
                 var current = materialProperty.objectReferenceValue as Material;
                 EditorGUILayout.BeginVertical(EditorStyles.helpBox);
                 bool remove;
@@ -122,8 +127,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         if (choices[choice] != null) selectedHere.Add(choices[choice]);
                     }
                 }
-                EditorGUILayout.PropertyField(item.FindPropertyRelative("UVRegion"), new GUIContent("UV Region"));
-                EditorGUILayout.PropertyField(item.FindPropertyRelative("NormalCorrection"), new GUIContent("Normal Correction"));
+                EditorGUILayout.PropertyField(item.FindPropertyRelative("uvRegion"), new GUIContent("UV Region"));
+                EditorGUILayout.PropertyField(item.FindPropertyRelative("normalCorrection"), new GUIContent("Normal Correction"));
+                var prebaked = item.FindPropertyRelative("prebakedNormalMap");
+                EditorGUILayout.PropertyField(prebaked, new GUIContent("Pre-baked Normal Map"));
+                if (prebaked.objectReferenceValue is Texture2D prebakedTexture &&
+                    AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(prebakedTexture)) is TextureImporter importer &&
+                    importer.textureType != TextureImporterType.NormalMap)
+                    EditorGUILayout.HelpBox("This texture isn't imported as a normal map. Set its Texture Type to Normal map.", MessageType.Warning);
                 EditorGUILayout.EndVertical();
             }
             var available = discovery.Materials.Where(m => !assignedElsewhere.Contains(m) && !selectedHere.Contains(m)).ToList();
@@ -149,10 +160,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         int index = sources.arraySize;
                         sources.InsertArrayElementAtIndex(index);
                         var item = sources.GetArrayElementAtIndex(index);
-                        item.FindPropertyRelative("Material").objectReferenceValue = material;
-                        item.FindPropertyRelative("UVRegion").rectValue = new Rect(0, 0, 1, 1);
+                        item.FindPropertyRelative("material").objectReferenceValue = material;
+                        item.FindPropertyRelative("uvRegion").rectValue = new Rect(0, 0, 1, 1);
                         // New array elements copy the previous one, so set the default explicitly.
-                        item.FindPropertyRelative("NormalCorrection").boolValue = true;
+                        item.FindPropertyRelative("normalCorrection").boolValue = true;
+                        item.FindPropertyRelative("prebakedNormalMap").objectReferenceValue = null;
                     }
                 }
                 EditorGUI.EndDisabledGroup();
@@ -160,7 +172,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (available.Count == 0)
                 EditorGUILayout.LabelField("All detected materials are assigned, or none are available.", EditorStyles.wordWrappedMiniLabel);
             EditorGUILayout.Space();
-            using (new EditorGUI.DisabledScope(!HasAssignedMaterials(sources) || AtlasShaderRegistry.Output(config.FindPropertyRelative("ShaderId").stringValue) == null))
+            using (new EditorGUI.DisabledScope(!HasAssignedMaterials(sources) || AtlasShaderRegistry.Output(config.FindPropertyRelative("shaderId").stringValue) == null))
             {
                 if (GUILayout.Button("Auto Setup Output Configuration"))
                 {
@@ -168,11 +180,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     serializedObject.ApplyModifiedProperties();
                     AtlasOutputAutoSetup.Apply(output);
                     serializedObject.Update();
-                    config = serializedObject.FindProperty("Configuration");
+                    config = serializedObject.FindProperty("configuration");
                 }
             }
             EditorGUILayout.LabelField("General Output Texture Settings", EditorStyles.boldLabel);
-            var sharedMain = config.FindPropertyRelative("MainTexture");
+            var sharedMain = config.FindPropertyRelative("mainTexture");
             bool mainChanged = AtlasOutputUI.Main(sharedMain);
             if (mainChanged)
             {
@@ -180,31 +192,31 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 // This also ensures the preview reads the newly committed values.
                 serializedObject.ApplyModifiedProperties();
                 serializedObject.Update();
-                config = serializedObject.FindProperty("Configuration");
-                sharedMain = config.FindPropertyRelative("MainTexture");
-                var activeShader = AtlasShaderRegistry.Output(config.FindPropertyRelative("ShaderId").stringValue);
-                AtlasOutputUI.NormalizeAll(config.FindPropertyRelative("Settings"), sharedMain, activeShader);
+                config = serializedObject.FindProperty("configuration");
+                sharedMain = config.FindPropertyRelative("mainTexture");
+                var activeShader = AtlasShaderRegistry.Output(config.FindPropertyRelative("shaderId").stringValue);
+                AtlasOutputUI.NormalizeAll(config.FindPropertyRelative("settings"), sharedMain, activeShader);
                 serializedObject.ApplyModifiedProperties();
-                var configuredShader = AtlasShaderRegistry.Output(output.Configuration.ShaderId);
+                var configuredShader = AtlasShaderRegistry.Output(output.configuration.shaderId);
                 if (configuredShader != null)
                 {
-                    configuredShader.OnConfigurationChanged(output.Configuration, AtlasConfigurationChange.MainTexture);
+                    configuredShader.OnConfigurationChanged(output.configuration, AtlasConfigurationChange.MainTexture);
                     EditorUtility.SetDirty(output);
                 }
                 serializedObject.Update();
-                config = serializedObject.FindProperty("Configuration");
-                sharedMain = config.FindPropertyRelative("MainTexture");
+                config = serializedObject.FindProperty("configuration");
+                sharedMain = config.FindPropertyRelative("mainTexture");
             }
-            AtlasOutputUI.DrawShaderFields(config.FindPropertyRelative("Settings"), sharedMain,
-                AtlasShaderRegistry.Output(config.FindPropertyRelative("ShaderId").stringValue));
+            AtlasOutputUI.DrawShaderFields(config.FindPropertyRelative("settings"), sharedMain,
+                AtlasShaderRegistry.Output(config.FindPropertyRelative("shaderId").stringValue));
             serializedObject.ApplyModifiedProperties();
             previewOpen = EditorGUILayout.Foldout(previewOpen, "UV Layout Preview", true);
             if (previewOpen)
             {
-                var dimensions = output.Configuration.MainTexture;
-                AtlasUVPreview.Draw(output.Configuration.Sources,
-                    dimensions != null && dimensions.Enabled ? dimensions.Width : 1,
-                    dimensions != null && dimensions.Enabled ? dimensions.Height : 1);
+                var dimensions = output.configuration.mainTexture;
+                AtlasUVPreview.Draw(output.configuration.sources,
+                    dimensions != null ? dimensions.width : 1,
+                    dimensions != null ? dimensions.height : 1);
                 EditorGUILayout.LabelField("Preview uses main textures; no shader-specific baking or padding is applied.", EditorStyles.wordWrappedMiniLabel);
             }
             if (main != null)
@@ -217,7 +229,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static bool HasAssignedMaterials(SerializedProperty entries)
         {
             for (int i=0; i<entries.arraySize; i++)
-                if (entries.GetArrayElementAtIndex(i).FindPropertyRelative("Material").objectReferenceValue != null) return true;
+                if (entries.GetArrayElementAtIndex(i).FindPropertyRelative("material").objectReferenceValue != null) return true;
             return false;
         }
         private static void AddSource(NordicsAtlasOutput output, Material material)
@@ -227,11 +239,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (!discovery.Materials.Contains(material)) return;
             foreach (var other in output.GetComponents<NordicsAtlasOutput>())
             {
-                if (other.Configuration.Sources != null && other.Configuration.Sources.Any(e => e != null && e.Material == material)) return;
+                if (other.configuration.sources != null && other.configuration.sources.Any(e => e != null && e.material == material)) return;
             }
             Undo.RecordObject(output, "Add atlas source material");
-            if (output.Configuration.Sources == null) output.Configuration.Sources = new List<AtlasSourceEntry>();
-            output.Configuration.Sources.Add(new AtlasSourceEntry { Material = material, UVRegion = new Rect(0, 0, 1, 1) });
+            if (output.configuration.sources == null) output.configuration.sources = new List<AtlasSourceEntry>();
+            output.configuration.sources.Add(new AtlasSourceEntry { material = material, uvRegion = new Rect(0, 0, 1, 1) });
             EditorUtility.SetDirty(output);
         }
         private void DrawShaderSelection(SerializedProperty id)

@@ -17,19 +17,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static void Apply(NordicsAtlasOutput component)
         {
             if (component == null) throw new ArgumentNullException(nameof(component));
-            AtlasOutputConfiguration config = component.Configuration;
-            IAtlasOutputShader output = AtlasShaderRegistry.Output(config.ShaderId);
-            if (output == null) { Debug.LogWarning("Atlas output shader is not registered: " + config.ShaderId, component); return; }
+            AtlasOutputConfiguration config = component.configuration;
+            IAtlasOutputShader output = AtlasShaderRegistry.Output(config.shaderId);
+            if (output == null) { Debug.LogWarning("Atlas output shader is not registered: " + config.shaderId, component); return; }
 
             // Complete parsing before changing serialized state; invalid inputs are ignored
             // individually rather than preventing auto configuration for the remaining sources.
             var parsed = new List<AtlasUnifiedMaterial>();
             var seen = new HashSet<Material>();
-            if (config.Sources != null)
+            if (config.sources != null)
             {
-                foreach (var entry in config.Sources)
+                foreach (var entry in config.sources)
                 {
-                    Material material = entry == null ? null : entry.Material;
+                    Material material = entry == null ? null : entry.material;
                     if (material == null || !seen.Add(material)) continue;
                     var parser = AtlasShaderRegistry.Detect(material);
                     if (parser == null) continue;
@@ -41,24 +41,24 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
             Undo.RecordObject(component, "Auto Setup Atlas Output");
             AtlasShaderRegistry.EnsureSettings(config, output);
-            SetMainTextureDimensions(parsed, config.MainTexture);
+            SetMainTextureDimensions(parsed, config.mainTexture);
             // Output shaders can override shared dimensions (and every other shared setting).
             output.AutoConfigure(parsed, config);
             output.OnConfigurationChanged(config, AtlasConfigurationChange.AutoSetup);
-            if (config.MainTexture == null) config.MainTexture = new AtlasTextureDimensions();
-            config.MainTexture.Width = Closest(config.MainTexture.Width);
-            config.MainTexture.Height = Closest(config.MainTexture.Height);
+            if (config.mainTexture == null) config.mainTexture = new AtlasTextureSize();
+            config.mainTexture.width = Closest(config.mainTexture.width);
+            config.mainTexture.height = Closest(config.mainTexture.height);
             EditorUtility.SetDirty(component);
 
             // Reuse exactly the same constraint normalization as the inspector controls.
             var serialized = new SerializedObject(component);
             serialized.Update();
-            var property = serialized.FindProperty("Configuration");
-            AtlasOutputUI.NormalizeAll(property.FindPropertyRelative("Settings"), property.FindPropertyRelative("MainTexture"), output);
+            var property = serialized.FindProperty("configuration");
+            AtlasOutputUI.NormalizeAll(property.FindPropertyRelative("settings"), property.FindPropertyRelative("mainTexture"), output);
             serialized.ApplyModifiedProperties();
         }
 
-        public static void SetMainTextureDimensions(IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasTextureDimensions main)
+        public static void SetMainTextureDimensions(IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasTextureSize main)
         {
             if (sources == null || main == null) return;
             Texture largest = null;
@@ -81,17 +81,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
             }
             if (largest == null) return; // Keep user dimensions if no source main texture exists.
-            main.Enabled = true;
-            main.Width = Closest(largest.width);
-            main.Height = Closest(largest.height);
+            main.width = Closest(largest.width);
+            main.height = Closest(largest.height);
         }
 
         public static void SetTextureForSemantic(AtlasOutputConfiguration output, string fieldId,
             IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasTextureSemantic semantic)
         {
             var setting = output == null ? null : output.Find(fieldId);
-            if (setting == null || setting.Texture == null) return;
-            setting.Texture.Enabled = sources != null && sources.Any(source => source != null &&
+            if (setting == null || setting.texture == null) return;
+            setting.texture.enabled = sources != null && sources.Any(source => source != null &&
                 source.HasTexture(semantic));
         }
 

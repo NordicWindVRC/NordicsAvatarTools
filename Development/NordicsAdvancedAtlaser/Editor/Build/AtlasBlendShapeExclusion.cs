@@ -12,10 +12,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             NordicsAdvancedAtlaser atlaser, SkinnedMeshRenderer renderer)
         {
             var matches = new List<AtlasExcludedBlendShape>();
-            if (atlaser == null || renderer == null || !atlaser.IgnoreGeometryAffectedByBlendShape ||
-                atlaser.ExcludedBlendShapes == null) return matches;
-            foreach (var entry in atlaser.ExcludedBlendShapes)
-                if (entry != null && entry.Renderer == renderer && !string.IsNullOrEmpty(entry.BlendShapeName))
+            // An empty list means nothing is excluded.
+            if (atlaser == null || renderer == null || atlaser.excludedBlendShapes == null) return matches;
+            foreach (var entry in atlaser.excludedBlendShapes)
+                if (entry != null && entry.renderer == renderer && !string.IsNullOrEmpty(entry.blendShapeName))
                     matches.Add(entry);
             return matches;
         }
@@ -34,14 +34,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var dt = new Vector3[mesh.vertexCount];
             foreach (var entry in entries)
             {
-                int shapeIndex = mesh.GetBlendShapeIndex(entry.BlendShapeName);
+                int shapeIndex = mesh.GetBlendShapeIndex(entry.blendShapeName);
                 if (shapeIndex < 0)
                 {
-                    diagnostics.Add(atlaser.name + ": blend shape '" + entry.BlendShapeName +
+                    diagnostics.Add(atlaser.name + ": blend shape '" + entry.blendShapeName +
                         "' missing from source renderer '" + renderer.name + "'.");
                     continue;
                 }
-                float threshold = Mathf.Max(0f, entry.Threshold);
+                float threshold = Mathf.Max(0f, entry.threshold);
                 float thresholdSquared = threshold * threshold;
                 var affected = new bool[mesh.vertexCount];
                 int frames = mesh.GetBlendShapeFrameCount(shapeIndex);
@@ -59,14 +59,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     int a = triangles[i], b = triangles[i+1], c = triangles[i+2];
                     if (a < 0 || a >= affected.Length || b < 0 || b >= affected.Length ||
                         c < 0 || c >= affected.Length) continue;
-                    bool match = entry.SelectionMode == AtlasBlendShapeSelectionMode.AllVertices
+                    bool match = entry.selectionMode == AtlasBlendShapeSelectionMode.AllVertices
                         ? affected[a] && affected[b] && affected[c]
                         : affected[a] || affected[b] || affected[c];
                     if (match) { excluded[tri] = true; newlyExcluded++; }
                 }
-                diagnostics.Add(atlaser.name + ": blend shape '" + entry.BlendShapeName +
+                diagnostics.Add(atlaser.name + ": blend shape '" + entry.blendShapeName +
                     "' on '" + renderer.name + "': threshold=" + threshold +
-                    ", mode=" + entry.SelectionMode + ", newly excluded triangles=" + newlyExcluded + ".");
+                    ", mode=" + entry.selectionMode + ", newly excluded triangles=" + newlyExcluded + ".");
             }
             return excluded;
         }

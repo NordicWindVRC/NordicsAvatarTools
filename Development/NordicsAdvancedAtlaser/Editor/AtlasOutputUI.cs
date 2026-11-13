@@ -19,18 +19,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static bool Main(SerializedProperty main)
         {
             if (main == null) return false;
-            var enabled = main.FindPropertyRelative("Enabled");
-            var w = main.FindPropertyRelative("Width");
-            var h = main.FindPropertyRelative("Height");
+            var w = main.FindPropertyRelative("width");
+            var h = main.FindPropertyRelative("height");
             EditorGUI.BeginChangeCheck();
             using (new EditorGUILayout.HorizontalScope())
             {
-                enabled.boolValue = EditorGUILayout.ToggleLeft("Main", enabled.boolValue, GUILayout.Width(115));
-                using (new EditorGUI.DisabledScope(!enabled.boolValue))
-                {
-                    w.intValue = SizePopup(w.intValue, Sizes);
-                    h.intValue = SizePopup(h.intValue, Sizes);
-                }
+                // The main texture is always generated; only its size is chosen.
+                EditorGUILayout.PrefixLabel("Main Texture Size");
+                w.intValue = SizePopup(w.intValue, Sizes);
+                h.intValue = SizePopup(h.intValue, Sizes);
             }
             return EditorGUI.EndChangeCheck();
         }
@@ -46,11 +43,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 switch (field.Kind)
                 {
                     case AtlasSettingKind.Texture: Texture(p, main, field.Label); break;
-                    case AtlasSettingKind.Toggle: Toggle(p.FindPropertyRelative("BoolValue"), field.Label); break;
-                    case AtlasSettingKind.Color: Color(p.FindPropertyRelative("ColorValue"), field.Label); break;
-                    case AtlasSettingKind.Integer: Value(p.FindPropertyRelative("IntValue"), field.Label); break;
-                    case AtlasSettingKind.Vector: Value(p.FindPropertyRelative("VectorValue"), field.Label); break;
-                    case AtlasSettingKind.Float: Value(p.FindPropertyRelative("FloatValue"), field.Label); break;
+                    case AtlasSettingKind.Toggle: Toggle(p.FindPropertyRelative("boolValue"), field.Label); break;
+                    case AtlasSettingKind.Color: Color(p.FindPropertyRelative("colorValue"), field.Label); break;
+                    case AtlasSettingKind.Integer: Value(p.FindPropertyRelative("intValue"), field.Label); break;
+                    case AtlasSettingKind.Vector: Value(p.FindPropertyRelative("vectorValue"), field.Label); break;
+                    case AtlasSettingKind.Float: Value(p.FindPropertyRelative("floatValue"), field.Label); break;
                     case AtlasSettingKind.Description: Description(field.Label); break;
                 }
             }
@@ -60,7 +57,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             for (int i=0;i<items.arraySize;i++)
             {
                 var p=items.GetArrayElementAtIndex(i);
-                if (p.FindPropertyRelative("Id").stringValue == id) return p;
+                if (p.FindPropertyRelative("id").stringValue == id) return p;
             }
             return null;
         }
@@ -78,11 +75,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
         private static void Texture(SerializedProperty item, SerializedProperty main, string label)
         {
-            var tex = item.FindPropertyRelative("Texture");
-            var enabled = tex.FindPropertyRelative("Enabled");
-            var width = tex.FindPropertyRelative("Width");
-            var height = tex.FindPropertyRelative("Height");
-            var mode = (AtlasTextureSizeMode)item.FindPropertyRelative("SizeMode").enumValueIndex;
+            var tex = item.FindPropertyRelative("texture");
+            var enabled = tex.FindPropertyRelative("enabled");
+            var width = tex.FindPropertyRelative("width");
+            var height = tex.FindPropertyRelative("height");
+            var mode = (AtlasTextureSizeMode)item.FindPropertyRelative("sizeMode").enumValueIndex;
             EditorGUI.BeginChangeCheck();
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -91,8 +88,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 {
                     if (mode == AtlasTextureSizeMode.MasterAspect)
                     {
-                        int mw = main.FindPropertyRelative("Enabled").boolValue ? main.FindPropertyRelative("Width").intValue : 1;
-                        int mh = main.FindPropertyRelative("Enabled").boolValue ? main.FindPropertyRelative("Height").intValue : 1;
+                        int mw = main.FindPropertyRelative("width").intValue;
+                        int mh = main.FindPropertyRelative("height").intValue;
                         int[] valid = Sizes.Where(w => Valid(w, mw, mh)).ToArray();
                         if (valid.Length > 0) width.intValue = SizePopup(width.intValue, valid);
                         using (new EditorGUI.DisabledScope(true))
@@ -117,13 +114,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
         private static void NormalizeTexture(SerializedProperty item, SerializedProperty main)
         {
-            var tex=item.FindPropertyRelative("Texture"); if(tex==null) return;
-            var w=tex.FindPropertyRelative("Width"); var h=tex.FindPropertyRelative("Height");
-            var mode=(AtlasTextureSizeMode)item.FindPropertyRelative("SizeMode").enumValueIndex;
+            var tex=item.FindPropertyRelative("texture"); if(tex==null) return;
+            var w=tex.FindPropertyRelative("width"); var h=tex.FindPropertyRelative("height");
+            var mode=(AtlasTextureSizeMode)item.FindPropertyRelative("sizeMode").enumValueIndex;
             if(mode == AtlasTextureSizeMode.MasterAspect)
             {
-                int mw=main.FindPropertyRelative("Enabled").boolValue ? main.FindPropertyRelative("Width").intValue : 1;
-                int mh=main.FindPropertyRelative("Enabled").boolValue ? main.FindPropertyRelative("Height").intValue : 1;
+                int mw=main.FindPropertyRelative("width").intValue;
+                int mh=main.FindPropertyRelative("height").intValue;
                 int[] valid=Sizes.Where(v=>Valid(v,mw,mh)).ToArray();
                 if(valid.Length > 0) {w.intValue=Closest(w.intValue,valid); h.intValue=(int)((long)w.intValue*mh/mw);}
             }

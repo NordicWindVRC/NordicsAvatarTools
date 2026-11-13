@@ -12,8 +12,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public string OutputName;
         public string OutputShaderId;
+        // Already 0 when the output has fewer than two sources.
         public int RegionPadding;
-        public AtlasTextureDimensions MainTexture;
+        public AtlasTextureSize MainTexture;
         public readonly List<AtlasOutputSetting> Settings = new List<AtlasOutputSetting>();
         public readonly List<AtlasGeneratorSource> Sources = new List<AtlasGeneratorSource>();
     }
@@ -22,6 +23,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasUnifiedMaterial Material;
         public Rect UVRegion;
         public bool GeometryBakingAvailable;
+        // Optional normal map baked for this mesh by the author, applied at strength 1.
+        //
+        // A writer combines a source's normal maps into the output's main normal map in this
+        // order, each on top of the previous one:
+        //   1. PrebakedNormalMap (author-supplied, for example for a lower-detail mesh)
+        //   2. Bakes' TangentNormalCorrection (changes made to the mesh during the build)
+        //   3. the material's primary normal map
+        //   4. its secondary normal map
+        //   5. its detail normal map
+        // Strengths are normalised to the largest strength among the atlas's sources.
+        public Texture2D PrebakedNormalMap;
         // Null when disabled; missing submeshes instead have an explicit empty/flat bake.
         public AtlasBakedInputSet Bakes;
     }

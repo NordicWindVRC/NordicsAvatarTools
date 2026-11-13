@@ -50,7 +50,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             for (int atlaserIndex=0; atlaserIndex<atlasers.Length; atlaserIndex++)
             {
                 var atlaser = atlasers[atlaserIndex];
-                if (!atlaser.EnableGeometryBaking) continue;
+                if (!atlaser.enableGeometryBaking) continue;
                 atlaserCount++;
                 // Keep the same source selection used by the main Atlaser inspector:
                 // AAO Merge Skinned Mesh inputs, or the local renderer otherwise.
@@ -58,19 +58,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 foreach (var material in discovery.Materials) snapshot.DetectedMaterials.Add(material);
                 if (!string.IsNullOrEmpty(discovery.Warning))
                     snapshot.CaptureDiagnostics.Add(atlaser.name + ": " + discovery.Warning);
-                if (atlaser.IgnoreGeometryAffectedByBlendShape && atlaser.ExcludedBlendShapes != null)
-                    foreach (var excluded in atlaser.ExcludedBlendShapes)
-                        if (excluded != null && excluded.Renderer != null &&
-                            !discovery.Renderers.Contains(excluded.Renderer))
+                if (atlaser.excludedBlendShapes != null)
+                    foreach (var excluded in atlaser.excludedBlendShapes)
+                        if (excluded != null && excluded.renderer != null &&
+                            !discovery.Renderers.Contains(excluded.renderer))
                             snapshot.CaptureDiagnostics.Add(atlaser.name + ": excluded blend shape '" +
-                                excluded.BlendShapeName + "' targets renderer '" + excluded.Renderer.name +
+                                excluded.blendShapeName + "' targets renderer '" + excluded.renderer.name +
                                 "' outside the discovered source renderer set; ignored.");
                 var assigned = new HashSet<Material>();
                 foreach (var output in atlaser.GetComponents<NordicsAtlasOutput>())
                 {
-                    if (output.Configuration.Sources == null) continue;
-                    foreach (var item in output.Configuration.Sources)
-                        if (item != null && item.Material != null) assigned.Add(item.Material);
+                    if (output.configuration.sources == null) continue;
+                    foreach (var item in output.configuration.sources)
+                        if (item != null && item.material != null) assigned.Add(item.material);
                 }
                 snapshot.ConfiguredMaterialCount += assigned.Count;
                 snapshot.SourceRendererCount += discovery.Renderers.Count;
@@ -91,14 +91,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 var outputs = atlaser.GetComponents<NordicsAtlasOutput>();
                 for (int oi=0; oi<outputs.Length; oi++)
                 {
-                    var sources = outputs[oi].Configuration.Sources;
+                    var sources = outputs[oi].configuration.sources;
                     if (sources == null) continue;
                     for (int si=0; si<sources.Count; si++)
                     {
                         var source = sources[si];
-                        if (source == null || source.Material == null) continue;
+                        if (source == null || source.material == null) continue;
                         List<AtlasMeshSection> sections;
-                        if (localSections.TryGetValue(source.Material,out sections) && sections.Count>0)
+                        if (localSections.TryGetValue(source.material,out sections) && sections.Count>0)
                             snapshot.SourceSections[AtlasOriginalGeometry.SourceKey(atlaserIndex,oi,si)] = sections;
                     }
                 }

@@ -48,9 +48,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     summary.AppendLine("Original sections: " + originals);
                     summary.AppendLine("Surviving material submeshes: " + survivors);
                     summary.AppendLine("Geometry bakes: " + bakes);
-                    summary.AppendLine("Geometry baking: " + (group.Component!=null && group.Component.EnableGeometryBaking?"enabled":"disabled"));
-                    if(group.Component!=null && group.Component.EnableGeometryBaking)
-                        summary.AppendLine("Resolution: "+group.Component.GeometryBakingResolution+" x "+group.Component.GeometryBakingResolution);
+                    summary.AppendLine("Geometry baking: " + (group.Component!=null && group.Component.enableGeometryBaking
+                        ? "enabled (each material at 1.5× its atlas area, up to " + AtlasOutputLayout.BakeLimit + " per side)" : "disabled"));
                     ErrorReport.ReportError(new AtlasMessageError(ErrorSeverity.Information,
                         "Nordic's Advanced Atlaser — Build Results", summary.ToString()));
                 }

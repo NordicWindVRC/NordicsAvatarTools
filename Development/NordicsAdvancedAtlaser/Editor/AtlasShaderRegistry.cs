@@ -84,15 +84,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static void EnsureSettings(AtlasOutputConfiguration config, IAtlasOutputShader output)
         {
             if (config == null || output == null) return;
-            if (config.Settings == null) config.Settings = new List<AtlasOutputSetting>();
+            if (config.settings == null) config.settings = new List<AtlasOutputSetting>();
             foreach (var field in output.Fields)
             {
                 if (string.IsNullOrEmpty(field.Id) || config.Find(field.Id) != null) continue;
-                config.Settings.Add(new AtlasOutputSetting {
-                    Id = field.Id, Kind = field.Kind, BoolValue = field.DefaultEnabled,
-                    FloatValue = field.DefaultFloat, IntValue = field.DefaultInt, ColorValue = field.DefaultColor,
-                    Texture = new AtlasTextureDimensions { Enabled = field.DefaultEnabled, Width = field.DefaultWidth, Height = field.DefaultHeight },
-                    SizeMode = field.SizeMode
+                config.settings.Add(new AtlasOutputSetting {
+                    id = field.Id, kind = field.Kind, boolValue = field.DefaultEnabled,
+                    floatValue = field.DefaultFloat, intValue = field.DefaultInt, colorValue = field.DefaultColor,
+                    texture = new AtlasTextureDimensions { enabled = field.DefaultEnabled, width = field.DefaultWidth, height = field.DefaultHeight },
+                    sizeMode = field.SizeMode
                 });
             }
         }

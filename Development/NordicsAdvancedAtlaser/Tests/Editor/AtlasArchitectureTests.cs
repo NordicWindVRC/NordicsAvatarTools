@@ -88,71 +88,43 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsEmpty(result.Materials);
         }
         [Test]
-        public void BlendShapeExclusionDefaultsOffAndSupportsRendererNamePairs()
+        public void BlendShapeExclusionIsEmptyByDefaultAndSupportsRendererNamePairs()
         {
             var go = new GameObject("Atlaser Exclusion Test");
             try
             {
                 var atlaser = go.AddComponent<NordicsAdvancedAtlaser>();
                 var renderer = go.AddComponent<SkinnedMeshRenderer>();
-                Assert.IsFalse(atlaser.IgnoreGeometryAffectedByBlendShape);
-                Assert.NotNull(atlaser.ExcludedBlendShapes);
-                Assert.AreEqual(0, atlaser.ExcludedBlendShapes.Count);
-                atlaser.IgnoreGeometryAffectedByBlendShape = true;
-                atlaser.ExcludedBlendShapes.Add(new AtlasExcludedBlendShape {
-                    Renderer = renderer, BlendShapeName = "Hide Breasts" });
-                Assert.AreSame(renderer, atlaser.ExcludedBlendShapes[0].Renderer);
-                Assert.AreEqual("Hide Breasts", atlaser.ExcludedBlendShapes[0].BlendShapeName);
-                Assert.AreEqual(0.001f, atlaser.ExcludedBlendShapes[0].Threshold);
-                Assert.AreEqual(AtlasBlendShapeSelectionMode.AnyVertex, atlaser.ExcludedBlendShapes[0].SelectionMode);
+                Assert.NotNull(atlaser.excludedBlendShapes);
+                Assert.AreEqual(0, atlaser.excludedBlendShapes.Count);
+                atlaser.excludedBlendShapes.Add(new AtlasExcludedBlendShape {
+                    renderer = renderer, blendShapeName = "Hide Breasts" });
+                Assert.AreSame(renderer, atlaser.excludedBlendShapes[0].renderer);
+                Assert.AreEqual("Hide Breasts", atlaser.excludedBlendShapes[0].blendShapeName);
+                Assert.AreEqual(0.001f, atlaser.excludedBlendShapes[0].threshold);
+                Assert.AreEqual(AtlasBlendShapeSelectionMode.AnyVertex, atlaser.excludedBlendShapes[0].selectionMode);
             }
             finally { Object.DestroyImmediate(go); }
         }
         [Test]
-        public void GeometryBakingDefaultsToEnabled4096OnMainComponent()
+        public void GeometryBakingIsEnabledByDefaultAndOutputDefaultsMatchTheDesign()
         {
             var go = new GameObject("Atlaser Test");
             try
             {
                 var atlaser = go.AddComponent<NordicsAdvancedAtlaser>();
-                Assert.IsTrue(atlaser.EnableGeometryBaking);
-                Assert.AreEqual(4096, atlaser.GeometryBakingResolution);
+                Assert.IsTrue(atlaser.enableGeometryBaking);
+                // The bake resolution is automatic now (AtlasOutputLayout.BakeSize).
+                Assert.IsNull(typeof(NordicsAdvancedAtlaser).GetField("geometryBakingResolution"));
                 Assert.IsNull(typeof(NordicsAdvancedAtlaser).GetField("GeometryNormalPadding"));
                 var output = go.AddComponent<NordicsAtlasOutput>();
                 Assert.IsNull(typeof(AtlasOutputConfiguration).GetField("MaxGeometryBakeDimension"));
-                Assert.NotNull(output.Configuration);
+                Assert.NotNull(output.configuration);
+                Assert.AreEqual(4096, output.configuration.mainTexture.width);
+                Assert.AreEqual(4096, output.configuration.mainTexture.height);
+                Assert.AreEqual(4, output.configuration.regionPadding);
             }
             finally { Object.DestroyImmediate(go); }
-        }
-        [Test]
-        public void OutputSettingsAreIndependentAndPreserved()
-        {
-            var config = new AtlasOutputConfiguration();
-            var p = AtlasShaderRegistry.Output("poiyomi10");
-            var m = AtlasShaderRegistry.Output("mobiletoon");
-            Assert.NotNull(p); Assert.NotNull(m);
-            AtlasShaderRegistry.EnsureSettings(config,p);
-            config.Find("normal").Texture.Width = 2048;
-            AtlasShaderRegistry.EnsureSettings(config,m);
-            Assert.AreEqual(2048,config.Find("normal").Texture.Width);
-            Assert.NotNull(config.Find("normal"));
-            Assert.AreEqual(1, config.Settings.FindAll(x => x.Id == "normal").Count);
-        }
-        [Test]
-        public void SwitchingShadersPreservesOneSharedNormalAndEmissionSetting()
-        {
-            var config = new AtlasOutputConfiguration();
-            var poiyomi = AtlasShaderRegistry.Output("poiyomi10");
-            var mobile = AtlasShaderRegistry.Output("mobiletoon");
-            AtlasShaderRegistry.EnsureSettings(config, poiyomi);
-            config.Find("normal").Texture.Width = 2048;
-            config.Find("emission").Texture.Enabled = true;
-            config.ShaderId = "mobiletoon";
-            AtlasShaderRegistry.EnsureSettings(config, mobile);
-            Assert.AreEqual(2048, config.Find("normal").Texture.Width);
-            Assert.IsTrue(config.Find("emission").Texture.Enabled);
-            Assert.AreEqual(1, config.Settings.FindAll(x => x.Id == "normal").Count);
-            Assert.AreEqual(1, config.Settings.FindAll(x => x.Id == "emission").Count);
         }
         [Test]
         public void MainTextureSettingsAreNotResetByValidation()
@@ -161,14 +133,12 @@ namespace NordicWind.AdvancedAtlaser.Tests
             try
             {
                 var output = go.AddComponent<NordicsAtlasOutput>();
-                output.Configuration.MainTexture.Enabled = false;
-                output.Configuration.MainTexture.Width = 4096;
-                output.Configuration.MainTexture.Height = 1024;
+                output.configuration.mainTexture.width = 4096;
+                output.configuration.mainTexture.height = 1024;
                 // OnValidate used to overwrite this with hidden legacy 2048x2048.
                 output.SendMessage("OnValidate", SendMessageOptions.DontRequireReceiver);
-                Assert.IsFalse(output.Configuration.MainTexture.Enabled);
-                Assert.AreEqual(4096, output.Configuration.MainTexture.Width);
-                Assert.AreEqual(1024, output.Configuration.MainTexture.Height);
+                Assert.AreEqual(4096, output.configuration.mainTexture.width);
+                Assert.AreEqual(1024, output.configuration.mainTexture.height);
             }
             finally { Object.DestroyImmediate(go); }
         }
@@ -178,20 +148,6 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsNull(typeof(NordicsAtlasOutput).GetField("MainTexture",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance));
             Assert.IsNull(typeof(NordicsAtlasOutput).GetMethod("Migrate"));
-        }
-        [Test]
-        public void AutoConfigureUsesUnifiedSemanticLayers()
-        {
-            var config = new AtlasOutputConfiguration();
-            var shader = AtlasShaderRegistry.Output("poiyomi10");
-            AtlasShaderRegistry.EnsureSettings(config, shader);
-            var source = new AtlasUnifiedMaterial();
-            source.Normals.Add(new AtlasNormalLayer { Map = new AtlasTextureSample { Texture = Texture2D.whiteTexture } });
-            source.Emissions.Add(new AtlasEmissionLayer { Map = new AtlasTextureSample { Texture = Texture2D.whiteTexture } });
-            shader.AutoConfigure(new List<AtlasUnifiedMaterial> { source }, config);
-            Assert.IsTrue(config.Find("normal").Texture.Enabled);
-            Assert.IsTrue(config.Find("emission").Texture.Enabled);
-            Assert.IsFalse(config.Find("globalMasks").Texture.Enabled);
         }
         [Test]
         public void SharedAutoSetupChoosesLargestAlbedoOnly()
@@ -206,11 +162,10 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 var second = new AtlasUnifiedMaterial();
                 second.Surface.BaseColor.Map = new AtlasTextureSample { Texture = large };
                 second.Normals.Add(new AtlasNormalLayer { Map = new AtlasTextureSample { Texture = hugeNormal } });
-                var main = new AtlasTextureDimensions { Enabled = false };
+                var main = new AtlasTextureSize();
                 AtlasOutputAutoSetup.SetMainTextureDimensions(new List<AtlasUnifiedMaterial> { first, second }, main);
-                Assert.IsTrue(main.Enabled);
-                Assert.AreEqual(1024, main.Width);
-                Assert.AreEqual(512, main.Height);
+                Assert.AreEqual(1024, main.width);
+                Assert.AreEqual(512, main.height);
             }
             finally { Object.DestroyImmediate(small); Object.DestroyImmediate(large); Object.DestroyImmediate(hugeNormal); }
         }

@@ -10,24 +10,24 @@ namespace NordicWind.AdvancedAtlaser.Editor
             AtlasShaderRegistry.EnsureSettings(job.Configuration, job.Shader);
             var config=job.Configuration;
             var generatorJob=new AtlasGeneratorJob {
-                OutputName=config.OutputName, OutputShaderId=config.ShaderId,
-                RegionPadding=config.RegionPadding,
-                MainTexture=config.MainTexture==null?null:new AtlasTextureDimensions {
-                    Enabled=config.MainTexture.Enabled,Width=config.MainTexture.Width,Height=config.MainTexture.Height
+                OutputName=config.outputName, OutputShaderId=config.shaderId,
+                RegionPadding=AtlasOutputLayout.EffectivePadding(config),
+                MainTexture=config.mainTexture==null?null:new AtlasTextureSize {
+                    width=config.mainTexture.width,height=config.mainTexture.height
                 }
             };
-            if (config.Settings!=null)
-                foreach(var setting in config.Settings)
+            if (config.settings!=null)
+                foreach(var setting in config.settings)
                 {
                     if (setting==null) continue;
                     generatorJob.Settings.Add(new AtlasOutputSetting {
-                        Id=setting.Id,Kind=setting.Kind,BoolValue=setting.BoolValue,
-                        FloatValue=setting.FloatValue,IntValue=setting.IntValue,
-                        ColorValue=setting.ColorValue,VectorValue=setting.VectorValue,
-                        TextValue=setting.TextValue,SizeMode=setting.SizeMode,
-                        CustomAspectWidth=setting.CustomAspectWidth,CustomAspectHeight=setting.CustomAspectHeight,
-                        Texture=setting.Texture==null?null:new AtlasTextureDimensions {
-                            Enabled=setting.Texture.Enabled, Width=setting.Texture.Width, Height=setting.Texture.Height
+                        id=setting.id,kind=setting.kind,boolValue=setting.boolValue,
+                        floatValue=setting.floatValue,intValue=setting.intValue,
+                        colorValue=setting.colorValue,vectorValue=setting.vectorValue,
+                        textValue=setting.textValue,sizeMode=setting.sizeMode,
+                        customAspectWidth=setting.customAspectWidth,customAspectHeight=setting.customAspectHeight,
+                        texture=setting.texture==null?null:new AtlasTextureDimensions {
+                            enabled=setting.texture.enabled, width=setting.texture.width, height=setting.texture.height
                         }
                     });
                 }
@@ -36,7 +36,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (source.Input == null || source.Input.Unified == null) continue;
                 generatorJob.Sources.Add(new AtlasGeneratorSource {
                     Material=source.Input.Unified, UVRegion=source.UVRegion,
-                    GeometryBakingAvailable=source.Bakes!=null, Bakes=source.Bakes
+                    GeometryBakingAvailable=source.Bakes!=null, Bakes=source.Bakes,
+                    PrebakedNormalMap=source.PrebakedNormalMap
                 });
             }
             // No Unity material or source shader information is passed across this boundary.

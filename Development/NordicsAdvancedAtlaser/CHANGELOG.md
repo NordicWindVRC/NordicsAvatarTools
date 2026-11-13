@@ -15,7 +15,26 @@ EditMode tests pass in Unity 2022.3.22 (2026-11-03).
   `NordicWind.AdvancedAtlaser.Tests`. MIT license.
 - Build errors start with `[Nordic's Advanced Atlaser]`.
 
+### Changed
+- **Geometry baking resolution is automatic.** Each material is baked at 1.5× its area in its
+  atlas, up to 4096 per side; a larger area is baked 1:1. The *Geometry Baking Resolution*
+  setting is removed.
+- The main output texture is always generated: no on/off switch, default 4096 × 4096.
+- Region padding defaults to 4 px and is only used with two or more source materials.
+- The Geometry Baking section explains what it does. *Excluded Blend Shapes* moved into it,
+  with a description, and only shows when baking is on. Its separate on/off switch is removed:
+  an empty list excludes nothing.
+- The output shaders' placeholder settings are removed. Each output shader gets its own
+  settings as its writer is built.
+- **Serialized fields are camelCase**, as the design guidelines require. Existing Atlaser
+  configurations are not migrated.
+
 ### Added
+- **Pre-baked Normal Map** per source material: an optional, author-supplied normal map for the
+  mesh, applied at strength 1 beneath the build's normal correction. The inspector warns when
+  the texture isn't imported as a normal map. Output writers get it with the documented
+  combining order.
+- `AtlasOutputLayout`: the bake size and effective padding rules, with tests.
 - **Normal Correction per source material**, on by default. Turned off, the bake keeps only
   the fast UV usage mask and a flat correction.
 - **Skips the normal-correction bake when nothing changed.** When every surviving triangle is

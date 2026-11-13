@@ -18,17 +18,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
             EditorGUI.DrawRect(preview, new Color(0.16f, 0.16f, 0.16f));
             if (entries == null) return;
             var ordered = new List<AtlasSourceEntry>();
-            foreach (var entry in entries) if (entry != null && entry.Material != null) ordered.Add(entry);
+            foreach (var entry in entries) if (entry != null && entry.material != null) ordered.Add(entry);
             // Large first; smaller regions paint over larger regions. Stable insertion order for equal areas.
-            ordered.Sort((a, b) => (b.UVRegion.width * b.UVRegion.height).CompareTo(a.UVRegion.width * a.UVRegion.height));
+            ordered.Sort((a, b) => (b.uvRegion.width * b.uvRegion.height).CompareTo(a.uvRegion.width * a.uvRegion.height));
             foreach (var entry in ordered)
             {
-                var uv = entry.UVRegion;
+                var uv = entry.uvRegion;
                 Rect r = new Rect(preview.x + uv.x * preview.width,
                     preview.y + (1f - uv.yMax) * preview.height,
                     uv.width * preview.width, uv.height * preview.height);
                 if (r.width <= 0 || r.height <= 0) continue;
-                var tex = GetMainTexture(entry.Material);
+                var tex = GetMainTexture(entry.material);
                 if (tex != null) GUI.DrawTexture(r, tex, ScaleMode.StretchToFill, false);
                 else EditorGUI.DrawRect(r, new Color(.24f, .43f, .60f, 1f));
                 Handles.BeginGUI();
@@ -36,7 +36,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Handles.DrawSolidRectangleWithOutline(r, Color.clear, Handles.color);
                 Handles.EndGUI();
                 if (r.width > 48 && r.height > 18)
-                    GUI.Label(new Rect(r.x + 3, r.y + 2, r.width - 6, 18), entry.Material.name, EditorStyles.whiteMiniLabel);
+                    GUI.Label(new Rect(r.x + 3, r.y + 2, r.width - 6, 18), entry.material.name, EditorStyles.whiteMiniLabel);
             }
             Handles.BeginGUI();
             Handles.color = Color.gray;

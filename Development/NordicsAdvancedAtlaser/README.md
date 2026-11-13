@@ -42,19 +42,34 @@ unified model and never see the source shader. See `UNIFIED_MATERIAL.md` for the
      being merged into it, including renderers that are themselves merges.
 
    The inspector lists the source materials it found, so you can check before going on.
-2. Set **Enable Geometry Baking** (on by default) and **Geometry Baking Resolution**
-   (256–8192, default 4096 square). The bake size doesn't depend on the atlas size.
+2. **Enable Geometry Baking** is on by default. It reduces visual artifacts on decimated
+   meshes by baking a normal map that compensates for the removed detail. Each material is
+   baked at 1.5× its area in the atlas, up to 4096 per side; a larger area is baked 1:1.
+   - **Excluded Blend Shapes** (optional): mesh parts moved by these blend shapes are left out
+     of the bake, so details from parts you remove on purpose aren't baked into the normal map.
+     **Threshold** is the minimum vertex movement that counts, in mesh units (default 0.001).
+     **Selection mode** is *Any Vertex* or *All Vertices* of a triangle. The avatar mesh and its
+     animations are never changed.
 3. Add one **Nordic's Atlas Output** per output material on the same GameObject. Choose the
-   output shader, the main texture size and region padding, and assign source materials with
-   their UV rectangles. **Auto Setup** picks the largest base texture, then lets the chosen
+   output shader and the main texture size (default 4096 × 4096), and assign source materials
+   with their UV rectangles. **Region Padding** (default 4 px) separates the sources' regions,
+   so it's only used with two or more source materials. **Auto Setup** picks the largest base texture, then lets the chosen
    output shader configure itself. Each source material may be assigned to only one output.
    Turn off **Normal Correction** on a source to skip its normal-correction bake, for example
    when that material's mesh isn't reduced.
-4. Optional, **Blend Shape Geometry Exclusion:** leave out geometry moved by selected
-   blendshapes from the *original* geometry used for normal correction.
-   - **Threshold:** the minimum vertex movement that counts, in mesh units (default 0.001).
-   - **Selection mode:** *Any Vertex* or *All Vertices* of a triangle.
-   - The avatar mesh and its animations are never changed.
+
+   **Pre-baked Normal Map** (optional) is a normal map made for this mesh, for example for a
+   lower-detail Quest version of a PC mesh. It's applied at strength 1. It doesn't replace the
+   build's normal correction, which only sees changes made during the build. A source's normal
+   maps are combined in this order, each on top of the previous one:
+   1. the pre-baked normal map
+   2. the build's normal correction
+   3. the material's primary normal map
+   4. its secondary normal map
+   5. its detail normal map
+
+   When sources with different normal strengths share an atlas, all of them are rescaled to the
+   largest strength.
 
 ### Debug options
 
@@ -113,8 +128,11 @@ silently assumed. See `UNIFIED_MATERIAL.md` for the details of each parser.
 
 | Output shader | ID | Settings it offers | Status |
 |---|---|---|---|
-| **Poiyomi Toon 10** | `poiyomi10` | Main texture, Normal, Emission, Global Masks, Base Tint, Emission Strength | Settings and Auto Setup work, but no material is generated yet |
-| **VRChat Mobile Toon Standard** | `mobiletoon` | Main texture, Normal, Matcap (square), Emission, Matcap Tint | Settings and Auto Setup work, but no material is generated yet |
+| **Poiyomi Toon 10** | `poiyomi10` | Main texture size | Not generated yet |
+| **VRChat Mobile Toon Standard** | `mobiletoon` | Main texture size | Not generated yet |
+
+Each output shader gets its own settings as its writer is built: overriding texture
+resolutions, turning off features, and controlling how features are emulated.
 
 ## Limitations
 

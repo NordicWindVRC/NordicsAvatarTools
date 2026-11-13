@@ -9,20 +9,21 @@ namespace NordicWind.AdvancedAtlaser
     [Serializable]
     public sealed class AtlasExcludedBlendShape
     {
-        public SkinnedMeshRenderer Renderer;
-        public string BlendShapeName;
-        [Min(0f)] public float Threshold = 0.001f;
-        public AtlasBlendShapeSelectionMode SelectionMode = AtlasBlendShapeSelectionMode.AnyVertex;
+        public SkinnedMeshRenderer renderer;
+        public string blendShapeName;
+        [Min(0f)] public float threshold = 0.001f;
+        public AtlasBlendShapeSelectionMode selectionMode = AtlasBlendShapeSelectionMode.AnyVertex;
     }
 
     [AddComponentMenu("NordicWind/Nordic's Advanced Atlaser")]
     [DisallowMultipleComponent]
     public sealed class NordicsAdvancedAtlaser : MonoBehaviour, INDMFEditorOnly
     {
-        public bool EnableGeometryBaking = true;
-        // Source UV-space bake resolution. Always square and independent of output atlases.
-        public int GeometryBakingResolution = 4096;
-        public bool IgnoreGeometryAffectedByBlendShape = false;
-        public List<AtlasExcludedBlendShape> ExcludedBlendShapes = new List<AtlasExcludedBlendShape>();
+        // Bakes a normal map that compensates for decimated meshes. Its resolution follows each
+        // material's area in its atlas.
+        public bool enableGeometryBaking = true;
+        // Mesh parts moved by these blend shapes are left out of the original geometry used for
+        // the bake. Empty means nothing is excluded.
+        public List<AtlasExcludedBlendShape> excludedBlendShapes = new List<AtlasExcludedBlendShape>();
     }
 }

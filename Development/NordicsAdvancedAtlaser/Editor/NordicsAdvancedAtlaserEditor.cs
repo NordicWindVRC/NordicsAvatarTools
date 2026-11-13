@@ -13,35 +13,28 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-            var enabled = serializedObject.FindProperty("EnableGeometryBaking");
-            var resolution = serializedObject.FindProperty("GeometryBakingResolution");
+            var enabled = serializedObject.FindProperty("enableGeometryBaking");
+            var excluded = serializedObject.FindProperty("excludedBlendShapes");
             EditorGUILayout.LabelField("Geometry Baking", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(enabled, new GUIContent("Enable Geometry Baking"));
-            using (new EditorGUI.DisabledScope(!enabled.boolValue))
+            EditorGUILayout.HelpBox("Geometry baking reduces visual artifacts on decimated meshes by baking a normal map " +
+                "that compensates for the removed detail. Its resolution follows each material's area in the atlas.", MessageType.Info);
+            if (enabled.boolValue)
             {
-                resolution.intValue = EditorGUILayout.IntPopup("Resolution", resolution.intValue,
-                    new[] {"256 x 256", "512 x 512", "1024 x 1024", "2048 x 2048", "4096 x 4096", "8192 x 8192"},
-                    new[] {256, 512, 1024, 2048, 4096, 8192});
-            }
-            EditorGUILayout.LabelField("Square source UV-space maps shared by all outputs; independent of output texture dimensions.", EditorStyles.wordWrappedMiniLabel);
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Blend Shape Geometry Exclusion", EditorStyles.boldLabel);
-            var ignore = serializedObject.FindProperty("IgnoreGeometryAffectedByBlendShape");
-            var excluded = serializedObject.FindProperty("ExcludedBlendShapes");
-            ignore.boolValue = EditorGUILayout.ToggleLeft("Exclude Blend Shape Geometry", ignore.boolValue);
-            if (ignore.boolValue)
-            {
-                EditorGUILayout.HelpBox("Ignore mesh parts affected by selected blend shapes when creating normal corrections. Useful when mesh optimization tools remove those parts. This does not change your avatar's mesh.", MessageType.Info);
+                EditorGUI.indentLevel++;
+                EditorGUILayout.LabelField("Excluded Blend Shapes", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField("Mesh parts moved by these blend shapes are left out of the bake, so details " +
+                    "from parts you remove on purpose (for example clothing hidden by a blend shape) aren't baked into " +
+                    "the normal map. Your avatar's mesh isn't changed.", EditorStyles.wordWrappedMiniLabel);
                 var discoveredRenderers = AtlasMaterialDiscovery.Discover(((NordicsAdvancedAtlaser)target).gameObject).Renderers;
-                using (new EditorGUI.DisabledScope(!enabled.boolValue))
                 {
                     for (int i = 0; i < excluded.arraySize; ++i)
                     {
                         var entry = excluded.GetArrayElementAtIndex(i);
-                        var rendererProp = entry.FindPropertyRelative("Renderer");
-                        var shapeProp = entry.FindPropertyRelative("BlendShapeName");
-                        var thresholdProp = entry.FindPropertyRelative("Threshold");
-                        var modeProp = entry.FindPropertyRelative("SelectionMode");
+                        var rendererProp = entry.FindPropertyRelative("renderer");
+                        var shapeProp = entry.FindPropertyRelative("blendShapeName");
+                        var thresholdProp = entry.FindPropertyRelative("threshold");
+                        var modeProp = entry.FindPropertyRelative("selectionMode");
                         using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
                         {
                             using (new EditorGUILayout.HorizontalScope())
@@ -97,12 +90,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         int index = excluded.arraySize;
                         excluded.InsertArrayElementAtIndex(index);
                         var entry = excluded.GetArrayElementAtIndex(index);
-                        entry.FindPropertyRelative("Renderer").objectReferenceValue = null;
-                        entry.FindPropertyRelative("BlendShapeName").stringValue = "";
-                        entry.FindPropertyRelative("Threshold").floatValue = 0.001f;
-                        entry.FindPropertyRelative("SelectionMode").enumValueIndex = 0;
+                        entry.FindPropertyRelative("renderer").objectReferenceValue = null;
+                        entry.FindPropertyRelative("blendShapeName").stringValue = "";
+                        entry.FindPropertyRelative("threshold").floatValue = 0.001f;
+                        entry.FindPropertyRelative("selectionMode").enumValueIndex = 0;
                     }
                 }
+                EditorGUI.indentLevel--;
             }
 
             serializedObject.ApplyModifiedProperties();
@@ -116,10 +110,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var assignment = new Dictionary<Material, string>();
             foreach (var output in outputs)
             {
-                if (output.Configuration.Sources != null)
-                    foreach (var source in output.Configuration.Sources)
-                        if (source != null && source.Material != null && !assignment.ContainsKey(source.Material))
-                            assignment.Add(source.Material, output.Configuration.OutputName);
+                if (output.configuration.sources != null)
+                    foreach (var source in output.configuration.sources)
+                        if (source != null && source.material != null && !assignment.ContainsKey(source.material))
+                            assignment.Add(source.material, output.configuration.outputName);
             }
             foreach (var material in discovery.Materials)
             {
@@ -139,7 +133,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    EditorGUILayout.LabelField(string.IsNullOrEmpty(output.Configuration.OutputName) ? "(Unnamed)" : output.Configuration.OutputName);
+                    EditorGUILayout.LabelField(string.IsNullOrEmpty(output.configuration.outputName) ? "(Unnamed)" : output.configuration.outputName);
                 }
             }
             if (GUILayout.Button("Add Atlas Output")) Undo.AddComponent<NordicsAtlasOutput>(owner);

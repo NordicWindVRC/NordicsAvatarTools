@@ -12,25 +12,25 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var assignments = new Dictionary<Material, NordicsAtlasOutput>();
             foreach (var output in owner.GetComponents<NordicsAtlasOutput>())
             {
-                if (output.Configuration.Sources == null) continue;
+                if (output.configuration.sources == null) continue;
                 var local = new HashSet<Material>();
-                foreach (var entry in output.Configuration.Sources)
+                foreach (var entry in output.configuration.sources)
                 {
-                    if (entry == null || entry.Material == null) { warnings.Add(output.Configuration.OutputName + ": null source material."); continue; }
-                    if (!local.Add(entry.Material)) warnings.Add(output.Configuration.OutputName + ": duplicate material " + entry.Material.name + ".");
+                    if (entry == null || entry.material == null) { warnings.Add(output.configuration.outputName + ": null source material."); continue; }
+                    if (!local.Add(entry.material)) warnings.Add(output.configuration.outputName + ": duplicate material " + entry.material.name + ".");
                     NordicsAtlasOutput previous;
-                    if (assignments.TryGetValue(entry.Material, out previous) && previous != output)
-                        warnings.Add(entry.Material.name + " assigned to both " + previous.Configuration.OutputName + " and " + output.Configuration.OutputName + ".");
-                    else assignments[entry.Material] = output;
-                    if (!known.Contains(entry.Material)) warnings.Add(output.Configuration.OutputName + ": " + entry.Material.name + " is not in the currently detected source materials (it may have been removed or the sources changed).");
-                    var r = entry.UVRegion;
+                    if (assignments.TryGetValue(entry.material, out previous) && previous != output)
+                        warnings.Add(entry.material.name + " assigned to both " + previous.configuration.outputName + " and " + output.configuration.outputName + ".");
+                    else assignments[entry.material] = output;
+                    if (!known.Contains(entry.material)) warnings.Add(output.configuration.outputName + ": " + entry.material.name + " is not in the currently detected source materials (it may have been removed or the sources changed).");
+                    var r = entry.uvRegion;
                     if (r.width <= 0f || r.height <= 0f || r.x < 0f || r.y < 0f || r.xMax > 1f || r.yMax > 1f)
-                        warnings.Add(output.Configuration.OutputName + ": invalid UV rectangle for " + entry.Material.name + ". Rectangles must be inside 0..1 and have positive size.");
+                        warnings.Add(output.configuration.outputName + ": invalid UV rectangle for " + entry.material.name + ". Rectangles must be inside 0..1 and have positive size.");
                 }
-                if (output.Configuration.RegionPadding < 0) warnings.Add(output.Configuration.OutputName + ": padding must not be negative.");
+                if (output.configuration.regionPadding < 0) warnings.Add(output.configuration.outputName + ": padding must not be negative.");
                 bool supported = false;
-                foreach (var shader in AtlasShaderRegistry.OutputShaders) if (shader.ShaderId == output.Configuration.ShaderId) supported = true;
-                if (!supported) warnings.Add(output.Configuration.OutputName + ": output shader ID is not registered: " + output.Configuration.ShaderId);
+                foreach (var shader in AtlasShaderRegistry.OutputShaders) if (shader.ShaderId == output.configuration.shaderId) supported = true;
+                if (!supported) warnings.Add(output.configuration.outputName + ": output shader ID is not registered: " + output.configuration.shaderId);
             }
             return warnings;
         }
