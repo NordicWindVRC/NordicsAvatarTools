@@ -1,23 +1,101 @@
-# Nordic's Advanced Atlaser — Unified material contract
+# Nordic's Advanced Atlaser — Unified material
 
-`AtlasUnifiedMaterial` is a **non-serialized normalized union** of the rendering features
-supported by all input shaders. It is the only material description passed to output generators.
-The source `Material`, shader, parser, and raw shader property names never enter the output job.
+`AtlasUnifiedMaterial` describes what a material **looks like**, independent of the shader it
+came from. Input parsers translate each source material into it; output writers build their
+materials only from it.
 
-## Design invariant
+## Guidelines
 
-- **One feature definition per meaning**, not per shader or shader version.
-- `Lighting` is **one object** containing a `Mode` enum and the union of related properties;
-  it is not a hierarchy of Poiyomi/Mochie/Mobile lighting configurations.
-- Reuse a lighting mode when algorithms are compatible and missing parameters can be
-  filled with **behaviorally equivalent defaults**. Use distinct modes only for real differences.
-- Arrays represent real multiple layers: normals, emissions, decals, matcaps, rim effects,
-  shadows, etc. A shader brand does not justify another array or configuration class.
-- A common float/color/toggle maps 1:1. Translate numeric enums and conventions only when
-  the source and target meanings differ. Where a feature has not been verified, record an issue.
-- Output shader writers may support any subset of the unified features. **Input coverage and
-  output coverage are different metrics.**
-- No backward-compatibility configuration or migration code is retained during development.
+These are the design rules. Where the code doesn't follow them yet, see
+[*Known gaps*](#known-gaps) below.
+
+### Role
+
+- **It decouples inputs from outputs**, the way the Texture Wrapper decouples graphics work
+  from the Atlaser. Parsers know their source shader; writers know their output shader; neither
+  knows the other. The source `Material`, shader, parser and property names never reach a writer.
+- **It's shader-neutral.** No property names, source enum values, or structures named after a
+  shader or shader version. Everything a parser knows about its source stays in the parser.
+
+### Features
+
+- **A feature is a visual effect, defined by what it does**: base colour, normals, toon
+  shading, matcap, rim, decal, emission, and so on. It is *not* a copy of a shader's settings.
+- **Variants are modes and parameters of one feature**, not separate features. For example,
+  the many lighting modes of different shaders map onto a few lighting families with
+  parameters, not one entry per mode.
+- **Merge similar features.** Ten input shaders with a hundred features each must not become a
+  thousand features. Adding an input shader should mostly add parser code, not model features.
+- **A feature only one shader has is fine**, as long as it's described generically, so other
+  shaders can map into it later.
+- **Mapped by meaning, not copied 1:1.** A value is copied directly only when it means the same
+  in the source and the unified material; otherwise the parser translates it.
+- **Layers are lists** where a material can really have several: normals, emissions, decals,
+  matcaps, rims and so on. A shader brand never justifies another list or class.
+
+### Coverage and fidelity
+
+- **Coverage means the look, not the parameter surface.** Most of a shader's properties (Poiyomi
+  has thousands) exist to tweak and animate the result. Parsers resolve them into fewer, more
+  basic features and modes, so the output recreates the original's *look*, not its low-level
+  controls. A property is covered when its effect on the look is accounted for, either
+  represented or folded into something simpler, or when it has no effect in that material
+  (settings of disabled features, editor state).
+- **Static colour and texture maths is resolved**, and output writers may bake it into textures
+  with the Texture Wrapper: colour adjustments, gradient maps, tints, fixed UV transforms,
+  combined masks. **What changes at runtime stays a feature**: anything that depends on the
+  view, lights or time, and anything driven by animation.
+- **The goal is 100% coverage** of every supported input shader. Anything a parser can't map
+  yet is reported as an issue, saying how faithful the mapping is (exact, approximate,
+  unresolved). Issues are a temporary state, not a place to keep unmapped data: there is no bag
+  of raw properties to pass along.
+- **The benchmark is a round trip through the same shader.** Poiyomi → Poiyomi, rebuilt only
+  from the unified material, must be visually indistinguishable from the original, even where
+  individual values differ. There's no shortcut that copies the source material.
+- **Writers may support a subset** of the unified features and report what they can't
+  reproduce. Input coverage (what parsers read) and output coverage (what writers reproduce) are
+  tracked separately.
+
+### Conventions
+
+- **Conventions are normalised once, in the parser**, so writers never need to know how a
+  source expressed something: hue in turns (1 = 360°), saturation 1 = unchanged, roughness
+  rather than smoothness, colours in **linear** space (matching the Texture Wrapper), and typed
+  texture channels, UV sets and sampling.
+- **Textures are references**: the source texture plus how it's sampled (UV set, tiling and
+  offset, channel, and whether it holds colour, data or a normal map). The unified material
+  holds no pixels; writers decide what to bake.
+
+### Animation
+
+- **Animated values are targets in the unified material**, written as paths such as
+  `decal[0].alpha` or `colorProcessing.hueShift`. A parser maps an animated source property to
+  its target, a writer maps the target to its own output property, and the animation clips are
+  rewritten to match. Kept short and expandable.
+- **The material's current value is always applied.** An animated hue shift, for example, is
+  still applied with its current value rather than skipped. Effects that animation shows or
+  enables don't need to be skipped: blending with their current value simply doesn't apply them.
+
+### Lifetime
+
+- It's built fresh for each build and never saved, so it needs no migration or
+  backward-compatibility code.
+
+## Known gaps
+
+Where the current code doesn't follow the guidelines yet:
+
+- **Lighting modes** (`AtlasLightingMode`, 15 values) still include several modes that exist
+  because one shader has them, rather than a few lighting families with parameters.
+- **Free-form semantic features** (`AtlasSemanticFeature`, about 40 IDs, half of them from the
+  advanced Poiyomi parser) hold many effects as text-keyed values instead of typed features.
+  They should shrink as features become typed or are resolved into simpler ones.
+- **Colours** are stored as authored in the material (sRGB), not linear.
+- **Animation** is only declared, for decal alpha and emission. Nothing reads animation clips yet.
+- **Coverage** is partial. Poiyomi in particular reads its main features, but most procedural,
+  animated and special effects aren't mapped. Every Poiyomi material also gets a generic
+  "advanced effects not fully normalised" issue instead of a list of its unmapped effects.
+- **No output writer exists yet**, so no mapping has been verified by rebuilding a material.
 
 ## Structures
 
@@ -38,9 +116,9 @@ The source `Material`, shader, parser, and raw shader property names never enter
 | `Features[]` | Shared semantic feature IDs (e.g. `surface.clearcoat`, `environment.rain`, `geometry.wind`) with typed values/textures/masks; no source property names |
 | `Issues[]` | Warnings for unresolved source semantics; output generators must not silently assume pixel equivalence |
 
-The additional `AtlasSemanticFeature` mechanism is for uncommon **features** or newly
-shared parameters; keys refer to semantics (e.g. `rippleDensity`), never to the source
-shader's property identifier (e.g. `_RippleDensity`). Repeated instances must be
+The additional `AtlasSemanticFeature` mechanism is a **temporary** place for features that
+aren't typed yet (see *Known gaps*). Keys refer to semantics (e.g. `rippleDensity`), never to
+the source shader's property identifier (e.g. `_RippleDensity`). Repeated instances must be
 layers, not `Feature` objects named after source shader versions.
 
 ## Lighting mode normalization
@@ -101,15 +179,17 @@ of the unified union. **This is not a claim of 100% verified semantic coverage.*
 | VRChat Mobile Standard Lite | PBR, detail, spec AA, lightmap selection, bicubic, toggles | Verify feature-keyword activation in compiled variants |
 | VRChat Mobile Toon Lit | Base texture, vertex color, fixed lighting mode | Validate fixed directional/SH behavior in output writers |
 | VRChat Mobile Toon Standard | Toon ramp, specular controls, matcap, rim, emission, detail blending, color masks, hue, AudioLink | Shader's specialized AudioLink blends and conditional feature activation need visual verification |
-| Mochie Standard | Core PBR, packed maps, detail, sampling, masks, reflectance, SSS, color filters, rain/wind/puddles, AreaLit/LTCGI/light volumes | Some enum, swizzle and procedural semantics are recorded as approximate |
-| Poiyomi Toon 7–10 | Version-aware lighting modes, shadow bands, matcap weighted blends, normals, emission layers, masks, clearcoat, color adjustments, rim, SSS | Thousands of advanced properties, animated effects and global-mask routing not yet completely interpreted |
-| Fallback | Conservative conventional texture, scalar, tint, mask, specular and matcap recognition | Arbitrary shaders cannot be automatically guaranteed; unresolved features are reported |
+| Mochie Standard | Core PBR, packed maps, detail, sampling, masks, reflectance, SSS, color filters, rain/wind/puddles, AreaLit/LTCGI/light volumes | Some enum, swizzle and procedural semantics are recorded as approximate. The mapping should still be checked against the Mochie shader source (installed in the dev project under `Assets/Mochie`) |
+| Poiyomi Toon 7–10 | Version-aware lighting modes, shadow bands, matcap weighted blends, normals, emission layers, masks, clearcoat, color adjustments, rim, SSS | Most procedural, animated and special effects, and global-mask routing, aren't mapped yet. Poiyomi Pro has no parser and falls back to *Fallback* |
+| Fallback | Conservative conventional texture, scalar, tint, mask, specular and matcap recognition | Arbitrary shaders cannot be automatically guaranteed; unresolved features are reported. No tests yet |
 
 ## Parser responsibilities and testing
 
 1. Identify source shader and version (Poiyomi reads `shader_master_label` from locked
    or unlocked shaders if present).
-2. Map each rendering-relevant source property into its corresponding semantic feature.
+2. Resolve every source property that affects the look into unified features: represent it,
+   or fold it into something simpler (see *Coverage and fidelity*). Properties with no effect
+   in that material, such as settings of disabled features, are ignored.
 3. Translate modes and conventions where required. Preserve shared 1:1 values.
 4. Return `Issues` for unresolved or partial behavior. **Never claim correctness from
    merely referencing a property name.**
