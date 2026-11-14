@@ -4,6 +4,23 @@
 came from. Input parsers translate each source material into it; output writers build their
 materials only from it.
 
+## Source shader inventories
+
+One document per supported input shader family. Each one lists what the shader lets the user
+change, what that does to the look, and how the unified material should represent it.
+
+They're merged into one proposed feature set in
+[UNIFIED_MATERIAL_FEATURES.md](UNIFIED_MATERIAL_FEATURES.md) (first refinement pass), which is
+the target for the unified material refactoring.
+
+| Shader family | Document | Status |
+|---|---|---|
+| VRChat Mobile (Toon Lit, Standard Lite, Toon Standard) | [UNIFIED_MATERIAL_VRCHAT_MOBILE.md](UNIFIED_MATERIAL_VRCHAT_MOBILE.md) | First draft |
+| Unity Standard (metallic and specular setup) | [UNIFIED_MATERIAL_UNITY_STANDARD.md](UNIFIED_MATERIAL_UNITY_STANDARD.md) | First draft |
+| Mochie Standard (Standard, Lite, Mobile) | [UNIFIED_MATERIAL_MOCHIE_STANDARD.md](UNIFIED_MATERIAL_MOCHIE_STANDARD.md) | First draft |
+| Mochie Uber (and Outline) | [UNIFIED_MATERIAL_MOCHIE_UBER.md](UNIFIED_MATERIAL_MOCHIE_UBER.md) | First draft; no parser yet |
+| Poiyomi Toon 10 (and its avatar variants) | [UNIFIED_MATERIAL_POIYOMI.md](UNIFIED_MATERIAL_POIYOMI.md) | First draft |
+
 ## Guidelines
 
 These are the design rules. Where the code doesn't follow them yet, see
@@ -179,7 +196,7 @@ of the unified union. **This is not a claim of 100% verified semantic coverage.*
 | VRChat Mobile Standard Lite | PBR, detail, spec AA, lightmap selection, bicubic, toggles | Verify feature-keyword activation in compiled variants |
 | VRChat Mobile Toon Lit | Base texture, vertex color, fixed lighting mode | Validate fixed directional/SH behavior in output writers |
 | VRChat Mobile Toon Standard | Toon ramp, specular controls, matcap, rim, emission, detail blending, color masks, hue, AudioLink | Shader's specialized AudioLink blends and conditional feature activation need visual verification |
-| Mochie Standard | Core PBR, packed maps, detail, sampling, masks, reflectance, SSS, color filters, rain/wind/puddles, AreaLit/LTCGI/light volumes | Some enum, swizzle and procedural semantics are recorded as approximate. The mapping should still be checked against the Mochie shader source (installed in the dev project under `Assets/Mochie`) |
+| Mochie Standard | Core PBR, packed maps, detail, sampling, masks, reflectance, SSS, color filters, rain/wind/puddles, AreaLit/LTCGI/light volumes | Some enum, swizzle and procedural semantics are recorded as approximate. Checked against the v2.14.2 source; the fixes found are listed in [UNIFIED_MATERIAL_MOCHIE_STANDARD.md](UNIFIED_MATERIAL_MOCHIE_STANDARD.md) |
 | Poiyomi Toon 7–10 | Version-aware lighting modes, shadow bands, matcap weighted blends, normals, emission layers, masks, clearcoat, color adjustments, rim, SSS | Most procedural, animated and special effects, and global-mask routing, aren't mapped yet. Poiyomi Pro has no parser and falls back to *Fallback* |
 | Fallback | Conservative conventional texture, scalar, tint, mask, specular and matcap recognition | Arbitrary shaders cannot be automatically guaranteed; unresolved features are reported. No tests yet |
 
