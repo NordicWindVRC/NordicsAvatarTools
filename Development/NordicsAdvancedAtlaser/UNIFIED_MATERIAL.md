@@ -130,11 +130,14 @@ The model is in `Editor/Unified/`, one file per part of the
 
 | File | Catalogue | Contents |
 |---|---|---|
-| `AtlasUnifiedMaterial.cs` | — | The root: surface, lighting, layers, fur, render, and the report lines (`Issues`) |
+| `AtlasUnifiedMaterial.cs` | — | The root: surface, lighting, layers, colour adjustments, modulators, outlines, fur, render, and the report lines (`Issues`) |
 | `AtlasBuildingBlocks.cs` | 1 | Texture reference, scalar input, colour input, mask, blend, placement |
 | `AtlasSurface.cs` | 2 | Base colour and vertex colour, alpha, primary normal, surface response, parallax |
-| `AtlasLighting.cs` | 3 | Lighting family, diffuse model, ambient model, received shadows, light contributions |
-| `AtlasLayers.cs` | 4 | The parts every layer shares; the surface layer and its targets |
+| `AtlasLighting.cs` | 3 | Lighting family, ramp toon, diffuse model, ambient model, received shadows, light contributions, brightness limit and minimum |
+| `AtlasLayers.cs` | 4 | The parts every layer shares; the surface layer and its targets; the lookup layer (matcap); the angle layer (rim) |
+| `AtlasColorAdjustment.cs` | 1.10 | Colour adjustments (hue so far) |
+| `AtlasModulators.cs` | 1.9 | Modulators and the audio source with spread |
+| `AtlasOutline.cs` | 5.1 | Outlines |
 | `AtlasFur.cs` | 5.2 | Fur |
 | `AtlasRender.cs` | 6 | Surface mode, cutoff, blend factors, pass settings |
 
@@ -165,7 +168,7 @@ shader's materials go to the fallback parser.
 | Unity Standard (metallic and specular) | **Rebuilt** (step 3): rendering modes, albedo, metallic or specular, smoothness, normal, parallax, occlusion, emission, detail, highlights and reflections, physically based lighting. Full coverage |
 | VRChat Mobile Standard Lite | **Rebuilt** (step 4): base colour × vertex colour, metallic and smoothness map times sliders, normal, occlusion, emission, detail, highlights, reflections, specular anti-aliasing, physically based lighting without shadows. Full coverage |
 | Fallback | **Rebuilt** (step 5): common property names with Unity's conventions: base colour, alpha mask, normal, metallic or specular colour, roughness or smoothness, occlusion, emission, culling, depth write and surface mode from blend factors. One warning per material says the result is a guess; a matcap is reported |
-| VRChat Mobile Toon Standard | Being rebuilt (step 6) |
+| VRChat Mobile Toon Standard (and Outline) | **Rebuilt** (step 6): every section by its keyword: ramp toon lighting, specular, matcap, emission, detail, occlusion, rim, hue shift, colour mask, outline, AudioLink. AudioLink's rim mask and UV-based mode are reported |
 | Mochie Uber | Being rebuilt (step 7) |
 | Poiyomi Toon 10 | Being rebuilt (step 8) |
 | Poiyomi Toon 11, Poiyomi Pro 10 and 11 | Being rebuilt (step 9) |

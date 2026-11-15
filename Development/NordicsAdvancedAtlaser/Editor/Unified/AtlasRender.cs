@@ -51,6 +51,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasBlendFactor DestinationBlend = AtlasBlendFactor.Zero;
         // The render queue; −1 uses the output shader's own.
         public int Queue = -1;
+        // Back faces flip their normal, so they light like front faces.
+        public bool TwoSidedLighting;
         public readonly AtlasPassSettings Pass = new AtlasPassSettings();
     }
 }

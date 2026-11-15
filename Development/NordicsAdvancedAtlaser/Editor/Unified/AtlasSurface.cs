@@ -65,8 +65,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Darkens ambient light and reflections, not direct light. The constant is the strength:
         // 1 − (1 − map) × strength.
         public readonly AtlasScalarInput Occlusion = new AtlasScalarInput(1f) { Combine = AtlasScalarCombine.StrengthAroundOne };
+        // 0–1: how much occlusion also darkens direct light, and reflections.
+        public float OcclusionDirect;
+        public float OcclusionReflections = 1f;
         // Direct-light highlights.
         public bool Highlights = true;
+        // 0–1: blends the highlight toward a hard edge, lerp(h, smoothstep(0.5, 0.51, h), sharpness).
+        public float HighlightSharpness;
         // Environment reflections; off: a flat colour from the ambient specular instead.
         public bool Reflections = true;
         public readonly AtlasSpecularAntiAliasing SpecularAntiAliasing = new AtlasSpecularAntiAliasing();

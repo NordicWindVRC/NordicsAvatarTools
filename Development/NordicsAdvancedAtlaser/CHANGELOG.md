@@ -61,6 +61,20 @@ under *Added* describe the parsers before the rebuild.
   emission, culling, depth write, surface mode from the blend factors). A smoothness map is
   now inverted into roughness (it used to be read as roughness). One warning per material says
   the result is a guess; a matcap texture is reported, not mapped. First fallback tests.
+- **VRChat Mobile Toon Standard rebuilt** (and its Outline variant). Every section follows its
+  keyword, so a section that's off has no effect (before, every material got a rim and
+  AudioLink, and disabled normal maps, specular, detail and colour masks were applied):
+  - ramp toon lighting with the ramp preset recognised, shadow lift and colour, minimum and
+    limited brightness, flat ambient, no received shadows;
+  - specular with reflectance as the unified 0–1 control (0.5 = 4%), scaled by the gloss map;
+  - matcap as a lit lookup layer; rim as an angle layer; detail by mode; colour mask regions
+    as recolour layers; hue shifts as colour adjustments in turns; the outline;
+  - AudioLink as an emission layer scaled by an audio modulator, with the mask channel fixed
+    (it was off by one). Its rim mask and UV-based mode are reported.
+
+  The unified material gains ramp toon, the lookup and angle layers, colour adjustments,
+  modulators with the audio source, outlines, highlight sharpness, occlusion amounts,
+  two-sided lighting and limit and minimum brightness.
 
 ### Changed
 - Package and NDMF name `app.nordicwind.advanced-atlaser`. Requires Texture Wrapper 0.10.0 or

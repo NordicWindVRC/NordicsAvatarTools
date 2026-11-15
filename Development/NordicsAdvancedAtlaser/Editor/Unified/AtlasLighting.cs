@@ -32,6 +32,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public sealed class AtlasLighting
     {
         public AtlasLightingFamily Family = AtlasLightingFamily.PhysicallyBased;
+        // 3.2: the ramp toon family's ramp.
+        public readonly AtlasRampToon Ramp = new AtlasRampToon();
         // 3.3: the physically based family's diffuse.
         public AtlasDiffuseModel Diffuse = AtlasDiffuseModel.Lambert;
         // 3.4: shared parameters.
@@ -39,6 +41,33 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The main light's shadow.
         public bool ReceiveShadows = true;
         public readonly AtlasLightContributions Contributions = new AtlasLightContributions();
+        // Clamps the light (direct + ambient) to 1 per channel.
+        public bool LimitBrightness;
+        // 0–1: base × value is added after lighting, like emission.
+        public float MinimumBrightness;
+    }
+
+    public enum AtlasShadingTerm
+    {
+        // N·L × 0.5 + 0.5, times the received shadow.
+        HalfLambert
+    }
+
+    // Names a ramp's shape, so a writer can use its own equivalent.
+    public enum AtlasRampPreset { None, Flat, Realistic, RealisticSoft, RealisticVerySoft, TwoBands, ThreeBands, FourBands }
+
+    // 3.2: brightness = min(1, ramp(term) × occlusion + shadow lift);
+    // light = lerp(base × shadow colour from base, 1, brightness) × light colour + ambient.
+    public sealed class AtlasRampToon
+    {
+        public AtlasShadingTerm Term = AtlasShadingTerm.HalfLambert;
+        // Sampled along u at the shading term; a colour. Null: white, fully lit everywhere.
+        public AtlasTextureReference Ramp;
+        public AtlasRampPreset Preset = AtlasRampPreset.None;
+        // 0–1
+        public float ShadowLift;
+        // 0–1: 0 black shadows, 1 shadows in the base colour.
+        public float ShadowColorFromBase;
     }
 
     // 3.4: how much each kind of light counts, 0–1.

@@ -14,6 +14,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly AtlasLighting Lighting = new AtlasLighting();
         // Applied in list order, each on top of the ones before.
         public readonly List<AtlasLayer> Layers = new List<AtlasLayer>();
+        // 1.10: applied in list order to their targets.
+        public readonly List<AtlasColorAdjustment> ColorAdjustments = new List<AtlasColorAdjustment>();
+        // 1.9: runtime values driving parameters.
+        public readonly List<AtlasModulator> Modulators = new List<AtlasModulator>();
+        // 5.1
+        public readonly List<AtlasOutline> Outlines = new List<AtlasOutline>();
         public readonly AtlasFur Fur = new AtlasFur();
         public readonly AtlasRender Render = new AtlasRender();
         public readonly List<AtlasIssue> Issues = new List<AtlasIssue>();

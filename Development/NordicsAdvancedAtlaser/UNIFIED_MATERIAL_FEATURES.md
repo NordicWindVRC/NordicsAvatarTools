@@ -181,17 +181,38 @@ an animated value and a modulated value look the same.
 
 - **Output:** `target = mode(target, lerp(min, max, value))`, mode *add*, *multiply* or
   *replace*.
-- **Colour targets** use a colour ramp or a palette entry instead of min and max.
+- **Colour targets** use a colour ramp or a palette entry instead of min and max. A colour
+  target with mode *multiply* and plain min and max scales the colour.
 - A modulator whose target is a mapping (noise into UVs) is UV distortion.
 
-**Audio spread:** how the audio value varies across the surface. The **coordinate** is a
-0–1 position: along a UV direction, or out from a UV centre.
+**Specified so far** (refactor step 6): the modulator and the audio source.
+
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| target | path | — | for example `layers[3].source.color`; indices are list positions in the unified material |
+| mode | add, multiply, replace | multiply | |
+| min, max | float | 0, 1 | |
+| source | audio | — | the other sources aren't specified yet |
+
+**Audio source:**
+
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| band | bass, low mids, high mids, highs, volume | bass | |
+| smoothing | 0–1 | 0 | 0 = the raw level, 1 = AudioLink's most smoothed |
+| fallback beat | bool, speed | off, 1 | without AudioLink in the world: a decaying pulse, `(1 − frac(t × speed))` on every other cycle |
+| spread | none, history, fill | none | see below |
+| coordinate | UV u, UV v (with a UV set), view angle, texture channel | UV u | for *history* and *fill*: a 0–1 position. *view angle* is `1 − abs(view · normal)`, 0 facing the viewer |
+| history offset, history length | samples | 0, 128 | *history*: the sample `offset + coordinate × length` ago |
+| fill softness | 0–1 | 0.1 | *fill*: the fade below the level |
+
+**Audio spread:** how the audio value varies across the surface.
 
 | Spread | Value at a point | Sources |
 |---|---|---|
 | none | the band's current level, everywhere | Toon Standard Pulse, most per-feature AudioLink |
-| history | the band's level from `coordinate × length` ago, so recent audio travels along the coordinate; length in history samples | Toon Standard Scroll, Poiyomi centre-out emission |
-| fill | 1 where `coordinate ≤ level`, else 0, with a softness | Toon Standard Bar |
+| history | the band's level from `offset + coordinate × length` samples ago, so recent audio travels along the coordinate | Toon Standard Scroll, Poiyomi centre-out emission |
+| fill | 1 where `coordinate ≤ level`, else 0, fading over the softness below it | Toon Standard Bar |
 
 Spread keeps one modulator type for whole-surface and travelling audio effects alike.
 
@@ -212,6 +233,18 @@ An ordered list of operations on a **target**, with a mask.
 
 - **Targets:** base colour, any single layer, emission, final colour (S6).
 - Static adjustments on anything but the final colour are bakeable.
+
+**Specified so far** (refactor step 6): one adjustment is one operation; the material keeps an
+ordered list.
+
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| target | base colour, layer, final colour | base colour | *base colour*: the base colour input (2.1), before layers; *layer*: that layer's source. Emission is a layer |
+| layer | a layer | — | for target *layer* |
+| mask | 1.4, or none | none | |
+| operation | hue | hue | |
+| amount | turns | 0 | hue: 1 = a full turn |
+| hue method | grey-axis rotation | grey-axis rotation | rotation of the linear colour around the grey axis `(1,1,1)/√3`, which keeps brightness roughly constant |
 
 ---
 
@@ -262,13 +295,17 @@ How the surface reflects light (S2).
 | occlusion | scalar, strength around one | 1, no map | darkens ambient light and reflections, not direct light |
 | highlights | bool | on | direct-light highlights |
 | reflections | bool | on | environment reflections; off: a flat colour from the ambient specular instead of reflection probes |
+| highlight sharpness | 0–1 | 0 | blends the highlight toward a hard edge: `lerp(h, smoothstep(0.5, 0.51, h), sharpness)` |
+| occlusion: direct | 0–1 | 0 | how much occlusion also darkens direct light |
+| occlusion: reflections | 0–1 | 1 | how much occlusion darkens reflections |
 | specular anti-aliasing | bool | off | roughens where the normal changes quickly on screen, so small or curved detail doesn't sparkle (projected-space normal filtering, Tokuyoshi 2021) |
 | anti-aliasing variance | 0–1 | 0.1 | screen-space variance scale |
 | anti-aliasing threshold | 0–1 | 0.2 | the most it may add to roughness |
 
 *Specified with Unity Standard (refactor step 3); specular anti-aliasing with Standard Lite
-(step 4).* Not specified yet:
-- **Occlusion** tint, direct and indirect amount; multi-bounce occlusion.
+(step 4); highlight sharpness and occlusion amounts with Toon Standard (step 6).* Not specified
+yet:
+- **Occlusion** tint; multi-bounce occlusion.
 - **Highlights:** strength, tint; light-type limits;
   - **shape:** round, or stretched (anisotropy amount, rotation, direction map, two layers,
     strand variation);
@@ -311,8 +348,20 @@ Not specified yet: multi-step methods with step counts, mask.
 | **physically based** | energy-conserving diffuse with a diffuse model, plus surface response | Standard Lite, Unity Standard, Uber, Poiyomi Realistic, Skin, Cloth, PBR |
 
 ### 3.2 Ramp toon
-- **Shading term:** N·L (wrapped or half-Lambert), received shadows only, or an SDF face
-  texture with forward and left directions.
+`brightness = min(1, ramp(term) × occlusion + shadow lift)`;
+`light = lerp(base × shadow colour from base, 1, brightness) × light colour + ambient`.
+
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| shading term | half-Lambert | half-Lambert | `N·L × 0.5 + 0.5`, times the received shadow |
+| ramp | texture reference, or none | none | sampled along u at the shading term; colour; none = white (fully lit everywhere) |
+| ramp preset | none, flat, realistic, realistic soft, realistic very soft, two bands, three bands, four bands | none | names the ramp's shape, so a writer can use its own equivalent |
+| shadow lift | 0–1 | 0 | |
+| shadow colour from base | 0–1 | 0 | 0: shadows go black; 1: shadows take the base colour, a saturated darkening |
+
+*Specified with Toon Standard (refactor step 6).* Not specified yet:
+- **Shading term:** N·L, wrapped, received shadows only, or an SDF face texture with forward
+  and left directions.
 - **Ramp:** one gradient. Ramp textures, band layers (border, blur), step and feather
   settings, two-width blends and wrap parameters all resolve into it. Optional named preset.
 - **Shade colours:** per band, from a constant, the base colour, or a texture.
@@ -337,11 +386,14 @@ GGX highlights and reflection probes, with the surface response (2.4).
 | contribution: additional lights | 0–1 | 1 | other per-pixel lights |
 | contribution: vertex lights | 0–1 | 1 | Unity's four per-vertex lights |
 | contribution: ambient | 0–1 | 1 | ambient and light probes, including lights Unity folds into them |
+| limit brightness | bool | off | clamps the light (direct + ambient) to 1 per channel, so bright worlds don't blow out colours |
+| minimum brightness | 0–1 | 0 | `base × value` is added after lighting, like emission, so the surface never goes fully dark |
 
-*Specified with Toon Lit (refactor step 2).* Not specified yet:
+*Specified with Toon Lit (refactor step 2); brightness limit and minimum with Toon Standard
+(step 6).* Not specified yet:
 - **Light direction override:** none, a fixed local or world direction, or the view direction.
 - **Light colour override;** monochrome light.
-- **Brightness ceiling** (per channel, or keeping the hue) and **floor**.
+- **Brightness ceiling** other than 1, or keeping the hue.
 - **Received shadow softness.**
 
 ### 3.5 External lighting
@@ -392,10 +444,11 @@ detail, decal, flipbook, recolour or colour mask, back face, and emission.
 | emission amount | 0–1 | 0 | |
 | source | colour input | white | |
 | source is base colour | bool | off | |
-| targets | list of: target, blend (1.7), opacity 0–1, channel | — | *normal* targets composite by whiteout, opacity being the strength; one-value targets read the source's *channel* |
+| targets | list of: target, blend (1.7), opacity, channel | — | opacity 0–1, or any amount ≥ 0 for blend *add*; *normal* targets composite by whiteout, opacity being the strength; one-value targets read the source's *channel* |
+| source alpha is opacity | bool | off | the source's alpha multiplies every target's opacity (alpha-blended details and decals) |
 
 A source with different textures per target (a detail colour map and a detail normal map) is
-two layers with the same mask.
+two layers with the same mask. *Luminance* in the blends is `0.3 r + 0.59 g + 0.11 b`.
 
 **Bakeable** when static and placed in UV space. **Sources:** all except Toon Lit.
 
@@ -419,6 +472,14 @@ A texture looked up by direction instead of by UV.
 - **Options:** blur or roughness, own normal map, base and light colour mix, hide in shadow,
   probe fallback.
 
+**Specified so far** (refactor step 6), besides the shared layer parts:
+
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| source | colour input | white | the texture is looked up by the projection, not by UV |
+| projection | view stabilised | view stabilised | the normal in view space with world up kept up, so the lookup doesn't roll with the head (VR) |
+| blend, opacity | 1.7, 0–1 | add, 1 | placement *surface* blends into the base colour (lit and shadowed); later placements into the lit colour |
+
 **Sources:** Toon Standard, Uber, Poiyomi (matcaps, cubemap).
 
 ### 4.4 Angle layer
@@ -430,6 +491,18 @@ Colour driven by how the surface faces the viewer or the light.
 - **Colour source:** colour input, the environment (reflection probe), base colour mix.
 - **Light response:** ignore light, scale by light, lit side only, a second colour on the dark
   side, back light (shines where the light is behind).
+
+**Specified so far** (refactor step 6), besides the shared layer parts (placement *overlay*):
+
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| edge source | view angle | view angle | `e = 1 − abs(view · normal)`, the view from between the eyes |
+| profile | band | band | `smoothstep((1 − width) − softness, (1 − width) + softness, e)` |
+| width, softness | 0–1 | 0.3, 0.1 | |
+| colour | colour input | white | |
+| base colour mix | 0–1 | 0 | multiplies by `lerp(1, base, mix)` |
+| light response | ignore light, scale by light | ignore light | *scale by light*: times (main light colour + ambient) |
+| blend, opacity | 1.7, 0–1 | add, 1 | |
 
 **Sources:** Toon Standard rim, Uber basic and environment rim and iridescence, Poiyomi rims,
 depth rim, environmental rim, Depth FX, backlights.
@@ -465,6 +538,20 @@ A **list** of outline layers (Poiyomi Pro has three), each with:
 - **Colour:** colour input, base colour blend, lit or unlit, emission, an inner highlight line.
 - **Masks per property** (size, colour, alpha, emission and so on).
 - Its own render settings (6).
+
+**Specified so far** (refactor step 6):
+
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| enabled | bool | on | |
+| shape | normal expansion | normal expansion | an inverted hull pushed out along the normal |
+| width | metres | 0.0005 | |
+| width mask | 1.4, or none | none | |
+| screen width limit | float, or 0 | 0 | the largest on-screen offset in normalised device coordinates; 0 = none |
+| colour | colour input | black | |
+| base colour mix | 0–1 | 0 | blends toward the base colour (with vertex colour) |
+| lit | bool | off | unlit: the colour as is |
+| pass | 6 | cull front, depth write on | |
 
 **Sources:** Toon Standard (Outline), Uber (Outline), Poiyomi, Poiyomi Pro.
 
@@ -511,13 +598,14 @@ particles from triangles. **Sources:** Poiyomi Pro variants.
 | fade | everything fades with alpha, highlights and reflections included | `src × a + dst × (1 − a)` |
 | transparent | glass: diffuse fades with alpha, highlights and reflections stay | `src + dst × (1 − a)`, diffuse premultiplied by alpha |
 
-Also: depth write per pass. *Specified with Unity Standard (refactor step 3).* Not specified
-yet:
+Also: per pass, cull (off, front, back) and depth write; **two-sided lighting** (back faces
+flip their normal, so they light like front faces). *Specified with Unity Standard (refactor
+step 3); two-sided lighting with Toon Standard (step 6).* Not specified yet:
 - **Surface modes** dithered, additive, soft additive, multiplicative, multiplicative ×2. Raw
   blend factors are kept only when they match none of these.
 - **Per pass:** base, each outline layer and fur have cull, depth test and write, depth
   offset, stencil and colour mask.
-- **Two-sided lighting**, **fog**.
+- **Fog**.
 - **Visibility:** in mirrors, cameras, normal view; an alternate mirror appearance; near-camera
   clipping with a mask; hide by UV tile; invisible.
 - **Fallback shader:** what viewers with blocked shaders see; carried for writers.

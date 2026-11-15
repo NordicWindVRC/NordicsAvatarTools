@@ -1,6 +1,6 @@
 # Unified material — refactor plan
 
-**Status:** steps 1 to 5 done (2026-11-15); step 5 waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
+**Status:** steps 1 to 6 done (2026-11-15); step 6 waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
 the [feature catalogue](UNIFIED_MATERIAL_FEATURES.md), then rebuilding every input parser on it.
 
 **Goal:** the code matches the catalogue. Every supported input shader maps into typed
@@ -163,7 +163,13 @@ factors). One warning per material says the result is a guess. A matcap is repor
 than mapped: its blend can't be guessed, and the lookup layer comes in step 6.
 `AtlasFallbackTests` is its first test set; `AtlasTestMaterials.AddSavedTexture` is new.
 
-### 6. VRChat Mobile Toon Standard
+### 6. VRChat Mobile Toon Standard (done)
+`AtlasVRChatToonStandardParser` (both variants). Typed and specified: ramp toon (3.2), limit
+and minimum brightness (3.4), highlight sharpness and occlusion amounts (2.4), the lookup layer
+(4.3), the angle layer (4.4), colour adjustment with hue (1.10), the modulator and audio source
+with spread (1.9), source alpha as opacity (4.1), two-sided lighting (6), and **outline (5.1)**,
+which the Outline variant needs first (planned for step 7). AudioLink's rim mask and UV-based
+mode are reported. Planned:
 - **Typed:**
   - the *ramp toon* family;
   - lookup layer (matcap) and angle layer (rim);
@@ -183,6 +189,7 @@ than mapped: its blend can't be guessed, and the lookup layer comes in step 6.
   - transition (base colour dissolve);
   - outline (5.1);
   - deformation (5.3: inflate, snapping, transform);
+  - outline: already typed in step 6; Uber extends it;
   - refraction;
   - frames (flipbooks);
   - UV distortion as a modulator;
