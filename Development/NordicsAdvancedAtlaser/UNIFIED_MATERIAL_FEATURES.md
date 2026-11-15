@@ -18,6 +18,8 @@ are left out on purpose; they get their own pass later.
   part of the parameter-level specification.
 - **About 25 features** instead of about 35, plus 10 building blocks.
 
+**Refactor plan:** [UNIFIED_MATERIAL_REFACTOR.md](UNIFIED_MATERIAL_REFACTOR.md).
+
 **Inputs:**
 - [VRChat Mobile](UNIFIED_MATERIAL_VRCHAT_MOBILE.md): Toon Lit, Standard Lite, Toon Standard.
 - [Unity Standard](UNIFIED_MATERIAL_UNITY_STANDARD.md).

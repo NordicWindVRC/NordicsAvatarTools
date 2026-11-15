@@ -11,7 +11,8 @@ change, what that does to the look, and how the unified material should represen
 
 They're merged into one proposed feature set in
 [UNIFIED_MATERIAL_FEATURES.md](UNIFIED_MATERIAL_FEATURES.md) (second refinement pass), which is
-the target for the unified material refactoring.
+the target for the unified material refactoring. The refactoring itself is planned in
+[UNIFIED_MATERIAL_REFACTOR.md](UNIFIED_MATERIAL_REFACTOR.md).
 
 | Shader family | Document | Status |
 |---|---|---|
