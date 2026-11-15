@@ -101,42 +101,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
             // Secondary Maps: detail albedo ×2 and detail normal, faded in by the detail mask's
             // alpha (on the main tiling). The detail normal needs the normal-map keyword.
-            if (Keyword(m, "_DETAIL_MULX2")) Detail(m, d, normalMaps);
+            if (Keyword(m, "_DETAIL_MULX2")) AtlasSourceMapping.UnityDetail(m, d, normalMaps);
 
             // Unity's physically based lighting: Disney diffuse, GGX, full light probes, shadows.
             d.Lighting.Family = AtlasLightingFamily.PhysicallyBased;
             d.Lighting.Diffuse = AtlasDiffuseModel.Disney;
             d.Lighting.Ambient = AtlasAmbientModel.Directional;
-        }
-
-        private static void Detail(Material m, AtlasUnifiedMaterial d, bool normalMaps)
-        {
-            AtlasMask mask = null;
-            var maskMap = Main(m, "_DetailMask", AtlasTextureInterpretation.Data);
-            if (maskMap != null) mask = new AtlasMask { Map = maskMap, Channel = AtlasChannel.Alpha };
-            var space = AtlasMaterialReader.Float(m, "_UVSec", 0f) > 0.5f ? AtlasTextureSpace.UV1 : AtlasTextureSpace.UV0;
-
-            var albedo = AtlasSourceMapping.Texture(m, "_DetailAlbedoMap");
-            if (albedo != null)
-            {
-                albedo.Space = space;
-                var layer = new AtlasSurfaceLayer { Mask = mask };
-                layer.Source.Map = albedo;
-                layer.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.BaseColor, AtlasBlend.MultiplyDouble));
-                d.Layers.Add(layer);
-            }
-
-            var normal = normalMaps ? AtlasSourceMapping.Texture(m, "_DetailNormalMap",
-                AtlasTextureInterpretation.TangentNormal, "_DetailAlbedoMap") : null;
-            if (normal != null)
-            {
-                normal.Space = space;
-                var layer = new AtlasSurfaceLayer { Mask = mask };
-                layer.Source.Map = normal;
-                layer.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Normal, AtlasBlend.Replace,
-                    AtlasMaterialReader.Float(m, "_DetailNormalMapScale", 1f)));
-                d.Layers.Add(layer);
-            }
         }
 
         // Main maps use the albedo's tiling and offset.

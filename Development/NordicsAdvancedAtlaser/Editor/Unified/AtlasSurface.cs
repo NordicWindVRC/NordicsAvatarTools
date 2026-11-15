@@ -69,6 +69,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool Highlights = true;
         // Environment reflections; off: a flat colour from the ambient specular instead.
         public bool Reflections = true;
+        public readonly AtlasSpecularAntiAliasing SpecularAntiAliasing = new AtlasSpecularAntiAliasing();
+    }
+
+    // Roughens where the normal changes quickly on screen, so small or curved detail doesn't
+    // sparkle (projected-space normal filtering, Tokuyoshi 2021).
+    public sealed class AtlasSpecularAntiAliasing
+    {
+        public bool Enabled;
+        // Screen-space variance scale, 0–1.
+        public float Variance = 0.1f;
+        // The most it may add to roughness, 0–1.
+        public float Threshold = 0.2f;
     }
 
     public enum AtlasParallaxMethod { SingleStep }

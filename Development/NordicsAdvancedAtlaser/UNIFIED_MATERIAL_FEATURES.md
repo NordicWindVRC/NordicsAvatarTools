@@ -262,8 +262,12 @@ How the surface reflects light (S2).
 | occlusion | scalar, strength around one | 1, no map | darkens ambient light and reflections, not direct light |
 | highlights | bool | on | direct-light highlights |
 | reflections | bool | on | environment reflections; off: a flat colour from the ambient specular instead of reflection probes |
+| specular anti-aliasing | bool | off | roughens where the normal changes quickly on screen, so small or curved detail doesn't sparkle (projected-space normal filtering, Tokuyoshi 2021) |
+| anti-aliasing variance | 0–1 | 0.1 | screen-space variance scale |
+| anti-aliasing threshold | 0–1 | 0.2 | the most it may add to roughness |
 
-*Specified with Unity Standard (refactor step 3).* Not specified yet:
+*Specified with Unity Standard (refactor step 3); specular anti-aliasing with Standard Lite
+(step 4).* Not specified yet:
 - **Occlusion** tint, direct and indirect amount; multi-bounce occlusion.
 - **Highlights:** strength, tint; light-type limits;
   - **shape:** round, or stretched (anisotropy amount, rotation, direction map, two layers,
@@ -276,7 +280,7 @@ How the surface reflects light (S2).
 - **Sheen:** strength, colour, roughness, mask; a soft edge lobe for cloth.
 - **Glints:** density, size, colour and variation, roughness, mask; sparkling flakes in the
   specular response, as opposed to the glitter pattern layer.
-- **Specular anti-aliasing:** strength, variance, threshold.
+- **Specular anti-aliasing** strength.
 - **Sources:** Standard Lite, Toon Standard, Unity Standard, Uber, Poiyomi.
 
 ### 2.5 Parallax

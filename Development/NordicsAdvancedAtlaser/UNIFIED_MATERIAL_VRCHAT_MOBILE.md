@@ -87,7 +87,8 @@ Albedo texture × colour × vertex colour.
 - **Live or baked:** baked.
 - **Unified:** base colour layer. Vertex colour multiply is **always on**: the switch for it
   exists only as a shader keyword with no inspector control.
-- **Parser today:** reads texture and colour, but **doesn't record the vertex colour multiply.**
+- **Parser today:** rebuilt (step 4): texture and colour (linear), albedo tiling; vertex colour
+  *multiply colour* on unless `DISABLE_VERTEX_COLORING` is set; alpha source *none*.
 
 ### Metallic and smoothness
 How metallic and how glossy the surface is.
@@ -95,19 +96,15 @@ How metallic and how glossy the surface is.
   a Smoothness slider. The sliders **multiply** the texture; they don't replace it.
 - **Live or baked:** baked (scalar maps).
 - **Unified:** surface response: metallic and roughness, each a constant times a channel.
-- **Parser today:**
-  - **Smoothness is wrong when a texture is set:** the shared Standard code uses
-    `_GlossMapScale`, which Standard Lite doesn't have, so the constant becomes 1 instead of
-    the Smoothness slider.
-  - The Metallic slider is stored gamma-encoded (`[Gamma]`); the parser reads it raw.
-  - Multiplying is right: the unified scalar evaluates as constant × map channel.
-  - Uses each map's own tiling instead of the albedo's (see *Shared tiling*).
+- **Parser today:** rebuilt (step 4): metallic = map red × the slider converted from gamma to
+  linear; roughness = 1 − map alpha × the Smoothness slider; albedo tiling.
 
 ### Normal map
 - **Controls:** texture and scale.
 - **Live or baked:** baked; part of normal compositing.
 - **Unified:** primary normal layer.
-- **Parser today:** reads it, with the wrong tiling.
+- **Parser today:** rebuilt (step 4): always applied (no keyword), albedo tiling, scale as
+  strength.
 
 ### Occlusion
 Darkens ambient light in creases. Read from green.
@@ -115,14 +112,14 @@ Darkens ambient light in creases. Read from green.
 - **Live or baked:** baked as a map. Its effect is live: it scales ambient light only, not
   direct light.
 - **Unified:** occlusion: channel, strength around one.
-- **Parser today:** correct, apart from the tiling.
+- **Parser today:** rebuilt (step 4): green channel, strength around one, albedo tiling.
 
 ### Emission
 Glow on top of lighting.
 - **Controls:** an Emission checkbox; when on, texture and HDR colour.
 - **Live or baked:** baked (texture × colour), with the HDR intensity kept as a scale.
 - **Unified:** emission layer.
-- **Parser today:** correct; enabled by the shader keyword.
+- **Parser today:** rebuilt (step 4): an emission surface layer when the keyword is on.
 
 ### Detail
 A second, usually tiled, albedo and normal map, faded in by a mask.
@@ -135,7 +132,8 @@ A second, usually tiled, albedo and normal map, faded in by a mask.
 - **Live or baked:** baked; it's static colour and normal maths.
 - **Unified:** detail layer: albedo with *multiply ×2* blend; detail normal with whiteout
   blend; shared mask; UV set and tiling.
-- **Parser today:** correct; mask channel alpha. Its UV set and tiling are read.
+- **Parser today:** rebuilt (step 4): with the `_DETAIL` keyword, Unity's detail as in Standard
+  (shared code): a *multiply ×2* colour layer and a normal layer, sharing the mask.
 
 ### Specular highlights
 The shader labels the toggle "Specular Lightprobe Hack". On, it adds GGX highlights from the
@@ -146,14 +144,17 @@ from the light probes' dominant direction. **Default off.**
 - **Unified:** surface response: direct highlights on or off. The probe-direction highlight is
   the shader's way of producing highlights without a light, so it belongs to the lighting
   family rather than being a separate feature.
-- **Parser today:** reads the toggle.
+- **Parser today:** rebuilt (step 4): on unless `_SPECULARHIGHLIGHTS_OFF` is set.
+- **Not represented:** the highlight from the light probes' dominant direction when there's
+  no directional light or reflection probe. It's the shader's own behaviour, not a material
+  setting.
 
 ### Reflections
 Reflection probe reflections. **Default off.**
 - **Controls:** toggle.
 - **Live or baked:** live.
 - **Unified:** surface response: environment reflections on or off.
-- **Parser today:** reads the toggle.
+- **Parser today:** rebuilt (step 4): on unless `_GLOSSYREFLECTIONS_OFF` is set.
 
 ### Specular anti-aliasing
 Reduces sparkling highlights on small or curved detail by roughening where the surface normal
@@ -162,12 +163,22 @@ changes quickly on screen.
 - **Live or baked:** live, but minor.
 - **Unified:** a surface response parameter. Toon Standard always applies its own version, so
   this fits as a shared parameter.
-- **Parser today:** reads all three.
+- **Parser today:** rebuilt (step 4): the keyword, variance and threshold.
 
 ### Not visual for avatars
 - **Lightmap Type** (Default or MonoSH) and **bicubic sampling**: they only affect lightmaps,
-  which skinned avatars don't use. The parser maps both; they can be dropped.
+  which skinned avatars don't use. Ignored since step 4.
 - **GPU instancing**, **double-sided global illumination**: performance and baking options.
+
+### Lighting
+Physically based, ambient along the normal (L1 light probes), one per-pixel directional light
+(no add pass: other lights through vertex lights and probes), no received shadows (`noshadow`).
+The BRDF is VRChat's mobile one on Quest (Lambert diffuse) and Unity's on PC (Disney diffuse).
+- **Parser today:** rebuilt (step 4): *physically based*, diffuse *Lambert* (the shader's
+  mobile target), ambient *directional*, received shadows off, additional lights 0.
+
+**Coverage (step 4):** every section is mapped; lightmap, bicubic, instancing and GI options
+are ignored without a report line.
 
 ---
 
@@ -410,13 +421,13 @@ In order of visual impact:
    `USE_DETAIL_MAPS`, `USE_NORMAL_MAPS`, `USE_OCCLUSION_MAP`, `USE_HUE_SHIFT`, `USE_COLOR_MASK`,
    `USE_AUDIOLINK`). Every material gets a rim and AudioLink; disabled normal maps, specular,
    detail and colour masks are applied.
-2. **Standard Lite tiling:** main maps should use the albedo's tiling.
+2. **Standard Lite tiling:** main maps should use the albedo's tiling. *Fixed in step 4.*
 3. **Standard Lite smoothness** with a texture uses a property it doesn't have; it should
-   use Smoothness × map alpha.
+   use Smoothness × map alpha. *Fixed in step 4.*
 4. **Toon Standard AudioLink mask channel** is off by one.
-5. **Standard Lite vertex colour** multiply isn't recorded.
+5. **Standard Lite vertex colour** multiply isn't recorded. *Fixed in step 4.*
 6. **Toon Standard reflectance:** wrong default, and no defined convention.
-7. **Standard Lite metallic** is gamma-encoded.
+7. **Standard Lite metallic** is gamma-encoded. *Fixed in step 4.*
 8. Smaller items: ramp presets, flat ambient, matcap placement and tiling, rim range
    convention, hue method, the detail normal's mask scaling, and dropping lightmap and
    bicubic.

@@ -163,7 +163,7 @@ shader's materials go to the fallback parser.
 |---|---|
 | VRChat Mobile Toon Lit | **Rebuilt** (step 2): base colour texture × vertex colour, flat lighting, opaque. Full coverage |
 | Unity Standard (metallic and specular) | **Rebuilt** (step 3): rendering modes, albedo, metallic or specular, smoothness, normal, parallax, occlusion, emission, detail, highlights and reflections, physically based lighting. Full coverage |
-| VRChat Mobile Standard Lite | Being rebuilt (step 4) |
+| VRChat Mobile Standard Lite | **Rebuilt** (step 4): base colour × vertex colour, metallic and smoothness map times sliders, normal, occlusion, emission, detail, highlights, reflections, specular anti-aliasing, physically based lighting without shadows. Full coverage |
 | Fallback | Base colour only; rebuilt in step 5 |
 | VRChat Mobile Toon Standard | Being rebuilt (step 6) |
 | Mochie Uber | Being rebuilt (step 7) |

@@ -1,6 +1,6 @@
 # Unified material — refactor plan
 
-**Status:** steps 1 to 3 done (2026-11-15); step 3 waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
+**Status:** steps 1 to 4 done (2026-11-15); step 4 waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
 the [feature catalogue](UNIFIED_MATERIAL_FEATURES.md), then rebuilding every input parser on it.
 
 **Goal:** the code matches the catalogue. Every supported input shader maps into typed
@@ -146,7 +146,11 @@ tiling. Every section of the draft is mapped; its five fixes are done. Planned:
 - **Bug fixed:** metallic with a texture.
 - **Test:** the saved-value test moves here.
 
-### 4. VRChat Mobile Standard Lite
+### 4. VRChat Mobile Standard Lite (done)
+`AtlasVRChatStandardLiteParser`. Typed specular anti-aliasing (2.4). Unity's detail mapping
+moved to `AtlasSourceMapping.UnityDetail`, shared with Standard. Lightmap type and bicubic
+sampling turned out not to be visual on avatars, so they're ignored rather than typed. Every
+section of the draft is mapped; its four Standard Lite fixes are done. Planned:
 - **Typed:** specular anti-aliasing, the lightmap and ambient options, bicubic sampling.
 - **Bugs fixed:** tiling follows the albedo; smoothness with a map is slider × map alpha;
   vertex colour multiply is recorded.

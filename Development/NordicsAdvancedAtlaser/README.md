@@ -127,7 +127,7 @@ description before an output shader uses it.
 |---|---|---|---|
 | Unity **Standard** (rebuilt) | Shader name | Rendering modes, base color, metallic/smoothness, normal, parallax, occlusion, emission, detail maps, highlights and reflections | — |
 | Unity **Standard (Specular setup)** (rebuilt) | Shader name | Same as Standard, with the specular colour | — |
-| **VRChat/Mobile/Standard Lite** | Shader name | Metallic workflow, detail, specular anti-aliasing, lightmaps | Feature keywords of compiled variants |
+| **VRChat/Mobile/Standard Lite** (rebuilt) | Shader name | Base color and vertex color, metallic workflow, normal, occlusion, emission, detail, highlights and reflections, specular anti-aliasing | — |
 | **VRChat/Mobile/Toon Lit** (rebuilt) | Shader name | Base texture, vertex color, flat lighting | — |
 | **VRChat/Mobile/Toon Standard** (and Outline) | Shader name | Toon ramp, specular, matcap, rim, emission, detail, color masks, hue, AudioLink | Special AudioLink blends |
 | **Mochie/Uber** (and Outline) | Shader name | Shading on/off, blending and alpha mask, four surface workflows, parallax, toon shadows, detail, two emission layers, two matcaps, basic and environment rims, subsurface, filtering and team colours, light volumes, separate or packed feature masks | Outline, refraction, iridescence, flipbooks, UV distortion, vertex manipulation, AudioLink, map filters (reported). Uber X special features are unsupported |

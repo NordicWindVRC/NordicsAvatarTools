@@ -49,6 +49,13 @@ under *Added* describe the parsers before the rebuild.
 
   The unified material gains parallax, the *base colour constant alpha* source, the diffuse
   model, and surface modes fade and transparent.
+- **VRChat Mobile Standard Lite rebuilt:** every main map uses the albedo's tiling (was each
+  map's own); smoothness is the map's alpha × the Smoothness slider (was a property the shader
+  doesn't have); the metallic slider is converted from gamma to linear; vertex colour multiply
+  is recorded (off with `DISABLE_VERTEX_COLORING`); emission, detail, specular anti-aliasing,
+  highlights and reflections follow their keywords; physically based lighting with Lambert
+  diffuse, no received shadows. Lightmap type and bicubic sampling are no longer read: they
+  only affect lightmaps. The unified material gains specular anti-aliasing.
 
 ### Changed
 - Package and NDMF name `app.nordicwind.advanced-atlaser`. Requires Texture Wrapper 0.10.0 or
