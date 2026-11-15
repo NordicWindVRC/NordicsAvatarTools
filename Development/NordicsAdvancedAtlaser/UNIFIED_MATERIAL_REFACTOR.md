@@ -1,6 +1,6 @@
 # Unified material — refactor plan
 
-**Status:** steps 1 and 2 done (2026-11-15); step 2 waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
+**Status:** steps 1 to 3 done (2026-11-15); step 3 waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
 the [feature catalogue](UNIFIED_MATERIAL_FEATURES.md), then rebuilding every input parser on it.
 
 **Goal:** the code matches the catalogue. Every supported input shader maps into typed
@@ -130,7 +130,12 @@ them.
   covers the untouched material, texture tiling, and the installed shader against saved values.
 - **Coverage:** the shader's one property is mapped; nothing is reported.
 
-### 3. Unity Standard (metallic and specular)
+### 3. Unity Standard (metallic and specular) (done)
+`AtlasUnityStandardParser` and `AtlasUnityStandardSpecularParser`, following the shader's
+keywords. Specs written for alpha (2.2), surface response (2.4), parallax (2.5), the physically
+based diffuse model (3.3), the surface layer's parameters (4.1) and the surface modes opaque,
+cutout, fade and transparent (6). `AtlasSourceMapping.Texture` can take another property's
+tiling. Every section of the draft is mapped; its five fixes are done. Planned:
 - **Typed:**
   - surface response: metallic, specular colour, roughness, occlusion, highlights and
     reflections toggles;

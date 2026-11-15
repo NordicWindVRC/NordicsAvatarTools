@@ -13,6 +13,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         PhysicallyBased
     }
 
+    public enum AtlasDiffuseModel
+    {
+        Lambert,
+        // Burley's diffuse: edges darken or brighten with roughness, as Unity Standard on PC.
+        Disney
+    }
+
     public enum AtlasAmbientModel
     {
         // The ambient light's average colour, the same in every direction.
@@ -25,6 +32,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public sealed class AtlasLighting
     {
         public AtlasLightingFamily Family = AtlasLightingFamily.PhysicallyBased;
+        // 3.3: the physically based family's diffuse.
+        public AtlasDiffuseModel Diffuse = AtlasDiffuseModel.Lambert;
         // 3.4: shared parameters.
         public AtlasAmbientModel Ambient = AtlasAmbientModel.Directional;
         // The main light's shadow.

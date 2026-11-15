@@ -41,9 +41,8 @@ How the surface uses alpha.
 - **Unified:** render: surface mode *opaque*, *cutout* with threshold, *fade* (everything
   fades), *transparent* (glass-like: reflections stay). The last two are the same alpha with
   different treatment of specular, which other shaders also offer.
-- **Parser today:** maps Fade to `Transparent` and Transparent to `Premultiplied`. That's
-  the right distinction under unclear names; the refinement pass should name them by what
-  they look like. The cutoff is read.
+- **Parser today:** rebuilt (step 3): surface modes *opaque*, *cutout* with the cutoff, *fade*
+  and *transparent*, from the shader's keywords; depth write.
 
 ## Albedo
 Base colour and transparency.
@@ -53,8 +52,8 @@ Base colour and transparency.
   alone.
 - **Live or baked:** baked.
 - **Unified:** base colour layer; alpha source.
-- **Parser today:** reads texture and colour. **Doesn't handle albedo alpha being used for
-  smoothness:** the texture's alpha is still treated as transparency.
+- **Parser today:** rebuilt (step 3): colour (linear) and texture. With smoothness in the
+  albedo's alpha, the alpha source is the colour's alpha alone (*base colour constant alpha*).
 
 ## Metallic (metallic setup)
 - **Controls:** Metallic texture (metallic in red, smoothness in alpha) **or**, with no
@@ -63,9 +62,8 @@ Base colour and transparency.
   stored gamma-encoded.
 - **Live or baked:** baked.
 - **Unified:** surface response: metallic.
-- **Parser today:** **wrong with a texture.** It keeps the slider value as the constant, and
-  the unified scalar multiplies constant × map, so a hidden, leftover slider value scales the
-  texture. With a texture, the constant should be 1. The gamma encoding isn't handled either.
+- **Parser today:** rebuilt (step 3): with a map (keyword on) the constant is 1 and the map's
+  red channel is metallic; otherwise the slider, converted from gamma to linear.
 
 ## Specular (specular setup)
 Specular colour instead of metallic: sets how strong and what colour reflections are, directly.
@@ -76,9 +74,8 @@ Specular colour instead of metallic: sets how strong and what colour reflections
   the unified material keeps two workflows, or converts specular colour to metallic and
   reflectance. That conversion is lossy for coloured specular on non-metals, so keeping both
   is probably simpler.
-- **Parser today:** reads colour and texture. It doesn't drop the colour when a texture is
-  set, but it's unclear how the unified specular colour combines with its map. That needs
-  checking.
+- **Parser today:** rebuilt (step 3): the specular colour (linear), or with a map, white × the
+  map.
 
 ## Smoothness
 - **Controls:**
@@ -89,13 +86,15 @@ Specular colour instead of metallic: sets how strong and what colour reflections
   and that alpha no longer means transparency.
 - **Live or baked:** baked.
 - **Unified:** surface response: roughness, from a channel of any texture.
-- **Parser today:** correct, including the albedo-alpha source.
+- **Parser today:** rebuilt (step 3): roughness = 1 − (map alpha × scale), from the metallic or
+  specular map or the albedo; otherwise 1 − the slider.
 
 ## Normal Map
 - **Controls:** texture and scale.
 - **Live or baked:** baked; part of normal compositing.
 - **Unified:** primary normal layer.
-- **Parser today:** reads it, with the wrong tiling.
+- **Parser today:** rebuilt (step 3): only with the normal-map keyword; albedo tiling; scale as
+  strength.
 
 ## Height Map
 Parallax: shifts the texture lookup by viewing angle, so surfaces look deeper than they are.
@@ -104,22 +103,24 @@ Parallax: shifts the texture lookup by viewing angle, so surfaces look deeper th
 - **Live or baked:** live; it depends on the view. The height map itself is baked.
 - **Unified:** a parallax feature: height channel, depth, method (single step here; other
   shaders use multi-step).
-- **Parser today:** reads map, channel and depth; wrong tiling.
+- **Parser today:** rebuilt (step 3): parallax, single step, green channel, depth; only with
+  the keyword and a map; albedo tiling.
 
 ## Occlusion
 - **Controls:** texture (green channel) and strength.
 - **Behaviour:** darkens ambient light and reflections, not direct light.
 - **Live or baked:** baked map, live effect.
 - **Unified:** occlusion: channel, strength around one.
-- **Parser today:** correct, apart from the tiling.
+- **Parser today:** rebuilt (step 3): green channel, strength around one, albedo tiling.
 
 ## Emission
 - **Controls:** an Emission checkbox; HDR colour and texture; a Global Illumination option.
 - **Behaviour:** texture × colour, added after lighting.
 - **Live or baked:** baked.
 - **Unified:** emission layer.
-- **Parser today:** correct, enabled by the shader keyword. The Global Illumination option
-  only affects lightmap baking and isn't visual on avatars.
+- **Parser today:** rebuilt (step 3): an emission surface layer (texture × HDR colour in
+  linear, blend *add*) when the keyword is on. The Global Illumination option isn't visual on
+  avatars.
 
 ## Detail
 A second, usually tiled, albedo and normal map, faded in by a mask.
@@ -135,8 +136,9 @@ A second, usually tiled, albedo and normal map, faded in by a mask.
 - **Live or baked:** baked.
 - **Unified:** detail layer with *multiply ×2* blend; detail normal with whiteout blend; shared
   mask.
-- **Parser today:** correct; mask channel alpha, UV set read. The mask uses the wrong
-  tiling.
+- **Parser today:** rebuilt (step 3): with the ×2 keyword, a colour layer (blend *multiply ×2*)
+  and, with the normal-map keyword, a normal layer (strength = detail normal scale) on the
+  detail tiling and UV set, sharing the detail mask (alpha, albedo tiling).
 
 ## Specular Highlights and Reflections
 - **Controls:** two toggles, both **on** by default.
@@ -145,15 +147,15 @@ A second, usually tiled, albedo and normal map, faded in by a mask.
 - **Live or baked:** live.
 - **Unified:** surface response: direct highlights and environment reflections on or off.
   Same as Standard Lite.
-- **Parser today:** reads both.
+- **Parser today:** rebuilt (step 3): from the *_OFF* keywords.
 
 ## Lighting
 Unity's physically based lighting: GGX highlights, Lambert diffuse, full light probe ambient,
 reflection probes, real-time shadows received and cast. Nothing to set.
 - **Unified:** the *physically based* lighting family, ambient model *directional*
   (full light probes), receives shadows.
-- **Parser today:** sets `StandardMetallic` or `StandardSpecular` as the lighting mode: one
-  value per workflow, where the guidelines want one family.
+- **Parser today:** rebuilt (step 3): *physically based*, Disney diffuse, ambient
+  *directional*, receives shadows.
 
 ## Not visual for avatars
 - Emission's **Global Illumination** option, **double-sided global illumination**: lightmap
@@ -190,7 +192,10 @@ reflection probes, real-time shadows received and cast. Nothing to set.
 4. **Metallic slider gamma encoding,** shared with Standard Lite.
 5. **Specular colour with a texture:** check how the unified specular combines colour and map.
 
-Nothing has been changed yet.
+All five are fixed in the rebuilt parser (refactor step 3).
+
+**Coverage (step 3):** every section is mapped; the *Not visual* items are ignored without a
+report line.
 
 ## Open questions
 

@@ -230,7 +230,14 @@ An ordered list of operations on a **target**, with a mask.
 **Sources:** all. *Specified with Toon Lit (refactor step 2).*
 
 ### 2.2 Alpha
-- **Source:** base colour alpha, a mask, vertex alpha, or none; strength.
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| source | base colour alpha, base colour constant alpha, mask, none | base colour alpha | *base colour alpha*: colour alpha × texture alpha; *constant alpha*: the colour's alpha alone, when the texture's alpha means something else (smoothness); *none*: 1 |
+| mask | 1.4 | — | for source *mask* |
+
+What alpha does is the render surface mode's job (6). *Specified with Unity Standard (refactor
+step 3).* Not specified yet:
+- **Source** vertex alpha; strength.
 - **Modifiers** (live, S7): distance fade, view-angle fade, camera- or model-angle fade, audio.
 - **Cutout handling:** threshold, sharpened coverage, mip preservation, dithering (soften edges
   or real transparency).
@@ -245,10 +252,20 @@ An ordered list of operations on a **target**, with a mask.
 
 ### 2.4 Surface response
 How the surface reflects light (S2).
-- **Inputs:** metallic, roughness, reflectance, specular colour (its own input; parsers don't
-  convert it to metallic); occlusion
-  with strength, tint, direct and indirect amount; multi-bounce occlusion.
-- **Highlights:** on, strength, tint; light-type limits;
+
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| metallic | scalar 0–1 | 0 | the value the shading uses: parsers convert gamma-encoded sliders |
+| roughness | scalar 0–1 | 0.5 | perceptual roughness, `1 − smoothness` |
+| reflectance | scalar 0–1 | 0.5 | non-metal reflectance at normal incidence; 0.5 = 4% (`F0 = 0.16 × r²`) |
+| specular colour | colour input, or none | none | the specular workflow's F0 colour; *none* is the metallic workflow. Its own input: parsers don't convert it to metallic |
+| occlusion | scalar, strength around one | 1, no map | darkens ambient light and reflections, not direct light |
+| highlights | bool | on | direct-light highlights |
+| reflections | bool | on | environment reflections; off: a flat colour from the ambient specular instead of reflection probes |
+
+*Specified with Unity Standard (refactor step 3).* Not specified yet:
+- **Occlusion** tint, direct and indirect amount; multi-bounce occlusion.
+- **Highlights:** strength, tint; light-type limits;
   - **shape:** round, or stretched (anisotropy amount, rotation, direction map, two layers,
     strand variation);
   - **style:** smooth, or stepped (step count, size, feather);
@@ -263,9 +280,19 @@ How the surface reflects light (S2).
 - **Sources:** Standard Lite, Toon Standard, Unity Standard, Uber, Poiyomi.
 
 ### 2.5 Parallax
-Height scalar, depth, method (single step, multi-step with step counts), mask, offset. Shifts
-every S1 texture lookup that uses the same mapping. Live. **Sources:** Unity Standard, Uber,
-Poiyomi.
+Shifts the surface texture lookups (S1) by the view angle, so the surface looks deeper than it
+is. Live.
+
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| enabled | bool | off | |
+| height | scalar input | — | 0 low, 1 high |
+| depth | float | 0.02 | UV shift scale |
+| reference height | 0–1 | 0.5 | the height that doesn't move |
+| method | single step | single step | `shift = (height − reference) × depth × view.xy / (view.z + 0.42)`, view in tangent space |
+
+**Sources:** Unity Standard, Uber, Poiyomi. *Specified with Unity Standard (refactor step 3).*
+Not specified yet: multi-step methods with step counts, mask.
 
 ---
 
@@ -288,8 +315,14 @@ Poiyomi.
 - **Shadow lift**, strength, painted shadow mask, border colour.
 
 ### 3.3 Physically based
-**Diffuse model:** Lambert, Disney, skin (pre-integrated colour lookup, thickness), cloth (with
-its own sheen and reflectance).
+GGX highlights and reflection probes, with the surface response (2.4).
+
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| diffuse model | Lambert, Disney | Lambert | *Disney*: Burley's diffuse, which darkens or brightens edges with roughness, as Unity Standard on PC |
+
+*Specified with Unity Standard (refactor step 3).* Not specified yet: diffuse models skin
+(pre-integrated colour lookup, thickness) and cloth (with its own sheen and reflectance).
 
 ### 3.4 Shared lighting parameters
 | Parameter | Values | Default | Notes |
@@ -344,6 +377,21 @@ detail, decal, flipbook, recolour or colour mask, back face, and emission.
 - **Emission:** a layer targeting emission. "Use base colour" is the base colour as the
   source; "override base colour" adds a base colour target with blend *replace* to black;
   blinking, scrolling, centre-out and light-based glow are modulators.
+
+**Parameters specified so far** (refactor step 3):
+
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| enabled | bool | on | |
+| mask | 1.4, or none | none | none: everywhere |
+| placement | 1.8 | surface | a layer targeting only emission uses *emission* |
+| emission amount | 0–1 | 0 | |
+| source | colour input | white | |
+| source is base colour | bool | off | |
+| targets | list of: target, blend (1.7), opacity 0–1, channel | — | *normal* targets composite by whiteout, opacity being the strength; one-value targets read the source's *channel* |
+
+A source with different textures per target (a detail colour map and a detail normal map) is
+two layers with the same mask.
 
 **Bakeable** when static and placed in UV space. **Sources:** all except Toon Lit.
 
@@ -452,9 +500,17 @@ particles from triangles. **Sources:** Poiyomi Pro variants.
 
 ## 6. Render
 
-- **Surface mode:** opaque, cutout, dithered, fade (everything fades), transparent (glass:
-  reflections stay), additive, soft additive, multiplicative, multiplicative ×2. Raw blend
-  factors are kept only when they match none of these.
+| Surface mode | Look | Blend |
+|---|---|---|
+| opaque | alpha ignored | none |
+| cutout | pixels below the cutoff are discarded | none |
+| fade | everything fades with alpha, highlights and reflections included | `src × a + dst × (1 − a)` |
+| transparent | glass: diffuse fades with alpha, highlights and reflections stay | `src + dst × (1 − a)`, diffuse premultiplied by alpha |
+
+Also: depth write per pass. *Specified with Unity Standard (refactor step 3).* Not specified
+yet:
+- **Surface modes** dithered, additive, soft additive, multiplicative, multiplicative ×2. Raw
+  blend factors are kept only when they match none of these.
 - **Per pass:** base, each outline layer and fur have cull, depth test and write, depth
   offset, stencil and colour mask.
 - **Two-sided lighting**, **fog**.

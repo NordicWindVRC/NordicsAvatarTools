@@ -125,8 +125,8 @@ description before an output shader uses it.
 
 | Shader | Recognised by | What is read | Not yet covered |
 |---|---|---|---|
-| Unity **Standard** | Shader name | Base color, metallic/smoothness, normal, occlusion, emission, detail maps, parallax, transparency | Some keyword and packed-channel combinations |
-| Unity **Standard (Specular setup)** | Shader name | Same as Standard, with specular workflow | Specular-map channel variations |
+| Unity **Standard** (rebuilt) | Shader name | Rendering modes, base color, metallic/smoothness, normal, parallax, occlusion, emission, detail maps, highlights and reflections | — |
+| Unity **Standard (Specular setup)** (rebuilt) | Shader name | Same as Standard, with the specular colour | — |
 | **VRChat/Mobile/Standard Lite** | Shader name | Metallic workflow, detail, specular anti-aliasing, lightmaps | Feature keywords of compiled variants |
 | **VRChat/Mobile/Toon Lit** (rebuilt) | Shader name | Base texture, vertex color, flat lighting | — |
 | **VRChat/Mobile/Toon Standard** (and Outline) | Shader name | Toon ramp, specular, matcap, rim, emission, detail, color masks, hue, AudioLink | Special AudioLink blends |

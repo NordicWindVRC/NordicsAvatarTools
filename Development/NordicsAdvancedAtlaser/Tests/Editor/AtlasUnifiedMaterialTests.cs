@@ -71,8 +71,9 @@ namespace NordicWind.AdvancedAtlaser.Tests
         [Test]
         public void FallbackReadsTheBaseColourInLinear()
         {
-            var shader = Shader.Find("Standard");
-            if (shader == null) Assert.Ignore("The Standard shader is not available.");
+            // A built-in shader no other parser reads.
+            var shader = Shader.Find("Legacy Shaders/Diffuse");
+            if (shader == null) Assert.Ignore("Legacy Shaders/Diffuse is not available.");
             var material = new Material(shader);
             var albedo = new Texture2D(4, 4);
             try

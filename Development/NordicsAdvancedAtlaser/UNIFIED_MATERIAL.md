@@ -132,8 +132,8 @@ The model is in `Editor/Unified/`, one file per part of the
 |---|---|---|
 | `AtlasUnifiedMaterial.cs` | — | The root: surface, lighting, layers, fur, render, and the report lines (`Issues`) |
 | `AtlasBuildingBlocks.cs` | 1 | Texture reference, scalar input, colour input, mask, blend, placement |
-| `AtlasSurface.cs` | 2 | Base colour and vertex colour, alpha, primary normal, surface response |
-| `AtlasLighting.cs` | 3 | Lighting family, ambient model, received shadows, light contributions |
+| `AtlasSurface.cs` | 2 | Base colour and vertex colour, alpha, primary normal, surface response, parallax |
+| `AtlasLighting.cs` | 3 | Lighting family, diffuse model, ambient model, received shadows, light contributions |
 | `AtlasLayers.cs` | 4 | The parts every layer shares; the surface layer and its targets |
 | `AtlasFur.cs` | 5.2 | Fur |
 | `AtlasRender.cs` | 6 | Surface mode, cutoff, blend factors, pass settings |
@@ -162,7 +162,7 @@ shader's materials go to the fallback parser.
 | Input parser | Status |
 |---|---|
 | VRChat Mobile Toon Lit | **Rebuilt** (step 2): base colour texture × vertex colour, flat lighting, opaque. Full coverage |
-| Unity Standard (metallic and specular) | Being rebuilt (step 3) |
+| Unity Standard (metallic and specular) | **Rebuilt** (step 3): rendering modes, albedo, metallic or specular, smoothness, normal, parallax, occlusion, emission, detail, highlights and reflections, physically based lighting. Full coverage |
 | VRChat Mobile Standard Lite | Being rebuilt (step 4) |
 | Fallback | Base colour only; rebuilt in step 5 |
 | VRChat Mobile Toon Standard | Being rebuilt (step 6) |

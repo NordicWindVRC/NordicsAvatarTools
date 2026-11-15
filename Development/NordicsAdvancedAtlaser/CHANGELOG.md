@@ -33,6 +33,22 @@ under *Added* describe the parsers before the rebuild.
   (multiply colour or alpha, sRGB data) and the shared lighting parameters (ambient model,
   received shadows, light contributions). Tests use a shared saved-value helper,
   `AtlasTestMaterials`, so they don't need the shader installed.
+- **Unity Standard rebuilt** (metallic and specular setup), following the shader's keywords as
+  the shader does:
+  - rendering modes named by look: opaque, cutout, fade (everything fades), transparent
+    (glass: reflections stay);
+  - every main map uses the albedo's tiling and offset (was each map's own);
+  - a metallic or specular map replaces the slider or colour (a leftover slider used to scale
+    the map); the metallic slider is converted from gamma to linear;
+  - with smoothness in the albedo's alpha, transparency comes from the colour's alpha alone;
+  - normal map, parallax, emission and detail apply only with their keyword, as in the
+    shader; the detail normal also needs the normal-map keyword;
+  - emission and detail are surface layers (detail: *multiply ×2* colour and a normal layer
+    sharing the mask);
+  - physically based lighting with Disney diffuse.
+
+  The unified material gains parallax, the *base colour constant alpha* source, the diffuse
+  model, and surface modes fade and transparent.
 
 ### Changed
 - Package and NDMF name `app.nordicwind.advanced-atlaser`. Requires Texture Wrapper 0.10.0 or
