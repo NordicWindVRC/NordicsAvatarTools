@@ -62,8 +62,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             else response.Roughness.Constant = AtlasMaterialReader.Float(m, "_Glossiness", 0.5f);
 
             // Forward Rendering Options
-            response.Highlights = !Keyword(m, "_SPECULARHIGHLIGHTS_OFF");
-            response.Reflections = !Keyword(m, "_GLOSSYREFLECTIONS_OFF");
+            response.Highlights.Enabled = !Keyword(m, "_SPECULARHIGHLIGHTS_OFF");
+            if (Keyword(m, "_GLOSSYREFLECTIONS_OFF")) response.Reflections.Source = AtlasReflectionSource.AmbientColor;
 
             // Normal Map
             bool normalMaps = Keyword(m, "_NORMALMAP");

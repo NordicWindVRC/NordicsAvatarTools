@@ -1,6 +1,6 @@
 # Unified material — refactor plan
 
-**Status:** steps 1 to 6 done (2026-11-15); step 6 waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
+**Status:** steps 1 to 7 done (2026-11-15); step 7b-3 waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
 the [feature catalogue](UNIFIED_MATERIAL_FEATURES.md), then rebuilding every input parser on it.
 
 **Goal:** the code matches the catalogue. Every supported input shader maps into typed
@@ -180,6 +180,32 @@ mode are reported. Planned:
   mask channel is off by one; reflectance has a defined default.
 
 ### 7. Mochie Uber
+Split in two, like Poiyomi: Uber has about 590 properties.
+- **7a (done):** the core sections. Typed: dithered surface mode, alpha strength, vertex colour
+  amount, grouped highlights and reflections (strength, tint, mask, roughness override,
+  fresnel, cubemap, fallback, and the source *ambient colour* for Unity's reflections off,
+  which Standard and Standard Lite now use), occlusion indirect, ramp keys, ramp strength and
+  term mask, light volumes, the lookup layer's centre eye, tiling, blur, source alpha and light
+  response, the angle layer's power band and environment colour, the subsurface layer, the
+  time and light-level modulator sources and modulator masks, colour operations saturation,
+  contrast, brightness, tint and hue methods HSV and Oklab, and the *surface colour*
+  adjustment target.
+- **7b-1 (done):** geometry and render: cube mode (lookup projection *view direction*), mirror
+  visibility and mirror base colour, invisible, near clip, deformations (inflate, rotate,
+  translate, snap), the outline extended (vertex colour width, hide within, multiply by base
+  colour, lit, emission), flat shading, specular from the mesh normal, fixed light direction.
+- **7b-2 (done):** the transition layer (dissolve), decal placement and frames on texture
+  references (flipbooks), the refraction layer, the angle profiles hue rotation and ramp with
+  *specular only* and *scale by metallic* (iridescence), shared UV distortion on texture
+  references, lookup normal maps, multi-step parallax, scalar remaps (applied to the sample,
+  before strength and inversion) and the occlusion tint (map filters).
+- **7b-3 (done):** AudioLink as audio modulators (with *value without AudioLink*), the
+  oscilloscope as the first procedural pattern layer, colour operations smooth invert, sRGB
+  decode, ACES and channel tint, hue *set*, highlight steps, shapes and options, reflection
+  steps and light-based strength, ramp conditions and dithering, stencil per pass, the alpha
+  mask multiplier, Disney and directional amounts. Four details stay reported.
+
+Planned for step 7 as a whole:
 - **Typed:**
   - subsurface;
   - packed and separate masks with remap (map filters);

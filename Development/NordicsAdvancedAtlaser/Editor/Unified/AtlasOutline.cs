@@ -17,11 +17,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasMask WidthMask;
         // The largest on-screen offset in normalised device coordinates; 0 = no limit.
         public float ScreenWidthLimit;
+        // Width × vertex colour; black vertices have no outline.
+        public bool WidthFromVertexColor;
+        // No outline closer to the camera than this, in metres.
+        public float HideWithin;
         public readonly AtlasColorInput Color = new AtlasColorInput { Color = UnityEngine.Color.black };
         // 0–1: blends toward the base colour (with vertex colour).
         public float BaseColorMix;
+        // Colour × the base colour.
+        public bool MultiplyByBaseColor;
         // Unlit: the colour as is.
         public bool Lit;
+        // The material's emission also shows on the outline.
+        public bool Emission;
         public readonly AtlasPassSettings Pass = new AtlasPassSettings { Cull = AtlasCull.Front };
     }
 }

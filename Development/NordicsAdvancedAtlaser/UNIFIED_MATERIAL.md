@@ -138,6 +138,7 @@ The model is in `Editor/Unified/`, one file per part of the
 | `AtlasColorAdjustment.cs` | 1.10 | Colour adjustments (hue so far) |
 | `AtlasModulators.cs` | 1.9 | Modulators and the audio source with spread |
 | `AtlasOutline.cs` | 5.1 | Outlines |
+| `AtlasDeformation.cs` | 5.3 | Deformations (inflate, rotate, translate, snap) |
 | `AtlasFur.cs` | 5.2 | Fur |
 | `AtlasRender.cs` | 6 | Surface mode, cutoff, blend factors, pass settings |
 
@@ -169,7 +170,7 @@ shader's materials go to the fallback parser.
 | VRChat Mobile Standard Lite | **Rebuilt** (step 4): base colour × vertex colour, metallic and smoothness map times sliders, normal, occlusion, emission, detail, highlights, reflections, specular anti-aliasing, physically based lighting without shadows. Full coverage |
 | Fallback | **Rebuilt** (step 5): common property names with Unity's conventions: base colour, alpha mask, normal, metallic or specular colour, roughness or smoothness, occlusion, emission, culling, depth write and surface mode from blend factors. One warning per material says the result is a guess; a matcap is reported |
 | VRChat Mobile Toon Standard (and Outline) | **Rebuilt** (step 6): every section by its keyword: ramp toon lighting, specular, matcap, emission, detail, occlusion, rim, hue shift, colour mask, outline, AudioLink. AudioLink's rim mask and UV-based mode are reported |
-| Mochie Uber | Being rebuilt (step 7) |
+| Mochie Uber (and Outline) | **Rebuilt** (step 7, in parts 7a, 7b-1, 7b-2, 7b-3; 7b-3: AudioLink as modulators, the oscilloscope, the remaining filters, highlight, reflection and shadow extras, stencil) (7b-2: dissolve, flipbooks, refraction, iridescence, UV distortion, matcap normals, multi-step parallax, map filters): render and alpha, base colour and cube mode, shading off as flat, workflows, detail, masks, ramp or physically based lighting, reflections, highlights, matcaps, rims, subsurface, emission with pulse and light reactivity, filtering, light volumes, mirror and near clip, vertex manipulation, outline, hard edges, clear coat, static light direction. Four details stay reported (flipbook alpha, AudioLink rim pulse, AudioLink on vertex rotation and UV distortion); Uber X is unsupported |
 | Poiyomi Toon 10 | Being rebuilt (step 8) |
 | Poiyomi Toon 11, Poiyomi Pro 10 and 11 | Being rebuilt (step 9) |
 | Poiyomi Toon 7.3 to 9.3 | Being rebuilt (step 10) |

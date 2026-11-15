@@ -20,6 +20,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly List<AtlasModulator> Modulators = new List<AtlasModulator>();
         // 5.1
         public readonly List<AtlasOutline> Outlines = new List<AtlasOutline>();
+        // 5.3: applied in list order.
+        public readonly List<AtlasDeformation> Deformations = new List<AtlasDeformation>();
         public readonly AtlasFur Fur = new AtlasFur();
         public readonly AtlasRender Render = new AtlasRender();
         public readonly List<AtlasIssue> Issues = new List<AtlasIssue>();

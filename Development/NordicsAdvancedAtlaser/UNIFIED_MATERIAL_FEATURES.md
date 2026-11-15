@@ -97,6 +97,15 @@ feature count low. This pass gives each one its parameters; see 1.0 for units.
 Shared mappings and per-UV-channel settings (Poiyomi's UV Settings) are folded into each texture
 reference by the parser.
 
+**Specified** (refactor step 7b):
+- **Placement (decal):** centre (UV), scale, rotation (degrees); the UV wraps (0–1) before
+  placing; *clip outside*: nothing is sampled outside the placed area.
+- **Frames:** a sprite sheet (columns, rows; frames read left to right, top to bottom) or a
+  texture array (one frame per slice); a rate in frames per second, or a fixed frame.
+- **Distortion:** a UV offset shared by several references: simplex noise (scale, speed,
+  octaves) or a normal map's xy (a texture reference), times strength and a mask. Offsets are
+  in UV units. One distortion object can be shared by every reference it shifts.
+
 ### 1.2 Scalar input
 `value = remap(constant × channel(texture))`, or the constant alone without a texture.
 
@@ -105,7 +114,7 @@ reference by the parser.
 | constant | float | per use | set to 1 when a source's texture replaces its slider |
 | texture, channel | texture reference, R/G/B/A/luminance | none, R | |
 | invert sample | bool | off | applied to the channel before the constant |
-| remap | input range, output range, midpoint, contrast | identity | Uber's map filters, Poiyomi 11 mask levels |
+| remap | output range, contrast, intensity, lightness | identity | `v = lerp(min, max, v)`; `v = saturate(lerp(0.5, v, contrast))`; `v += saturate(v × intensity)`; `v = saturate(v + lightness)`; applied to the sampled value (constant × channel; for strength around one the channel, before the strength), before *invert result*. Uber's map filters (specified, refactor step 7b). Input range and midpoint: not specified yet (Poiyomi 11 mask levels) |
 | combine | multiply, strength around one | multiply | around one: `1 − (1 − channel) × constant` (occlusion) |
 | invert result | bool | off | only for parser convenience (smoothness → roughness) |
 
@@ -192,7 +201,8 @@ an animated value and a modulated value look the same.
 | target | path | — | for example `layers[3].source.color`; indices are list positions in the unified material |
 | mode | add, multiply, replace | multiply | |
 | min, max | float | 0, 1 | |
-| source | audio | — | the other sources aren't specified yet |
+| source | audio, time, light level | — | the other sources aren't specified yet |
+| mask | 1.4, or none | none | where the modulation applies: `lerp(target, modulated, mask)` |
 
 **Audio source:**
 
@@ -201,10 +211,26 @@ an animated value and a modulated value look the same.
 | band | bass, low mids, high mids, highs, volume | bass | |
 | smoothing | 0–1 | 0 | 0 = the raw level, 1 = AudioLink's most smoothed |
 | fallback beat | bool, speed | off, 1 | without AudioLink in the world: a decaying pulse, `(1 − frac(t × speed))` on every other cycle |
+| value without AudioLink | 0–1 | 0 | the value when the world has no AudioLink and there's no fallback beat |
 | spread | none, history, fill | none | see below |
 | coordinate | UV u, UV v (with a UV set), view angle, texture channel | UV u | for *history* and *fill*: a 0–1 position. *view angle* is `1 − abs(view · normal)`, 0 facing the viewer |
 | history offset, history length | samples | 0, 128 | *history*: the sample `offset + coordinate × length` ago |
 | fill softness | 0–1 | 0.1 | *fill*: the fade below the level |
+
+**Time source** (refactor step 7): a waveform of time.
+
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| waveform | sine, square, triangle, saw, reverse saw | sine | 0–1: sine `0.5 + 0.5 sin(2π f t)`, square its rounding, triangle up and down, saw rising, reverse saw falling |
+| frequency | cycles per second | 1 | parsers convert their speed units |
+
+**Light level source** (refactor step 7): how bright the surroundings are.
+
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| threshold, crossfade | 0–1 | 0.5, 0.1 | the value rises from `threshold − crossfade` to `threshold + crossfade` |
+| smooth | bool | off | off: the raw brightness (average of direct, ambient and vertex light, 0–1); on: smoothed through the crossfade |
+| include shadows | bool | off | the brightness includes the surface's own shading |
 
 **Audio spread:** how the audio value varies across the surface.
 
@@ -239,12 +265,16 @@ ordered list.
 
 | Parameter | Values | Default | Notes |
 |---|---|---|---|
-| target | base colour, layer, final colour | base colour | *base colour*: the base colour input (2.1), before layers; *layer*: that layer's source. Emission is a layer |
+| target | base colour, surface colour, layer, final colour | base colour | *base colour*: the base colour input (2.1), before layers; *surface colour*: the base colour after the surface layers (end of S1); *layer*: that layer's source. Emission is a layer |
 | layer | a layer | — | for target *layer* |
 | mask | 1.4, or none | none | |
-| operation | hue | hue | |
-| amount | turns | 0 | hue: 1 = a full turn |
-| hue method | grey-axis rotation | grey-axis rotation | rotation of the linear colour around the grey axis `(1,1,1)/√3`, which keeps brightness roughly constant |
+| operation | hue, saturation, contrast, brightness, tint, smooth invert, sRGB decode, ACES tone map, channel tint | hue | |
+| amount | float | 0 | hue: turns, 1 = a full turn; saturation `lerp(luminance, c, amount)`; contrast `lerp(0.5, c, amount)`; brightness `c × amount` |
+| colour | linear colour | white | tint: `c × colour` |
+| hue set | bool | off | hue: every colour takes the hue `amount` instead of being rotated by it (a mono tint) |
+| smooth invert, sRGB decode, ACES tone map | amount 0–1 | 1 | `lerp(c, f(c), amount)`: smooth invert `1 − smootherstep(0, 1, c)`; sRGB decode the sRGB transfer curve to linear; ACES `(x(2.51x + 0.03)) / (x(2.43x + 0.59) + 0.14)` with `x = 0.6 c` |
+| channel tint | 4 linear colours, a mask texture | — | weights `m` from the mask's RGBA, divided by their sum when above 1; `t = Σ colourᵢ mᵢ + max(0, 1 − Σ mᵢ)`; `c × (2t − 1)` (Alloy team colours) |
+| hue method | grey-axis rotation, HSV, Oklab | grey-axis rotation | grey-axis: rotation of the linear colour around `(1,1,1)/√3`; HSV: the hue of the HSV colour; Oklab: the Oklab hue angle |
 
 ---
 
@@ -258,6 +288,7 @@ ordered list.
 | colour input | 1.3 | white, no texture | |
 | vertex colour: multiply colour | bool | off | RGB × vertex RGB |
 | vertex colour: multiply alpha | bool | off | alpha × vertex alpha |
+| vertex colour: amount | 0–1 | 1 | `base × lerp(1, vertex, amount)` |
 | vertex colour: sRGB data | bool | off | off: vertex colours are used as stored (as linear values); on: converted from sRGB to linear first |
 
 **Sources:** all. *Specified with Toon Lit (refactor step 2).*
@@ -267,10 +298,12 @@ ordered list.
 |---|---|---|---|
 | source | base colour alpha, base colour constant alpha, mask, none | base colour alpha | *base colour alpha*: colour alpha × texture alpha; *constant alpha*: the colour's alpha alone, when the texture's alpha means something else (smoothness); *none*: 1 |
 | mask | 1.4 | — | for source *mask* |
+| mask multiplier | float | 1 | source *mask*: the mask × this |
+| strength | 0–1 | 1 | `lerp(1, alpha, strength)` |
 
 What alpha does is the render surface mode's job (6). *Specified with Unity Standard (refactor
 step 3).* Not specified yet:
-- **Source** vertex alpha; strength.
+- **Source** vertex alpha.
 - **Modifiers** (live, S7): distance fade, view-angle fade, camera- or model-angle fade, audio.
 - **Cutout handling:** threshold, sharpened coverage, mip preservation, dithering (soften edges
   or real transparency).
@@ -279,6 +312,8 @@ step 3).* Not specified yet:
 ### 2.3 Normals
 - **Layers:** the primary normal, then surface layers targeting the normal (4.1), composited
   by whiteout with strength and mask.
+- **Flat shading** (specified, refactor step 7b): the surface normal is the triangle's face
+  normal, for a hard-edged, faceted look; normal maps apply on top.
 - **Bent normal:** an input for specular occlusion and indirect light.
 - **Modifiers:** spherize toward a point, flat shading, back-face flip.
 - **Sources:** all except Toon Lit.
@@ -293,11 +328,15 @@ How the surface reflects light (S2).
 | reflectance | scalar 0–1 | 0.5 | non-metal reflectance at normal incidence; 0.5 = 4% (`F0 = 0.16 × r²`) |
 | specular colour | colour input, or none | none | the specular workflow's F0 colour; *none* is the metallic workflow. Its own input: parsers don't convert it to metallic |
 | occlusion | scalar, strength around one | 1, no map | darkens ambient light and reflections, not direct light |
-| highlights | bool | on | direct-light highlights |
-| reflections | bool | on | environment reflections; off: a flat colour from the ambient specular instead of reflection probes |
+| highlights | group | on | direct-light highlights: enabled; strength (1); tint (white); mask; roughness override (off, value); sharpness (below); **steps** (0: smooth, else `floor(h × steps) / steps`); **real-time light only**; **base colour mix** (the highlight colour toward the base colour); **ignore light colour** (not scaled by the diffuse light); **shape** (below) |
+| highlight shape | round, stretched, both | round | *stretched* (hair, brushed metal) along the bitangent: `D = saturate(1 / (w × f²))`, `f = (T·H)² + (B·H)² / w² + (N·H)²` with width `w`, a second layer of width `w₂` added with a strength (or laid over by its own value), strand ripples along U (frequency, amplitude, strength, continuity), its own strength and steps; fresnel scaled by metallic. *Both*: blended by a mask (1 = round) |
+| reflections | group | on | environment reflections: enabled (off: none); strength (1); tint (white); mask; fresnel strength (1, 0 = no fresnel falloff); roughness override (off, value); **steps** (0: smooth, else quantised, less on rough surfaces); **light based** (0–1: stronger where lit, `lerp(1, N·L + 0.3, amount)`); source *probes*, a fixed *cubemap* (lit by the surroundings or not), or *ambient colour* (a flat colour from the sky's ambient specular, Unity's reflections off); a fallback cubemap for scenes without probes |
 | highlight sharpness | 0–1 | 0 | blends the highlight toward a hard edge: `lerp(h, smoothstep(0.5, 0.51, h), sharpness)` |
 | occlusion: direct | 0–1 | 0 | how much occlusion also darkens direct light |
+| occlusion: indirect | 0–1 | 1 | how much occlusion darkens ambient light |
+| occlusion tint | colour input, or none | none | occlusion darkens toward this colour instead of black: `lerp(tint, 1, occlusion)` |
 | occlusion: reflections | 0–1 | 1 | how much occlusion darkens reflections |
+| specular from mesh normal | bool | off | highlights, reflections, matcaps and rims use the mesh normal, not the normal map; diffuse keeps it (a varnished look) |
 | specular anti-aliasing | bool | off | roughens where the normal changes quickly on screen, so small or curved detail doesn't sparkle (projected-space normal filtering, Tokuyoshi 2021) |
 | anti-aliasing variance | 0–1 | 0.1 | screen-space variance scale |
 | anti-aliasing threshold | 0–1 | 0.2 | the most it may add to roughness |
@@ -305,7 +344,7 @@ How the surface reflects light (S2).
 *Specified with Unity Standard (refactor step 3); specular anti-aliasing with Standard Lite
 (step 4); highlight sharpness and occlusion amounts with Toon Standard (step 6).* Not specified
 yet:
-- **Occlusion** tint; multi-bounce occlusion.
+- **Occlusion:** multi-bounce occlusion.
 - **Highlights:** strength, tint; light-type limits;
   - **shape:** round, or stretched (anisotropy amount, rotation, direction map, two layers,
     strand variation);
@@ -330,10 +369,12 @@ is. Live.
 | height | scalar input | — | 0 low, 1 high |
 | depth | float | 0.02 | UV shift scale |
 | reference height | 0–1 | 0.5 | the height that doesn't move |
-| method | single step | single step | `shift = (height − reference) × depth × view.xy / (view.z + 0.42)`, view in tangent space |
+| method | single step, multi-step | single step | single step: `shift = (height − reference) × depth × view.xy / (view.z + 0.42)`, view in tangent space. Multi-step: march from height 1 down in *steps* steps of `view.xy / (view.z + 0.42) × depth / steps` until below the surface, then three halving refinement steps |
+| steps | 1–50 | 25 | multi-step |
+| height offset | −1–1 | 0 | multi-step: added to the height (clamped below 1) |
 
 **Sources:** Unity Standard, Uber, Poiyomi. *Specified with Unity Standard (refactor step 3).*
-Not specified yet: multi-step methods with step counts, mask.
+Not specified yet: mask.
 
 ---
 
@@ -354,7 +395,11 @@ Not specified yet: multi-step methods with step counts, mask.
 | Parameter | Values | Default | Notes |
 |---|---|---|---|
 | shading term | half-Lambert | half-Lambert | `N·L × 0.5 + 0.5`, times the received shadow |
-| ramp | texture reference, or none | none | sampled along u at the shading term; colour; none = white (fully lit everywhere) |
+| ramp | texture reference, colour keys, or none | none | sampled along u at the shading term; colour. Keys are piecewise linear (position 0–1, colour), for ramps described by numbers. None = white (fully lit everywhere) |
+| ramp strength | 0–1, with a mask | 1 | `lerp(1, ramp, strength × mask)` |
+| term mask | 1.4, or none | none | a painted mask multiplying N·L before the ramp, to draw shadows in |
+| conditions | always, real-time light only, baked light only | always | when the ramp applies |
+| dithered | bool | off | the shadow becomes a dither pattern in proportion to its darkness |
 | ramp preset | none, flat, realistic, realistic soft, realistic very soft, two bands, three bands, four bands | none | names the ramp's shape, so a writer can use its own equivalent |
 | shadow lift | 0–1 | 0 | |
 | shadow colour from base | 0–1 | 0 | 0: shadows go black; 1: shadows take the base colour, a saturated darkening |
@@ -373,6 +418,7 @@ GGX highlights and reflection probes, with the surface response (2.4).
 | Parameter | Values | Default | Notes |
 |---|---|---|---|
 | diffuse model | Lambert, Disney | Lambert | *Disney*: Burley's diffuse, which darkens or brightens edges with roughness, as Unity Standard on PC |
+| Disney amount | 0–1 | 1 | Disney: blends from Lambert |
 
 *Specified with Unity Standard (refactor step 3).* Not specified yet: diffuse models skin
 (pre-integrated colour lookup, thickness) and cloth (with its own sheen and reflectance).
@@ -381,6 +427,7 @@ GGX highlights and reflection probes, with the surface response (2.4).
 | Parameter | Values | Default | Notes |
 |---|---|---|---|
 | ambient model | average, directional | directional | *average*: the ambient light's average colour, the same in every direction (spherical harmonics at order 0); *directional*: sampled along the normal |
+| directional amount | 0–1 | 1 | directional: blends from the average |
 | received shadows | bool | on | the main light's shadow |
 | contribution: main light | 0–1 | 1 | the main directional light |
 | contribution: additional lights | 0–1 | 1 | other per-pixel lights |
@@ -391,7 +438,8 @@ GGX highlights and reflection probes, with the surface response (2.4).
 
 *Specified with Toon Lit (refactor step 2); brightness limit and minimum with Toon Standard
 (step 6).* Not specified yet:
-- **Light direction override:** none, a fixed local or world direction, or the view direction.
+- **Light direction override:** a fixed local direction, or the view direction. *A fixed world
+  direction is specified (refactor step 7b): the main light's direction is replaced by it.*
 - **Light colour override;** monochrome light.
 - **Brightness ceiling** other than 1, or keeping the hue.
 - **Received shadow softness.**
@@ -399,6 +447,15 @@ GGX highlights and reflection probes, with the surface response (2.4).
 ### 3.5 External lighting
 VRChat light volumes (strength, specular, bias) and LTCGI (diffuse and specular tint,
 strength). **Sources:** Uber, Poiyomi.
+
+**Light volumes, specified** (refactor step 7):
+
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| enabled | bool | off | the world's light volumes replace the light probes |
+| strength | 0–1 | 1 | blends from the probes to the volumes |
+| specular | bool, strength | off, 1 | highlights from the volumes |
+| bias | float | 0 | offsets the sample point along the normal |
 
 ### 3.6 Screen-space lighting effects
 Darkening from the depth texture, which avatars only have with a depth-providing prefab:
@@ -460,7 +517,17 @@ A second appearance revealed by a threshold.
 - **Modes:** wave, continuous.
 
 Structurally a surface layer whose mask is a threshold with an edge band. Kept separate
-(decided) because its *amount* is the thing that gets animated. **Sources:** Uber base colour dissolve, Poiyomi
+(decided) because its *amount* is the thing that gets animated.
+
+**Specified so far** (refactor step 7b), besides the shared layer parts:
+
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| threshold | texture reference, channel | none | none: 1 everywhere |
+| amount | 0–1 | 0 | where the threshold is below the amount, the revealed appearance replaces the base colour (a hard edge) |
+| revealed | colour input | white | |
+| edge width | 0–1 | 0 | a band just above the amount, `0 < threshold − amount ≤ width` |
+| edge colour | linear colour | white | added after lighting, like emission | **Sources:** Uber base colour dissolve, Poiyomi
 dissolve.
 
 ### 4.3 Lookup layer
@@ -477,7 +544,14 @@ A texture looked up by direction instead of by UV.
 | Parameter | Values | Default | Notes |
 |---|---|---|---|
 | source | colour input | white | the texture is looked up by the projection, not by UV |
-| projection | view stabilised | view stabilised | the normal in view space with world up kept up, so the lookup doesn't roll with the head (VR) |
+| projection | view stabilised, view direction | view stabilised | *view stabilised*: the normal in view space with world up kept up, so the lookup doesn't roll with the head (VR); *view direction*: a cubemap sampled along the direction from the camera to the surface, like a window into it |
+| rotation, spin | 3 × degrees, 3 × degrees per second | 0, 0 | view direction: rotations of the xy, xz and yz planes, applied in that order |
+| centre eye | bool | off | both eyes use the view from between them |
+| tiling | 2 × float | (1, 1) | scales the lookup coordinate |
+| blur | 0–1, or the surface roughness | 0 | mip blur as roughness |
+| source alpha is opacity | bool | off | the source's alpha multiplies the opacity |
+| light response | ignore light, scale by light | ignore light | |
+| normal map | texture reference, strength, with surface | none | its own normal for the lookup; *with surface*: whiteout-blended with the surface normal |
 | blend, opacity | 1.7, 0–1 | add, 1 | placement *surface* blends into the base colour (lit and shadowed); later placements into the lit colour |
 
 **Sources:** Toon Standard, Uber, Poiyomi (matcaps, cubemap).
@@ -497,9 +571,14 @@ Colour driven by how the surface faces the viewer or the light.
 | Parameter | Values | Default | Notes |
 |---|---|---|---|
 | edge source | view angle | view angle | `e = 1 − abs(view · normal)`, the view from between the eyes |
-| profile | band | band | `smoothstep((1 − width) − softness, (1 − width) + softness, e)` |
-| width, softness | 0–1 | 0.3, 0.1 | |
+| profile | band, power band, hue rotation, ramp | band | band: `smoothstep((1 − width) − softness, (1 − width) + softness, e)`; power band: `smoothstep(edge, 1 − edge, e^power)`; hue rotation: the colour below rotated by `frac(power band)` turns (HSV); ramp: the colour below × a ramp texture at `e` |
+| ramp | texture reference | none | ramp profile |
+| specular only | bool | off | acts on highlights and reflections only, not the whole lit colour (iridescence) |
+| scale by metallic | bool | off | the opacity times the metallic value |
+| width, softness | 0–1 | 0.3, 0.1 | band |
+| power, edge | float, 0–0.5 | 5, 0 | power band |
 | colour | colour input | white | |
+| colour source | colour, environment | colour | *environment*: the reflection probe along the reflection, times the colour, with an optional roughness override |
 | base colour mix | 0–1 | 0 | multiplies by `lerp(1, base, mix)` |
 | light response | ignore light, scale by light | ignore light | *scale by light*: times (main light colour + ambient) |
 | blend, opacity | 1.7, 0–1 | add, 1 | |
@@ -511,10 +590,27 @@ depth rim, environmental rim, Depth FX, backlights.
 Light through thin parts: thickness texture, colour, base colour tint, direct and indirect
 strength, falloff, distortion, wrap, shadow strength. S3. **Sources:** Uber, Poiyomi.
 
+**Specified so far** (refactor step 7), besides the shared layer parts (placement *lit*):
+`light = (pow(saturate(view · −(L + N × distortion)), power) × intensity / π + ambient) ×
+pow(1 − thickness, thickness power) × (direct + ambient light) × colour`, times the received
+shadow when there's a real-time light.
+
+| Parameter | Values | Default |
+|---|---|---|
+| colour | colour input | white |
+| base colour mix | 0–1 | 0 |
+| thickness | texture reference, power | none, 1 |
+| intensity, power, distortion, ambient | float | 1, 1, 1, 0 |
+
 ### 4.6 Procedural pattern
 A generated pattern with a **kind** and its parameters: glitter, voronoi, truchet, pathing,
 internal parallax, video screen, audio spectrum, audio volume colour, oscilloscope,
 constellation. **Sources:** Poiyomi, Poiyomi Pro, Uber oscilloscope.
+
+**Oscilloscope, specified** (refactor step 7b): AudioLink's waveform drawn as a line,
+`saturate(1 − 50 × abs(wave(u′) − (2v′ − 1)))`, with `u′, v′` the UV scaled, offset and
+rotated (degrees), inside margins (a u range and a v range), × colour × opacity. Placement
+*overlay*, blend *add*.
 
 One layer type (decided). Each kind gets its own typed parameters when a parser types it;
 until then, a material using that kind gets an unmapped report line. Adding a kind never
@@ -524,6 +620,19 @@ changes the layer type.
 Bends what's behind a transparent surface: strength (IOR), tint, colour split, blur, opacity;
 with screen-grab extras (pixelation, colour ramp). **Sources:** Uber, Poiyomi Pro Grab Pass and
 Self Grab.
+
+**Specified so far** (refactor step 7b), besides the shared layer parts (placement *lit* or
+*overlay*): the screen behind, offset by `(IOR − 1) × the view-space normal / (depth + 1) ×
+(1 − N·V)`, times the tint, then `lerp(refraction, surface, opacity)`.
+
+| Parameter | Values | Default |
+|---|---|---|
+| IOR | float | 1.3 |
+| tint | linear colour | white |
+| opacity | 0–1 | 0 |
+| chromatic aberration | off, or strength 0–1 | off |
+| blur | off, or strength 0–1, optionally × roughness | off |
+| cut mask | texture reference, threshold | none: refraction where the mask is at most the threshold |
 
 ---
 
@@ -548,9 +657,13 @@ A **list** of outline layers (Poiyomi Pro has three), each with:
 | width | metres | 0.0005 | |
 | width mask | 1.4, or none | none | |
 | screen width limit | float, or 0 | 0 | the largest on-screen offset in normalised device coordinates; 0 = none |
+| width from vertex colour | bool | off | width × vertex colour; black vertices have no outline |
+| hide within | metres | 0 | no outline closer to the camera than this |
 | colour | colour input | black | |
 | base colour mix | 0–1 | 0 | blends toward the base colour (with vertex colour) |
+| multiply by base colour | bool | off | colour × the base colour |
 | lit | bool | off | unlit: the colour as is |
+| emission | bool | off | the material's emission also shows on the outline |
 | pass | 6 | cull front, depth write on | |
 
 **Sources:** Toon Standard (Outline), Uber (Outline), Poiyomi, Poiyomi Pro.
@@ -579,6 +692,16 @@ A list of vertex operations, each with a mask and modulators:
 
 **Sources:** Uber, Poiyomi, Poiyomi Pro, and Lil Fur for wind.
 
+**Specified so far** (refactor step 7b): a list of operations, applied in order, each with a
+mask (sampled per vertex on UV0) and a strength.
+
+| Operation | Amount | Notes |
+|---|---|---|
+| inflate | 3 × float, object units | along the normal per axis; *absolute normal*: along its absolute value, so everything moves outward on that axis |
+| rotate | 3 × degrees | the xy, xz and yz planes, in that order, around the object origin; normals turn too |
+| translate | 3 × float, object units | |
+| snap | precision, steps per metre | world position rounded up to the grid, `lerp(p, ceil(p × precision) / precision, strength × mask)`, for a retro look |
+
 Static operations (no modulator) stay deformation features like the animated ones. Whether a
 writer applies them to the mesh at build time, so outputs without them keep the shape, is
 decided later, with the writers.
@@ -595,19 +718,25 @@ particles from triangles. **Sources:** Poiyomi Pro variants.
 |---|---|---|
 | opaque | alpha ignored | none |
 | cutout | pixels below the cutoff are discarded | none |
+| dithered | screen-door transparency: a dither pattern keeps pixels in proportion to alpha | none |
 | fade | everything fades with alpha, highlights and reflections included | `src × a + dst × (1 − a)` |
 | transparent | glass: diffuse fades with alpha, highlights and reflections stay | `src + dst × (1 − a)`, diffuse premultiplied by alpha |
 
-Also: per pass, cull (off, front, back) and depth write; **two-sided lighting** (back faces
+Also: per pass, cull (off, front, back), depth write and **stencil** (reference 0–255,
+compare function, pass, fail and depth-fail operations; Unity's meanings); **two-sided lighting** (back faces
 flip their normal, so they light like front faces). *Specified with Unity Standard (refactor
 step 3); two-sided lighting with Toon Standard (step 6).* Not specified yet:
-- **Surface modes** dithered, additive, soft additive, multiplicative, multiplicative ×2. Raw
+- **Surface modes** additive, soft additive, multiplicative, multiplicative ×2. Raw
   blend factors are kept only when they match none of these.
 - **Per pass:** base, each outline layer and fur have cull, depth test and write, depth
   offset, stencil and colour mask.
 - **Fog**.
 - **Visibility:** in mirrors, cameras, normal view; an alternate mirror appearance; near-camera
-  clipping with a mask; hide by UV tile; invisible.
+  clipping with a mask; hide by UV tile; invisible. *Specified* (refactor step 7b):
+  - **mirror visibility:** both, mirror only, not in mirror;
+  - **mirror base colour:** a texture replacing the base colour texture in mirrors, or none;
+  - **near clip:** on, distance in metres, mask (UV0, hidden where above 0.5); not in mirrors;
+  - **invisible:** bool.
 - **Fallback shader:** what viewers with blocked shaders see; carried for writers.
 
 ---

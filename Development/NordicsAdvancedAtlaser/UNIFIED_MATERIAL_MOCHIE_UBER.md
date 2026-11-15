@@ -12,12 +12,9 @@ Variants: `Mochie/Uber` and `Mochie/Uber (Outline)`.
 **Character:** Mochie's avatar shader: physically based or toon shading, with many stylised and
 animated effects. About 590 properties.
 
-**Parser:** `AtlasMochieUberParser` follows this inventory against today's unified material. It
-maps shading on/off, blending and alpha, the four surface workflows, parallax, toon shadows,
-lighting contributions, detail, both emission layers, both matcaps, both rims, subsurface,
-filtering and team colours, light volumes and the feature masks. Features without a typed home
-yet are reported once each when switched on; see [*Parser work*](#parser-work). The feature
-entries below don't have *Parser today* lines.
+**Parser:** `AtlasMochieUberParser`, rebuilt in refactor step 7a; see
+[*Rebuilt parser (step 7a)*](#rebuilt-parser-step-7a). The feature entries below don't have
+*Parser today* lines.
 
 **Uber X:** the paid version adds the inspector's *Special Features* and some AudioLink targets.
 Its code isn't installed here; see [*Uber X features*](#uber-x-features).
@@ -374,6 +371,105 @@ as Poiyomi Pro.
 - **Atlasing limits:** some settings can't differ inside one merged material: blend mode,
   culling, mirror behaviour, outline on or off, stencil, fallback shader. Sources that
   disagree on these can't share an output. See the open questions.
+
+## Rebuilt parser (step 7a)
+
+Every section follows its keyword, as the shader does (the inspector sets them).
+- **Render:** blending modes opaque, cutout (with Uber's sharpened alpha edge), **dithered**
+  (screen-door), fade, transparent; cutoff, alpha-to-coverage, depth write and test, culling;
+  two-sided lighting; alpha strength; the alpha mask with its channel.
+- **Base colour:** texture × colour on the main transform (tiling, scroll, rotation); vertex
+  colour by its amount.
+- **Shading off** is *not* unlit: the shader lights the base colour uniformly and clamps it to the
+  base colour. It maps to the *flat* family with limited brightness.
+- **Workflows:** metallic (maps replace sliders; roughness, not smoothness), specular (colour,
+  smoothness from its own map, the specular map's alpha, or the scale), packed (a channel per
+  property). Normal map, occlusion (direct and indirect amounts from *Direct AO* and
+  *Indirect AO*; reflections always), GSAA.
+- **Detail:** albedo, metallic, roughness and occlusion as surface layers, blend per mode (Lerp
+  is half way, so its opacity halves; Alpha uses the detail alpha), strength × the detail mask,
+  on the detail transform and UV set; the detail normal.
+- **Masks:** separate (red, main transform, or their own with mask transforms) or packed.
+- **Lighting:** physically based or ramp toon. *Manual Blend* becomes ramp keys (piecewise
+  linear, with the shadow tint); *Ramp* the texture; shadow strength with the shadow mask; the
+  painted detail shadow map as the term mask; received shadows from *Realtime Self-shadowing*.
+  Disney diffuse, light-probe strength as the ambient model, contributions, colour preservation
+  as limited brightness, light volumes.
+- **Reflections and highlights:** strength, tint, mask, fresnel, roughness override, probes,
+  cubemap or fallback cubemap.
+- **Matcaps:** overlay lookup layers, alpha blend as source alpha, unlit or scaled by light,
+  blur from roughness or manual, centre eye.
+- **Rims:** angle layers with the *power band* profile (`(1 − width) × 10`, edge); the
+  environment rim with colour source *environment* (its tint applies twice in the shader).
+- **Subsurface:** a subsurface layer. The shader passes the shadow and the base colour to its
+  subsurface function in swapped order; the unified layer follows the intended meaning.
+- **Emission:** two layers; pulse as a *time* modulator (speed converted to cycles per second
+  per waveform), light reactivity as a *light level* modulator, both scaling each layer.
+- **Filtering:** colour adjustments (hue HSV or Oklab, auto hue shift as a time modulator, RGB
+  tint, saturation, contrast, brightness) on the *surface colour* (after detail), or the final
+  colour with Post Filtering; the filter mask.
+
+**Step 7b-1** adds:
+- **Cube mode:** a lookup layer with projection *view direction* on the base colour (replace,
+  or the cube blend with its amount or mask); rotation and auto-rotation as rotation and spin.
+  Uber's rotation turns each plane by the angle + 90° once any angle is set; the parser adds it.
+- **Mirror behaviour:** mirror visibility, and *Textured Reflection* as the mirror base colour.
+- **Hide** as invisible; **near clipping** with distance and mask.
+- **Vertex manipulation:** deformations inflate (expansion × 0.001, absolute normal from the
+  clamp), rotate (+ 90° as above), translate, snap (rounding strength and precision), masks on
+  raw UV0.
+- **Outline** (Outline variant, by shader name): width `thickness × 0.01 × multiplier`, the
+  thickness mask (separate on raw UV0 or its own transform, packed mask 3 alpha), vertex colour
+  width, range as *hide within*, texture × colour, albedo tint as *multiply by base colour*,
+  lighting and emission, the outline culling. Object units are taken as metres.
+- **Hard edges** as flat shading; **clear coat** as specular from the mesh normal; the
+  **static light direction**.
+
+**Step 7b-2** adds:
+- **Base colour dissolve:** a transition layer (noise threshold, amount, the second base
+  colour, an edge band `rim width × 0.035` glowing in the rim colour × its alpha).
+- **Flipbooks:** surface layers whose texture is a placed decal (centre `position + 0.5`,
+  scale, rotation, on wrapped UV0 with scroll) with frames (sprite sheet or texture array,
+  rate or fixed frame); blended by their alpha with the flipbook blend; unlit ones placed
+  *overlay*. A flipbook replacing the alpha is reported.
+- **Refraction:** a refraction layer (IOR, tint, opacity, chromatic aberration, blur, the cut
+  mask), placement *lit* or *overlay* (unlit).
+- **Iridescence:** an angle layer on highlights and reflections only, scaled by metallic: hue
+  rotation by the power band, or the ramp.
+- **UV distortion:** one shared distortion (simplex noise or a normal map, strength × 0.1, the
+  mask) on the main, first emission, detail and rim maps, and ×20 on matcap lookups, as chosen.
+- **Matcap normals:** the lookup layer's own normal map, strength and *with surface*.
+- **Height:** multi-step parallax (steps, offset), from the height map or the packed channel.
+- **Map filters:** scalar remaps on metallic, roughness or smoothness, occlusion and height,
+  and the occlusion tint.
+
+**Step 7b-3** adds:
+- **AudioLink:** audio modulators. Each target is scaled by `lerp(1, remapped band,
+  multiplier × strength)`, with the band remapped from the global range to the target's; that
+  is linear in the band, so it becomes a modulator's min and max. Targets: emission (each
+  layer's colour), the rim's strength (opacity) and width (its power band's power, replaced),
+  the base colour dissolve's amount, the outline's width, the vertex expansion and rounding.
+  Uber reads the raw band, and 1 without AudioLink in the world.
+- **Oscilloscope:** a procedural pattern layer (scale, offset, rotation, margins, colour ×
+  alpha × strength), added after lighting.
+- **Filters:** smooth invert (unmasked, on the surface colour), team colours as a channel tint,
+  mono tint as a hue that's set rather than rotated, HDR as an sRGB decode, ACES tone mapping.
+- **Highlights:** steps, stretched (anisotropic) and combined shapes with their layers, ripples
+  and the blend mask, real-time light only, the light bias override as a base colour mix,
+  manual brightness as *ignore light colour*.
+- **Reflections:** steps, light-based strength. **Shadows:** conditions, dithering.
+- **Stencil** (base and outline pass); the colour alpha on the alpha mask; partial Disney
+  diffuse and light-probe strength as amounts.
+
+**Still reported** (each needs something the model doesn't have yet): a flipbook replacing the
+alpha, AudioLink's rim pulse (a history band along the view angle), AudioLink on the vertex
+rotation (Uber adds 90° per plane, so it isn't a factor) and on the shared UV distortion.
+**Unsupported:** Uber X.
+
+**Coverage (step 7):** every section of this draft is mapped, apart from the four details above.
+
+**Not represented:** the light with no real-time light (Uber's baked contributions), the
+non-linear probe evaluation, additive-light clamping, the diffuse mask.
 
 ## Parser work
 

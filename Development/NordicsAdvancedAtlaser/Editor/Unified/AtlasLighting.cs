@@ -34,10 +34,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasLightingFamily Family = AtlasLightingFamily.PhysicallyBased;
         // 3.2: the ramp toon family's ramp.
         public readonly AtlasRampToon Ramp = new AtlasRampToon();
-        // 3.3: the physically based family's diffuse.
+        // 3.3: the physically based family's diffuse; Disney blends from Lambert by its amount.
         public AtlasDiffuseModel Diffuse = AtlasDiffuseModel.Lambert;
-        // 3.4: shared parameters.
+        public float DisneyAmount = 1f;
+        // 3.4: shared parameters. Directional blends from the average by its amount.
         public AtlasAmbientModel Ambient = AtlasAmbientModel.Directional;
+        public float DirectionalAmount = 1f;
         // The main light's shadow.
         public bool ReceiveShadows = true;
         public readonly AtlasLightContributions Contributions = new AtlasLightContributions();
@@ -45,7 +47,36 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool LimitBrightness;
         // 0–1: base × value is added after lighting, like emission.
         public float MinimumBrightness;
+        // 3.5
+        public readonly AtlasLightVolumes LightVolumes = new AtlasLightVolumes();
+        // Replaces the main light's direction with a fixed world direction.
+        public bool FixedLightDirection;
+        public UnityEngine.Vector3 LightDirection = new UnityEngine.Vector3(0f, 0.75f, 1f);
     }
+
+    // 3.5: VRChat light volumes, which replace the light probes where the world has them.
+    public sealed class AtlasLightVolumes
+    {
+        public bool Enabled;
+        // 0–1: blends from the probes to the volumes.
+        public float Strength = 1f;
+        public bool Specular;
+        public float SpecularStrength = 1f;
+        // Offsets the sample point along the normal.
+        public float Bias;
+    }
+
+    // A ramp described by numbers: piecewise linear between keys.
+    public struct AtlasRampKey
+    {
+        // 0–1 along the shading term.
+        public float Position;
+        // Linear.
+        public UnityEngine.Color Color;
+        public AtlasRampKey(float position, UnityEngine.Color color) { Position = position; Color = color; }
+    }
+
+    public enum AtlasRampConditions { Always, RealtimeLightOnly, BakedLightOnly }
 
     public enum AtlasShadingTerm
     {
@@ -61,8 +92,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public sealed class AtlasRampToon
     {
         public AtlasShadingTerm Term = AtlasShadingTerm.HalfLambert;
-        // Sampled along u at the shading term; a colour. Null: white, fully lit everywhere.
+        // Sampled along u at the shading term; a colour. Without a ramp or keys: white, fully lit.
         public AtlasTextureReference Ramp;
+        // Instead of a texture: piecewise linear keys, in position order.
+        public readonly System.Collections.Generic.List<AtlasRampKey> Keys = new System.Collections.Generic.List<AtlasRampKey>();
+        // lerp(1, ramp, strength × mask).
+        public float RampStrength = 1f;
+        public AtlasMask RampStrengthMask;
+        // A painted mask multiplying N·L before the ramp, to draw shadows in.
+        public AtlasMask TermMask;
+        public AtlasRampConditions Conditions = AtlasRampConditions.Always;
+        // The shadow becomes a dither pattern in proportion to its darkness.
+        public bool Dithered;
         public AtlasRampPreset Preset = AtlasRampPreset.None;
         // 0–1
         public float ShadowLift;

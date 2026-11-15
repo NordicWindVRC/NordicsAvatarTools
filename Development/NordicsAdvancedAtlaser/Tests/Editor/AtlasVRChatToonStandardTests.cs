@@ -50,8 +50,8 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(AtlasCull.Back, d.Render.Pass.Cull);
             Assert.IsTrue(d.Render.TwoSidedLighting);
             Assert.IsFalse(d.Surface.VertexColor.MultiplyColor);
-            Assert.IsFalse(d.Surface.Response.Highlights);
-            Assert.IsFalse(d.Surface.Response.Reflections);
+            Assert.IsFalse(d.Surface.Response.Highlights.Enabled);
+            Assert.IsFalse(d.Surface.Response.Reflections.Enabled);
             Assert.IsNull(d.Surface.Normal.Map);
             Assert.IsEmpty(d.Layers);
             Assert.IsEmpty(d.ColorAdjustments);
@@ -106,8 +106,8 @@ namespace NordicWind.AdvancedAtlaser.Tests
             material.SetFloat("_Reflectance", 0.4f);
             material.SetFloat("_SpecularSharpness", 0.7f);
             var response = Parse().Surface.Response;
-            Assert.IsTrue(response.Highlights);
-            Assert.IsTrue(response.Reflections);
+            Assert.IsTrue(response.Highlights.Enabled);
+            Assert.IsTrue(response.Reflections.Enabled);
             Assert.AreSame(textureA, response.Metallic.Map.Texture);
             Assert.AreEqual(AtlasChannel.Blue, response.Metallic.Channel);
             Assert.AreEqual(0.6f, response.Metallic.Constant, 1e-5f);
@@ -115,7 +115,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(1f - 0.8f * 0.5f, response.Roughness.Evaluate(0.5f), 1e-5f);
             Assert.AreSame(textureB, response.Reflectance.Map.Texture);
             Assert.AreEqual(0.2f, response.Reflectance.Evaluate(0.5f), 1e-5f);
-            Assert.AreEqual(0.7f, response.HighlightSharpness, 1e-5f);
+            Assert.AreEqual(0.7f, response.Highlights.Sharpness, 1e-5f);
             Assert.IsTrue(response.SpecularAntiAliasing.Enabled);
             Assert.AreEqual(1f, response.OcclusionDirect);
             Assert.AreEqual(0f, response.OcclusionReflections);
@@ -274,7 +274,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(0.2f, rim.Softness, 1e-5f);
             Assert.AreEqual(0.8f, rim.Opacity, 1e-5f);
             Assert.AreEqual(0.5f, rim.BaseColorMix, 1e-5f);
-            Assert.AreEqual(AtlasAngleLightResponse.ScaleByLight, rim.LightResponse);
+            Assert.AreEqual(AtlasLightResponse.ScaleByLight, rim.LightResponse);
             Assert.AreEqual(AtlasBlend.Add, rim.Blend);
         }
 

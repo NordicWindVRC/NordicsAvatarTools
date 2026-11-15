@@ -98,8 +98,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var response = d.Surface.Response;
             if (!Keyword(m, "USE_SPECULAR"))
             {
-                response.Highlights = false;
-                response.Reflections = false;
+                response.Highlights.Enabled = false;
+                response.Reflections.Enabled = false;
                 return;
             }
             response.Metallic.Constant = Float(m, "_MetallicStrength", 0f);
@@ -114,7 +114,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             response.Reflectance.Constant = Float(m, "_Reflectance", 0.5f);
             response.Reflectance.Map = gloss;
             response.Reflectance.Channel = glossChannel;
-            response.HighlightSharpness = Float(m, "_SpecularSharpness", 0f);
+            response.Highlights.Sharpness = Float(m, "_SpecularSharpness", 0f);
             // Always on in the shader (Valve's geometric roughening, here as the unified filtering).
             response.SpecularAntiAliasing.Enabled = true;
         }
@@ -314,7 +314,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Softness = Float(m, "_RimSharpness", 0.1f),
                 BaseColorMix = Float(m, "_RimAlbedoTint", 0f),
                 Opacity = Float(m, "_RimIntensity", 0.5f),
-                LightResponse = Float(m, "_RimEnvironmental", 0f) > 0.5f ? AtlasAngleLightResponse.ScaleByLight : AtlasAngleLightResponse.IgnoreLight
+                LightResponse = Float(m, "_RimEnvironmental", 0f) > 0.5f ? AtlasLightResponse.ScaleByLight : AtlasLightResponse.IgnoreLight
             };
             var color = AtlasMaterialReader.ColorLinear(m, "_RimColor", Color.white);
             rim.Color.Color = new Color(color.r, color.g, color.b, 1f);

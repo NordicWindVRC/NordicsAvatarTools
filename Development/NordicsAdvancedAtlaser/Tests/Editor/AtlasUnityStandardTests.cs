@@ -44,8 +44,8 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(0.5f, d.Surface.Response.Roughness.Evaluate(), 1e-5f);
             Assert.IsNull(d.Surface.Response.SpecularColor);
             Assert.AreEqual(1f, d.Surface.Response.Occlusion.Evaluate(0f), 1e-5f);
-            Assert.IsTrue(d.Surface.Response.Highlights);
-            Assert.IsTrue(d.Surface.Response.Reflections);
+            Assert.IsTrue(d.Surface.Response.Highlights.Enabled);
+            Assert.IsTrue(d.Surface.Response.Reflections.Enabled);
             Assert.IsNull(d.Surface.Normal.Map);
             Assert.IsFalse(d.Surface.Parallax.Enabled);
             Assert.IsEmpty(d.Layers);
@@ -143,8 +143,8 @@ namespace NordicWind.AdvancedAtlaser.Tests
             material.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
             material.EnableKeyword("_GLOSSYREFLECTIONS_OFF");
             var response = Parse().Surface.Response;
-            Assert.IsFalse(response.Highlights);
-            Assert.IsFalse(response.Reflections);
+            Assert.IsFalse(response.Highlights.Enabled);
+            Assert.AreEqual(AtlasReflectionSource.AmbientColor, response.Reflections.Source);
         }
 
         [Test]

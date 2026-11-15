@@ -29,6 +29,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
         OneMinusSourceColor, DestinationAlpha, OneMinusDestinationAlpha, SourceAlphaSaturate, OneMinusSourceAlpha
     }
 
+    public enum AtlasMirrorVisibility { Both, MirrorOnly, NotInMirror }
+
+    // Hides parts close to the camera (not in mirrors), so views from inside the head stay clear.
+    public sealed class AtlasNearClip
+    {
+        public bool Enabled;
+        // Metres.
+        public float Distance;
+        // Hidden where the mask is above 0.5; null: everywhere.
+        public AtlasMask Mask;
+    }
+
     // Settings each pass has: the base pass, each outline layer, fur.
     public sealed class AtlasPassSettings
     {
@@ -39,6 +51,21 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float DepthOffsetUnits;
         // Bits: red 8, green 4, blue 2, alpha 1.
         public int ColorMask = 15;
+        public readonly AtlasStencil Stencil = new AtlasStencil();
+    }
+
+    // Unity's stencil operations, in its order.
+    public enum AtlasStencilOperation { Keep, Zero, Replace, IncrementSaturate, DecrementSaturate, Invert, IncrementWrap, DecrementWrap }
+
+    // A pass's stencil test, with Unity's meanings. The compare uses the depth test's functions.
+    public sealed class AtlasStencil
+    {
+        public bool Enabled;
+        public int Reference;
+        public AtlasDepthTest Compare = AtlasDepthTest.Always;
+        public AtlasStencilOperation Pass = AtlasStencilOperation.Keep;
+        public AtlasStencilOperation Fail = AtlasStencilOperation.Keep;
+        public AtlasStencilOperation DepthFail = AtlasStencilOperation.Keep;
     }
 
     // 6: how the material is drawn.
@@ -53,6 +80,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public int Queue = -1;
         // Back faces flip their normal, so they light like front faces.
         public bool TwoSidedLighting;
+        public AtlasMirrorVisibility MirrorVisibility = AtlasMirrorVisibility.Both;
+        // Replaces the base colour texture in mirrors; null: none.
+        public AtlasTextureReference MirrorBaseColor;
+        public readonly AtlasNearClip NearClip = new AtlasNearClip();
+        public bool Invisible;
         public readonly AtlasPassSettings Pass = new AtlasPassSettings();
     }
 }

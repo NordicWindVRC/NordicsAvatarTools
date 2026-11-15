@@ -119,8 +119,8 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsTrue(antiAliasing.Enabled);
             Assert.AreEqual(0.3f, antiAliasing.Variance, 1e-5f);
             Assert.AreEqual(0.4f, antiAliasing.Threshold, 1e-5f);
-            Assert.IsFalse(d.Surface.Response.Highlights);
-            Assert.IsFalse(d.Surface.Response.Reflections);
+            Assert.IsFalse(d.Surface.Response.Highlights.Enabled);
+            Assert.AreEqual(AtlasReflectionSource.AmbientColor, d.Surface.Response.Reflections.Source);
         }
 
         [Test]

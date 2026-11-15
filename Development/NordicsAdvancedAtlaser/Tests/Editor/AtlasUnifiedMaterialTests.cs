@@ -27,6 +27,20 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
+        public void RemapActsOnTheSampleBeforeStrengthAndInversion()
+        {
+            var remap = new AtlasScalarRemap { OutputMin = 0.2f, OutputMax = 0.6f };
+            Assert.AreEqual(0.4f, remap.Apply(0.5f), 1e-5f);
+            var occlusion = new AtlasScalarInput(0.5f) { Map = new AtlasTextureReference(),
+                Combine = AtlasScalarCombine.StrengthAroundOne, Remap = remap };
+            // The sample 0.5 becomes 0.4, then strength 0.5 around one: 1 - 0.6 * 0.5.
+            Assert.AreEqual(0.7f, occlusion.Evaluate(0.5f), 1e-5f);
+            var roughness = new AtlasScalarInput(1f) { Map = new AtlasTextureReference(), InvertResult = true,
+                Remap = new AtlasScalarRemap { Lightness = 0.1f } };
+            Assert.AreEqual(0.4f, roughness.Evaluate(0.5f), 1e-5f);
+        }
+
+        [Test]
         public void MaskWithoutMapAppliesEverywhereAndStrengthFadesIt()
         {
             Assert.AreEqual(1f, new AtlasMask().Evaluate(0f));

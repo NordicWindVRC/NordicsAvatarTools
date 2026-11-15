@@ -75,6 +75,38 @@ under *Added* describe the parsers before the rebuild.
   The unified material gains ramp toon, the lookup and angle layers, colour adjustments,
   modulators with the audio source, outlines, highlight sharpness, occlusion amounts,
   two-sided lighting and limit and minimum brightness.
+- **Mochie Uber rebuilt, part 1** (refactor step 7a), following the shader's keywords:
+  render and alpha (with dithered as its own surface mode), base colour, the three workflows,
+  detail layers, separate or packed masks, physically based or ramp toon lighting (Manual Blend
+  shadows as ramp keys), reflections and highlights, matcaps, rims, subsurface, two emission
+  layers with pulse and light reactivity as modulators, filtering as colour adjustments, light
+  volumes. **Shading off** maps to flat lighting clamped to the base colour (it was read as
+  unlit). The remaining sections are reported until part 2; Uber X is unsupported.
+
+  The unified material gains: highlights and reflections as groups (strength, tint, mask,
+  roughness override, fresnel, cubemaps), the reflection source *ambient colour* (Unity
+  Standard and Standard Lite now use it for reflections off, instead of turning reflections
+  off), ramp keys, ramp strength and term mask, light volumes, the subsurface layer, time and
+  light-level modulators, more colour operations and the *surface colour* target, and more
+  lookup and angle layer options.
+- **Mochie Uber, part 2a** (refactor step 7b-1): cube mode, mirror behaviour, hiding, near
+  clipping, vertex manipulation, the Outline variant's outline, hard edges, clear coat and the
+  static light direction are mapped. The unified material gains deformations, mirror
+  visibility and a mirror base colour, near clip, invisible, the lookup projection *view
+  direction* with rotation and spin, flat shading, specular from the mesh normal, a fixed
+  light direction, and more outline options.
+- **Mochie Uber, part 2b** (refactor step 7b-2): base colour dissolve, flipbooks, refraction,
+  iridescence, UV distortion, matcap normal maps, multi-step parallax and map filters are
+  mapped. The unified material gains the transition and refraction layers, decal placement,
+  frames and shared UV distortion on texture references, scalar remaps, the occlusion tint,
+  multi-step parallax, lookup normal maps and the angle profiles hue rotation and ramp.
+- **Mochie Uber, part 2c** (refactor step 7b-3, completing Uber): AudioLink as audio
+  modulators on emission, rim strength and width, dissolve, outline width and vertex
+  manipulation; the oscilloscope as a procedural pattern layer; invert, team colours, mono
+  tint, HDR and ACES as colour adjustments; stepped, anisotropic and combined highlights and
+  their options; stepped and light-based reflections; shadow conditions and dithering;
+  stencil; the colour alpha on the alpha mask; partial Disney diffuse and light-probe strength.
+  Four details stay reported; Uber X is unsupported.
 
 ### Changed
 - Package and NDMF name `app.nordicwind.advanced-atlaser`. Requires Texture Wrapper 0.10.0 or

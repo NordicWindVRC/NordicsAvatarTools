@@ -56,8 +56,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (Keyword(m, "_DETAIL")) AtlasSourceMapping.UnityDetail(m, d, true);
 
             // Highlights and reflections: on unless their *_OFF keyword is set, as in the shader.
-            response.Highlights = !Keyword(m, "_SPECULARHIGHLIGHTS_OFF");
-            response.Reflections = !Keyword(m, "_GLOSSYREFLECTIONS_OFF");
+            response.Highlights.Enabled = !Keyword(m, "_SPECULARHIGHLIGHTS_OFF");
+            if (Keyword(m, "_GLOSSYREFLECTIONS_OFF")) response.Reflections.Source = AtlasReflectionSource.AmbientColor;
 
             // Specular anti-aliasing.
             var antiAliasing = response.SpecularAntiAliasing;
