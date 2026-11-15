@@ -31,6 +31,8 @@ namespace NordicWind.AdvancedAtlaser.Tests
 
         // Material.SetFloat drops names its shader doesn't declare, so properties of another
         // shader are written into the material's saved data directly, as an asset would have them.
+        // Call it after the material's own Set* calls: the entry is appended, which breaks the
+        // name order Unity looks saved properties up in, so a later Set* can miss its entry.
         public static void AddSaved(Material material, string list, string name, Action<SerializedProperty> set)
         {
             using (var serialized = new SerializedObject(material))
@@ -52,5 +54,13 @@ namespace NordicWind.AdvancedAtlaser.Tests
             AddSaved(material, "m_Colors", name, v => v.colorValue = value);
 
         public static void AddSavedColor(Material material, string name) => AddSavedColor(material, name, Color.white);
+
+        public static void AddSavedTexture(Material material, string name, Texture texture) =>
+            AddSaved(material, "m_TexEnvs", name, v =>
+            {
+                v.FindPropertyRelative("m_Texture").objectReferenceValue = texture;
+                v.FindPropertyRelative("m_Scale").vector2Value = Vector2.one;
+                v.FindPropertyRelative("m_Offset").vector2Value = Vector2.zero;
+            });
     }
 }

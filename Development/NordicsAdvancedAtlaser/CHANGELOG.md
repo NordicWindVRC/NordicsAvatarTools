@@ -8,7 +8,7 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22 (2026-11-03).
 
 **Unified material rebuild in progress** (`UNIFIED_MATERIAL_REFACTOR.md`). Until each parser is
-rebuilt, its materials are read by the fallback parser, base colour only. The parser entries
+rebuilt, its materials are read by the fallback parser. The parser entries
 under *Added* describe the parsers before the rebuild.
 
 ### Unified material rebuild
@@ -56,6 +56,11 @@ under *Added* describe the parsers before the rebuild.
   highlights and reflections follow their keywords; physically based lighting with Lambert
   diffuse, no received shadows. Lightmap type and bicubic sampling are no longer read: they
   only affect lightmaps. The unified material gains specular anti-aliasing.
+- **Fallback parser rebuilt:** common property names with Unity's conventions (base colour,
+  alpha mask, normal, metallic or specular colour, roughness or smoothness, occlusion,
+  emission, culling, depth write, surface mode from the blend factors). A smoothness map is
+  now inverted into roughness (it used to be read as roughness). One warning per material says
+  the result is a guess; a matcap texture is reported, not mapped. First fallback tests.
 
 ### Changed
 - Package and NDMF name `app.nordicwind.advanced-atlaser`. Requires Texture Wrapper 0.10.0 or

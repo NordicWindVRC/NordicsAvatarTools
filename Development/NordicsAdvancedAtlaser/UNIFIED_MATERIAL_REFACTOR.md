@@ -1,6 +1,6 @@
 # Unified material — refactor plan
 
-**Status:** steps 1 to 4 done (2026-11-15); step 4 waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
+**Status:** steps 1 to 5 done (2026-11-15); step 5 waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
 the [feature catalogue](UNIFIED_MATERIAL_FEATURES.md), then rebuilding every input parser on it.
 
 **Goal:** the code matches the catalogue. Every supported input shader maps into typed
@@ -155,10 +155,13 @@ section of the draft is mapped; its four Standard Lite fixes are done. Planned:
 - **Bugs fixed:** tiling follows the albedo; smoothness with a map is slider × map alpha;
   vertex colour multiply is recorded.
 
-### 5. Fallback
-The rest of the conventional names: normal, emission, metallic, roughness, occlusion,
-specular, matcap. Unknown shaders get one report line saying the mapping is a guess. Its first
-tests.
+### 5. Fallback (done)
+Common property names with Unity's conventions: base colour, alpha mask, normal, metallic
+(or specular colour when the shader has no metallic), roughness or smoothness, occlusion,
+emission, and the render properties (culling, depth write, surface mode from the blend
+factors). One warning per material says the result is a guess. A matcap is reported rather
+than mapped: its blend can't be guessed, and the lookup layer comes in step 6.
+`AtlasFallbackTests` is its first test set; `AtlasTestMaterials.AddSavedTexture` is new.
 
 ### 6. VRChat Mobile Toon Standard
 - **Typed:**

@@ -120,8 +120,8 @@ description before an output shader uses it.
 
 > **Being rebuilt.** The shader-independent description and its input parsers are being rebuilt,
 > one parser at a time (see `UNIFIED_MATERIAL_REFACTOR.md`). Until a shader's parser is rebuilt,
-> its materials are read by the fallback parser, base colour only. The table shows what each
-> parser read before the rebuild.
+> its materials are read by the fallback parser. Parsers marked *rebuilt* are done; the others
+> show what they read before the rebuild.
 
 | Shader | Recognised by | What is read | Not yet covered |
 |---|---|---|---|
@@ -134,7 +134,7 @@ description before an output shader uses it.
 | **Poiyomi Toon 7.x, 8.x, 9.x, 10.x, 11.x** | Version label in the shader, then name/path | Lighting modes, shadow bands, matcaps, normals, emission layers, masks, global masks, clearcoat, color adjustments, rim, subsurface, decals, fur (Lil Fur variants) | Many advanced, procedural and animated features |
 | **Poiyomi Pro 10.x, 11.x** (and its variants) | Shader name, then the version label | Everything Poiyomi Toon reads, plus Pro Fur (shell fur) and 11.x PBR lighting | SSAO, contact shadows, TPS deformation, squish, constellation, tone mapping, outline bake, and the geometry, grab-pass, tessellation and triplanar variants (reported) |
 | Poiyomi Toon (unversioned) | Poiyomi Toon without a version | As above, best effort | As above |
-| **Any other shader** | Fallback | Common texture, color and scalar properties by convention | Anything shader-specific (reported as warnings) |
+| **Any other shader** (rebuilt) | Fallback | Common property names with Unity's conventions: base color, alpha mask, normal, metallic or specular, roughness or smoothness, occlusion, emission, culling and blending | Anything shader-specific; matcaps (reported) |
 
 Features that can't be read exactly are reported as warnings during the build, never
 silently assumed. See `UNIFIED_MATERIAL.md` for the details of each parser.
