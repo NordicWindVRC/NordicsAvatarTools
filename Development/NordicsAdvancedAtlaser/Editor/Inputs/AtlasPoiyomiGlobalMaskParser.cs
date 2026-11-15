@@ -121,7 +121,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
         private static Vector4 Vector(Material material,string property,Vector4 fallback)
         {
-            return AtlasMaterialReader.Has(material,property)?material.GetVector(property):fallback;
+            return AtlasMaterialReader.Vector(material,property,fallback);
         }
     }
 }

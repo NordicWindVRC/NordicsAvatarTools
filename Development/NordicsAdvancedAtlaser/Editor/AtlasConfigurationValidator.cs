@@ -28,9 +28,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         warnings.Add(output.configuration.outputName + ": invalid UV rectangle for " + entry.material.name + ". Rectangles must be inside 0..1 and have positive size.");
                 }
                 if (output.configuration.regionPadding < 0) warnings.Add(output.configuration.outputName + ": padding must not be negative.");
-                bool supported = false;
-                foreach (var shader in AtlasShaderRegistry.OutputShaders) if (shader.ShaderId == output.configuration.shaderId) supported = true;
-                if (!supported) warnings.Add(output.configuration.outputName + ": output shader ID is not registered: " + output.configuration.shaderId);
+                var outputShader = AtlasShaderRegistry.Output(output.configuration.shaderId);
+                if (outputShader == null)
+                    warnings.Add(output.configuration.outputName + ": output shader ID is not registered: " + output.configuration.shaderId);
+                else if (!AtlasShaderRegistry.IsInstalled(outputShader))
+                    warnings.Add(output.configuration.outputName + ": " + outputShader.DisplayName +
+                        " isn't installed in this project, so this output won't be built.");
             }
             return warnings;
         }

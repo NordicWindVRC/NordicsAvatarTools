@@ -205,6 +205,10 @@ public void PoiyomiFamilyAndVariantDetection(string name, string path, AtlasPoiy
 [TestCase(".poiyomi/Poiyomi Toon", "Assets/_PoiyomiShaders/Shaders/10.0/Toon/Poiyomi Toon.shader", null, 10)]
 [TestCase(".poiyomi/Poiyomi Toon", "", "<color=#E75898ff>Poiyomi 9.3.64</color>", 9)]
 [TestCase(".poiyomi/Poiyomi Toon", "", "<color=#E75898ff>Poiyomi 10.0.28</color>", 10)]
+[TestCase(".poiyomi/Poiyomi Toon", "", "<color=#E75898ff>Poiyomi 11.0.50</color>", 11)]
+[TestCase(".poiyomi/Poiyomi Toon", "Packages/com.poiyomi.pro/_PoiyomiShaders/Shaders/11.0/Toon/Poiyomi Toon.shader", null, 11)]
+[TestCase(".poiyomi/Poiyomi Pro", "", "<color=#E75898ff>Poiyomi 11.0.50</color>", 11)]
+[TestCase(".poiyomi/Old Versions/10.0/Poiyomi Pro", "", "<color=#E75898ff>Poiyomi 10.0.29</color>", 10)]
 [TestCase(".poiyomi/Poiyomi Toon", "", null, 0)]
 [TestCase("Standard", "", null, 0)]
 public void PoiyomiSourceNameAndPathDetection(string name, string path, string label, int expected)
@@ -372,21 +376,183 @@ public void PoiyomiSourceNameAndPathDetection(string name, string path, string l
         }
 
         [Test]
-        public void MochieSourceWorkflowMapsIntoSingleSurfaceWhenInstalled()
+        public void MochieUberMapsWorkflowShadowsAndMasksWhenInstalled()
         {
-            var shader=Shader.Find("Mochie/Standard");
-            if(shader==null)Assert.Ignore("Mochie/Standard shader is not installed.");
+            var shader=Shader.Find("Mochie/Uber");
+            if(shader==null)Assert.Ignore("Mochie/Uber shader is not installed.");
+            var material=new Material(shader);
+            var mask=new Texture2D(4,4);
+            var metallic=new Texture2D(4,4);
+            try
+            {
+                Assert.IsInstanceOf<AtlasMochieUberParser>(AtlasShaderRegistry.Detect(material));
+
+                // Metallic workflow: a texture replaces the slider, read from red.
+                material.SetInt("_RenderMode",1);
+                material.SetInt("_PBRWorkflow",0);
+                material.SetTexture("_MetallicGlossMap",metallic);
+                material.SetInt("_UseMetallicMap",1);
+                material.SetFloat("_Metallic",0.3f);
+                // Ramp shadows described by numbers.
+                material.SetInt("_ShadowMode",1);
+                material.SetFloat("_RampPos",0.2f);
+                // Packed masks: the primary matcap reads the blue channel of the first packed mask.
+                material.SetInt("_MaskingMode",2);
+                material.SetTexture("_PackedMask0",mask);
+                material.SetInt("_MatcapToggle",1);
+                material.SetTexture("_Matcap",Texture2D.whiteTexture);
+                material.SetInt("_MatcapBlending",1);
+
+                var unified=new AtlasMochieUberParser().Parse(material);
+                Assert.AreEqual(AtlasSurfaceWorkflow.Metallic,unified.Surface.Workflow);
+                Assert.AreSame(metallic,unified.Surface.Metallic.Sample.Texture);
+                Assert.AreEqual(1f,unified.Surface.Metallic.Constant);
+                Assert.AreEqual(AtlasChannel.Red,unified.Surface.Metallic.Channel);
+                Assert.AreEqual(AtlasLightingMode.ToonRamp,unified.Lighting.Mode);
+                Assert.AreEqual(0.2f,unified.Lighting.ShadowOffset,1e-5f);
+                Assert.IsTrue(unified.Lighting.Parameters.ContainsKey("rampWidth0"));
+                Assert.AreEqual(1,unified.Matcaps.Count);
+                Assert.AreSame(mask,unified.Matcaps[0].Mask.Sample.Texture);
+                Assert.AreEqual(AtlasChannel.Blue,unified.Matcaps[0].Mask.Channel);
+                Assert.AreEqual(1f,unified.Matcaps[0].BlendWeights.Replace);
+
+                // Shading off: unlit, and the surface maps are ignored.
+                material.SetInt("_RenderMode",0);
+                var unlit=new AtlasMochieUberParser().Parse(material);
+                Assert.AreEqual(AtlasLightingMode.Unlit,unlit.Lighting.Mode);
+                Assert.IsNull(unlit.Surface.Metallic.Sample);
+            }
+            finally {Object.DestroyImmediate(material);Object.DestroyImmediate(mask);Object.DestroyImmediate(metallic);}
+        }
+
+        [Test]
+        public void PoiyomiLilFurReadsTheFurPassWhenInstalled()
+        {
+            var shader=Shader.Find(".poiyomi/Poiyomi Toon + Lil Fur");
+            if(shader==null)Assert.Ignore("Poiyomi Toon + Lil Fur is not installed.");
+            var material=new Material(shader);
+            var furMask=new Texture2D(4,4);
+            try
+            {
+                material.SetVector("_FurVector",new Vector4(0f,0.25f,1f,0.05f));
+                material.SetTexture("_FurMask",furMask);
+                material.SetFloat("_FurLengthChannel",1f);  // Green.
+                material.SetFloat("_FurMaskStrengthG",0.5f);
+                material.SetFloat("_FurAlphaChannel",4f);   // Off.
+                material.SetFloat("_FurLayerNum",3f);
+                material.SetFloat("_FurWindEnabled",1f);
+
+                var unified=AtlasShaderRegistry.Detect(material).Parse(material);
+                var fur=unified.Fur;
+                Assert.IsTrue(fur.Enabled);
+                Assert.AreEqual(0.05f,fur.Length,1e-5f);
+                Assert.AreEqual(0.25f,fur.Direction.y,1e-5f);
+                Assert.IsNotNull(fur.LengthMask);
+                Assert.AreSame(furMask,fur.LengthMask.Sample.Texture);
+                Assert.AreEqual(AtlasChannel.Green,fur.LengthMask.Channel);
+                Assert.AreEqual(0.5f,fur.LengthMask.Strength,1e-5f);
+                Assert.IsNull(fur.AlphaMask);
+                Assert.AreEqual(3,fur.LayerCount);
+                Assert.IsTrue(fur.Wind.Enabled);
+                Assert.AreEqual(AtlasCullMode.Off,fur.Render.Cull);
+            }
+            finally {Object.DestroyImmediate(material);Object.DestroyImmediate(furMask);}
+        }
+
+        [Test]
+        public void Poiyomi11ToonAndProAreDetectedWhenInstalled()
+        {
+            var toon=Shader.Find(".poiyomi/Poiyomi Toon");
+            var pro=Shader.Find(".poiyomi/Poiyomi Pro");
+            if(pro==null)Assert.Ignore("Poiyomi Pro is not installed.");
+            var proMaterial=new Material(pro);
+            var toonMaterial=toon==null?null:new Material(toon);
+            try
+            {
+                Assert.AreEqual(11,AtlasPoiyomiVersionDetector.Detect(proMaterial));
+                Assert.IsInstanceOf<AtlasPoiyomiPro11Parser>(AtlasShaderRegistry.Detect(proMaterial));
+                // With Pro installed, ".poiyomi/Poiyomi Toon" is the 11.x Toon shader.
+                if(toonMaterial!=null && AtlasPoiyomiVersionDetector.Detect(toonMaterial)==11)
+                    Assert.IsInstanceOf<AtlasPoiyomi11Parser>(AtlasShaderRegistry.Detect(toonMaterial));
+            }
+            finally {Object.DestroyImmediate(proMaterial);if(toonMaterial!=null)Object.DestroyImmediate(toonMaterial);}
+        }
+
+        [Test]
+        public void Poiyomi11PbrLightingFillsTheSurfaceWhenInstalled()
+        {
+            var shader=Shader.Find(".poiyomi/Poiyomi Pro");
+            if(shader==null)Assert.Ignore("Poiyomi Pro is not installed.");
+            var material=new Material(shader);
+            var packed=new Texture2D(4,4);
+            try
+            {
+                material.SetFloat("_LightingMode",9f); // PBR
+                material.SetTexture("_PoiPBRMaskMap",packed);
+                material.SetFloat("_PoiPBRMetallic",0.7f);
+                material.SetFloat("_PoiPBRSmoothness",0.8f);
+                material.SetFloat("_PoiPBRSmoothnessChannel",3f);
+                material.SetFloat("_PoiPBRMetallicChannel",4f); // White: no texture.
+                material.SetFloat("_PoiPBRReflectance",0.5f);
+
+                var unified=AtlasShaderRegistry.Detect(material).Parse(material);
+                Assert.AreEqual(AtlasLightingMode.StandardMetallic,unified.Lighting.Mode);
+                Assert.AreEqual(AtlasSurfaceWorkflow.Metallic,unified.Surface.Workflow);
+                Assert.IsNull(unified.Surface.Metallic.Sample);
+                Assert.AreEqual(0.7f,unified.Surface.Metallic.Constant,1e-5f);
+                Assert.AreSame(packed,unified.Surface.Roughness.Sample.Texture);
+                Assert.AreEqual(AtlasChannel.Alpha,unified.Surface.Roughness.Channel);
+                Assert.IsTrue(unified.Surface.Roughness.InvertResult);
+                Assert.AreEqual(0.5f,unified.Surface.Reflectance,1e-5f);
+            }
+            finally {Object.DestroyImmediate(material);Object.DestroyImmediate(packed);}
+        }
+
+        [Test]
+        public void PoiyomiProFurReadsShellFurWhenInstalled()
+        {
+            var shader=Shader.Find(".poiyomi/Poiyomi Pro Fur");
+            if(shader==null)Assert.Ignore("Poiyomi Pro Fur is not installed.");
             var material=new Material(shader);
             try
             {
-                material.SetInt("_PrimaryWorkflow",2);
-                material.SetInt("_PrimarySampleMode",3);
-                var normalized=new AtlasMochieStandardParser().Parse(material);
-                Assert.AreEqual(AtlasSurfaceWorkflow.Specular,normalized.Surface.Workflow);
-                Assert.AreEqual(AtlasLightingMode.StandardSpecular,normalized.Lighting.Mode);
-                if(normalized.Surface.BaseColor.Map!=null)
-                    Assert.AreEqual(AtlasCoordinateSpace.Triplanar,normalized.Surface.BaseColor.Map.Mapping.Space);
+                material.SetFloat("_FurLayerCount",20f);
+                material.SetFloat("_FurLength",0.01f);
+                material.SetFloat("_FurTipTaper",0.4f);
+                material.SetFloat("_FurContact",2f);
+                var fur=AtlasShaderRegistry.Detect(material).Parse(material).Fur;
+                Assert.IsTrue(fur.Enabled);
+                Assert.AreEqual(AtlasFurMethod.Shells,fur.Method);
+                Assert.AreEqual(20,fur.LayerCount);
+                Assert.AreEqual(0.01f,fur.Length,1e-5f);
+                Assert.AreEqual(0.4f,fur.TipTaper,1e-5f);
+                Assert.AreEqual(2,fur.ContactIndex);
             }
+            finally {Object.DestroyImmediate(material);}
+        }
+
+        [Test]
+        public void PoiyomiProOnlyFeaturesAreReportedWhenInstalled()
+        {
+            var shader=Shader.Find(".poiyomi/Poiyomi Pro");
+            if(shader==null)Assert.Ignore("Poiyomi Pro is not installed.");
+            var material=new Material(shader);
+            try
+            {
+                material.SetFloat("_SSAOEnabled",1f);
+                var unified=AtlasShaderRegistry.Detect(material).Parse(material);
+                Assert.IsTrue(unified.Issues.Exists(x=>x.FeatureId=="lighting.screen-space-occlusion"));
+            }
+            finally {Object.DestroyImmediate(material);}
+        }
+
+        [Test]
+        public void PoiyomiWithoutFurLeavesFurDisabled()
+        {
+            var shader=Shader.Find(".poiyomi/Poiyomi Toon");
+            if(shader==null)Assert.Ignore("Poiyomi Toon is not installed.");
+            var material=new Material(shader);
+            try {Assert.IsFalse(AtlasShaderRegistry.Detect(material).Parse(material).Fur.Enabled);}
             finally {Object.DestroyImmediate(material);}
         }
 

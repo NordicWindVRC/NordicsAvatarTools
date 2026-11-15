@@ -1,179 +1,248 @@
 # Unified material — feature catalogue
 
-**Status:** first refinement pass, for review. This merges the per-shader inventories into one
+**Status:** second refinement pass, for review. This merges the per-shader inventories into one
 proposed feature set for the unified material, the target of the refactoring. Atlasing concerns
 are left out on purpose; they get their own pass later.
+
+**What changed since the first pass:**
+- **Poiyomi 11 and Pro are included:** PBR lighting with sheen and glints, mask levels,
+  contacts, screen-space lighting effects, shell fur, Pro deformations and geometry effects.
+- **An evaluation order:** where every feature acts, from surface inputs to the final pixel.
+  It replaces the loose "before or after lighting" note, and settles ordering questions such
+  as Poiyomi's rim *application stage* and Toon Standard's lit matcap.
+- **Layers merged from 13 to 7:**
+  - detail, decal, recolour, back face and emission become one **surface layer** with targets;
+  - matcap and cubemap become one **lookup layer**;
+  - rim and iridescence become one **angle layer**.
+- **Building blocks are specified:** parameters, units, defaults and formulas, as the first
+  part of the parameter-level specification.
+- **About 25 features** instead of about 35, plus 10 building blocks.
 
 **Inputs:**
 - [VRChat Mobile](UNIFIED_MATERIAL_VRCHAT_MOBILE.md): Toon Lit, Standard Lite, Toon Standard.
 - [Unity Standard](UNIFIED_MATERIAL_UNITY_STANDARD.md).
 - [Mochie Uber](UNIFIED_MATERIAL_MOCHIE_UBER.md).
-- [Poiyomi Toon 10](UNIFIED_MATERIAL_POIYOMI.md), with Lil Fur.
-- [Mochie Standard](UNIFIED_MATERIAL_MOCHIE_STANDARD.md) is used only as a cross-check: it's to be
-  dropped in favour of Uber.
+- [Poiyomi Toon 10 and 11, and Poiyomi Pro](UNIFIED_MATERIAL_POIYOMI.md), with both kinds of fur.
+
+Mochie Standard was inventoried as a cross-check and then dropped in favour of Uber. Its
+features are covered by the shaders above, apart from the world-only ones in section 7.
 
 **How to read it:**
 - Names are proposals in neutral wording, not code names.
-- Each feature says what it is, its parameters, and which sources map into it.
-- *Live* features need runtime support in the output shader; *bakeable* ones can be resolved into
-  textures when nothing animates them.
-- The design rules are in [`UNIFIED_MATERIAL.md`](UNIFIED_MATERIAL.md#guidelines); this catalogue
-  follows them.
+- *Live* features need runtime support in the output shader. *Bakeable* ones can be resolved
+  into textures when nothing animates them.
+- The design rules are in [`UNIFIED_MATERIAL.md`](UNIFIED_MATERIAL.md#guidelines).
 
-**Result in numbers:** about 35 features and 10 shared building blocks cover everything
-avatar-relevant in the five inventories. The current code has about 25 typed structures,
-15 lighting modes and about 40 free-form semantic features.
+---
+
+## How a unified material is evaluated
+
+Every feature acts at one stage. Writers implement the stages in this order; parsers decide which
+stage a source's feature belongs to.
+
+| Stage | What happens | Features |
+|---|---|---|
+| **S1 Surface inputs** | Base colour, alpha, normals and surface response inputs are built up | Base colour (2.1), surface layers targeting colour, alpha, normal or surface inputs (4.1), transition (4.2), parallax (2.5) |
+| **S2 Lighting** | The lighting family shades the surface: diffuse, specular, reflections, sheen, glints, clear coat | Lighting (3), surface response (2.4), external and screen-space lighting (3.5, 3.6) |
+| **S3 Light-dependent layers** | Layers that need the light: transmission through thin parts, rims that follow the light | Subsurface (4.5); lit angle and lookup layers |
+| **S4 Overlays** | Layers added to the lit result, ignoring shadows | Angle, lookup and pattern layers with placement *overlay*; refraction (4.7) |
+| **S5 Emission** | Everything that glows, added last so it's never shadowed | Surface layers targeting emission; emission amounts of other layers |
+| **S6 Final colour** | Adjustments and tone mapping of the finished colour | Colour adjustment with target *final colour* (1.10) |
+| **S7 Output** | Alpha modifiers, cutout, blending, visibility | Alpha (2.2), render (6) |
+
+Geometry features (5) act before all of this, on the mesh and the extra passes.
+
+**Placement (1.8)** is how a layer chooses its stage: *surface* = S1, *lit* = S3, *overlay* = S4,
+*emission* = S5. Poiyomi's rim *application stage*, the "Unlit" toggles on matcaps, rims and
+flipbooks, and Toon Standard's matcap (which changes the albedo, so it's lit) are all
+placements.
 
 ---
 
 ## 1. Building blocks
 
-Shared types that features are made of. Getting these right is what keeps the feature count
-low: most source-specific detail lives in a building block, not in a feature.
+Shared types that features are made of. Most source-specific detail lives here, which keeps the
+feature count low. This pass gives each one its parameters; see 1.0 for units.
+
+### 1.0 Conventions
+| Quantity | Convention |
+|---|---|
+| Colour | Linear, HDR allowed (values above 1). Parsers convert sRGB-authored colours |
+| Hue | Turns: 1 = a full revolution, whatever the source's units (radians, degrees, 0–1) |
+| Angle | Degrees |
+| Distance | Metres in world space, unless the parameter says *screen* |
+| Strength, opacity, mask value | 0–1, linear |
+| Surface roughness | Roughness (0 smooth, 1 rough), never smoothness |
+| Saturation, contrast, brightness multipliers | 1 = unchanged |
+| Choices | Neutral names, never a source's enum numbers |
+| Time | Seconds; speeds per second |
 
 ### 1.1 Texture reference
-A texture plus how it's read.
-- **Texture** and **interpretation:** colour, data, tangent normal, or direction (fur).
-- **Mapping:**
-  - **space:** UV0–UV3, object position, world position, panosphere, polar, view (matcap),
-    screen, triplanar;
-  - **transform:** tiling, offset, rotation;
-  - **motion:** scroll, spin;
-  - **sampling:** default, stochastic, supersampled.
-- **Shared mappings:** several textures can share one mapping, as Unity Standard's main maps
-  do. The parser resolves inherited tilings, so writers never see source rules.
-- **Per-channel settings,** such as Poiyomi's UV Settings, fold into each texture that uses
-  that channel.
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| texture | 2D, cube or array texture | — | |
+| interpretation | colour, data, tangent normal, direction | colour | *direction* is a tangent-space direction map (fur), composited like a normal map |
+| space | UV0–UV3, object position, world position, panosphere, polar, view (matcap), screen, triplanar | UV0 | triplanar has a base space: object or world |
+| tiling, offset | 2 × float | (1,1), (0,0) | |
+| rotation | degrees | 0 | around the tile centre |
+| scroll | UV units per second | (0,0) | live |
+| spin | degrees per second | 0 | live |
+| sampling | default, stochastic, supersampled | default | stochastic hides tiling |
+| placement | none, or placed: position, scale, rotation, side offsets, aspect, symmetry, tiled | none | decal placement; outside the placed area nothing is sampled |
+| frames | none, or a sheet (columns, rows, count) or array; rate (frames per second) or fixed frame; range; crossfade | none | flipbooks and sprite-sheet decals; live unless fixed |
+
+Shared mappings and per-UV-channel settings (Poiyomi's UV Settings) are folded into each texture
+reference by the parser.
 
 ### 1.2 Scalar input
-A number that may come from a texture: constant × channel, with:
-- invert;
-- **remap** (min/max range, lightness, intensity, contrast): Uber's map filters, and
-  conventions like Toon Standard's 0.16·r² reflectance, are resolved into this;
-- a combine mode: multiply, or strength around one (occlusion).
+`value = remap(constant × channel(texture))`, or the constant alone without a texture.
 
-The parser sets the constant to 1 where a source's texture replaces its slider.
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| constant | float | per use | set to 1 when a source's texture replaces its slider |
+| texture, channel | texture reference, R/G/B/A/luminance | none, R | |
+| invert sample | bool | off | applied to the channel before the constant |
+| remap | input range, output range, midpoint, contrast | identity | Uber's map filters, Poiyomi 11 mask levels |
+| combine | multiply, strength around one | multiply | around one: `1 − (1 − channel) × constant` (occlusion) |
+| invert result | bool | off | only for parser convenience (smoothness → roughness) |
+
+Reflectance conventions resolve into the scalar: unified reflectance is the 0–1 control where
+0.5 = 4% F0 (`F0 = 0.16 × r²`). Sources that store F0 directly are converted.
 
 ### 1.3 Colour input
-A colour times an optional texture, or a reference to a **palette** entry (1.6). Linear
-colour space, HDR allowed.
+`colour × texture`, or a **palette** reference (1.6) times the texture. Linear, HDR.
 
 ### 1.4 Mask
-A channel reference: from any texture, a vertex colour channel, or a **mask bus** channel
-(1.5). Plus invert, remap and its own mapping. Packed and separate mask textures differ only
-in which texture and channel the parser points at.
+`value = levels(max(channel(texture), extra sources))`, then optionally inverted.
+
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| source | texture channel, vertex colour channel, mask bus channel, constant | constant 1 | |
+| extra sources | vertex colour channels | none | Poiyomi 11; combined by max (to verify against the source) |
+| levels | input min/max, midpoint, output min/max, normalise | identity | midpoint 0.5 = linear |
+| invert | bool | off | |
+| strength | 0–1 | 1 | `lerp(1, value, strength)` |
 
 ### 1.5 Mask bus
-Numbered channels shared by the whole material. Sources: Poiyomi's 16 global mask channels.
+Numbered channels shared by the whole material (Poiyomi: 16).
 - **Producers:** textures, vertex colours, view conditions (back face, in mirror, in camera,
-  distance), and features that write their result: decals, dissolve, light maps.
-- **Consumers:** any feature's mask.
+  camera distance), VRChat contacts (radius, falloff, position, which people), and features
+  that write their result (decals, dissolve, light maps).
+- **Combining:** a producer writes with a blend: replace, add, multiply, min, max, average,
+  subtract, divide.
+- **Consumers:** any mask (1.4).
 
 ### 1.6 Palette
-A few shared colours, each with optional adjustments, that features reference instead of
-copying. Sources: Poiyomi's theme colours.
+Up to a few shared colours, each with hue, saturation and brightness adjustments, referenced
+by colour inputs. Recolouring a palette entry recolours every feature that uses it.
 
 ### 1.7 Blend
-One shared list for every layer:
+`b` = what's below, `l` = the layer's value, `o` = opacity × mask.
 
-| Blend | Notes |
-|---|---|
-| replace (lerp) | covers "alpha", "lerp", detail *replace* mask mode |
-| multiply | |
-| multiply ×2 | detail convention |
-| add | |
-| subtract | |
-| screen | |
-| overlay | |
-| lighten, darken | Poiyomi decals |
-| mixed | Poiyomi's mixed mode |
-| **weighted** | several blends at once by weight; Poiyomi matcaps |
-
-Each layer also has an **opacity** and a **mask**.
+| Blend | Result | Notes |
+|---|---|---|
+| replace | `lerp(b, l, o)` | covers *alpha*, *lerp*, *normal* and detail *replace* |
+| multiply | `b × lerp(1, l, o)` | |
+| multiply ×2 | `b × lerp(1, 2l, o)` in gamma terms | in linear space the factor is 4.595, matching Unity's detail maps |
+| add | `b + l × o` | Poiyomi's *linear dodge* |
+| subtract | `max(b − l × o, 0)` | |
+| screen | `lerp(b, 1 − (1 − b)(1 − l), o)` | |
+| overlay | `lerp(b, overlay(b, l), o)` | standard overlay |
+| lighten, darken | `lerp(b, max(b, l), o)`, `lerp(b, min(b, l), o)` | |
+| mixed | `lerp(b, b + b × l, o)` | Poiyomi |
+| tint luminance | `lerp(b, luminance(b) × l, o)` | recolour regions (Toon Standard colour mask) |
+| add to luminance | `lerp(b, min(luminance(b) + l, 1), o)` | |
+| weighted | sum of several blends by weight | Poiyomi matcaps |
 
 ### 1.8 Placement
-Where a layer's result goes:
-- **before lighting:** changes the surface colour, so it's lit and shadowed;
-- **after lighting:** added to the lit colour, ignoring shadows;
-- **emission:** glows.
-
-The "Unlit" toggles on matcaps, rims, flipbooks and refraction choose between the first two.
-Many layers also have an **emission amount** that sends part of the result to emission.
+*surface* (S1), *lit* (S3), *overlay* (S4), *emission* (S5). Every layer has a placement and an
+**emission amount**, which copies part of its result to S5 as well.
 
 ### 1.9 Modulator
-A value that changes at runtime and drives any numeric parameter of any feature, addressed by
-path (for example `emission[1].strength`).
+A runtime value driving any numeric or colour parameter, addressed by path.
 
-| Source | Parameters | Sources |
+**Path syntax:** `feature[index].parameter`, for example `layers[3].opacity`,
+`lighting.shadowStrength` or `fur.length`. Animation clips use the same paths, so to a writer
+an animated value and a modulated value look the same.
+
+| Source | Output 0–1 from | Parameters |
 |---|---|---|
-| time | waveform (sine, square, triangle, saw, reverse saw, smooth or flashing blink), speed, phase, duty | Uber pulse, Poiyomi blink, auto hue, scroll |
-| audio | band (bass, low mids, high mids, highs), smoothing, delay, fallback beat | Toon Standard, Uber, Poiyomi |
-| light level | world or mesh brightness, threshold, crossfade, include shadows | Uber light reactivity, Poiyomi light-based emission |
-| camera distance | near, far | Poiyomi proximity colour, distance fades |
-| blacklight | key, range | Poiyomi |
-| spatial sweep | direction or centre-out, width, speed, interval, optional curve | Poiyomi scrolling and centre-out emission |
-| noise | texture, simplex, voronoi, curl, FBM, Gerstner; scale, speed | Uber and Poiyomi UV distortion |
+| time | a waveform | waveform (sine, square, triangle, saw, reverse saw, smooth blink, flashing blink), speed, phase, duty |
+| audio | an AudioLink band | band (bass, low mids, high mids, highs, volume), smoothing, delay, fallback beat speed |
+| light level | world or mesh brightness | threshold, crossfade, include shadows |
+| camera distance | distance to the camera | near, far |
+| contact | a VRChat contact | contact index, radius, falloff |
+| blacklight | a UV light in the world | key, range |
+| spatial sweep | position along a direction or from the centre, over time | direction or centre-out, width, speed, interval, curve |
+| noise | a noise field over UV or space | kind (texture, simplex, voronoi, curl, FBM, Gerstner), scale, speed |
 
-- **Output:** a remap to min and max, and a **mode:** add, multiply, or replace the parameter.
-- **Colour targets** take a colour ramp or palette entry instead of a number: Poiyomi's
-  "Color Override Ramp".
-- **Animation** uses the same parameter paths, so animated values and modulated values look
-  the same to a writer.
+- **Output:** `target = mode(target, lerp(min, max, value))`, mode *add*, *multiply* or
+  *replace*.
+- **Colour targets** use a colour ramp or a palette entry instead of min and max.
+- A modulator whose target is a mapping (noise into UVs) is UV distortion.
 
 ### 1.10 Colour adjustment
-A set of operations applied to a **target**:
-- **Operations:** hue (method: HSV, Oklab, grey-axis rotation; *shift* or *select*),
-  saturation, brightness, contrast, gamma, tint, invert, gradient map, posterise, tone map
-  (ACES).
-- **Targets:** base colour, detail, emission, any single layer, final colour.
-- **Mask.**
-- Static adjustments on anything except the final colour are bakeable.
+An ordered list of operations on a **target**, with a mask.
+
+| Operation | Parameters | Notes |
+|---|---|---|
+| hue | amount (turns), method (HSV, Oklab, grey-axis rotation), shift or select (keep one hue range) | |
+| saturation, brightness, contrast | multipliers, 1 = unchanged | brightness can also be an offset |
+| gamma | exponent | |
+| tint | colour input, mode multiply or perceptual (keeps lightness, takes hue) | |
+| black and white | lightness, contrast, tint, highlight colour, select by colour | Poiyomi 11 |
+| invert | bool | |
+| gradient map | colour ramp, strength | |
+| posterise | steps | |
+| tone map | ACES or GT7, strength | final colour only |
+
+- **Targets:** base colour, any single layer, emission, final colour (S6).
+- Static adjustments on anything but the final colour are bakeable.
 
 ---
 
 ## 2. Surface
 
 ### 2.1 Base colour
-Colour input, optional vertex colour multiply (colour, alpha, linear or sRGB), alpha source.
-**Sources:** all.
+Colour input; vertex colour multiply (colour, alpha; linear or sRGB vertex data). **Sources:**
+all.
 
 ### 2.2 Alpha
-- **Source:** base colour alpha, a mask, vertex alpha, or none.
-- **Strength.**
-- **Modifiers** (live): distance fade, view-angle (fresnel) fade, camera- or model-angle fade,
-  audio.
-- **Cutout handling:** threshold, sharpened coverage, mip preservation.
-- **Sources:** Unity Standard, Uber, Poiyomi, Mochie Standard.
+- **Source:** base colour alpha, a mask, vertex alpha, or none; strength.
+- **Modifiers** (live, S7): distance fade, view-angle fade, camera- or model-angle fade, audio.
+- **Cutout handling:** threshold, sharpened coverage, mip preservation, dithering (soften edges
+  or real transparency).
+- **Sources:** Unity Standard, Uber, Poiyomi.
 
 ### 2.3 Normals
-- **Layers:** primary, extra (Poiyomi's second), detail, each with strength, mask and
-  mapping. Composited by whiteout.
+- **Layers:** the primary normal, then surface layers targeting the normal (4.1), composited
+  by whiteout with strength and mask.
 - **Bent normal:** an input for specular occlusion and indirect light.
-- **Modifiers:** spherize toward a point (Poiyomi normal correct), flat shading (Uber hard
-  edges), back-face flip.
+- **Modifiers:** spherize toward a point, flat shading, back-face flip.
 - **Sources:** all except Toon Lit.
 
 ### 2.4 Surface response
-How the surface reflects light.
-- **Workflow:** metallic, or specular colour. Kept as two inputs; see open question 1.
-- **Inputs:** metallic, roughness, reflectance (F0 for non-metals), specular colour,
-  occlusion (strength, **tint**, direct and indirect amount).
-- **Highlights:** on, strength, tint;
-  - **shape:** round, or stretched (anisotropy amount and direction map, two layers, strand
-    variation);
+How the surface reflects light (S2).
+- **Inputs:** metallic, roughness, reflectance, specular colour (open question 1); occlusion
+  with strength, tint, direct and indirect amount; multi-bounce occlusion.
+- **Highlights:** on, strength, tint; light-type limits;
+  - **shape:** round, or stretched (anisotropy amount, rotation, direction map, two layers,
+    strand variation);
   - **style:** smooth, or stepped (step count, size, feather);
-  - optional **second lobe**; light-type limits (real-time only).
-- **Reflections:** on, strength, tint, fresnel strength, roughness override, **source**
-  (scene probes or a fixed cubemap, lit or unlit).
-- **Clear coat:** a second reflective layer with strength, smoothness, tints, and whether it
-  follows the normal map.
+  - an optional **second lobe**.
+- **Reflections:** on, strength, tint, fresnel strength, roughness override; source scene
+  probes or a fixed cubemap, lit or unlit.
+- **Clear coat:** strength, roughness, tints, whether it follows the normal map.
+- **Sheen:** strength, colour, roughness, mask; a soft edge lobe for cloth.
+- **Glints:** density, size, colour and variation, roughness, mask; sparkling flakes in the
+  specular response, as opposed to the glitter pattern layer.
 - **Specular anti-aliasing:** strength, variance, threshold.
-- **Sources:** Standard Lite, Toon Standard, Unity Standard, Uber, Poiyomi (Reflections &
-  Specular, Clear Coat, Anisotropics, Stylized Reflections).
+- **Sources:** Standard Lite, Toon Standard, Unity Standard, Uber, Poiyomi.
 
 ### 2.5 Parallax
-Height texture, depth, method (single step, multi-step with step counts, cone stepping), mask,
-offset. Live. **Sources:** Unity Standard, Uber, Poiyomi, Mochie Standard.
+Height scalar, depth, method (single step, multi-step with step counts), mask, offset. Shifts
+every S1 texture lookup that uses the same mapping. Live. **Sources:** Unity Standard, Uber,
+Poiyomi.
 
 ---
 
@@ -185,117 +254,185 @@ offset. Live. **Sources:** Unity Standard, Uber, Poiyomi, Mochie Standard.
 | **unlit** | base colour as is | Uber shading off, Poiyomi unlit intensity |
 | **flat** | uniform light, no shading across the surface | Toon Lit, Poiyomi Flat |
 | **ramp toon** | a shading term mapped through a ramp to brightness and shade colour | Toon Standard, Uber shadows, Poiyomi TextureRamp, Multilayer Math, ShadeMap, Wrapped, SDF |
-| **physically based** | energy-based diffuse with a diffuse model | Standard Lite, Unity Standard, Mochie, Poiyomi Realistic, Skin, Cloth |
+| **physically based** | energy-conserving diffuse with a diffuse model, plus surface response | Standard Lite, Unity Standard, Uber, Poiyomi Realistic, Skin, Cloth, PBR |
 
 ### 3.2 Ramp toon
 - **Shading term:** N·L (wrapped or half-Lambert), received shadows only, or an SDF face
-  texture (with forward and left directions).
-- **Ramp:** one gradient representation. Ramp textures, band layers (border, blur), step and
-  feather settings and wrap parameters are all resolved into it. Optional named presets, so a
-  writer can use its own equivalent (Toon Standard's ramp presets).
-- **Shade colours:** per band, from a constant, the base colour (shadow tint by albedo), or a
-  texture (shade maps).
-- **Shadow lift**, shadow strength, painted shadow mask, border colour.
+  texture with forward and left directions.
+- **Ramp:** one gradient. Ramp textures, band layers (border, blur), step and feather
+  settings, two-width blends and wrap parameters all resolve into it. Optional named preset.
+- **Shade colours:** per band, from a constant, the base colour, or a texture.
+- **Shadow lift**, strength, painted shadow mask, border colour.
 
 ### 3.3 Physically based
-**Diffuse model:** Lambert, Disney, skin (pre-integrated colour lookup, thickness), cloth
-(sheen, its own reflectance).
+**Diffuse model:** Lambert, Disney, skin (pre-integrated colour lookup, thickness), cloth (with
+its own sheen and reflectance).
 
 ### 3.4 Shared lighting parameters
-- **Ambient model:** flat average or directional (full light probes).
+- **Ambient model:** flat average or directional.
 - **Light direction override:** none, a fixed local or world direction, or the view direction.
 - **Light colour override;** monochrome light.
-- **Brightness ceiling and floor** (limit brightness, colour preservation, minimum
-  brightness).
+- **Brightness ceiling** (per channel, or keeping the hue) and **floor**.
 - **Received shadows** with softness.
 - **Contribution per source:** main light, additional lights, vertex lights, ambient.
 
 ### 3.5 External lighting
-On/off and strength per system: VRChat light volumes (with specular and bias), LTCGI (diffuse
-and specular tint). **Sources:** Uber, Poiyomi, Mochie Standard.
+VRChat light volumes (strength, specular, bias) and LTCGI (diffuse and specular tint,
+strength). **Sources:** Uber, Poiyomi.
+
+### 3.6 Screen-space lighting effects
+Darkening from the depth texture, which avatars only have with a depth-providing prefab:
+ambient occlusion (radius, intensity, colour, mask) and contact shadows (light source,
+distance, thickness, colour, mask). **Sources:** Poiyomi Pro.
 
 ---
 
 ## 4. Layers
 
-All layers share: blend (1.7), opacity, mask (1.4), placement (1.8), emission amount,
-colour adjustment (1.10), modulators (1.9).
+Seven layer types. All share: source, mask (1.4), blend (1.7) with opacity, placement (1.8)
+with emission amount, colour adjustment (1.10) and modulators (1.9).
 
-| Layer | What it is | Specific parameters | Sources |
-|---|---|---|---|
-| **Detail** | Detail on any surface input | target (base colour, normal, metallic, roughness, occlusion), texture, strength | Unity Standard, Standard Lite, Toon Standard, Uber, Poiyomi |
-| **Recolour** | Recolour regions picked by mask channels | per region: colour, texture, normal, emission, surface overrides; recolour method (tint the greyscale, add to it, replace) | Toon Standard colour mask, Uber colour masking, Poiyomi RGBA colour masking |
-| **Decal** | A placed image, optionally animated | placement (position, rotation, scale, side offset, aspect, symmetry, tiled), frames (texture array or sheet, rate or fixed frame, range, crossfade), video source, chromatic aberration | Poiyomi decals and flipbooks, Uber flipbook |
-| **Transition** | A second appearance revealed by a threshold | threshold source (texture, noise, point to point, sphere, centre out), amount, softness, edge (colours, widths, emission), revealed appearance (transparent, or colour and texture), wave or continuous mode | Uber base colour dissolve, Poiyomi dissolve |
-| **Matcap** | View-based texture lookup | projection (view, view stabilised in VR, top pinch, double-sided, gradient, light direction), blur, own normal map, base and light colour mix, hide in shadow | Toon Standard, Uber, Poiyomi |
-| **Cubemap** | Colour from a cubemap | projection (reflection, skybox, world or local normal), rotation and spin, smoothness | Uber, Poiyomi |
-| **Rim** | A band along edges | **edge source** (view angle, depth, intersection), width, softness, power, **colour source** (constant, texture, environment, base colour mix), **light response** (light-scaled, lit side only, second colour on the unlit side), invert | Toon Standard, Uber basic and environment rim, Poiyomi rims, depth rim, environmental rim, Depth FX, backlight, fur rim |
-| **Emission** | Glow | colour input, strength, base colour as the source, override base colour | all except Toon Lit |
-| **Iridescence** | Colour by view angle | ramp or hue rotation, width, sharpness | Uber |
-| **Subsurface** | Light through thin parts | thickness texture, colour, base colour tint, direct and indirect strength, falloff, distortion, wrap, shadow strength | Uber, Poiyomi, Mochie Standard |
-| **Back face** | Different appearance on back faces | colour, texture, emission, hue, detail amount, alpha | Poiyomi |
-| **Procedural pattern** | Generated patterns | kind (glitter, voronoi, truchet, pathing, internal parallax, video screen, audio spectrum, audio volume colour, oscilloscope) and its parameters | Poiyomi, Uber oscilloscope; see open question 2 |
-| **Refraction** | Bends what's behind | IOR, tint, colour split, blur, opacity | Uber; probably Poiyomi Grab Pass (that variant wasn't inventoried) |
+### 4.1 Surface layer
+A colour or texture applied to one or more surface inputs. It covers what the sources call
+detail, decal, flipbook, recolour or colour mask, back face, and emission.
+
+| Part | Values |
+|---|---|
+| source | colour input (with placement and frames from 1.1), the base colour itself, or a palette entry |
+| targets | one or more of: base colour, alpha, normal, metallic, roughness, occlusion, emission; each with its own blend and opacity |
+| mask | any mask, including view conditions: back face, in mirror |
+
+**How sources map:**
+- **Detail:** a tiled source targeting colour (multiply ×2), normal, metallic, roughness,
+  occlusion.
+- **Decal or flipbook:** a placed source, optionally with frames.
+- **Recolour region** (Toon Standard colour mask, Uber team colours, Poiyomi RGBA colour
+  masking): a layer per mask channel, colour blend *tint luminance* or *add to luminance*,
+  plus emission, normal and surface targets.
+- **Back face:** a layer masked by the back-face condition.
+- **Emission:** a layer targeting emission. "Use base colour" is the base colour as the
+  source; "override base colour" adds a base colour target with blend *replace* to black;
+  blinking, scrolling, centre-out and light-based glow are modulators.
+
+**Bakeable** when static and placed in UV space. **Sources:** all except Toon Lit.
+
+### 4.2 Transition
+A second appearance revealed by a threshold.
+- **Threshold source:** texture, noise, point to point, sphere, centre out; amount, softness.
+- **Edge:** up to three colours, widths, emission.
+- **Revealed appearance:** transparent, or a colour and texture.
+- **Modes:** wave, continuous.
+
+Structurally a surface layer whose mask is a threshold with an edge band. Kept separate because
+its *amount* is the thing that gets animated. **Sources:** Uber base colour dissolve, Poiyomi
+dissolve.
+
+### 4.3 Lookup layer
+A texture looked up by direction instead of by UV.
+- **Texture:** 2D (matcap) or cube.
+- **Projection:** view normal (VR-stabilised or not), top pinch, double-sided, gradient,
+  light direction, reflection direction, world or local normal, skybox; rotation and spin for
+  cubes.
+- **Options:** blur or roughness, own normal map, base and light colour mix, hide in shadow,
+  probe fallback.
+
+**Sources:** Toon Standard, Uber, Poiyomi (matcaps, cubemap).
+
+### 4.4 Angle layer
+Colour driven by how the surface faces the viewer or the light.
+- **Edge source:** view angle, depth (screen-space silhouette), intersection with other
+  geometry.
+- **Profile:** a band (width, softness, power, invert) for rims, or a full gradient over the
+  angle (a ramp or hue rotation) for iridescence.
+- **Colour source:** colour input, the environment (reflection probe), base colour mix.
+- **Light response:** ignore light, scale by light, lit side only, a second colour on the dark
+  side, back light (shines where the light is behind).
+
+**Sources:** Toon Standard rim, Uber basic and environment rim and iridescence, Poiyomi rims,
+depth rim, environmental rim, Depth FX, backlights.
+
+### 4.5 Subsurface
+Light through thin parts: thickness texture, colour, base colour tint, direct and indirect
+strength, falloff, distortion, wrap, shadow strength. S3. **Sources:** Uber, Poiyomi.
+
+### 4.6 Procedural pattern
+A generated pattern with a **kind** and its parameters: glitter, voronoi, truchet, pathing,
+internal parallax, video screen, audio spectrum, audio volume colour, oscilloscope,
+constellation. **Sources:** Poiyomi, Poiyomi Pro, Uber oscilloscope. See open question 2.
+
+### 4.7 Refraction
+Bends what's behind a transparent surface: strength (IOR), tint, colour split, blur, opacity;
+with screen-grab extras (pixelation, colour ramp). **Sources:** Uber, Poiyomi Pro Grab Pass and
+Self Grab.
 
 ---
 
 ## 5. Geometry and extra passes
 
 ### 5.1 Outline
-- **Shape:** normal expansion, drop shadow, directional offset.
-- **Width:** in world units, with a mask; a screen-size cap; fixed size over distance; fade
-  over distance.
+A **list** of outline layers (Poiyomi Pro has three), each with:
+- **Shape:** normal expansion, drop shadow, directional offset; normals from vertex colours or
+  baked curvature data.
+- **Width:** world units with a mask; screen-size cap; fixed size over distance; fade over
+  distance; edge fade; thicker on the lit or the dark side.
 - **Colour:** colour input, base colour blend, lit or unlit, emission, an inner highlight line.
-- **Normals from vertex colours.**
-- **Sources:** Toon Standard (Outline), Uber (Outline), Poiyomi.
+- **Masks per property** (size, colour, alpha, emission and so on).
+- Its own render settings (6).
+
+**Sources:** Toon Standard (Outline), Uber (Outline), Poiyomi, Poiyomi Pro.
 
 ### 5.2 Fur
-- **Shape:** length (world units) and length mask; direction (map, vertex colour, constant);
-  gravity; randomness.
-- **Strands:** noise texture, alpha mask, root occlusion; layer count, widths.
-- **Fur sway:** uses the wind deformation from 5.3.
-- **Fur rim:** a rim layer scoped to the fur.
-- **Sources:** Poiyomi Lil Fur.
+- **Method:** strands or shells.
+- **Shape:** length (metres) and length mask; direction (constant, direction map, vertex
+  colours); gravity; randomness; tip taper.
+- **Strands:** pattern texture, alpha mask, root occlusion; layer count; widths; distance level
+  of detail.
+- **Colour:** colour input, optionally also tinting the skin.
+- **Contacts:** bends away from a VRChat contact, with a push strength.
+- **Sway:** the wind deformation (5.3). **Rim:** an angle layer scoped to the fur.
+- Its own render settings (6).
+
+**Sources:** Poiyomi Lil Fur (strands), Poiyomi Pro Fur (shells). Typed in code already.
 
 ### 5.3 Deformation
 A list of vertex operations, each with a mask and modulators:
-- transform (translate, rotate, scale, spin);
-- inflate along the normal;
-- snap to a grid;
-- displace by a height map;
-- barrel, sphere and tornado distortion;
-- wind (layers of direction, amplitude, speed, frequency);
-- look at the camera;
-- glitch;
-- push toward the camera (view-clip prevention).
+- transform (translate, rotate, scale, spin); inflate along the normal; snap to a grid;
+  displace by a height map;
+- barrel, sphere and tornado distortion; wind (layers of direction, amplitude, speed,
+  frequency); glitch;
+- look at the camera; push toward the camera (view-clip prevention);
+- squash where a contact presses; TPS shaping (bend, squeeze, bulge, pulse).
 
-**Sources:** Uber, Poiyomi, and Lil Fur for wind.
+**Sources:** Uber, Poiyomi, Poiyomi Pro, and Lil Fur for wind.
+
+### 5.4 Geometry effects
+Effects that add or remove geometry: tessellation, dissolving into pieces, shattering,
+particles from triangles. **Sources:** Poiyomi Pro variants.
 
 ---
 
 ## 6. Render
 
 - **Surface mode:** opaque, cutout, dithered, fade (everything fades), transparent (glass:
-  reflections stay), additive, soft additive, multiplicative, multiplicative ×2. Named by
-  look. Raw blend factors are kept only when they match none of these.
-- **Per pass:** base, outline and fur each have cull, depth test and write, depth offset,
-  stencil and colour mask.
-- **Two-sided lighting:** flip back-face normals.
-- **Fog:** on or off.
-- **Visibility:** in mirrors, in cameras, in normal view; an alternate mirror appearance;
-  near-camera clipping with a mask; hide by UV tile; invisible.
-- **Fallback shader:** what viewers with blocked shaders see. Not part of the look, but carried
-  for writers.
+  reflections stay), additive, soft additive, multiplicative, multiplicative ×2. Raw blend
+  factors are kept only when they match none of these.
+- **Per pass:** base, each outline layer and fur have cull, depth test and write, depth
+  offset, stencil and colour mask.
+- **Two-sided lighting**, **fog**.
+- **Visibility:** in mirrors, cameras, normal view; an alternate mirror appearance; near-camera
+  clipping with a mask; hide by UV tile; invisible.
+- **Fallback shader:** what viewers with blocked shaders see; carried for writers.
 
 ---
 
 ## 7. Out of scope
 
-- **World-only features:** see the Mochie Standard draft. Rain, puddles, world vertex wind,
-  screen-space reflections, lightmap-based effects, AreaLit, Bakery.
-- **Shaders:** Poiyomi Toon World; Beatsaber support.
-- **Unavailable source:** Poiyomi Pro, Uber X. Materials using them get one unmapped info
-  line.
+- **World-only features:** parsers ignore them, with at most one info line per material when
+  one is switched on: rain, puddles, world vertex wind, screen-space reflections,
+  lightmap-based effects, AreaLit, Bakery.
+- **Shaders:** Poiyomi Toon World, Poiyomi Pro World and World Fur; Beatsaber support (gone
+  in 11).
+- **Unavailable source:** Uber X. Materials using it get one unmapped info line.
 - **Not visual:** stats overlay (proposed), debug views, editor state, optimiser properties.
 
 ---
@@ -304,163 +441,132 @@ A list of vertex operations, each with a mask and modulators:
 
 ✓ the source has it; ~ partly or as a special case; blank: not present.
 
-| Unified feature | Toon Lit | Std Lite | Toon Std | Unity Std | Uber | Poiyomi |
-|---|:-:|:-:|:-:|:-:|:-:|:-:|
-| 1.1 Mapping spaces beyond UV0/1 | | | | | ~ | ✓ |
-| 1.5 Mask bus | | | | | | ✓ |
-| 1.6 Palette | | | | | | ✓ |
-| 1.9 Modulators | | | ~ | | ✓ | ✓ |
-| 1.10 Colour adjustment | | | ✓ | | ✓ | ✓ |
-| 2.1 Base colour | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| 2.2 Alpha | | | | ✓ | ✓ | ✓ |
-| 2.3 Normals | | ✓ | ✓ | ✓ | ✓ | ✓ |
-| 2.4 Surface response | | ✓ | ✓ | ✓ | ✓ | ✓ |
-| 2.5 Parallax | | | | ✓ | ✓ | ✓ |
-| 3 Lighting: unlit | | | | | ✓ | ~ |
-| 3 Lighting: flat | ✓ | | | | | ✓ |
-| 3 Lighting: ramp toon | | | ✓ | | ✓ | ✓ |
-| 3 Lighting: physically based | | ✓ | | ✓ | ✓ | ✓ |
-| 3.5 External lighting | | | | | ✓ | ✓ |
-| 4 Detail | | ✓ | ✓ | ✓ | ✓ | ✓ |
-| 4 Recolour | | | ✓ | | ✓ | ✓ |
-| 4 Decal | | | | | ~ | ✓ |
-| 4 Transition | | | | | ✓ | ✓ |
-| 4 Matcap | | | ✓ | | ✓ | ✓ |
-| 4 Cubemap | | | | | ✓ | ✓ |
-| 4 Rim | | | ✓ | | ✓ | ✓ |
-| 4 Emission | | ✓ | ✓ | ✓ | ✓ | ✓ |
-| 4 Iridescence | | | | | ✓ | |
-| 4 Subsurface | | | | | ✓ | ✓ |
-| 4 Back face | | | | | | ✓ |
-| 4 Procedural pattern | | | | | ~ | ✓ |
-| 4 Refraction | | | | | ✓ | ~ |
-| 5.1 Outline | | | ~ | | ✓ | ✓ |
-| 5.2 Fur | | | | | | ✓ |
-| 5.3 Deformation | | | | | ✓ | ✓ |
-| 6 Visibility | | | | | ✓ | ✓ |
+| Unified feature | Toon Lit | Std Lite | Toon Std | Unity Std | Uber | Poiyomi | Poiyomi Pro adds |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| 1.1 Mapping beyond UV0/1, placement, frames | | | | | ~ | ✓ | |
+| 1.5 Mask bus | | | | | | ✓ | |
+| 1.6 Palette | | | | | | ✓ | |
+| 1.9 Modulators | | | ~ | | ✓ | ✓ | |
+| 1.10 Colour adjustment | | | ✓ | | ✓ | ✓ | GT7 |
+| 2.1 Base colour | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| 2.2 Alpha | | | | ✓ | ✓ | ✓ | |
+| 2.3 Normals | | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| 2.4 Surface response | | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| 2.5 Parallax | | | | ✓ | ✓ | ✓ | |
+| 3 Lighting: unlit | | | | | ✓ | ~ | |
+| 3 Lighting: flat | ✓ | | | | | ✓ | |
+| 3 Lighting: ramp toon | | | ✓ | | ✓ | ✓ | |
+| 3 Lighting: physically based | | ✓ | | ✓ | ✓ | ✓ | |
+| 3.5 External lighting | | | | | ✓ | ✓ | |
+| 3.6 Screen-space lighting | | | | | | | ✓ |
+| 4.1 Surface layer | | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| 4.2 Transition | | | | | ✓ | ✓ | |
+| 4.3 Lookup layer | | | ✓ | | ✓ | ✓ | |
+| 4.4 Angle layer | | | ✓ | | ✓ | ✓ | |
+| 4.5 Subsurface | | | | | ✓ | ✓ | |
+| 4.6 Procedural pattern | | | | | ~ | ✓ | constellation |
+| 4.7 Refraction | | | | | ✓ | | ✓ |
+| 5.1 Outline | | | ~ | | ✓ | ✓ | layers, curvature |
+| 5.2 Fur | | | | | | ✓ | shells |
+| 5.3 Deformation | | | | | ✓ | ✓ | squish, TPS |
+| 5.4 Geometry effects | | | | | | | ✓ |
+| 6 Visibility | | | | | ✓ | ✓ | |
 
-Toon Lit and the two Standards fit entirely inside the catalogue. Uber and Poiyomi need almost
-all of it. No feature exists only for one source unless it's described generically; the
-single-source ones are mask bus, palette, back face and fur (Poiyomi) and iridescence (Uber).
+Single-source features, described generically so other shaders can map into them later: mask
+bus, palette and the back-face condition (Poiyomi); screen-space lighting and geometry effects
+(Poiyomi Pro).
 
 ---
 
 ## 9. What changes in the current code
 
-How the catalogue differs from `AtlasUnifiedMaterial` today:
-
 | Today | Catalogue |
 |---|---|
-| 15 `AtlasLightingMode` values | 4 families with parameters (section 3) |
-| About 40 free-form semantic features | Typed features, building blocks and modulators |
+| 15 `AtlasLightingMode` values | 4 families with parameters (3) |
+| 27 free-form semantic features | Typed features, building blocks and modulators |
 | Fixed hue fields (`HueShift`, `DetailHueShift`, `EmissionHueShift`) | Colour adjustments with targets (1.10) |
-| Matcap, rim, detail, decal and emission each with their own blend fields | One shared blend list and placement (1.7, 1.8) |
+| Separate detail, decal, colour mask and emission structures, each with its own blend fields | One surface layer type with targets (4.1) and one blend list (1.7) |
+| Separate matcap and rim structures | Lookup layer (4.3) and angle layer (4.4) |
 | AudioLink and emission pulse as dedicated structures | Modulators on any parameter (1.9) |
-| `AtlasColorMaskLayer` with four fixed slots | Recolour layer with any number of regions |
+| `AtlasColorMaskLayer` with four fixed slots | Recolour regions as surface layers |
 | Global masks as Poiyomi-shaped bindings | Mask bus (1.5) |
-| Colours stored as sRGB | Linear (already a known gap) |
+| Colours stored as sRGB | Linear (1.0) |
 | `AtlasSurfaceMode` (Opaque, Cutout, Transparent, Premultiplied, Additive) | Surface modes named by look (6) |
-| No outline, fur or deformation | Sections 5.1–5.3 |
+| No outline, deformation or geometry effects; fur typed | 5.1, 5.3, 5.4; fur matches 5.2 |
+| No defined order between features | Evaluation stages S1–S7 |
 
 ### 9.1 Typing the free-form semantic features
 
-The parsers create 36 distinct free-form feature IDs (`AtlasSemanticFeature`). Eight more IDs
-only label missing-feature issues. Every one of the 36 has a home in this catalogue.
+The parsers create 27 distinct free-form feature IDs (`AtlasSemanticFeature`); other IDs only
+label missing-feature issues. Every one has a home here.
 
 **What typing one involves:**
-1. **A typed home:** a field in a feature or building block. Without one, typing would mean
-   adding source-shaped fields, which the guidelines rule out.
-2. **Units and conventions:** the free-form values are raw source values, often source enum
-   integers stored as "choices". Each one is converted into the catalogue's convention. This
-   is the real work.
+1. **A typed home:** a field in a feature or building block.
+2. **Units and conventions** (1.0): the free-form values are raw source values, often source
+   enum numbers. Converting them is the real work.
 3. **Parser and test:** the parser writes the typed field, and a test checks the converted
    value.
 
-There are no output writers yet, so nothing downstream needs changing.
-
-**Home exists in the catalogue; parser work only:**
-
 | Free-form ID | Becomes |
 |---|---|
-| `surface.normal.secondary`, `surface.bent-normal` | 2.3 Normals: layer mask, bent-normal input |
-| `surface.alpha-map`, `render.alpha` | 2.2 Alpha: source, modifiers, cutout handling |
-| `surface.specular`, `surface.reflections`, `surface.clearcoat` | 2.4 Surface response: strengths, tints, fresnel, clear coat layer |
-| `surface.channel-packing` | Mostly disappears: packing is the texture and channel of each scalar input (1.2) |
-| `surface.detail` (Mochie's detail metallic, roughness, occlusion) | Detail layer with a target (4) |
-| `lighting.rim`, `lighting.rim.options.*`, `lighting.environmental-rim`, `lighting.backlight` | Rim layer: colour source *environment*, back-light response (4) |
-| `lighting.subsurface`, `lighting.skin-scattering` | Subsurface layer (4); diffuse model *skin* (3.3) |
-| `lighting.external`, `lighting.light-volumes`, `lighting.ltcgi` | External lighting (3.5); the typed structure exists and needs a few more fields |
-| `render.options`, `render.additional` | Render (6): fog, two-sided lighting, depth offset, queue |
-| `decal.options.*` | Decal layer (4): blend, alpha blend, aspect, mirroring |
-| `texture.sampling`, `mask.sampling` | Mapping (1.1): sampling, UV set, swizzle, rotation, scroll on any texture or mask |
-
-**Needs the lighting families first:**
-
-| Free-form ID | Becomes |
-|---|---|
-| `lighting.light-data`, `lighting.additional-lights`, `lighting.shadows` | Families and shared parameters (3.1–3.4). The parser resolves Poiyomi's light colour, map and direction modes into these parameters; the 15 lighting modes go away with this step |
-
-**Needs a building block first:**
-
-| Free-form ID | Needs |
-|---|---|
-| `emission.modulation`, `audio.reactive.modulation`, `audio.global` | Modulators (1.9): waveform, audio band, smoothing, fallback |
-| `surface.proximity-color` | A camera-distance modulator driving a colour (1.9) |
-| `color.adjustment` | Colour adjustment with targets (1.10), replacing the fixed hue fields |
-| `matcap.blend` (fallback parser) | The shared blend list (1.7) |
-
-**Needs a new feature:**
-
-| Free-form ID | Needs |
-|---|---|
-| `surface.glitter` | Procedural pattern layer (4); see open question 2 |
-| Outlines (`geometry.outline`, today only a missing-feature issue) | Outline (5.1) |
-
-**Drop:** `environment.rain`, `environment.puddles` and `geometry.wind` from Mochie Standard,
-and the Bakery, screen-space-reflection and lightmap values inside `lighting.external` and
-`surface.reflections`. They're world-only, and Mochie Standard is being dropped.
+| `surface.normal.secondary`, `surface.bent-normal` | Normals (2.3) |
+| `surface.alpha-map`, `render.alpha` | Alpha (2.2) |
+| `surface.specular`, `surface.reflections`, `surface.clearcoat` | Surface response (2.4), including sheen and glints |
+| `surface.detail` | Surface layer targets (4.1) |
+| `decal.options.*` | Surface layer with placement (1.1, 4.1) |
+| `lighting.rim`, `lighting.rim.options.*`, `lighting.environmental-rim`, `lighting.backlight` | Angle layer (4.4) |
+| `lighting.subsurface`, `lighting.skin-scattering` | Subsurface (4.5); skin diffuse model (3.3) |
+| `lighting.external`, `lighting.light-volumes`, `lighting.ltcgi` | External lighting (3.5) |
+| `render.options` | Render (6) |
+| `lighting.light-data`, `lighting.additional-lights`, `lighting.shadows` | Lighting families and shared parameters (3); needs the families first |
+| `emission.modulation`, `audio.reactive.modulation`, `audio.global`, `surface.proximity-color` | Modulators (1.9) |
+| `color.adjustment` | Colour adjustment (1.10) |
+| `surface.glitter` | Procedural pattern (4.6) |
+| `geometry.fur` (Pro Fur extras) | Fur (5.2): strand height range, occlusion range, hue |
 
 **Order,** following the dependencies:
-1. Building blocks: mapping, scalar remap, mask with mask-bus reference, blend, placement,
-   colour adjustment, modulators.
-2. The parser-only moves.
-3. Lighting families.
-4. Modulators in the parsers.
-5. Outline and procedural patterns.
+1. Building blocks (1.1–1.10).
+2. Surface layer, lookup layer and angle layer, replacing today's per-kind structures.
+3. The parser-only moves.
+4. Lighting families.
+5. Modulators in the parsers.
+6. Outline, deformation and procedural patterns.
 
 **Afterwards:** `AtlasSemanticFeature` stays only for reporting. A source value with no typed
-home becomes an *unmapped* report line, not stored data. Coverage then becomes measurable:
-every report is a gap.
+home becomes an *unmapped* report line, not stored data, so every report is a coverage gap.
 
 ---
 
 ## 10. Decisions so far
 
-From your answers during the inventory:
 - Avatar shaders and features only; world-only features are ignored, not counted as unmapped.
-- Mochie Standard is dropped in favour of Mochie Uber, after the inventory.
+- Mochie Standard is dropped in favour of Mochie Uber (done).
+- Poiyomi 11 and Poiyomi Pro are supported (done).
+- Parsing never requires the source shader to be installed; output shaders must be installed
+  (done; see [*Shader availability*](UNIFIED_MATERIAL.md#shader-availability)).
+- The layer merges of the second pass are accepted for now, to be refined once output writers
+  exist and are tested.
 - Coverage means the look; misunderstandings of a source are fixed in its parser, not in the
   unified material.
 
 ## 11. Open questions
 
-Merged from the drafts, without the atlasing ones. Where the drafts asked the same thing, it's
-asked once here.
+Without the atlasing ones.
 
-1. **Specular colour workflow:** keep specular colour as a second surface response input next
-   to metallic (my lean), or have parsers convert it? Unity Standard, Uber and Mochie offer it.
+1. **Specular colour workflow:** keep specular colour as a surface response input next to
+   metallic (my lean), or have parsers convert it?
 2. **Procedural pattern layer:** one layer with a pattern *kind*, or leave the rarer kinds
-   (truchet, video screen, internal parallax, oscilloscope) reported as unsupported until a
-   writer needs them?
+   (truchet, video screen, internal parallax, oscilloscope, constellation) reported as
+   unsupported until a writer needs them?
 3. **Stats overlay:** out of scope, as not part of the look?
-4. **Unavailable sources:** Poiyomi Pro and Uber X stay unsupported unless you can provide the
-   source?
+4. **Uber X** stays unsupported unless you can provide the source?
 5. **Older versions:** Poiyomi 7.3–9.3 and older Mochie material versions: keep supporting
    them, or support current versions only and report older ones?
 6. **Static deformation** (transform, inflate, snap, displacement): carry it as a geometry
-   feature (live), or resolve it into the mesh at build time? This touches the build, not
-   just the unified material.
+   feature, or resolve it into the mesh at build time?
 7. **Light volumes and LTCGI** stay in scope as external lighting?
+8. **Transition:** keep it separate (my lean, since its amount is what gets animated), or fold
+   it into the surface layer as a threshold mask with an edge band?
 
 **Deferred to the atlasing pass:** UV-tile features (AudioLink UV modes, UV tile discard),
 vertex colour handling when merging, settings that can't differ within one material, and

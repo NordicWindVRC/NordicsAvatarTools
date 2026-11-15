@@ -106,13 +106,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 decal.Map=map??decal.Map;
                 decal.Enabled=B(m,"_DecalEnabled"+s);
                 decal.Tint=C(m,"_DecalColor"+s,Color.white);
-                var pos=Has(m,"_DecalPosition"+s)?m.GetVector("_DecalPosition"+s):new Vector4(.5f,.5f,0f,0f);
+                var pos=AtlasMaterialReader.Vector(m,"_DecalPosition"+s,new Vector4(.5f,.5f,0f,0f));
                 decal.Position=new Vector2(pos.x,pos.y);
-                var scale=Has(m,"_DecalScale"+s)?m.GetVector("_DecalScale"+s):Vector4.one;
+                var scale=AtlasMaterialReader.Vector(m,"_DecalScale"+s,Vector4.one);
                 decal.Scale=new Vector2(scale.x,scale.y);
                 decal.RotationDegrees=F(m,"_DecalRotation"+s);
                 decal.RotationSpeed=F(m,"_DecalRotationSpeed"+s);
-                if(Has(m,"_DecalSideOffset"+s))decal.SideOffset=m.GetVector("_DecalSideOffset"+s);
+                if(Has(m,"_DecalSideOffset"+s))decal.SideOffset=AtlasMaterialReader.Vector(m,"_DecalSideOffset"+s,Vector4.zero);
                 decal.Tiled=B(m,"_DecalTiled"+s);
                 decal.EmissionStrength=F(m,"_DecalEmissionStrength"+s);
                 decal.Alpha=F(m,"_DecalBlendAlpha"+s,1f);
@@ -303,7 +303,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 d.AudioReactive.BandSmoothing[i]=F(m,"_AudioLinkSmoothing"+band);
                 if(Has(m,"_AudioLinkBandOverrideSliders"))
                 {
-                    Vector4 overrides=m.GetVector("_AudioLinkBandOverrideSliders");
+                    Vector4 overrides=AtlasMaterialReader.Vector(m,"_AudioLinkBandOverrideSliders",Vector4.zero);
                     d.AudioReactive.BandOverrides[i]=i==0?overrides.x:i==1?overrides.y:i==2?overrides.z:overrides.w;
                 }
             }
@@ -336,7 +336,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             color.ClampOutput|=B(m,"_MainColorAdjustClamp");
             // Poiyomi 10's tint is perceptual, mixed in by its alpha (default 0 = off). Older
             // versions have no tint, so the default white multiply leaves colors unchanged.
-            if(m.HasProperty("_MainTintColor"))
+            if(Has(m,"_MainTintColor"))
             {
                 color.Tint.Color=C(m,"_MainTintColor",new Color(1f,1f,1f,0f));
                 color.TintMode=AtlasTintMode.Perceptual;

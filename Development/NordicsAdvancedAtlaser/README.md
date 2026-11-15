@@ -125,13 +125,19 @@ description before an output shader uses it.
 | **VRChat/Mobile/Standard Lite** | Shader name | Metallic workflow, detail, specular anti-aliasing, lightmaps | Feature keywords of compiled variants |
 | **VRChat/Mobile/Toon Lit** | Shader name | Base texture, vertex color, fixed lighting | — |
 | **VRChat/Mobile/Toon Standard** (and Outline) | Shader name | Toon ramp, specular, matcap, rim, emission, detail, color masks, hue, AudioLink | Special AudioLink blends |
-| **Mochie/Standard** | Shader name | Metallic workflow, packed maps, detail, masks, reflections, subsurface, color filters, rain/wind/puddles, AreaLit, LTCGI, light volumes | Some procedural effects (marked approximate) |
-| **Poiyomi Toon 7.x, 8.x, 9.x, 10.x** | Version label in the shader, then name/path | Lighting modes, shadow bands, matcaps, normals, emission layers, masks, global masks, clearcoat, color adjustments, rim, subsurface, decals | Many advanced, procedural and animated features |
+| **Mochie/Uber** (and Outline) | Shader name | Shading on/off, blending and alpha mask, four surface workflows, parallax, toon shadows, detail, two emission layers, two matcaps, basic and environment rims, subsurface, filtering and team colours, light volumes, separate or packed feature masks | Outline, refraction, iridescence, flipbooks, UV distortion, vertex manipulation, AudioLink, map filters (reported). Uber X special features are unsupported |
+| **Poiyomi Toon 7.x, 8.x, 9.x, 10.x, 11.x** | Version label in the shader, then name/path | Lighting modes, shadow bands, matcaps, normals, emission layers, masks, global masks, clearcoat, color adjustments, rim, subsurface, decals, fur (Lil Fur variants) | Many advanced, procedural and animated features |
+| **Poiyomi Pro 10.x, 11.x** (and its variants) | Shader name, then the version label | Everything Poiyomi Toon reads, plus Pro Fur (shell fur) and 11.x PBR lighting | SSAO, contact shadows, TPS deformation, squish, constellation, tone mapping, outline bake, and the geometry, grab-pass, tessellation and triplanar variants (reported) |
 | Poiyomi Toon (unversioned) | Poiyomi Toon without a version | As above, best effort | As above |
 | **Any other shader** | Fallback | Common texture, color and scalar properties by convention | Anything shader-specific (reported as warnings) |
 
 Features that can't be read exactly are reported as warnings during the build, never
 silently assumed. See `UNIFIED_MATERIAL.md` for the details of each parser.
+
+**Source shaders don't need to be installed.** A material whose shader is missing, such as a
+Poiyomi material copied into a Quest project, is still read from the values it saved. Poiyomi
+and Mochie Uber are recognised from their properties, including the Poiyomi version and Pro.
+A few option names that only the shader declares are reported instead of read.
 
 ## Output shaders
 
@@ -139,6 +145,11 @@ silently assumed. See `UNIFIED_MATERIAL.md` for the details of each parser.
 |---|---|---|---|
 | **Poiyomi Toon 10** | `poiyomi10` | Main texture size | Not generated yet |
 | **VRChat Mobile Toon Standard** | `mobiletoon` | Main texture size | Not generated yet |
+
+**Output shaders must be installed,** since the new materials are made with them. The picker
+only lists installed ones. An output whose shader isn't installed shows a warning, and is
+skipped at build time with one diagnostic. Poiyomi Toon 10 is found under its usual name, or
+under *Old Versions* when Poiyomi Pro or 11 is installed.
 
 Each output shader gets its own settings as its writer is built: overriding texture
 resolutions, turning off features, and controlling how features are emulated.

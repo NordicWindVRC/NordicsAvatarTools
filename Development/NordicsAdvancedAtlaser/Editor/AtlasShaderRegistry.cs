@@ -20,6 +20,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         string ShaderId { get; }
         string DisplayName { get; }
+        // The installed Unity shader the new materials are made with, or null when it isn't
+        // installed. Output shaders are only offered, and only built, when it's installed.
+        Shader FindShader();
         IReadOnlyList<AtlasOutputField> Fields { get; }
         // Called after shared main-texture size detection. May override any shared or shader-specific setting.
         void AutoConfigure(IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasOutputConfiguration output);
@@ -52,6 +55,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static readonly List<IAtlasOutputShader> Outputs = new List<IAtlasOutputShader>();
         public static IReadOnlyList<IAtlasSourceShaderParser> InputParsers => Parsers;
         public static IReadOnlyList<IAtlasOutputShader> OutputShaders => Outputs;
+        public static bool IsInstalled(IAtlasOutputShader output) => output != null && output.FindShader() != null;
+        // The output shaders whose Unity shader is installed in this project.
+        public static IReadOnlyList<IAtlasOutputShader> InstalledOutputShaders => Outputs.Where(IsInstalled).ToList();
         static AtlasShaderRegistry()
         {
             foreach (var type in TypeCache.GetTypesDerivedFrom<IAtlasSourceShaderParser>())
@@ -78,7 +84,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
             Outputs.Add(shader);
         }
         public static IAtlasSourceShaderParser Detect(Material material)
-        { return material == null ? null : Parsers.FirstOrDefault(p => p.CanParse(material)); }
+        {
+            if (material == null) return null;
+            AtlasMaterialReader.ClearCache();
+            try { return Parsers.FirstOrDefault(p => p.CanParse(material)); }
+            finally { AtlasMaterialReader.ClearCache(); }
+        }
         public static IAtlasOutputShader Output(string id)
         { return Outputs.FirstOrDefault(p => p.ShaderId == id); }
         public static void EnsureSettings(AtlasOutputConfiguration config, IAtlasOutputShader output)

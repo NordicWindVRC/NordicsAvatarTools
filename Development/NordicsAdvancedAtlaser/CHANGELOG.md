@@ -36,6 +36,54 @@ EditMode tests pass in Unity 2022.3.22 (2026-11-03).
   `CurrentWorldNormals`; debug exports still write them.
 
 ### Added
+- **Source shaders don't need to be installed.** When a material's shader is missing, the
+  parsers read the values the material saved, through `AtlasMaterialReader` (new
+  `AtlasSavedProperties`). Parsers no longer call the material or shader API directly.
+  Poiyomi (family, Pro, version 7–11) and Mochie Uber are recognised from saved property
+  names. Option names that only the shader declares are reported, not guessed. Such materials
+  get an info note.
+- **Output shaders must be installed.** `IAtlasOutputShader.FindShader()` finds the Unity
+  shader an output uses. The output picker lists only installed ones, the validator warns
+  about an output whose shader isn't installed, and the build skips it with one diagnostic.
+  Poiyomi Toon 10 is found under its usual name or under *Old Versions*.
+- Tests for both: saved-value parsing matches shader parsing, Poiyomi Pro and Mochie Uber
+  detection from saved values alone, version and Pro markers, and the installed-output list.
+- **Poiyomi 11 and Poiyomi Pro.** The version detector recognises 11, which keeps 10's shader
+  names and is told apart by its version label, and the Pro variant. New parsers:
+  `poiyomi-toon-11`, `poiyomi-pro-11`, `poiyomi-pro-10` and a generic `poiyomi-pro`, all on the
+  shared Poiyomi base.
+  - 11's **PBR lighting type** maps to physically based lighting, with metallic, smoothness,
+    occlusion and reflectance from its packed texture. Clear coat, anisotropy, sheen and glints
+    are kept as raw values.
+  - **Pro Fur** (shell fur) fills the fur definition, which gains a method (strands or shells),
+    fur colour, tip taper, contact response and distance level of detail. Lil Fur's 11.x
+    contact push is read too.
+  - Pro-only effects (SSAO, contact shadows, TPS deformation, squish, constellation, GT7 tone
+    mapping, neutral emission, outline bake) and Pro variant shaders (geometric dissolve,
+    ShatterWave, particles, tessellation, triplanar projection, triple outline, grab pass) are
+    reported once each.
+  - 11's mask levels and vertex-colour mask channels are reported once when used.
+  - Tests: detection from shader metadata, and parser tests that run when Pro is installed. The
+    Poiyomi tint test now runs on 10 or 11.
+- **Mochie Uber input parser** (`Mochie/Uber` and `Mochie/Uber (Outline)`), Mochie's avatar
+  shader. It reads:
+  - shading on or off; blending mode, cutoff and alpha mask; culling; vertex colour;
+  - the four surface workflows (metallic, specular with a smoothness map, specular with
+    smoothness in alpha, packed), occlusion and parallax;
+  - toon shadows (a ramp texture, or a ramp described by numbers) and lighting contributions;
+  - detail maps, both emission layers, both matcaps, basic and environment rims, subsurface
+    scattering, filtering and team colours, light volumes;
+  - per-feature masks in separate or packed mode.
+
+  Features without a typed home yet (outline, refraction, iridescence, flipbooks, UV
+  distortion, vertex manipulation, AudioLink, map filters, mirror behaviour, cubemap base
+  colour) are reported once each when switched on. Uber X special features are reported as
+  unsupported. Tests run when Uber is installed.
+- **Fur:** `AtlasUnifiedMaterial.Fur`, a typed fur definition: length and length mask,
+  direction (constant, map or vertex colours), gravity, randomness, strand pattern, alpha
+  mask, root occlusion, layers, width, wind, a fur rim, and the fur pass's own render
+  settings. The Poiyomi parser fills it for the *Lil Fur* variants. Tests run when Poiyomi is
+  installed.
 - **Normal Baker** (**Tools → NordicWind → Advanced Atlaser → Normal Baker**): a dockable window
   that bakes the shading of an original mesh onto a current, for example lower-detail, mesh and
   saves it as a PNG normal map, for a source's *Pre-baked Normal Map*. Slots accept mesh assets
@@ -68,6 +116,10 @@ EditMode tests pass in Unity 2022.3.22 (2026-11-03).
 - `AtlasColorProcessingDefinition.TintMode`: *Multiply* or *Perceptual* (keeps lightness,
   takes the tint's hue, scales chroma by the tint's saturation, mixes in by its alpha).
   Poiyomi 10's tint is perceptual.
+
+### Removed
+- **The Mochie Standard input parser.** Mochie Standard is mainly a world shader; Mochie's
+  avatar shader, Uber, replaces it. Mochie Standard materials now go to the fallback parser.
 
 ### Fixed
 - With *Export Intermediate Maps* on, the tangent-frame maps were exported (which normalizes

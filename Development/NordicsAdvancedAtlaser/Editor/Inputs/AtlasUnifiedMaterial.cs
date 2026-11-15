@@ -18,6 +18,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly AtlasExternalLightingDefinition ExternalLighting = new AtlasExternalLightingDefinition();
         public readonly AtlasAudioReactiveDefinition AudioReactive = new AtlasAudioReactiveDefinition();
         public readonly AtlasColorProcessingDefinition ColorProcessing = new AtlasColorProcessingDefinition();
+        // Strands grown from the surface by an extra pass. Disabled for materials without fur.
+        public readonly AtlasFurDefinition Fur = new AtlasFurDefinition();
 
         // Layer order is significant (low index to high index). These are never shader-specific arrays.
         public readonly List<AtlasNormalLayer> Normals = new List<AtlasNormalLayer>();
@@ -520,6 +522,75 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool LTCGIUseExposureOcclusion;
         public float LTCGISpecularMultiplier = 1f;
         public float LTCGIDiffuseMultiplier = 1f;
+    }
+
+    // Fur strands grown from the surface. The strands use the material's own surface, lighting and
+    // layers; these settings only describe their shape, transparency and strand-specific shading.
+    // Strands: short cards grown per triangle (lilToon style). Shells: the mesh redrawn in
+    // stacked, pushed-out layers with a strand pattern cut into each.
+    public enum AtlasFurMethod { Strands, Shells }
+    public sealed class AtlasFurDefinition
+    {
+        public bool Enabled;
+        public AtlasFurMethod Method = AtlasFurMethod.Strands;
+        // Colour of the fur itself; white when the fur simply shows the surface colour.
+        public readonly AtlasColorInput Color = new AtlasColorInput();
+        // Whether the fur colour texture also tints the skin underneath.
+        public bool ColorAppliesToSurface;
+        // 0..1: how much the strands narrow toward the tip.
+        public float TipTaper;
+        // Fur bends away from a VRChat contact (1..8 selects which; 0 = none).
+        public int ContactIndex;
+        public float ContactPush = 1f;
+        // Fewer layers from LevelOfDetailStart, down to one by LevelOfDetailEnd (metres from the
+        // camera); both 0 = always full.
+        public float LevelOfDetailStart;
+        public float LevelOfDetailEnd;
+        // Strand length in metres, scaled by LengthMask where present.
+        public float Length = 0.02f;
+        public AtlasMaskDefinition LengthMask;
+        // Default strand direction in tangent space (z = along the normal).
+        public Vector3 Direction = new Vector3(0f, 0f, 1f);
+        // Per-texel direction, read like a tangent-space normal map; null when unused.
+        public AtlasTextureSample DirectionMap;
+        public float DirectionMapStrength = 1f;
+        // Take the strand direction from vertex colours instead of the map or the constant.
+        public bool DirectionFromVertexColors;
+        // 0..1: how far strands bend downward under gravity.
+        public float Gravity = 0.25f;
+        // Random per-strand variation of the direction.
+        public float Randomness;
+        // Strand pattern; strands appear where it is bright.
+        public AtlasTextureSample StrandNoise;
+        // Thins the fur; null when unused.
+        public AtlasMaskDefinition AlphaMask;
+        // 0..1 darkening toward the strand roots.
+        public float RootOcclusion;
+        public int LayerCount = 2;
+        // 0..1: how much of the strand keeps full width from the root up.
+        public float RootWidth;
+        // 0..1: strand thickness relative to the pattern.
+        public float Width = 0.15f;
+        public readonly AtlasFurWind Wind = new AtlasFurWind();
+        // Rim on the strands only, times the direct light colour.
+        public Color RimColor = UnityEngine.Color.black;
+        public float RimPower = 3f;
+        // 0..1: suppresses the rim on the lit side.
+        public float RimLitSideSuppression = 0.5f;
+        // Render settings for the fur pass alone.
+        public readonly AtlasRenderDefinition Render = new AtlasRenderDefinition { Cull = AtlasCullMode.Off };
+    }
+    public sealed class AtlasFurWind
+    {
+        public bool Enabled;
+        public Vector3 PrimaryDirection = new Vector3(1f, 0f, 0f);
+        public float PrimaryAmplitude = 0.2f;
+        public float PrimarySpeed = 1f;
+        public float PrimaryFrequency = 1f;
+        public Vector3 DetailDirection = new Vector3(0f, 0f, 1f);
+        public float DetailAmplitude = 0.1f;
+        public float DetailSpeed = 2.5f;
+        public float DetailFrequency = 5f;
     }
 
     // Shader-independent extension point for features not yet promoted into strongly-typed classes.

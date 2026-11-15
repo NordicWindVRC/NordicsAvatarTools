@@ -36,22 +36,24 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void Poiyomi10TintIsPerceptualWhenShaderInstalled()
+        public void Poiyomi10And11TintIsPerceptualWhenShaderInstalled()
         {
             var shader = Shader.Find(".poiyomi/Poiyomi Toon");
             if (shader == null) Assert.Ignore("Poiyomi Toon is not installed.");
             var material = new Material(shader);
             try
             {
-                if (AtlasPoiyomiVersionDetector.Detect(material) != 10) Assert.Ignore("Installed Poiyomi Toon is not 10.x.");
-                var untouched = new AtlasPoiyomi10Parser().Parse(material).ColorProcessing;
+                int major = AtlasPoiyomiVersionDetector.Detect(material);
+                if (major != 10 && major != 11) Assert.Ignore("Installed Poiyomi Toon is not 10.x or 11.x.");
+                var parser = AtlasShaderRegistry.Detect(material);
+                var untouched = parser.Parse(material).ColorProcessing;
                 Assert.AreEqual(1f, untouched.Saturation, 1e-5f);
                 Assert.AreEqual(1f, untouched.BrightnessMultiplier, 1e-5f);
                 Assert.AreEqual(AtlasTintMode.Perceptual, untouched.TintMode);
                 Assert.AreEqual(0f, untouched.Tint.Color.a, 1e-5f); // tint is off by default
 
                 material.SetColor("_MainTintColor", new Color(1f, 0f, 0f, 0.5f));
-                Assert.AreEqual(0.5f, new AtlasPoiyomi10Parser().Parse(material).ColorProcessing.Tint.Color.a, 1e-5f);
+                Assert.AreEqual(0.5f, parser.Parse(material).ColorProcessing.Tint.Color.a, 1e-5f);
             }
             finally { Object.DestroyImmediate(material); }
         }

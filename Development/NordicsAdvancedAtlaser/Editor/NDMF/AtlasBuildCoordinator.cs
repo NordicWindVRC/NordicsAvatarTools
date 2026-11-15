@@ -53,6 +53,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     Component=output, Configuration=config, Shader=AtlasShaderRegistry.Output(config.shaderId) };
                 if(job.Shader==null)
                     context.Diagnostics.Add(output.name+": unregistered output shader "+config.shaderId);
+                else if(!AtlasShaderRegistry.IsInstalled(job.Shader))
+                {
+                    // The new materials are made with the output shader, so it must be installed.
+                    context.Diagnostics.Add(output.name+": "+job.Shader.DisplayName+" isn't installed; this output is skipped.");
+                    job.Shader=null;
+                }
                 group.Outputs.Add(job);
                 if(config.sources==null) continue;
                 for(int sourceIndex=0;sourceIndex<config.sources.Count;sourceIndex++)

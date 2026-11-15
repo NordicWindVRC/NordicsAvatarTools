@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
 {
@@ -11,6 +12,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public string ShaderId => "poiyomi10";
         public string DisplayName => "Poiyomi Toon 10";
+        // Poiyomi 11 keeps 10's shader name; with Poiyomi Pro installed, 10 lives under Old Versions.
+        public Shader FindShader()
+        {
+            foreach (string name in new[] { ".poiyomi/Poiyomi Toon", ".poiyomi/Old Versions/10.0/Poiyomi Toon" })
+            {
+                var shader = Shader.Find(name);
+                if (shader == null) continue;
+                int major = AtlasPoiyomiVersionDetector.DetectFromMetadata(shader.name,
+                    UnityEditor.AssetDatabase.GetAssetPath(shader), AtlasPoiyomiVersionDetector.GetShaderMasterLabel(shader));
+                if (major == 10) return shader;
+            }
+            return null;
+        }
         public IReadOnlyList<AtlasOutputField> Fields => Array.Empty<AtlasOutputField>();
         public void AutoConfigure(IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasOutputConfiguration output) { }
         public void OnConfigurationChanged(AtlasOutputConfiguration config, AtlasConfigurationChange change) { }
@@ -24,6 +38,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public string ShaderId => "mobiletoon";
         public string DisplayName => "VRChat Mobile Toon Standard";
+        public Shader FindShader() => Shader.Find("VRChat/Mobile/Toon Standard");
         public IReadOnlyList<AtlasOutputField> Fields => Array.Empty<AtlasOutputField>();
         public void AutoConfigure(IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasOutputConfiguration output) { }
         public void OnConfigurationChanged(AtlasOutputConfiguration config, AtlasConfigurationChange change) { }

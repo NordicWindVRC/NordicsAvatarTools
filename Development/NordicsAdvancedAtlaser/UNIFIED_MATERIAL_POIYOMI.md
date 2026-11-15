@@ -11,11 +11,13 @@ about 60 top-level sections.
 is Thry Editor, built from the shader's property block: section markers, toggles and hidden
 flags. I extracted the section tree with a script: **3,801 properties, about 2,640 visible.**
 Older versions (7.3, 8.1, 9.0, 9.3) aren't covered; their differences are parser work.
+**Version 11 and Poiyomi Pro** (11.0.50, from the dev project's `com.poiyomi.pro` download) are
+covered in [*Version 11 and Pro*](#version-11-and-pro), as differences from 10.0.29.
 
 **Variants:** Poiyomi Toon, Two Pass, Early Outline, Grab Pass, Lil Fur and Lil Fur Two Pass
 share this feature set. Grab Pass adds screen-grab effects; Lil Fur adds a fur pass, covered in
-[*Lil Fur*](#lil-fur-variants-lil-fur-and-lil-fur-two-pass). **Poiyomi Toon World** is world-only and out of scope. **Poiyomi Pro** isn't
-installed, so its features aren't covered.
+[*Lil Fur*](#lil-fur-variants-lil-fur-and-lil-fur-two-pass). **Poiyomi Toon World** is world-only and out of scope. Poiyomi Pro's variants are listed under
+[*Version 11 and Pro*](#version-11-and-pro).
 
 **Parser today:** the Poiyomi parsers (`AtlasPoiyomi*.cs`) read some controls in most sections,
 many as raw values. Each feature has a short *Parser today* line based on a script count of how
@@ -551,8 +553,106 @@ the strand.
 - **Fur on or off** is a variant choice: fur and non-fur sources can't share one output
   material. See the open question about settings that can't be merged in the
   [Uber draft](UNIFIED_MATERIAL_MOCHIE_UBER.md#open-questions).
-- **Parser today:** the Lil Fur shader names go to the Poiyomi parser, which reads the shared
-  features. Nothing fur-specific is read.
+- **Parser:** the Lil Fur shader names go to the Poiyomi parser, which reads the shared
+  features and fills the unified fur definition (`AtlasUnifiedMaterial.Fur`) from the
+  controls above.
+
+## Version 11 and Pro
+
+**Source:** Poiyomi 11.0.50, downloaded by the `com.poiyomi.pro` package into the dev project.
+It contains Toon and Pro for both 10.0.29 (as *Old Versions*) and 11.0.50.
+
+**Detection:** Toon 11 keeps 10's shader names (`.poiyomi/Poiyomi Toon` and so on), so only the
+shader's version label ("Poiyomi 11.0.50") tells them apart. Pro shaders are named
+`.poiyomi/Poiyomi Pro…`.
+
+**Size:** Toon 11 has 4,825 properties, about 3,000 visible. Compared with 10.0.29 it adds 376
+properties and removes 25. Pro 11 adds another 159 on top of Toon 11, and removes none.
+
+### What Toon 11 adds
+- **PBR lighting type** (*Lighting Type* value 9): physically based shading with its own
+  surface controls.
+  - Metallic, smoothness and occlusion, each a constant and a channel of one packed texture
+    (*White* means no texture).
+  - Dielectric reflectance (0.5 is the usual 4%); multi-bounce occlusion.
+  - Clear coat (strength, smoothness), anisotropy (strength, rotation, mask), **sheen**
+    (strength, colour, smoothness, mask), and **glints**: sparkling flakes with density, size,
+    colour and variation.
+
+  **Unified:** the *physically based* family. Sheen and glints are new surface response
+  features: sheen as a soft cloth-like edge lobe, glints as a flake layer. Glitter is a
+  procedural pattern in its own section; glints belong to the specular response instead.
+- **Black & White** colour adjustment: lightness, contrast, tint, highlight colour, select by
+  colour, with a mask. **Unified:** another colour adjustment operation.
+- **Mask levels on about 59 masks:** input and output range, midpoint, invert, normalise, plus
+  optional vertex-colour channels added to the mask. **Unified:** the mask building block's
+  remap (catalogue 1.4) and a vertex-colour source.
+- **Decals:** sprite-sheet animation (columns, rows, frames, FPS), MSDF textures (sharp
+  vector-like edges), flip in mirror, smooth border.
+- **Lighting limits:** limit brightness per channel or keeping the hue, for the main and the
+  additional lights.
+- **Alpha:** dithering mode (soften edges, or real transparency); dithered shadows.
+- **RGBA colour masking:** per-region occlusion maps, smoothness blend, *affect alpha*. The
+  vertex-colour mask type and the per-region PBR toggles are gone.
+- **Two backlights** instead of one; rims gain an application stage, anti-aliasing and *apply
+  transparency*.
+- **Outlines:** a mask channel per property (size, colour, alpha, emission, highlight and so
+  on), edge fade, thin-outline smoothing, rim-style outline widths on the lit and dark sides, an
+  outline emission map, Z clip and offset, camera depth.
+- **Contacts:** up to 8 VRChat contacts, each producing a global mask (radius, falloff,
+  position, which people). **Unified:** a mask-bus producer driven by contacts, and so also a
+  modulator source.
+- **Smaller additions:** dissolve colour adjust; flipbook video, depth and flip in mirror;
+  emission *apply transparency*; pathing motion and easing; internal parallax refraction and
+  depth fog; voronoi motion and AudioLink; a radial AL spectrum; vertex-colour hue shift; fit
+  bounds for vertex effects and LookAt; screen-space UV sizing; post processing that includes
+  emission.
+- **Lil Fur:** fur bends away from a VRChat contact (*Contact*, *Contact Push*).
+- **Removed:** Beatsaber support, the advanced parallax options (cone stepping, anisotropic
+  filtering, curvature fix).
+
+### What Pro adds (Pro 11 over Toon 11)
+- **TPS deformation:** bending, squeeze, bulge, pulsing and idle shape driven by TPS lights.
+  **Unified:** deformation.
+- **Squish:** surfaces flatten where a contact presses, with a colour gradient. **Unified:**
+  deformation driven by contacts, with a colour layer.
+- **Screen-space ambient occlusion** and **contact shadows:** darkening from the depth texture
+  (needs Poiyomi's depth prefab). **Unified:** screen-space lighting effects, a new lighting
+  group.
+- **Outline bake:** baked curvature data for better outline shapes. **Unified:** an outline
+  input.
+- **Constellation:** stars and connecting lines, animated, with AudioLink. **Unified:** a
+  procedural pattern kind.
+- **GT7 tone mapping** and **neutral surface emission** under post processing. **Unified:** a
+  tone-map choice and an emission adjustment.
+
+**Pro variant shaders:**
+
+| Variant | What it adds | Proposed unified home |
+|---|---|---|
+| Pro Fur | Shell fur: layer count, length, gravity, tip taper, colour texture, mask, height map, AO, contacts, distance LOD | Fur, method *shells* |
+| Lil Fur, Lil Fur Two Pass | As Toon's Lil Fur | Fur, method *strands* |
+| Two Pass, Early Outline | Pass arrangements | Render |
+| Triple Outline | Three outline layers, each with its own stencil | Outline as a list |
+| Grab Pass, Self Grab | Screen-grab effects: refraction, blur, pixelation, colour ramp, an SDF volume, a lava lamp | Refraction layer and screen-grab effects |
+| Geom, Geometric Dissolve, Tessellated (and combinations) | A geometry stage; dissolving into pieces; tessellation | Deformation and geometry effects |
+| ShatterWave, Particle | Shattering, and particles spawned from triangles | Geometry effects |
+| Triplanar Projection | Triplanar texture projection | Mapping |
+| World, World Fur | World variants | Out of scope |
+
+### Parser
+- The version detector recognises 11 and Pro. `AtlasPoiyomi11Parser` handles Toon 11;
+  `AtlasPoiyomiPro11Parser`, `AtlasPoiyomiPro10Parser` and a generic Pro parser handle Pro. All
+  share the Poiyomi base, since Pro is Toon plus extras.
+- **Mapped:** the PBR lighting type's surface (metallic, smoothness, occlusion, reflectance; clear
+  coat, anisotropy, sheen and glints as raw values), Pro Fur into the fur definition, and fur
+  contacts for both fur kinds.
+- **Reported once each when used:** mask levels and vertex-colour mask channels; SSAO, contact
+  shadows, TPS deformation, squish, constellation, GT7 tone mapping, neutral emission, outline
+  bake; and the variant shaders listed above.
+- **Not yet read:** the other 11 additions (Black & White, decal sprite sheets, outline masks,
+  backlight 2, contacts and so on) fall under the existing *advanced effects not fully
+  normalised* report, like the rest of Poiyomi's unmapped features.
 
 ## Out of scope
 
@@ -609,7 +709,8 @@ What Poiyomi adds to, or confirms in, the earlier drafts:
    voronoi, truchet, pathing, internal parallax, video screen, audio spectrum), or leave the
    rarer ones reported as unsupported until a writer needs them?
 3. **Stats Overlay:** treat as out of scope, like world-only features?
-4. **Poiyomi Pro:** confirm it stays unsupported unless you can provide the source.
+4. **Poiyomi Pro:** resolved; the source is available now. See
+   [*Version 11 and Pro*](#version-11-and-pro).
 5. **Older Poiyomi versions** (7.3–9.3): the parser has version detection. Keep supporting
    them, or limit support to 10.x and report older versions?
 6. **Fur length when atlasing:** bake the length ratio into the length mask and use the longest

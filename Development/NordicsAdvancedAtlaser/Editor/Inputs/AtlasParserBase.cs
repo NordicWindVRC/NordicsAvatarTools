@@ -9,14 +9,23 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public abstract string DisplayName { get; }
         public virtual int Priority => 50;
         public abstract bool CanParse(Material material);
-        protected static string Name(Material m) => m != null && m.shader != null ? m.shader.name : "";
+        protected static string Name(Material m) => AtlasMaterialReader.ShaderName(m);
 
         public virtual AtlasUnifiedMaterial Parse(Material material)
         {
             if (material == null) throw new ArgumentNullException(nameof(material));
-            var output = AtlasMaterialReader.Create(material);
-            Populate(material, output);
-            return output;
+            AtlasMaterialReader.ClearCache();
+            try
+            {
+                var output = AtlasMaterialReader.Create(material);
+                if (AtlasMaterialReader.Saved(material) != null)
+                    output.Issues.Add(new AtlasNormalizationIssue("shader.not-installed", AtlasNormalizationSeverity.Info,
+                        "The shader isn't installed, so the material's saved values were read as " + DisplayName +
+                        ". Options whose names come from the shader are reported, not guessed."));
+                Populate(material, output);
+                return output;
+            }
+            finally { AtlasMaterialReader.ClearCache(); }
         }
         protected virtual void Populate(Material m, AtlasUnifiedMaterial data)
         {
@@ -30,6 +39,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public abstract class AtlasPoiyomiParserBase : AtlasParserBase
     {
         public override int Priority => 100;
+        // Poiyomi Pro is Poiyomi Toon plus Pro-only features and variants.
+        protected virtual bool IsPro => false;
         protected override void Populate(Material m, AtlasUnifiedMaterial d)
         {
             d.Surface.Model = AtlasShadingModel.Toon;
@@ -57,6 +68,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             AtlasPoiyomiUnifiedParser.Populate(m,d,AtlasPoiyomiVersionDetector.Detect(m));
             AtlasPoiyomiFeatureParser.Populate(m,d);
             AtlasPoiyomiAdvancedParser.Populate(m,d);
+            AtlasPoiyomiFurParser.Populate(m,d);
+            AtlasPoiyomiMaskLevels.Report(m,d);
+            if (IsPro) AtlasPoiyomiProFeatures.Report(m,d);
             bool globalEnabled=AtlasSemanticReader.Toggle(m,"_GlobalMaskTexturesEnable",true);
             foreach(var mask in d.Masks)
                 if(mask.Purpose==AtlasMaskPurpose.Global) mask.Enabled=globalEnabled;

@@ -52,7 +52,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 detail.DetailBlend=AtlasDetailBlendMode.MultiplyDouble;
             }
             foreach(var layer in d.Emissions)
-                layer.Enabled = m.IsKeywordEnabled("_EMISSION") ||
+                layer.Enabled = AtlasMaterialReader.Keyword(m,"_EMISSION") ||
                     (mobileLite && layer.Map!=null && layer.Tint.maxColorComponent>0.0001f);
 
             d.Surface.Height.Sample=AtlasMaterialReader.Sample(m,"_ParallaxMap",AtlasColorInterpretation.LinearData,d);

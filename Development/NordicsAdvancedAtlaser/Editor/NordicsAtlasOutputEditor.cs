@@ -248,12 +248,26 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
         private void DrawShaderSelection(SerializedProperty id)
         {
-            var options = AtlasShaderRegistry.OutputShaders;
+            // Only installed output shaders are offered: the new materials are made with them.
+            var options = AtlasShaderRegistry.InstalledOutputShaders;
+            if (options.Count == 0)
+            {
+                EditorGUILayout.HelpBox("No supported output shader is installed in this project. Install one, " +
+                    "for example Poiyomi Toon 10 or the VRChat SDK's Mobile Toon Standard.", MessageType.Error);
+                return;
+            }
             var labels = options.Select(o => o.DisplayName).ToArray();
             int index = -1;
             for (int i = 0; i < options.Count; ++i) if (options[i].ShaderId == id.stringValue) index = i;
-            if (index < 0) EditorGUILayout.HelpBox("Unknown shader ID: " + id.stringValue, MessageType.Warning);
-            int next = EditorGUILayout.Popup("Output Shader", Mathf.Max(0, index), labels);
+            if (index < 0)
+            {
+                var configured = AtlasShaderRegistry.Output(id.stringValue);
+                EditorGUILayout.HelpBox(configured != null
+                    ? configured.DisplayName + " isn't installed in this project, so this output can't be built. " +
+                      "Install it, or choose an installed shader."
+                    : "Unknown output shader: " + id.stringValue + ". Choose an installed shader.", MessageType.Warning);
+            }
+            int next = EditorGUILayout.Popup("Output Shader", index, labels);
             if (next >= 0 && next < options.Count && next != index) id.stringValue = options[next].ShaderId;
         }
     }

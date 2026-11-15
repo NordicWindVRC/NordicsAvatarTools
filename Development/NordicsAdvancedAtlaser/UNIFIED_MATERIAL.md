@@ -10,15 +10,14 @@ One document per supported input shader family. Each one lists what the shader l
 change, what that does to the look, and how the unified material should represent it.
 
 They're merged into one proposed feature set in
-[UNIFIED_MATERIAL_FEATURES.md](UNIFIED_MATERIAL_FEATURES.md) (first refinement pass), which is
+[UNIFIED_MATERIAL_FEATURES.md](UNIFIED_MATERIAL_FEATURES.md) (second refinement pass), which is
 the target for the unified material refactoring.
 
 | Shader family | Document | Status |
 |---|---|---|
 | VRChat Mobile (Toon Lit, Standard Lite, Toon Standard) | [UNIFIED_MATERIAL_VRCHAT_MOBILE.md](UNIFIED_MATERIAL_VRCHAT_MOBILE.md) | First draft |
 | Unity Standard (metallic and specular setup) | [UNIFIED_MATERIAL_UNITY_STANDARD.md](UNIFIED_MATERIAL_UNITY_STANDARD.md) | First draft |
-| Mochie Standard (Standard, Lite, Mobile) | [UNIFIED_MATERIAL_MOCHIE_STANDARD.md](UNIFIED_MATERIAL_MOCHIE_STANDARD.md) | First draft |
-| Mochie Uber (and Outline) | [UNIFIED_MATERIAL_MOCHIE_UBER.md](UNIFIED_MATERIAL_MOCHIE_UBER.md) | First draft; no parser yet |
+| Mochie Uber (and Outline) | [UNIFIED_MATERIAL_MOCHIE_UBER.md](UNIFIED_MATERIAL_MOCHIE_UBER.md) | First draft; parser added |
 | Poiyomi Toon 10 (and its avatar variants) | [UNIFIED_MATERIAL_POIYOMI.md](UNIFIED_MATERIAL_POIYOMI.md) | First draft |
 
 ## Guidelines
@@ -33,6 +32,32 @@ These are the design rules. Where the code doesn't follow them yet, see
   knows the other. The source `Material`, shader, parser and property names never reach a writer.
 - **It's shader-neutral.** No property names, source enum values, or structures named after a
   shader or shader version. Everything a parser knows about its source stays in the parser.
+
+### Shader availability
+
+- **Parsing never requires the source shader to be installed, but may use it when it is.**
+  Parsing mostly works without the shader and fully works with it.
+  - A material keeps its values even when its shader is missing, for example materials copied
+    into a Quest project without Poiyomi. Parsers read them through `AtlasMaterialReader`,
+    which uses the shader when it's there and the material's saved values when it isn't.
+    Parsers never call the material or shader API directly.
+  - When the shader is installed, a parser may use it for what saved values can't provide,
+    such as option names from the shader's declaration or a variant that differs only by
+    name.
+  - Anything lost without the shader is reported, never guessed.
+  - **Typed features never depend on the shader.** Everything that decides the look is read
+    from plain values, and each parser holds its own option tables as features get typed.
+    The installed shader only adds detail to untyped values, reports and edge cases.
+  - **Detection without the shader** uses the property names a material saved: Poiyomi by
+    family, Pro and version marker properties; Mochie Uber by its own combination of controls.
+    VRChat Mobile and Unity Standard shaders are always present.
+  - **Option names** that come from the shader's own declaration (about 30 reads, all feeding
+    untyped values today) can't be read without it, and are reported. They move into the
+    parsers' own option tables as those values are typed.
+  - A material parsed this way gets an info note saying so.
+- **Output shaders must be installed.** The new materials are made with them, so the output
+  picker only offers installed ones. An output whose shader isn't installed shows a warning
+  and is skipped at build time with one diagnostic.
 
 ### Features
 
@@ -196,8 +221,8 @@ of the unified union. **This is not a claim of 100% verified semantic coverage.*
 | VRChat Mobile Standard Lite | PBR, detail, spec AA, lightmap selection, bicubic, toggles | Verify feature-keyword activation in compiled variants |
 | VRChat Mobile Toon Lit | Base texture, vertex color, fixed lighting mode | Validate fixed directional/SH behavior in output writers |
 | VRChat Mobile Toon Standard | Toon ramp, specular controls, matcap, rim, emission, detail blending, color masks, hue, AudioLink | Shader's specialized AudioLink blends and conditional feature activation need visual verification |
-| Mochie Standard | Core PBR, packed maps, detail, sampling, masks, reflectance, SSS, color filters, rain/wind/puddles, AreaLit/LTCGI/light volumes | Some enum, swizzle and procedural semantics are recorded as approximate. Checked against the v2.14.2 source; the fixes found are listed in [UNIFIED_MATERIAL_MOCHIE_STANDARD.md](UNIFIED_MATERIAL_MOCHIE_STANDARD.md) |
-| Poiyomi Toon 7–10 | Version-aware lighting modes, shadow bands, matcap weighted blends, normals, emission layers, masks, clearcoat, color adjustments, rim, SSS | Most procedural, animated and special effects, and global-mask routing, aren't mapped yet. Poiyomi Pro has no parser and falls back to *Fallback* |
+| Mochie Uber | Shading on/off, blending, alpha mask, four surface workflows, parallax, toon shadows, detail, emission, matcaps, rims, subsurface, filtering, team colours, light volumes, feature masks | Outline, refraction, iridescence, flipbooks, UV distortion, vertex manipulation, AudioLink and map filters are reported, not mapped. Uber X is unsupported. Mochie Standard is no longer parsed |
+| Poiyomi Toon 7–11 and Pro 10–11 | Version-aware lighting modes, shadow bands, matcap weighted blends, normals, emission layers, masks, clearcoat, color adjustments, rim, SSS, fur (Lil Fur strands, Pro shells), 11.x PBR lighting | Most procedural, animated and special effects, and global-mask routing, aren't mapped yet. Pro-only effects and variants, and 11.x mask levels, are reported, not mapped |
 | Fallback | Conservative conventional texture, scalar, tint, mask, specular and matcap recognition | Arbitrary shaders cannot be automatically guaranteed; unresolved features are reported. No tests yet |
 
 ## Parser responsibilities and testing

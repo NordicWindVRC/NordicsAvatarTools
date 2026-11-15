@@ -55,11 +55,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
         public static void Vector(Material m, AtlasSemanticFeature feature, string semantic, string source)
         {
-            if (!AtlasMaterialReader.Has(m,source) || m.shader == null) return;
-            int index = m.shader.FindPropertyIndex(source);
-            if (index < 0 || m.shader.GetPropertyType(index) != ShaderPropertyType.Vector) return;
+            if (!AtlasMaterialReader.Has(m,source)) return;
+            if (AtlasMaterialReader.Saved(m) == null)
+            {
+                int index = m.shader.FindPropertyIndex(source);
+                if (index < 0 || m.shader.GetPropertyType(index) != ShaderPropertyType.Vector) return;
+            }
             feature.Parameters[semantic] = new AtlasSemanticValue {
-                Kind = AtlasSemanticValueKind.Vector, Vector = m.GetVector(source)
+                Kind = AtlasSemanticValueKind.Vector, Vector = AtlasMaterialReader.Vector(m, source, Vector4.zero)
             };
         }
         public static void Texture(Material m, AtlasUnifiedMaterial output, AtlasSemanticFeature feature,
@@ -90,7 +93,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static bool TryDeclaredChoice(Material m, string source, out string choice)
         {
             choice = null;
-            if (!AtlasMaterialReader.Has(m,source) || m.shader == null) return false;
+            // Option names come from the shader's declaration, so they need the shader installed.
+            if (!AtlasMaterialReader.Has(m,source) || AtlasMaterialReader.Saved(m) != null || m.shader == null) return false;
             int index=m.shader.FindPropertyIndex(source);
             if(index<0)return false;
             string[] attributes=m.shader.GetPropertyAttributes(index);

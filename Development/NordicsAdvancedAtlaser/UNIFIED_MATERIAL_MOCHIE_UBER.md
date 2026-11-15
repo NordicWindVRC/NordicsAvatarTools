@@ -12,8 +12,12 @@ Variants: `Mochie/Uber` and `Mochie/Uber (Outline)`.
 **Character:** Mochie's avatar shader: physically based or toon shading, with many stylised and
 animated effects. About 590 properties.
 
-**Parser today:** none. Uber materials go to the fallback parser, which only recognises
-conventional texture names. So no feature below has a *Parser today* line; everything is to do.
+**Parser:** `AtlasMochieUberParser` follows this inventory against today's unified material. It
+maps shading on/off, blending and alpha, the four surface workflows, parallax, toon shadows,
+lighting contributions, detail, both emission layers, both matcaps, both rims, subsurface,
+filtering and team colours, light volumes and the feature masks. Features without a typed home
+yet are reported once each when switched on; see [*Parser work*](#parser-work). The feature
+entries below don't have *Parser today* lines.
 
 **Uber X:** the paid version adds the inspector's *Special Features* and some AudioLink targets.
 Its code isn't installed here; see [*Uber X features*](#uber-x-features).
@@ -89,7 +93,7 @@ Settings.
   with scale; tiling, scroll, rotation; a detail mask (under Masks).
 - **Live or baked:** baked; scroll is live.
 - **Unified:** the general detail layer from the
-  [Mochie Standard draft](UNIFIED_MATERIAL_MOCHIE_STANDARD.md): target, blend, strength, mask,
+  [feature catalogue](UNIFIED_MATERIAL_FEATURES.md#4-layers): target, blend, strength, mask,
   mapping.
 
 ### Masks
@@ -162,7 +166,7 @@ Settings.
 - **Controls:** Off, Environment (reflection probes), or a Cubemap (lit or unlit); tint and
   strength; fresnel with strength; manual roughness; lighting-based strength. Screen-space
   reflections are listed but are world-only (see the
-  [Mochie Standard draft](UNIFIED_MATERIAL_MOCHIE_STANDARD.md#world-only-features)).
+  [feature catalogue](UNIFIED_MATERIAL_FEATURES.md#7-out-of-scope)).
 - **Live or baked:** live.
 - **Unified:** environment reflections with a source (scene probes or a fixed cubemap), tint,
   strength, fresnel strength, and a roughness override.
@@ -189,7 +193,7 @@ Settings.
 ### Subsurface Scattering
 - **Controls:** thickness map with power; colour texture and colour, base colour tint; direct
   and indirect strength; power; normal strength; wrapping.
-- **Unified:** the subsurface layer from Mochie Standard, plus a colour texture.
+- **Unified:** the subsurface layer, plus a colour texture.
 
 ### Basic Rim
 - **Controls:** colour texture and colour; blend (Add, Sub, Mul, Mul×2, Overlay, Screen,
@@ -228,7 +232,7 @@ Settings.
 
 ### Light Volumes
 - **Controls:** a toggle, strength, specularity with strength, bias.
-- **Unified:** external lighting, as in Mochie Standard.
+- **Unified:** external lighting.
 
 ---
 
@@ -373,25 +377,29 @@ as Poiyomi Pro.
 
 ## Parser work
 
-There's no Uber parser. A new parser can follow this inventory section by section. Items
-that need care:
+`AtlasMochieUberParser` handles these points:
 - **Section toggles** gate everything; values behind a disabled section don't count.
 - **Masks:** resolve separate or packed masks to the feature that uses them.
 - **Metallic workflow:** a texture replaces its slider.
-- **Map filters** turn into remaps on the scalar inputs.
+- **Map filters** are reported, not applied yet. They become remaps on the scalar inputs once
+  the scalar input has a remap.
 - **Manual Blend shadows** become a ramp.
-- **Uber X** materials: detect enabled X features and report them once.
+- **Uber X** materials: enabled X features are reported once.
+
+**Reported, not mapped yet:** outline, refraction, iridescence, cubemap base colour, mirror
+behaviour, base colour dissolve, flipbooks, UV distortion, vertex manipulation, AudioLink,
+hard edges, map filters, dithered blending (approximated as cutout), and post filtering
+(approximated as a base colour adjustment).
 
 ## Open questions
 
 1. **Uber X:** treat like Poiyomi Pro: unsupported unless you can provide the source?
 2. **Static vertex manipulation** (expansion, rounding, rotation, position): bake into the mesh
    at build time, so it works with any output shader, or carry it as a geometry feature?
-   On avatars these are deliberate looks, unlike Mochie Standard's world props.
+   On avatars these are deliberate looks, not world props.
 3. **Settings that can't be merged** (blend mode, culling, mirror behaviour, outline, stencil,
    fallback shader): should the Atlaser report sources that disagree within one output, or
    should the user's output configuration simply define them, so sources are rendered with
    the output's settings?
 4. **Mochie versions:** Nordics Nardo has Uber v1.34.2, one minor version behind. Same
-   question as for Mochie Standard: support older material versions, or expect an upgrade
-   first?
+   question as for Poiyomi: support older material versions, or expect an upgrade first?

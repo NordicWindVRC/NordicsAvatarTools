@@ -55,7 +55,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     default:return AtlasLightingMode.Unknown;
                 }
             }
-            if(major>=8 && major<=10)
+            if(major>=8 && major<=11)
             {
                 switch(value)
                 {
@@ -68,10 +68,53 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     case 6:return AtlasLightingMode.Realistic;
                     case 7:return AtlasLightingMode.Cloth;
                     case 8:return AtlasLightingMode.SignedDistanceField;
+                    // 11.x: physically based shading with its own surface controls.
+                    case 9:return major>=11?AtlasLightingMode.StandardMetallic:AtlasLightingMode.Unknown;
                     default:return AtlasLightingMode.Unknown;
                 }
             }
             return AtlasLightingMode.Unknown;
+        }
+        // Poiyomi 11's PBR lighting type has its own metallic, smoothness, reflectance and occlusion
+        // (one packed texture with a channel each, "White" meaning no texture), plus clear coat,
+        // anisotropy, sheen and glints.
+        private static void PhysicallyBasedSurface(Material m, AtlasUnifiedMaterial d)
+        {
+            var s=d.Surface;
+            s.Model=AtlasShadingModel.StandardMetallic;
+            s.Workflow=AtlasSurfaceWorkflow.Metallic;
+            d.Lighting.Model=AtlasShadingModel.StandardMetallic;
+            var packed=AtlasMaterialReader.Sample(m,"_PoiPBRMaskMap",AtlasColorInterpretation.LinearData,d,"_PoiPBRMaskMapUV",true);
+            PbrScalar(m,s.Metallic,packed,"_PoiPBRMetallic",0f,"_PoiPBRMetallicChannel",0);
+            PbrScalar(m,s.Roughness,packed,"_PoiPBRSmoothness",0.5f,"_PoiPBRSmoothnessChannel",3);
+            s.Roughness.InvertResult=true;
+            PbrScalar(m,s.Occlusion,packed,"_PoiPBROcclusionStrength",1f,"_PoiPBROcclusionChannel",1);
+            s.Occlusion.CombineMode=AtlasScalarCombineMode.StrengthAroundOne;
+            // 0..1 control; 0.5 is the usual 4% for non-metals (F0 = 0.16 × r²).
+            s.Reflectance=AtlasMaterialReader.Float(m,"_PoiPBRReflectance",0.5f);
+            s.SpecularHighlights=true;
+            s.GlossyReflections=true;
+            var specular=AtlasSemanticReader.Feature(d,"surface.specular");
+            AtlasSemanticReader.ToggleSet(m,specular,"multiBounceOcclusion","_PoiPBRMultiBounceAO","glints","_PoiPBRGlints");
+            AtlasSemanticReader.NumberSet(m,specular,"anisotropy","_PoiPBRAnisotropy","anisotropyRotation","_PoiPBRAnisotropyRotation",
+                "sheenStrength","_PoiPBRSheen","sheenSmoothness","_PoiPBRSheenSmoothness",
+                "glintDensity","_PoiPBRGlintDensity","glintSize","_PoiPBRGlintSize","glintSmoothness","_PoiPBRGlintSmoothness");
+            AtlasSemanticReader.Color(m,specular,"sheenColor","_PoiPBRSheenColor");
+            AtlasSemanticReader.Color(m,specular,"glintColor","_PoiPBRGlintColor");
+            if(AtlasMaterialReader.Float(m,"_PoiPBRClearCoat",0f)>0f)
+            {
+                var coat=AtlasSemanticReader.Feature(d,"surface.clearcoat");
+                AtlasSemanticReader.NumberSet(m,coat,"strength","_PoiPBRClearCoat","smoothness","_PoiPBRClearCoatSmoothness");
+            }
+        }
+        private static void PbrScalar(Material m,AtlasScalarInput input,AtlasTextureSample packed,string constant,float fallback,
+            string channelProperty,int defaultChannel)
+        {
+            int channel=Mathf.RoundToInt(AtlasMaterialReader.Float(m,channelProperty,defaultChannel));
+            bool sampled=packed!=null && channel>=0 && channel<=3;
+            input.Sample=sampled?packed:null;
+            input.Channel=sampled?(AtlasChannel)channel:AtlasChannel.Red;
+            input.Constant=AtlasMaterialReader.Float(m,constant,fallback);
         }
         private static void Lighting(Material m, AtlasUnifiedMaterial d, int major)
         {
@@ -80,6 +123,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             l.Mode=ToLightingMode(major,mode);
             if(l.Mode==AtlasLightingMode.Unknown)
                 AtlasMaterialReader.MissingFeature(d,"lighting.mode","Lighting mode is not yet identified or has an unknown version-specific value.");
+            if(major>=11 && mode==9)PhysicallyBasedSurface(m,d);
 
             l.ShadowStrength=AtlasMaterialReader.Float(m,"_ShadowStrength",1f);
             l.ShadowOffset=AtlasMaterialReader.Float(m,"_ShadowOffset",0f);
