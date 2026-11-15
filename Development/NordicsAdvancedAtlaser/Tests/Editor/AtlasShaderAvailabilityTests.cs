@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using NUnit.Framework;
 using NordicWind.AdvancedAtlaser.Editor;
-using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -14,47 +12,10 @@ namespace NordicWind.AdvancedAtlaser.Tests
     // and built when installed.
     public sealed class AtlasShaderAvailabilityTests
     {
-        // Makes the reader use the material's saved values, as it does when the shader is missing.
-        private sealed class SavedValuesOnly : IDisposable
-        {
-            private static readonly FieldInfo Flag = typeof(AtlasShaderRegistry).Assembly
-                .GetType("NordicWind.AdvancedAtlaser.Editor.AtlasMaterialReader")
-                .GetField("ForceSavedProperties", BindingFlags.NonPublic | BindingFlags.Static);
-            public SavedValuesOnly() { Flag.SetValue(null, true); }
-            public void Dispose() { Flag.SetValue(null, false); }
-        }
-
-        // Material.SetFloat drops names its shader doesn't declare, so properties from another
-        // shader are written into the material's saved data directly, as an asset would have them.
-        private static void AddSaved(Material material, string list, string name, Action<SerializedProperty> set)
-        {
-            using (var serialized = new SerializedObject(material))
-            {
-                var entries = serialized.FindProperty("m_SavedProperties").FindPropertyRelative(list);
-                int index = entries.arraySize;
-                entries.InsertArrayElementAtIndex(index);
-                var entry = entries.GetArrayElementAtIndex(index);
-                entry.FindPropertyRelative("first").stringValue = name;
-                set(entry.FindPropertyRelative("second"));
-                serialized.ApplyModifiedPropertiesWithoutUndo();
-            }
-        }
-        private static void AddSavedFloat(Material material, string name) =>
-            AddSaved(material, "m_Floats", name, value => value.floatValue = 0f);
-        private static void AddSavedColor(Material material, string name) =>
-            AddSaved(material, "m_Colors", name, value => value.colorValue = Color.white);
-
-        private static Material StandardMaterial()
-        {
-            var shader = Shader.Find("Standard");
-            if (shader == null) Assert.Ignore("The Standard shader is not available.");
-            return new Material(shader);
-        }
-
         [Test]
         public void SavedValuesGiveTheSameResultAsTheShader()
         {
-            var material = StandardMaterial();
+            var material = AtlasTestMaterials.Standard();
             var albedo = new Texture2D(4, 4);
             try
             {
@@ -65,7 +26,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
 
                 var installed = new AtlasFallbackParser().Parse(material);
                 AtlasUnifiedMaterial saved;
-                using (new SavedValuesOnly()) saved = new AtlasFallbackParser().Parse(material);
+                using (new AtlasTestMaterials.SavedValuesOnly()) saved = new AtlasFallbackParser().Parse(material);
 
                 // The values pass through serialization, so they can differ by float rounding.
                 Assert.AreEqual(0f, Vector4.Distance(installed.Surface.BaseColor.Color, saved.Surface.BaseColor.Color), 1e-5f);
@@ -83,13 +44,13 @@ namespace NordicWind.AdvancedAtlaser.Tests
         {
             // A Standard material carrying Poiyomi Pro 11's properties: neither Poiyomi nor its
             // shader name is involved, as when Poiyomi isn't installed.
-            var material = StandardMaterial();
+            var material = AtlasTestMaterials.Standard();
             try
             {
                 foreach (string name in new[] { "_ShaderOptimizerEnabled", "_LightingMode", "_MainBlackWhiteStrength", "_ConstellationEnable" })
-                    AddSavedFloat(material, name);
-                AddSavedColor(material, "_LightingShadowColor");
-                using (new SavedValuesOnly())
+                    AtlasTestMaterials.AddSavedFloat(material, name);
+                AtlasTestMaterials.AddSavedColor(material, "_LightingShadowColor");
+                using (new AtlasTestMaterials.SavedValuesOnly())
                 {
                     Assert.AreEqual(AtlasPoiyomiVariant.Pro, AtlasPoiyomiVersionDetector.DetectVariant(material));
                     Assert.AreEqual(11, AtlasPoiyomiVersionDetector.Detect(material));

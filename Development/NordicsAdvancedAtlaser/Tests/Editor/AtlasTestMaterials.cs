@@ -1,0 +1,56 @@
+using System;
+using System.Reflection;
+using NUnit.Framework;
+using NordicWind.AdvancedAtlaser.Editor;
+using UnityEditor;
+using UnityEngine;
+
+namespace NordicWind.AdvancedAtlaser.Tests
+{
+    // Builds source materials for parser tests without the source shader installed: a Standard
+    // material carries the source shader's properties in its saved data, and the reader is told
+    // to read saved values, as it does when a shader is missing.
+    internal static class AtlasTestMaterials
+    {
+        // While alive, the reader uses the material's saved values even though Standard is installed.
+        public sealed class SavedValuesOnly : IDisposable
+        {
+            private static readonly FieldInfo Flag = typeof(AtlasShaderRegistry).Assembly
+                .GetType("NordicWind.AdvancedAtlaser.Editor.AtlasMaterialReader")
+                .GetField("ForceSavedProperties", BindingFlags.NonPublic | BindingFlags.Static);
+            public SavedValuesOnly() { Flag.SetValue(null, true); }
+            public void Dispose() { Flag.SetValue(null, false); }
+        }
+
+        public static Material Standard()
+        {
+            var shader = Shader.Find("Standard");
+            if (shader == null) Assert.Ignore("The Standard shader is not available.");
+            return new Material(shader);
+        }
+
+        // Material.SetFloat drops names its shader doesn't declare, so properties of another
+        // shader are written into the material's saved data directly, as an asset would have them.
+        public static void AddSaved(Material material, string list, string name, Action<SerializedProperty> set)
+        {
+            using (var serialized = new SerializedObject(material))
+            {
+                var entries = serialized.FindProperty("m_SavedProperties").FindPropertyRelative(list);
+                int index = entries.arraySize;
+                entries.InsertArrayElementAtIndex(index);
+                var entry = entries.GetArrayElementAtIndex(index);
+                entry.FindPropertyRelative("first").stringValue = name;
+                set(entry.FindPropertyRelative("second"));
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+            }
+        }
+
+        public static void AddSavedFloat(Material material, string name, float value = 0f) =>
+            AddSaved(material, "m_Floats", name, v => v.floatValue = value);
+
+        public static void AddSavedColor(Material material, string name, Color value) =>
+            AddSaved(material, "m_Colors", name, v => v.colorValue = value);
+
+        public static void AddSavedColor(Material material, string name) => AddSavedColor(material, name, Color.white);
+    }
+}

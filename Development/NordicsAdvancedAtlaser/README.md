@@ -128,7 +128,7 @@ description before an output shader uses it.
 | Unity **Standard** | Shader name | Base color, metallic/smoothness, normal, occlusion, emission, detail maps, parallax, transparency | Some keyword and packed-channel combinations |
 | Unity **Standard (Specular setup)** | Shader name | Same as Standard, with specular workflow | Specular-map channel variations |
 | **VRChat/Mobile/Standard Lite** | Shader name | Metallic workflow, detail, specular anti-aliasing, lightmaps | Feature keywords of compiled variants |
-| **VRChat/Mobile/Toon Lit** | Shader name | Base texture, vertex color, fixed lighting | — |
+| **VRChat/Mobile/Toon Lit** (rebuilt) | Shader name | Base texture, vertex color, flat lighting | — |
 | **VRChat/Mobile/Toon Standard** (and Outline) | Shader name | Toon ramp, specular, matcap, rim, emission, detail, color masks, hue, AudioLink | Special AudioLink blends |
 | **Mochie/Uber** (and Outline) | Shader name | Shading on/off, blending and alpha mask, four surface workflows, parallax, toon shadows, detail, two emission layers, two matcaps, basic and environment rims, subsurface, filtering and team colours, light volumes, separate or packed feature masks | Outline, refraction, iridescence, flipbooks, UV distortion, vertex manipulation, AudioLink, map filters (reported). Uber X special features are unsupported |
 | **Poiyomi Toon 7.x, 8.x, 9.x, 10.x, 11.x** | Version label in the shader, then name/path | Lighting modes, shadow bands, matcaps, normals, emission layers, masks, global masks, clearcoat, color adjustments, rim, subsurface, decals, fur (Lil Fur variants) | Many advanced, procedural and animated features |

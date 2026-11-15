@@ -40,8 +40,9 @@ Texture times vertex colour.
 - **Controls:** texture, tiling and offset. No tint colour.
 - **Live or baked:** baked. The vertex colour stays per-vertex (see *Vertex colour* under
   [Cross-shader notes](#cross-shader-notes)).
-- **Unified:** base colour layer; vertex colour multiply on.
-- **Parser today:** correct.
+- **Unified:** base colour texture; vertex colour *multiply colour* on, used as stored (not
+  sRGB data). Alpha source *none*: the output is always opaque.
+- **Parser today:** rebuilt (refactor step 2); mapped as above.
 
 ### Lighting
 Uniform light per object, no direction; receives shadows. When the world has no directional
@@ -52,11 +53,21 @@ light, the direct light becomes 20% of the ambient colour.
   direct colour × shadow + ambient. This is the same look as a toon ramp that's flat
   everywhere, apart from receiving shadows, so it might merge into the ramp family as a
   preset.
-- **Parser today:** sets `MobileVertexToon`. Fine as a value, but it's one of the
-  per-shader lighting modes the guidelines want replaced by families.
+- **Parser today:** rebuilt (refactor step 2): family *flat*, ambient model *average*, received
+  shadows on, additional and vertex light contributions 0 (the shader has no add pass and
+  doesn't read vertex lights).
+- **Not represented:** the shader's own fallback when the world has no directional light (20%
+  of the ambient colour). It's not a material setting; a flat writer has its own behaviour.
+
+### Render
+Always opaque, back faces culled, depth written, queue Geometry: the unified render defaults.
+The fallback shader (*VRChat/Mobile/Diffuse*) isn't represented: mobile shaders are never
+blocked.
 
 ### Not visual
 Nothing; the shader has one property.
+
+**Coverage (step 2):** the one property is mapped; nothing is reported.
 
 ---
 

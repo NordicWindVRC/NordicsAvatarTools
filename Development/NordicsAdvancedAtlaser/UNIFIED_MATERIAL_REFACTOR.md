@@ -1,6 +1,6 @@
 # Unified material — refactor plan
 
-**Status:** step 1 done (2026-11-15), waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
+**Status:** steps 1 and 2 done (2026-11-15); step 2 waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
 the [feature catalogue](UNIFIED_MATERIAL_FEATURES.md), then rebuilding every input parser on it.
 
 **Goal:** the code matches the catalogue. Every supported input shader maps into typed
@@ -121,9 +121,14 @@ them.
 - **Docs:** the catalogue is the specification; `UNIFIED_MATERIAL.md` describes the new code and
   lists every parser as being rebuilt; README and changelog note the rebuild.
 
-### 2. VRChat Mobile Toon Lit
-Base colour, vertex colour and the *flat* lighting family. This proves the pattern: model,
-parser, saved-value tests, docs.
+### 2. VRChat Mobile Toon Lit (done)
+- **Typed:** vertex colour on the base colour (2.1); the *flat* family; the shared lighting
+  parameters ambient model, received shadows and light contributions (3.4). Specs written into
+  the catalogue.
+- **Parser:** `AtlasVRChatToonLitParser`, detected by shader name.
+- **Tests:** `AtlasTestMaterials` is the shared saved-value helper; `AtlasVRChatToonLitTests`
+  covers the untouched material, texture tiling, and the installed shader against saved values.
+- **Coverage:** the shader's one property is mapped; nothing is reported.
 
 ### 3. Unity Standard (metallic and specular)
 - **Typed:**

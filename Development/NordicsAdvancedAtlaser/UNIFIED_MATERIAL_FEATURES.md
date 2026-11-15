@@ -218,8 +218,16 @@ An ordered list of operations on a **target**, with a mask.
 ## 2. Surface
 
 ### 2.1 Base colour
-Colour input; vertex colour multiply (colour, alpha; linear or sRGB vertex data). **Sources:**
-all.
+`base = colour input × vertex colour` (where enabled).
+
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| colour input | 1.3 | white, no texture | |
+| vertex colour: multiply colour | bool | off | RGB × vertex RGB |
+| vertex colour: multiply alpha | bool | off | alpha × vertex alpha |
+| vertex colour: sRGB data | bool | off | off: vertex colours are used as stored (as linear values); on: converted from sRGB to linear first |
+
+**Sources:** all. *Specified with Toon Lit (refactor step 2).*
 
 ### 2.2 Alpha
 - **Source:** base colour alpha, a mask, vertex alpha, or none; strength.
@@ -267,7 +275,7 @@ Poiyomi.
 | Family | Look | Sources |
 |---|---|---|
 | **unlit** | base colour as is | Uber shading off, Poiyomi unlit intensity |
-| **flat** | uniform light, no shading across the surface | Toon Lit, Poiyomi Flat |
+| **flat** | uniform light, no shading across the surface: `base × (main light × shadow + ambient)`, each term times its contribution (3.4) | Toon Lit, Poiyomi Flat |
 | **ramp toon** | a shading term mapped through a ramp to brightness and shade colour | Toon Standard, Uber shadows, Poiyomi TextureRamp, Multilayer Math, ShadeMap, Wrapped, SDF |
 | **physically based** | energy-conserving diffuse with a diffuse model, plus surface response | Standard Lite, Unity Standard, Uber, Poiyomi Realistic, Skin, Cloth, PBR |
 
@@ -284,12 +292,20 @@ Poiyomi.
 its own sheen and reflectance).
 
 ### 3.4 Shared lighting parameters
-- **Ambient model:** flat average or directional.
+| Parameter | Values | Default | Notes |
+|---|---|---|---|
+| ambient model | average, directional | directional | *average*: the ambient light's average colour, the same in every direction (spherical harmonics at order 0); *directional*: sampled along the normal |
+| received shadows | bool | on | the main light's shadow |
+| contribution: main light | 0–1 | 1 | the main directional light |
+| contribution: additional lights | 0–1 | 1 | other per-pixel lights |
+| contribution: vertex lights | 0–1 | 1 | Unity's four per-vertex lights |
+| contribution: ambient | 0–1 | 1 | ambient and light probes, including lights Unity folds into them |
+
+*Specified with Toon Lit (refactor step 2).* Not specified yet:
 - **Light direction override:** none, a fixed local or world direction, or the view direction.
 - **Light colour override;** monochrome light.
 - **Brightness ceiling** (per channel, or keeping the hue) and **floor**.
-- **Received shadows** with softness.
-- **Contribution per source:** main light, additional lights, vertex lights, ambient.
+- **Received shadow softness.**
 
 ### 3.5 External lighting
 VRChat light volumes (strength, specular, bias) and LTCGI (diffuse and specular tint,

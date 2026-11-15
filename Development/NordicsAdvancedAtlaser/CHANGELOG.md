@@ -28,6 +28,11 @@ under *Added* describe the parsers before the rebuild.
   is removed.
 - Tests: parser tests are removed with the parsers; new tests cover the building blocks,
   report lines, auto setup sizing and the fallback's linear base colour.
+- **VRChat Mobile Toon Lit rebuilt:** base colour texture times vertex colour, the *flat*
+  lighting family with the ambient average, opaque. The unified material gains vertex colour
+  (multiply colour or alpha, sRGB data) and the shared lighting parameters (ambient model,
+  received shadows, light contributions). Tests use a shared saved-value helper,
+  `AtlasTestMaterials`, so they don't need the shader installed.
 
 ### Changed
 - Package and NDMF name `app.nordicwind.advanced-atlaser`. Requires Texture Wrapper 0.10.0 or

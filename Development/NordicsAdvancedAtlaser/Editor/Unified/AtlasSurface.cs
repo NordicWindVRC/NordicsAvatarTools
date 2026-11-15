@@ -3,14 +3,24 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // 2: what the surface is made of (stage S1) and how it reflects light (S2).
     public sealed class AtlasSurface
     {
-        // 2.1
+        // 2.1: base colour = colour input × vertex colour (where enabled).
         public readonly AtlasColorInput BaseColor = new AtlasColorInput();
+        public readonly AtlasVertexColor VertexColor = new AtlasVertexColor();
         // 2.2
         public readonly AtlasAlpha Alpha = new AtlasAlpha();
         // 2.3: the primary normal. Surface layers targeting the normal are composited on top.
         public readonly AtlasNormal Normal = new AtlasNormal();
         // 2.4
         public readonly AtlasSurfaceResponse Response = new AtlasSurfaceResponse();
+    }
+
+    // 2.1: how the mesh's vertex colours change the base colour.
+    public sealed class AtlasVertexColor
+    {
+        public bool MultiplyColor;
+        public bool MultiplyAlpha;
+        // Off: vertex colours are used as stored, as linear values. On: converted from sRGB first.
+        public bool SrgbData;
     }
 
     public enum AtlasAlphaSource { BaseColorAlpha, Mask, None }
