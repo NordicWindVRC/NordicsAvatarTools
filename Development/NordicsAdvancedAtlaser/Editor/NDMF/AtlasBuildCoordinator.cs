@@ -92,8 +92,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 // Keep the issues visible to the author rather than silently treating
                 // unresolved source effects as exact shader-independent features.
                 foreach (var issue in input.Unified.Issues)
-                    if (issue.Severity != AtlasNormalizationSeverity.Info)
-                        context.Diagnostics.Add(input.SourceMaterial.name + " [" + issue.FeatureId + "]: " + issue.Message);
+                    if (issue.IsWarning)
+                        context.Diagnostics.Add(input.SourceMaterial.name + " [" + issue.Feature + "]: " + issue.Message);
             }
 
             // Validate *before* allocating any texture buffers, even when baking is disabled.

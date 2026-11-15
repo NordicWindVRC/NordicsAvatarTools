@@ -7,6 +7,28 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 
 EditMode tests pass in Unity 2022.3.22 (2026-11-03).
 
+**Unified material rebuild in progress** (`UNIFIED_MATERIAL_REFACTOR.md`). Until each parser is
+rebuilt, its materials are read by the fallback parser, base colour only. The parser entries
+under *Added* describe the parsers before the rebuild.
+
+### Unified material rebuild
+- **The unified material is rebuilt** from the feature catalogue, in `Editor/Unified/`. So far
+  it has the building blocks (texture reference, scalar, colour, mask, blend, placement), the
+  surface (base colour, alpha, primary normal, surface response), the lighting family, the
+  surface layer, fur and render settings. Colours are linear. More features are added as the
+  parsers that need them are rebuilt.
+- Report lines have a kind (unmapped, unsupported, ignored, note), at most one per kind and
+  feature per material. Unmapped and unsupported lines are build warnings.
+- The free-form semantic features (`AtlasSemanticFeature`) and the parsers' model-writing
+  helpers are removed. Parsers read through `AtlasMaterialReader` and the small helpers in
+  `AtlasSourceMapping`; `AtlasMaterialReader.ColorLinear` reads colours in linear.
+- Every input parser except the fallback is removed, to be rebuilt one at a time. The
+  fallback reads only the base colour for now.
+- Auto setup sizes the atlas by the base colour texture; the unused `SetTextureForSemantic`
+  is removed.
+- Tests: parser tests are removed with the parsers; new tests cover the building blocks,
+  report lines, auto setup sizing and the fallback's linear base colour.
+
 ### Changed
 - Package and NDMF name `app.nordicwind.advanced-atlaser`. Requires Texture Wrapper 0.10.0 or
   later, for the renamed runtime assembly and the normal correction safety rules.

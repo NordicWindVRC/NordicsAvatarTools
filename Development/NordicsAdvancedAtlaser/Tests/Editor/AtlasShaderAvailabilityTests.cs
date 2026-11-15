@@ -61,21 +61,19 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 material.SetColor("_Color", new Color(0.2f, 0.4f, 0.6f, 1f));
                 material.SetTexture("_MainTex", albedo);
                 material.SetTextureScale("_MainTex", new Vector2(2f, 3f));
-                material.SetFloat("_Metallic", 0.7f);
-                material.SetFloat("_Glossiness", 0.25f);
+                material.SetTextureOffset("_MainTex", new Vector2(0.5f, 0.25f));
 
-                var installed = new AtlasStandardParser().Parse(material);
+                var installed = new AtlasFallbackParser().Parse(material);
                 AtlasUnifiedMaterial saved;
-                using (new SavedValuesOnly()) saved = new AtlasStandardParser().Parse(material);
+                using (new SavedValuesOnly()) saved = new AtlasFallbackParser().Parse(material);
 
                 // The values pass through serialization, so they can differ by float rounding.
                 Assert.AreEqual(0f, Vector4.Distance(installed.Surface.BaseColor.Color, saved.Surface.BaseColor.Color), 1e-5f);
                 Assert.AreSame(albedo, saved.Surface.BaseColor.Map.Texture);
-                Assert.AreEqual(new Vector2(2f, 3f), saved.Surface.BaseColor.Map.Mapping.Scale);
-                Assert.AreEqual(installed.Surface.Metallic.Constant, saved.Surface.Metallic.Constant, 1e-5f);
-                Assert.AreEqual(installed.Surface.Roughness.Constant, saved.Surface.Roughness.Constant, 1e-5f);
-                Assert.IsTrue(saved.Issues.Exists(i => i.FeatureId == "shader.not-installed"));
-                Assert.IsFalse(installed.Issues.Exists(i => i.FeatureId == "shader.not-installed"));
+                Assert.AreEqual(new Vector2(2f, 3f), saved.Surface.BaseColor.Map.Tiling);
+                Assert.AreEqual(new Vector2(0.5f, 0.25f), saved.Surface.BaseColor.Map.Offset);
+                Assert.IsTrue(saved.Issues.Exists(i => i.Feature == "shader.not-installed"));
+                Assert.IsFalse(installed.Issues.Exists(i => i.Feature == "shader.not-installed"));
             }
             finally { Object.DestroyImmediate(material); Object.DestroyImmediate(albedo); }
         }
@@ -95,22 +93,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 {
                     Assert.AreEqual(AtlasPoiyomiVariant.Pro, AtlasPoiyomiVersionDetector.DetectVariant(material));
                     Assert.AreEqual(11, AtlasPoiyomiVersionDetector.Detect(material));
-                    Assert.IsInstanceOf<AtlasPoiyomiPro11Parser>(AtlasShaderRegistry.Detect(material));
                 }
-            }
-            finally { Object.DestroyImmediate(material); }
-        }
-
-        [Test]
-        public void MochieUberIsDetectedFromSavedValuesAlone()
-        {
-            var material = StandardMaterial();
-            try
-            {
-                foreach (string name in new[] { "_MirrorBehavior", "_CubeMode", "_PBRWorkflow", "_RenderMode", "_ColorPreservation" })
-                    AddSavedFloat(material, name);
-                using (new SavedValuesOnly())
-                    Assert.IsInstanceOf<AtlasMochieUberParser>(AtlasShaderRegistry.Detect(material));
             }
             finally { Object.DestroyImmediate(material); }
         }

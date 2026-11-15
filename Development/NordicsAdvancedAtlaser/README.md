@@ -118,6 +118,11 @@ submesh. If it appears on more, the build stops, because the bake would be ambig
 The Atlaser reads these shaders. Each source material is converted into one shader-independent
 description before an output shader uses it.
 
+> **Being rebuilt.** The shader-independent description and its input parsers are being rebuilt,
+> one parser at a time (see `UNIFIED_MATERIAL_REFACTOR.md`). Until a shader's parser is rebuilt,
+> its materials are read by the fallback parser, base colour only. The table shows what each
+> parser read before the rebuild.
+
 | Shader | Recognised by | What is read | Not yet covered |
 |---|---|---|---|
 | Unity **Standard** | Shader name | Base color, metallic/smoothness, normal, occlusion, emission, detail maps, parallax, transparency | Some keyword and packed-channel combinations |
@@ -166,7 +171,8 @@ resolutions, turning off features, and controlling how features are emulated.
 
 | Path | Responsibility |
 |---|---|
-| `Editor/Inputs/` | Source shader parsers, version detection and the unified material model |
+| `Editor/Inputs/` | Source shader parsers, the material reader and version detection |
+| `Editor/Unified/` | The unified material model |
 | `Editor/Outputs/` | Output generator interface and shader schemas |
 | `Editor/Build/` | Geometry capture, pose evaluation, blend-shape exclusion and baking |
 | `Editor/NDMF/` | Plugin registration, build coordination, reporting and cleanup |

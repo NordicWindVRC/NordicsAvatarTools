@@ -29,9 +29,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // order, each on top of the previous one:
         //   1. PrebakedNormalMap (author-supplied, for example for a lower-detail mesh)
         //   2. Bakes' TangentNormalCorrection (changes made to the mesh during the build)
-        //   3. the material's primary normal map
-        //   4. its secondary normal map
-        //   5. its detail normal map
+        //   3. the material's primary normal map (Material.Surface.Normal)
+        //   4. its surface layers that target the normal, in layer order (secondary and detail
+        //      normal maps)
         // Strengths are normalised to the largest strength among the atlas's sources.
         public Texture2D PrebakedNormalMap;
         // Null when disabled; missing submeshes instead have an explicit empty/flat bake.

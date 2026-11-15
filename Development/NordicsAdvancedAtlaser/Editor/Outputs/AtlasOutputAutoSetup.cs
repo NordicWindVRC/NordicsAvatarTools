@@ -65,33 +65,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
             long largestArea = -1;
             foreach (var source in sources)
             {
-                if (source == null) continue;
-                // Prefer semantically normalized albedo. Do not accidentally size by a
-                // large normal, decal or mask texture when no main texture exists.
-                foreach (var sample in source.Textures(AtlasTextureSemantic.BaseColor))
+                // Only the base colour sizes the atlas, never a large normal, decal or mask texture.
+                var tex = source?.Surface.BaseColor.Map?.Texture;
+                if (tex == null || tex.width <= 0 || tex.height <= 0) continue;
+                long area = (long)tex.width * tex.height;
+                if (area > largestArea)
                 {
-                    var tex = sample.Texture;
-                    if (tex == null || tex.width <= 0 || tex.height <= 0) continue;
-                    long area = (long)tex.width * tex.height;
-                    if (area > largestArea)
-                    {
-                        largest = tex;
-                        largestArea = area;
-                    }
+                    largest = tex;
+                    largestArea = area;
                 }
             }
             if (largest == null) return; // Keep user dimensions if no source main texture exists.
             main.width = Closest(largest.width);
             main.height = Closest(largest.height);
-        }
-
-        public static void SetTextureForSemantic(AtlasOutputConfiguration output, string fieldId,
-            IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasTextureSemantic semantic)
-        {
-            var setting = output == null ? null : output.Find(fieldId);
-            if (setting == null || setting.texture == null) return;
-            setting.texture.enabled = sources != null && sources.Any(source => source != null &&
-                source.HasTexture(semantic));
         }
 
         private static int Closest(int size)

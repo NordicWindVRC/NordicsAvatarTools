@@ -1,8 +1,9 @@
 # Unified material — feature catalogue
 
-**Status:** second refinement pass, for review. This merges the per-shader inventories into one
-proposed feature set for the unified material, the target of the refactoring. Atlasing concerns
-are left out on purpose; they get their own pass later.
+**Status:** specification of the unified material, after two refinement passes; the code is
+being rebuilt to match it. It merges the per-shader inventories into one feature set. Each
+feature's full parameter specification is added when the first parser types it. Atlasing
+concerns are left out on purpose; they get their own pass later.
 
 **What changed since the first pass:**
 - **Poiyomi 11 and Pro are included:** PBR lighting with sheen and glints, mask levels,

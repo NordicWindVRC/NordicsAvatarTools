@@ -1,6 +1,6 @@
 # Unified material — refactor plan
 
-**Status:** plan, for review. Phase 4 of the first release: rebuilding the unified material from
+**Status:** step 1 done (2026-11-15), waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
 the [feature catalogue](UNIFIED_MATERIAL_FEATURES.md), then rebuilding every input parser on it.
 
 **Goal:** the code matches the catalogue. Every supported input shader maps into typed
@@ -30,7 +30,7 @@ inventories do.
 - the reading half of `AtlasMaterialReader`;
 - `AtlasSavedProperties` and the shader-availability rules;
 - `AtlasPoiyomiVersionDetector`;
-- `AtlasShaderRegistry`, and parser detection (`CanParse`);
+- `AtlasShaderRegistry`. Each shader's detection (`CanParse`) returns with its rebuilt parser;
 - the fur definition, which already matches 5.2 and moves into the new model.
 
 **The model grows with the parsers.**
@@ -94,31 +94,32 @@ them.
 
 ## Steps
 
-### 1. Foundation
+### 1. Foundation (done)
 - **New model** in `Editor/Unified/`, one file per catalogue part:
-  - `AtlasUnifiedMaterial` (root and issues);
+  - `AtlasUnifiedMaterial` (root and report lines);
   - building blocks: texture reference, scalar input, colour input, mask, blend, placement;
-  - surface: base colour, alpha, normals, surface response, parallax;
-  - lighting: the family and the shared parameters;
-  - layers: the shared layer parts and the surface layer;
-  - render;
+  - surface: base colour, alpha, primary normal, the basic surface response inputs;
+  - lighting: the family;
+  - layers: the shared layer parts and the surface layer with targets;
+  - render: surface mode, cutoff, blend factors, pass settings;
   - fur (moved).
+
+  Parallax, the lighting families' parameters and everything else come with the parser that
+  first needs them.
 - **Removed:** the old model types, `AtlasSemanticFeature`, `AtlasSemanticReader`, the model
-  helpers in `AtlasMaterialReader` (`BaseColor`, `Normal`, `Detail`, `Decal` and the others),
-  and all parsers. Your last commit before this step is the reference for the old mappings.
-- **Reader:** adds `ColorLinear`. Its model-writing half is replaced by the small helpers
-  described above.
-- **Fallback parser,** minimal: base colour from `_MainTex` and `_Color`, so auto setup keeps
-  working for every material. Registered alone.
-- **Consumers:** auto setup reads the base colour, and texture presence per feature. The build
-  coordinator reads issues. The generator job's normal order points at the normals (2.3) and at
-  surface layers with a normal target.
-- **Docs:**
-  - the catalogue's status becomes *specification*;
-  - `UNIFIED_MATERIAL.md` drops its sections that describe the old code (structures, lighting
-    mode normalisation, matcap blend modes, scalar conventions, global masks, Poiyomi inspector
-    mappings, known gaps) and points at the catalogue;
-  - its parser status table lists every parser as *being rebuilt*.
+  helpers in `AtlasMaterialReader`, and all parsers but the fallback. Commit `e3b647d` is the
+  reference for the old mappings and detection.
+- **Reader:** adds `ColorLinear`. `AtlasSourceMapping` holds the shared helpers (texture
+  reference, colour input).
+- **Fallback parser,** minimal: base colour under the common names, and one report line saying
+  the parsers are being rebuilt.
+- **Consumers:** auto setup sizes by the base colour texture; the build coordinator shows
+  unmapped and unsupported lines; the generator job's normal order points at the primary
+  normal and at surface layers targeting the normal.
+- **Tests:** old-model and parser tests removed; new tests for the building blocks, report
+  lines, auto setup sizing and the fallback; the saved-value test now uses the fallback.
+- **Docs:** the catalogue is the specification; `UNIFIED_MATERIAL.md` describes the new code and
+  lists every parser as being rebuilt; README and changelog note the rebuild.
 
 ### 2. VRChat Mobile Toon Lit
 Base colour, vertex colour and the *flat* lighting family. This proves the pattern: model,
