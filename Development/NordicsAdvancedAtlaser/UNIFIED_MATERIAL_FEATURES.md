@@ -168,7 +168,7 @@ an animated value and a modulated value look the same.
 | Source | Output 0–1 from | Parameters |
 |---|---|---|
 | time | a waveform | waveform (sine, square, triangle, saw, reverse saw, smooth blink, flashing blink), speed, phase, duty |
-| audio | an AudioLink band | band (bass, low mids, high mids, highs, volume), smoothing, delay, fallback beat speed |
+| audio | an AudioLink band | band (bass, low mids, high mids, highs, volume), smoothing, delay, fallback beat speed, spread |
 | light level | world or mesh brightness | threshold, crossfade, include shadows |
 | camera distance | distance to the camera | near, far |
 | contact | a VRChat contact | contact index, radius, falloff |
@@ -180,6 +180,17 @@ an animated value and a modulated value look the same.
   *replace*.
 - **Colour targets** use a colour ramp or a palette entry instead of min and max.
 - A modulator whose target is a mapping (noise into UVs) is UV distortion.
+
+**Audio spread:** how the audio value varies across the surface. The **coordinate** is a
+0–1 position: along a UV direction, or out from a UV centre.
+
+| Spread | Value at a point | Sources |
+|---|---|---|
+| none | the band's current level, everywhere | Toon Standard Pulse, most per-feature AudioLink |
+| history | the band's level from `coordinate × length` ago, so recent audio travels along the coordinate; length in history samples | Toon Standard Scroll, Poiyomi centre-out emission |
+| fill | 1 where `coordinate ≤ level`, else 0, with a softness | Toon Standard Bar |
+
+Spread keeps one modulator type for whole-surface and travelling audio effects alike.
 
 ### 1.10 Colour adjustment
 An ordered list of operations on a **target**, with a mask.
@@ -223,7 +234,8 @@ all.
 
 ### 2.4 Surface response
 How the surface reflects light (S2).
-- **Inputs:** metallic, roughness, reflectance, specular colour (open question 1); occlusion
+- **Inputs:** metallic, roughness, reflectance, specular colour (its own input; parsers don't
+  convert it to metallic); occlusion
   with strength, tint, direct and indirect amount; multi-bounce occlusion.
 - **Highlights:** on, strength, tint; light-type limits;
   - **shape:** round, or stretched (anisotropy amount, rotation, direction map, two layers,
@@ -323,8 +335,8 @@ A second appearance revealed by a threshold.
 - **Revealed appearance:** transparent, or a colour and texture.
 - **Modes:** wave, continuous.
 
-Structurally a surface layer whose mask is a threshold with an edge band. Kept separate because
-its *amount* is the thing that gets animated. **Sources:** Uber base colour dissolve, Poiyomi
+Structurally a surface layer whose mask is a threshold with an edge band. Kept separate
+(decided) because its *amount* is the thing that gets animated. **Sources:** Uber base colour dissolve, Poiyomi
 dissolve.
 
 ### 4.3 Lookup layer
@@ -358,7 +370,11 @@ strength, falloff, distortion, wrap, shadow strength. S3. **Sources:** Uber, Poi
 ### 4.6 Procedural pattern
 A generated pattern with a **kind** and its parameters: glitter, voronoi, truchet, pathing,
 internal parallax, video screen, audio spectrum, audio volume colour, oscilloscope,
-constellation. **Sources:** Poiyomi, Poiyomi Pro, Uber oscilloscope. See open question 2.
+constellation. **Sources:** Poiyomi, Poiyomi Pro, Uber oscilloscope.
+
+One layer type (decided). Each kind gets its own typed parameters when a parser types it;
+until then, a material using that kind gets an unmapped report line. Adding a kind never
+changes the layer type.
 
 ### 4.7 Refraction
 Bends what's behind a transparent surface: strength (IOR), tint, colour split, blur, opacity;
@@ -405,6 +421,10 @@ A list of vertex operations, each with a mask and modulators:
 
 **Sources:** Uber, Poiyomi, Poiyomi Pro, and Lil Fur for wind.
 
+Static operations (no modulator) stay deformation features like the animated ones. Whether a
+writer applies them to the mesh at build time, so outputs without them keep the shape, is
+decided later, with the writers.
+
 ### 5.4 Geometry effects
 Effects that add or remove geometry: tessellation, dissolving into pieces, shattering,
 particles from triangles. **Sources:** Poiyomi Pro variants.
@@ -433,7 +453,8 @@ particles from triangles. **Sources:** Poiyomi Pro variants.
 - **Shaders:** Poiyomi Toon World, Poiyomi Pro World and World Fur; Beatsaber support (gone
   in 11).
 - **Unavailable source:** Uber X. Materials using it get one unmapped info line.
-- **Not visual:** stats overlay (proposed), debug views, editor state, optimiser properties.
+- **Not visual:** stats overlay (live text such as FPS, position and a clock; one info line
+  when switched on), debug views, editor state, optimiser properties.
 
 ---
 
@@ -548,25 +569,25 @@ home becomes an *unmapped* report line, not stored data, so every report is a co
   exist and are tested.
 - Coverage means the look; misunderstandings of a source are fixed in its parser, not in the
   unified material.
+- **Specular colour** is its own surface response input next to metallic (2.4); parsers don't
+  convert it.
+- **Uber X** stays unsupported for now (7).
+- **Static deformation** stays a deformation feature (5.3); applying it to the mesh is a later
+  writer decision.
+- **Light volumes and LTCGI** stay in scope as external lighting (3.5): they're common on
+  avatars.
+- **Transition** stays its own layer type (4.2).
+- **Procedural patterns** are one layer type with a pattern kind (4.6).
+- **Stats overlay** is out of scope (7).
+- **Older versions are supported where their source is available.** That is every Poiyomi
+  version from 7.3 to 11: the Toon packages ship the older versions under
+  `_PoiyomiShaders/Shaders/<version>`. 8.1 to 9.3 share 96–99% of their property names with
+  10.0; 7.3 shares about two thirds and needs the most parser work. Only the current Mochie
+  Uber is on hand; older Uber sources can be obtained if a difference needs checking.
 
 ## 11. Open questions
 
-Without the atlasing ones.
-
-1. **Specular colour workflow:** keep specular colour as a surface response input next to
-   metallic (my lean), or have parsers convert it?
-2. **Procedural pattern layer:** one layer with a pattern *kind*, or leave the rarer kinds
-   (truchet, video screen, internal parallax, oscilloscope, constellation) reported as
-   unsupported until a writer needs them?
-3. **Stats overlay:** out of scope, as not part of the look?
-4. **Uber X** stays unsupported unless you can provide the source?
-5. **Older versions:** Poiyomi 7.3–9.3 and older Mochie material versions: keep supporting
-   them, or support current versions only and report older ones?
-6. **Static deformation** (transform, inflate, snap, displacement): carry it as a geometry
-   feature, or resolve it into the mesh at build time?
-7. **Light volumes and LTCGI** stay in scope as external lighting?
-8. **Transition:** keep it separate (my lean, since its amount is what gets animated), or fold
-   it into the surface layer as a threshold mask with an edge band?
+None outside the atlasing pass.
 
 **Deferred to the atlasing pass:** UV-tile features (AudioLink UV modes, UV tile discard),
 vertex colour handling when merging, settings that can't differ within one material, and

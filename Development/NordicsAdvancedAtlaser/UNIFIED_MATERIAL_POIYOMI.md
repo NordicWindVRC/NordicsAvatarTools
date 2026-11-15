@@ -10,7 +10,8 @@ about 60 top-level sections.
 (`Packages/com.poiyomi.toon/_PoiyomiShaders/Shaders/10.0/Toon/Poiyomi Toon.shader`). The inspector
 is Thry Editor, built from the shader's property block: section markers, toggles and hidden
 flags. I extracted the section tree with a script: **3,801 properties, about 2,640 visible.**
-Older versions (7.3, 8.1, 9.0, 9.3) aren't covered; their differences are parser work.
+Older versions (7.3, 8.1, 9.0, 9.3) aren't covered; their differences are parser work. Their
+sources ship inside the Toon packages, under `_PoiyomiShaders/Shaders/<version>`.
 **Version 11 and Poiyomi Pro** (11.0.50, from the dev project's `com.poiyomi.pro` download) are
 covered in [*Version 11 and Pro*](#version-11-and-pro), as differences from 10.0.29.
 

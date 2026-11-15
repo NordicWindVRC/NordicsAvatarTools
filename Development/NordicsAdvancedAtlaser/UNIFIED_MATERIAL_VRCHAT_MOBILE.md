@@ -347,7 +347,8 @@ Audio-reactive emission, driven by the world's AudioLink.
   - Fallback beat when the world has no AudioLink, with its speed.
 - **Live or baked:** live; the masks are baked.
 - **Unified:** audio-reactive layer: mode, band, smoothing, tint, intensity, blend into emission,
-  mask source, view-angle mask, fallback.
+  mask source, view-angle mask, fallback. In the catalogue: an emission surface layer with an
+  audio modulator; Pulse, Scroll and Bar are its spread *none*, *history* and *fill*.
 - **Parser today:**
   - Reads all of it, but **enables it whenever the property exists, so every SDK 3.10.6
     material counts as audio-reactive.**
