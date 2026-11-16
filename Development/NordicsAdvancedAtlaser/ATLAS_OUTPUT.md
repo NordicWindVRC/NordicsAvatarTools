@@ -10,6 +10,8 @@ Related documents:
 - [UNIFIED_MATERIAL_FEATURES.md](UNIFIED_MATERIAL_FEATURES.md): the feature catalogue. Section
   numbers such as *4.3* in this document refer to it.
 - [NORMAL_BAKER.md](NORMAL_BAKER.md): the normal correction bake that the output reuses.
+- [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md): the implementation plan, in phases and
+  milestones.
 
 ---
 
@@ -270,6 +272,35 @@ needs one is baked or uses its fallback.
 **Cost.** Each written channel adds a UV per vertex to the mesh. That is small next to
 textures and isn't texture memory. The remap writes only the channels the output reads, and
 only on the atlased vertices; other materials on the same mesh keep their own.
+
+---
+
+## Mesh remapper
+
+The remapper moves each source's UVs into its region of the atlas and puts the output
+material on the meshes. It runs in the build, in the same pass as the outputs, after Avatar
+Optimizer has merged and reduced the meshes. The manual bake doesn't remap.
+
+Per renderer whose submeshes use a source material of an output:
+1. **Copy the mesh.** Shared mesh assets are never changed.
+2. **Split shared vertices.** A vertex used by triangles of two sources, or of a source and
+   a material that isn't atlased, gets one copy per user. Every attribute is copied with it:
+   position, normal, tangent, UVs, vertex colour, bone weights and each blend shape frame's
+   deltas.
+3. **Write UV0:** each source vertex's UV, clamped to 0–1 (as decided; one information line
+   per material when it clamps), placed in the source's region: `region.min + uv ×
+   region.size`. Triangles that a kept UV-tile feature needs in their tile, such as the world
+   AO blocker's, keep their UV0.
+4. **Write the preserved UV channels** the allocator assigned (see
+   [*UV channels*](#uv-channels)), raw or with each source's tiling and offset.
+5. **Vertex colours:** with the *Vertex colours* feature live, vertices of sources that don't
+   use them get white.
+6. **Swap the materials.** The source materials become the output material. Submeshes of one
+   renderer that now share the output material are merged into one submesh, which is where
+   atlasing saves draw calls. Other submeshes keep their order.
+
+Bones, bind poses and blend shape names are unchanged. Material swaps in animations that
+target a source material are part of the animation design and aren't handled yet.
 
 ---
 
@@ -704,28 +735,7 @@ differ.
 
 ## Phases
 
-Each phase ends with tests passing in Unity, as for the unified material.
-
-1. **Foundation**, as one slice through every pipeline step (collect, resolve, bake, pack,
-   write, export) and the manual bake, to prove the abstractions before features are added:
-   - feature interface, capabilities, virtual maps and textures, mask allocator, settings
-     storage, generated UI, source analysis cache, export rules (alpha, crunch), memory
-     budget;
-   - input parser reports logged only with the debug setting;
-   - features: colour, alpha, the main normal map, metallic and roughness (to prove a compound
-     texture), surface mode and render queue, fallback;
-   - writers: Poiyomi Toon 10 and VRChat Mobile Toon Standard, so the capability model is
-     tested on two different shaders from the start.
-2. **Surface:** normal map layers, the rest of reflection and specular, ambient occlusion
-   maps, emission, colour adjustments, shading and lighting mapped natively.
-3. **Layers:** masks and global masks in full, preserved UV channels (with the UV remap),
-   matcaps, rim lighting, environmental rim, backlight, clear coat, light volumes, LTCGI.
-4. **Baking toolkit:** geometry buffers, light rigs, virtual view, bake-ins for normal-map
-   shading, matcaps, rims, light, and occlusion maps into colour; emulations, tested mostly
-   with VRChat Mobile Toon Standard.
-5. **Effects:** glitter and sparkle, proximity colour, subsurface scattering, AudioLink,
-   world AO blocker (typed in the unified material, read by the Poiyomi parser).
-6. **Later features** (above), in order of use.
+The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
 
 ## Tests
 
@@ -749,7 +759,8 @@ Each phase ends with tests passing in Unity, as for the unified material.
 - **Light roles:** each light has its own temperature, softness, and diffuse and specular
   weights. Each bake uses only the light terms its purpose needs. Baked light colour is
   limited by a colour influence, and every bake has its own strength slider.
-- **First writers:** Poiyomi Toon 10 and VRChat Mobile Toon Standard, both in the first phase.
+- **First writers:** Poiyomi Toon 10 and VRChat Mobile Toon Standard, both from the first
+  milestone.
 - **Compound textures:** an output shader's texture can provide several virtual maps in its
   channels. Using any of them activates the texture; it is required when any of them is
   required, and has one size for all its channels.
@@ -777,8 +788,9 @@ Each phase ends with tests passing in Unity, as for the unified material.
   dirty count, its shader, and a version raised when textures or shaders are imported.
 - **Animation:** some animations will be supported, designed separately; this design only
   keeps room to record animated properties per source.
-- **Phase 1** is one slice through the whole pipeline, with the main normal map and a
-  compound metallic and roughness texture added to prove the abstractions early.
+- **The first milestone** is one slice through the whole pipeline, the mesh remapper and the
+  manual bake included, with the base colour texture only. The main normal map and a compound
+  metallic and roughness texture come first in the next milestone.
 
 ## Open questions
 
