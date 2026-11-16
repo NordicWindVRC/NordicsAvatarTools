@@ -11,7 +11,8 @@ change, what that does to the look, and how the unified material represents it.
 
 They're merged into one feature set in
 [UNIFIED_MATERIAL_FEATURES.md](UNIFIED_MATERIAL_FEATURES.md), the unified material's
-specification.
+specification. How outputs turn unified materials into atlas materials is in
+[ATLAS_OUTPUT.md](ATLAS_OUTPUT.md).
 
 | Shader family | Document | Status |
 |---|---|---|

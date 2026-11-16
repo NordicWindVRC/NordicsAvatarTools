@@ -16,7 +16,8 @@ materials. It is also meant to:
 Mapping is **per material**, not per submesh, because every submesh that uses a material
 shares that material's UV space. Each source material is parsed into one
 **shader-agnostic unified material**. Independent **output generators** read only that
-unified model and never see the source shader. See `UNIFIED_MATERIAL.md` for the model.
+unified model and never see the source shader. See `UNIFIED_MATERIAL.md` for the model
+and `ATLAS_OUTPUT.md` for the output design.
 
 | | |
 |---|---|
