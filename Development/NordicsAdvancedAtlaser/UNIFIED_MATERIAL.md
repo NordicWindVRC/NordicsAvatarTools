@@ -190,7 +190,8 @@ small helpers in `AtlasSourceMapping`. Colours are converted to linear with
 - *ignored:* deliberately not mapped, such as a world variant's world-only features;
 - *note:* how the material was read, such as with its shader missing.
 
-Unmapped and unsupported lines are build warnings; the others are information.
+The build lists every line only with *Verbose Logging*: atlasing is best effort, so how a
+source was read is debug information.
 
 ## Input parsers
 

@@ -88,12 +88,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
             foreach(var input in group.Inputs)
             {
                 AtlasMaterialNormalizer.Prepare(input);
-                if (input.Unified == null) continue;
-                // Keep the issues visible to the author rather than silently treating
-                // unresolved source effects as exact shader-independent features.
+                // Atlasing is best effort, so how each source was read is debug information:
+                // its report lines are listed only with Verbose Logging.
+                if (input.Unified == null || !AtlasDebugSettings.VerboseLogging) continue;
                 foreach (var issue in input.Unified.Issues)
-                    if (issue.IsWarning)
-                        context.Diagnostics.Add(input.SourceMaterial.name + " [" + issue.Feature + "]: " + issue.Message);
+                    context.Diagnostics.Add($"{input.SourceMaterial.name} [{issue.Kind}: {issue.Feature}]: {issue.Message}");
             }
 
             // Validate *before* allocating any texture buffers, even when baking is disabled.

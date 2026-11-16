@@ -16,7 +16,12 @@ EditMode tests pass in Unity 2022.3.22.
   refraction, highlight), outlines, fur, deformations and geometry effects, and render
   settings including visibility and a second pass. Colours are linear. Values without a typed
   home become report lines (unmapped, unsupported, ignored or note), at most one per kind and
-  feature per material; unmapped and unsupported lines are build warnings.
+  feature per material, listed in the build only with *Verbose Logging*.
+- **Output model** (`ATLAS_OUTPUT.md`): shared output features with modes, filtered by what
+  the output shader can express (its capabilities and texture layout); the output is resolved
+  into one merged unified material and the virtual maps it needs. The first feature is
+  *Colour*, the base colour map. Output settings are stored by feature ID, so changing the
+  output shader keeps every choice the new one supports. Nothing is baked or written yet.
 - **Input parsers** on the unified material (details in the `UNIFIED_MATERIAL_*.md`
   inventories):
   - VRChat Mobile Toon Lit, Standard Lite and Toon Standard (and Outline);
@@ -83,8 +88,10 @@ EditMode tests pass in Unity 2022.3.22.
 - The Geometry Baking section explains what it does. *Excluded Blend Shapes* moved into it,
   with a description, and only shows when baking is on. Its separate on/off switch is removed:
   an empty list excludes nothing.
-- The output shaders' placeholder settings are removed. Each output shader gets its own
-  settings as its writer is built.
+- The output shaders' placeholder settings are removed. Output shaders declare their
+  capabilities and texture layout; the settings belong to the shared output features.
+- **Input report lines are debug information.** How each source was read is listed in the
+  build only with *Verbose Logging*, since atlasing is best effort.
 - **Serialized fields are camelCase**, as the design guidelines require. Existing Atlaser
   configurations are not migrated.
 - **The bake releases its maps as soon as it's done.** Only the maps the bake needs exist at

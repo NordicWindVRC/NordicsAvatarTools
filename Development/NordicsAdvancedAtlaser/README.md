@@ -134,8 +134,8 @@ description before an output shader uses it.
 | Poiyomi Toon (unversioned) | Poiyomi Toon without a version | As above, best effort | As above |
 | **Any other shader** | Fallback | Common property names with Unity's conventions: base color, alpha mask, normal, metallic or specular, roughness or smoothness, occlusion, emission, culling and blending | Anything shader-specific; matcaps (reported) |
 
-Features that can't be read exactly are reported as warnings during the build, never
-silently assumed. See `UNIFIED_MATERIAL.md` for the details of each parser.
+Features that can't be read exactly are recorded per material, never silently assumed; the
+build lists them with *Verbose Logging* (Tools > NordicWind > Advanced Atlaser). See `UNIFIED_MATERIAL.md` for the details of each parser.
 
 **Source shaders don't need to be installed.** A material whose shader is missing, such as a
 Poiyomi material copied into a Quest project, is still read from the values it saved. Poiyomi

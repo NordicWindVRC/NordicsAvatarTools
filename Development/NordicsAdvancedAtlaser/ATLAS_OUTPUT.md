@@ -43,13 +43,16 @@ What exists today, which this design builds on:
 
 | Part | Where | What it does |
 |---|---|---|
-| Output component | `Runtime/NordicsAtlasOutput.cs` | `AtlasOutputConfiguration`: output name, output shader ID, region padding, sources (material, UV region, normal correction, pre-baked normal map), main texture size, and a generic list of `AtlasOutputSetting` |
-| Output shader interface | `Editor/AtlasShaderRegistry.cs` | `IAtlasOutputShader`: ID, display name, `FindShader`, `Fields`, `AutoConfigure`, `OnConfigurationChanged`, `Prepare(AtlasGeneratorJob)` |
-| Output shaders | `Editor/Outputs/AtlasOutputShaders.cs` | Poiyomi Toon 10 and VRChat Mobile Toon Standard, both registered and generating nothing yet |
-| Generator boundary | `Editor/Outputs/AtlasGeneratorJob.cs` | The unified materials, UV regions and bakes; no `Material` or `Shader` crosses it |
+| Output component | `Runtime/NordicsAtlasOutput.cs` | `AtlasOutputConfiguration`: output name, output shader ID, region padding, sources (material, UV region, normal correction, pre-baked normal map), main texture size, feature settings (`AtlasFeatureSetting`: mode, reference source, sources turned off, values) and texture settings, by ID |
+| Output shader interface | `Editor/AtlasShaderRegistry.cs` | `IAtlasOutputShader`: ID, display name, `FindShader`, `Capabilities` (the texture layout so far) |
+| Output shaders | `Editor/Outputs/AtlasOutputShaders.cs` | Poiyomi Toon 10 and VRChat Mobile Toon Standard: a base colour texture each; no writer yet |
+| Output model | `Editor/Outputs/AtlasOutputModel.cs`, `AtlasOutputFeature.cs` | Virtual maps, texture layouts, capabilities; `IAtlasOutputFeature` with its modes; the feature registry, available and effective modes |
+| Features | `Editor/Outputs/AtlasColorFeature.cs` | *Colour*: the base colour map |
+| Resolve | `Editor/Outputs/AtlasOutputPipeline.cs` | Feature choices from the settings, and steps 1 and 2 of the pipeline: the output unified material and its map requests (`AtlasOutputPlan`) |
+| Generator boundary | `Editor/Outputs/AtlasGeneratorJob.cs` | The unified materials, UV regions, bakes and feature choices; no `Material` or `Shader` crosses it |
 | Bake sizing | `Editor/Outputs/AtlasOutputLayout.cs` | Each source is baked at 1.5× its island size, at most 4096 |
 | Geometry bake | `Editor/Build/AtlasSubmeshBaker.cs` | Per source: the current mesh's coverage mask and the tangent-space normal correction. The world-space normal and tangent frame maps exist only during the bake |
-| Inspector | `Editor/NordicsAtlasOutputEditor.cs`, `Editor/AtlasOutputUI.cs` | Sources, UV regions, main texture size, the output shader's fields, auto setup, UV preview |
+| Inspector | `Editor/NordicsAtlasOutputEditor.cs`, `Editor/AtlasOutputUI.cs` | Sources, UV regions, main texture size, each feature's mode, auto setup, UV preview |
 | Texture library | Texture Wrapper (`API.md`) | Float textures with usage flags, `Blit` with blend modes, masks and padding, colour operations, triangle painting, normal difference baking, dilation, PNG and in-memory export, `OutputChannels.Auto` |
 
 The UV remapping of the meshes (moving each source's UVs into its region) is a separate,

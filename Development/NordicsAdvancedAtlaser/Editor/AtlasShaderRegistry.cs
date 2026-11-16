@@ -14,8 +14,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         bool CanParse(Material material);
         AtlasUnifiedMaterial Parse(Material material);
     }
-    public enum AtlasConfigurationChange { MainTexture, ShaderSelection, Setting, AutoSetup }
-
+    // An output shader keeps only what is specific to it (ATLAS_OUTPUT.md, "Output shaders"):
+    // what it can express and its texture layout. Merging, baking and the settings are shared,
+    // in the output features.
     public interface IAtlasOutputShader
     {
         string ShaderId { get; }
@@ -23,28 +24,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The installed Unity shader the new materials are made with, or null when it isn't
         // installed. Output shaders are only offered, and only built, when it's installed.
         Shader FindShader();
-        IReadOnlyList<AtlasOutputField> Fields { get; }
-        // Called after shared main-texture size detection. May override any shared or shader-specific setting.
-        void AutoConfigure(IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasOutputConfiguration output);
-        void OnConfigurationChanged(AtlasOutputConfiguration configuration, AtlasConfigurationChange change);
-        void Prepare(AtlasGeneratorJob job);
-    }
-    public sealed class AtlasOutputField
-    {
-        public string Id, Label, Description;
-        public AtlasSettingKind Kind;
-        public AtlasTextureSizeMode SizeMode;
-        public bool DefaultEnabled;
-        public int DefaultWidth = 1024, DefaultHeight = 1024;
-        public float DefaultFloat;
-        public int DefaultInt;
-        public Color DefaultColor = Color.white;
-        public AtlasOutputField(string id, string label, AtlasSettingKind kind, string description = null)
-        { Id = id; Label = label; Kind = kind; Description = description; }
-        public static AtlasOutputField Texture(string id, string label, AtlasTextureSizeMode sizing, bool enabled = false)
-        { return new AtlasOutputField(id, label, AtlasSettingKind.Texture) { SizeMode = sizing, DefaultEnabled = enabled }; }
-        public static AtlasOutputField Section(string title)
-        { return new AtlasOutputField(null, title, AtlasSettingKind.Description); }
+        AtlasOutputCapabilities Capabilities { get; }
     }
 
     // New shader integration = one IAtlasOutputShader implementation; no central switch statement.
@@ -92,20 +72,5 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
         public static IAtlasOutputShader Output(string id)
         { return Outputs.FirstOrDefault(p => p.ShaderId == id); }
-        public static void EnsureSettings(AtlasOutputConfiguration config, IAtlasOutputShader output)
-        {
-            if (config == null || output == null) return;
-            if (config.settings == null) config.settings = new List<AtlasOutputSetting>();
-            foreach (var field in output.Fields)
-            {
-                if (string.IsNullOrEmpty(field.Id) || config.Find(field.Id) != null) continue;
-                config.settings.Add(new AtlasOutputSetting {
-                    id = field.Id, kind = field.Kind, boolValue = field.DefaultEnabled,
-                    floatValue = field.DefaultFloat, intValue = field.DefaultInt, colorValue = field.DefaultColor,
-                    texture = new AtlasTextureDimensions { enabled = field.DefaultEnabled, width = field.DefaultWidth, height = field.DefaultHeight },
-                    sizeMode = field.SizeMode
-                });
-            }
-        }
     }
 }

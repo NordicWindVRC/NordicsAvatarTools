@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** plan; no phase started. It implements the design in
+**Status:** phase 1.1 done; 1.2 is next. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -41,10 +41,11 @@ in M2 (2.3).
   output shader's texture layout.
 - Building the **output unified material**: the merge of the sources, with texture references
   that can hold generated maps.
-- Settings stored by feature ID: feature settings (mode, values, per-source overrides),
-  texture settings, output settings. They replace the generic `AtlasOutputSetting` list.
-- `IAtlasOutputShader` gains capabilities, a texture layout and a writer. Its `Fields`,
-  `AutoConfigure` and `OnConfigurationChanged` move to the shared features.
+- Settings stored by feature ID: feature settings (mode, values, per-source overrides) and
+  texture settings. They replace the generic `AtlasOutputSetting` list. The output settings
+  (crunch, formats, baking) are added with the phases that use them.
+- `IAtlasOutputShader` gains capabilities and a texture layout; its writer comes in 1.4. Its
+  `Fields`, `AutoConfigure` and `OnConfigurationChanged` are replaced by the shared features.
 - Input parsers' *unmapped* lines are logged only with the debug setting.
 - **Features:** *Colour*, the base colour texture only.
 - **Tests:** capability filtering with a test output shader; settings surviving a change of

@@ -52,6 +52,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasOutputConfiguration Configuration;
         public IAtlasOutputShader Shader;
         public readonly List<AtlasOutputSourceJob> Sources = new List<AtlasOutputSourceJob>();
+        // The resolved output; null until the output is prepared, or when it can't be built.
+        public AtlasOutputPlan Plan;
     }
     public sealed class AtlasBakedInputSet : IDisposable
     {

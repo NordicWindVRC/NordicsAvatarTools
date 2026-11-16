@@ -4,10 +4,9 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
 {
-    // Output shader modules declare their own settings and generator. Settings are specific to
-    // each output shader and are added as its writer is built: overriding texture resolutions,
-    // turning off features, and controlling how features are emulated.
-    // Registrations are discovered automatically by AtlasShaderRegistry.
+    // Output shaders declare what they can express and their texture layouts; the shared
+    // output features decide what to produce. Registrations are discovered automatically by
+    // AtlasShaderRegistry.
     public sealed class PoiyomiToon10OutputShader : IAtlasOutputShader
     {
         public string ShaderId => "poiyomi10";
@@ -25,26 +24,27 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             return null;
         }
-        public IReadOnlyList<AtlasOutputField> Fields => Array.Empty<AtlasOutputField>();
-        public void AutoConfigure(IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasOutputConfiguration output) { }
-        public void OnConfigurationChanged(AtlasOutputConfiguration config, AtlasConfigurationChange change) { }
-        public void Prepare(AtlasGeneratorJob job)
+        public AtlasOutputCapabilities Capabilities { get; } = new AtlasOutputCapabilities
         {
-            // Not generated yet: the writer will build the material from job.Sources[n].Material
-            // (unified) and job.Sources[n].Bakes.
-        }
+            Textures =
+            {
+                new AtlasOutputTexture("BaseColor", "Base colour") { SizeMode = AtlasTextureSizeMode.Main }
+                    .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB)
+            }
+        };
     }
     public sealed class VRChatMobileToonOutputShader : IAtlasOutputShader
     {
         public string ShaderId => "mobiletoon";
         public string DisplayName => "VRChat Mobile Toon Standard";
         public Shader FindShader() => Shader.Find("VRChat/Mobile/Toon Standard");
-        public IReadOnlyList<AtlasOutputField> Fields => Array.Empty<AtlasOutputField>();
-        public void AutoConfigure(IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasOutputConfiguration output) { }
-        public void OnConfigurationChanged(AtlasOutputConfiguration config, AtlasConfigurationChange change) { }
-        public void Prepare(AtlasGeneratorJob job)
+        public AtlasOutputCapabilities Capabilities { get; } = new AtlasOutputCapabilities
         {
-            // Not generated yet.
-        }
+            Textures =
+            {
+                new AtlasOutputTexture("BaseColor", "Base colour") { SizeMode = AtlasTextureSizeMode.Main }
+                    .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB)
+            }
+        };
     }
 }

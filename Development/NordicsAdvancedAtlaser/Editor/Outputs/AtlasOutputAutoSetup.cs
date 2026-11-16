@@ -7,8 +7,8 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     /// <summary>
-    /// Shared auto-configuration orchestration. Source shader parsers produce unified materials;
-    /// output shaders choose their own defaults without any input-shader-specific branching.
+    /// Auto setup: the main texture size from the sources' base colour textures, and every
+    /// feature back to its default mode, which is the best one the output shader supports.
     /// </summary>
     public static class AtlasOutputAutoSetup
     {
@@ -40,22 +40,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (parsed.Count == 0) { Debug.LogWarning("Auto Setup requires at least one parseable assigned material.", component); return; }
 
             Undo.RecordObject(component, "Auto Setup Atlas Output");
-            AtlasShaderRegistry.EnsureSettings(config, output);
-            SetMainTextureDimensions(parsed, config.mainTexture);
-            // Output shaders can override shared dimensions (and every other shared setting).
-            output.AutoConfigure(parsed, config);
-            output.OnConfigurationChanged(config, AtlasConfigurationChange.AutoSetup);
             if (config.mainTexture == null) config.mainTexture = new AtlasTextureSize();
+            SetMainTextureDimensions(parsed, config.mainTexture);
             config.mainTexture.width = Closest(config.mainTexture.width);
             config.mainTexture.height = Closest(config.mainTexture.height);
+            ResetModes(config);
             EditorUtility.SetDirty(component);
+        }
 
-            // Reuse exactly the same constraint normalization as the inspector controls.
-            var serialized = new SerializedObject(component);
-            serialized.Update();
-            var property = serialized.FindProperty("configuration");
-            AtlasOutputUI.NormalizeAll(property.FindPropertyRelative("settings"), property.FindPropertyRelative("mainTexture"), output);
-            serialized.ApplyModifiedProperties();
+        // Every stored mode back to the feature's default. The other choices are kept.
+        public static void ResetModes(AtlasOutputConfiguration config)
+        {
+            if (config.features == null) return;
+            foreach (var setting in config.features)
+                if (setting != null) setting.mode = "";
         }
 
         public static void SetMainTextureDimensions(IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasTextureSize main)

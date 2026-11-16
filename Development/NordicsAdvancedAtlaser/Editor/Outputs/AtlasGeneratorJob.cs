@@ -15,8 +15,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Already 0 when the output has fewer than two sources.
         public int RegionPadding;
         public AtlasTextureSize MainTexture;
-        public readonly List<AtlasOutputSetting> Settings = new List<AtlasOutputSetting>();
+        public readonly List<AtlasFeatureChoice> Features = new List<AtlasFeatureChoice>();
         public readonly List<AtlasGeneratorSource> Sources = new List<AtlasGeneratorSource>();
+    }
+
+    // The user's choices for one feature, with sources as indices into Sources.
+    public sealed class AtlasFeatureChoice
+    {
+        public string FeatureId;
+        // Empty: the feature's default.
+        public string ModeId = "";
+        // -1: the source with the largest region.
+        public int ReferenceSource = -1;
+        public readonly HashSet<int> DisabledSources = new HashSet<int>();
     }
     public sealed class AtlasGeneratorSource
     {
