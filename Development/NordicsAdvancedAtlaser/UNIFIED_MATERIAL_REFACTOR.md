@@ -1,6 +1,6 @@
 # Unified material — refactor plan
 
-**Status:** steps 1 to 9 done (2026-11-16); step 9g-4f waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
+**Status:** steps 1 to 10 done (2026-11-16); step 10c waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
 the [feature catalogue](UNIFIED_MATERIAL_FEATURES.md), then rebuilding every input parser on it.
 
 **Goal:** the code matches the catalogue. Every supported input shader maps into typed
@@ -329,10 +329,36 @@ reported as geometry effects. Toon 11 adds about 1,000 properties over 10.0.29, 
       volume, blobs, shading, reservoirs, haze, AudioLink).
 
 ### 10. Poiyomi 7.3 to 9.3
-- **Version tables:** names and meanings that differ from 10, read from the sources on disk.
-- **Effort:** 8.1 to 9.3 differ little. 7.3 is the most work.
-- **Tests:** an untouched material per version, plus each known meaning change, such as
-  brightness and saturation.
+- **Version tables:** names and meanings that differ from 10, read from the sources on disk
+  (the "Nordics MC Fallback" project has 7.3, 8.0, 8.1, 9.0, 9.2 and 9.3).
+- **Effort, measured:** the plan assumed 8.1 to 9.3 differ little. A function-by-function diff
+  of 9.3 against 10 found Poiyomi 10 rewrote decals, AL decals, dissolve, glitter, matcap,
+  flipbooks and depth rims, and refined lighting, clear coat and reflections; 8.x differs more,
+  and 7.3 is a different architecture (952 properties, 316 not in 10).
+- **Decided (2026-11-16): pragmatic support.** Old versions are read on 10's parser with
+  version tables for renamed and re-meaning settings; features Poiyomi rewrote are read with
+  10's meaning and noted once each while in use (their dropped settings named in the note).
+  Not exact per-version modelling.
+- **Tests:** an untouched material per version, plus each known meaning change.
+- **Parts:**
+  - **10a (done):** 9.0–9.3: the Toon 9 parser; depth rim samples (two or ten) and SSS
+    thickness (always alpha) by version; notes for the rewritten features (decals, AL decal,
+    dissolve, glitter, matcap, flipbook, depth rim, Poiyomi rim, clear coat, reflections,
+    stylized specular, SSS, RGBA masking, voronoi, video, backlight, distortion, AL outline
+    colour); 9.0's dropped settings (anisotropy noise, fresnel strengths, outline HSVG)
+    reported. 9.0's other enum differences turned out to be the same meanings renamed.
+  - **10b (done):** 8.0–8.1: the Toon 8 parser; the Poiyomi rim's blend in its old
+    property, the lilToon rim adding, the alpha map under its old name; 8.0's extra blend
+    modes approximated and reported; 8.1's mislabelled global mask blends reported; notes
+    widened with 8's dropped settings; iridescence, back face alpha and the cubemap's weights
+    reported or noted.
+  - **10c (done):** 7.3: the Toon 7 parser; a name table for settings 8 renamed with the
+    same meaning (main texture UV, force opaque, dithering, alpha to coverage, mip scale,
+    angular fade, shading toggle, parallax, distance fade); the distorted UV at index 4; the
+    lighting types renumbered (Toon by its ramp type); the height map's own toggle and green
+    channel; the distance fade without a toggle. 7.3's lighting is noted; its specular,
+    metallics, BRDF, clear coat, SSS, panosphere, light maps, basic emission, fade mask and
+    emission AudioLink are reported.
 
 ### 11. Finish
 No free-form data left, and no `Material` or shader API calls outside the reader. The

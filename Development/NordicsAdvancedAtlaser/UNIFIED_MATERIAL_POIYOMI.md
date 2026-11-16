@@ -10,8 +10,9 @@ about 60 top-level sections.
 (`Packages/com.poiyomi.toon/_PoiyomiShaders/Shaders/10.0/Toon/Poiyomi Toon.shader`). The inspector
 is Thry Editor, built from the shader's property block: section markers, toggles and hidden
 flags. I extracted the section tree with a script: **3,801 properties, about 2,640 visible.**
-Older versions (7.3, 8.1, 9.0, 9.3) aren't covered; their differences are parser work. Their
-sources ship inside the Toon packages, under `_PoiyomiShaders/Shaders/<version>`.
+Older versions (7.3 to 9.3) are read on this parser with version tables (refactor step 10,
+pragmatic support); see [*Older versions*](#older-versions). Their sources ship inside the Toon
+packages, under `_PoiyomiShaders/Shaders/<version>`.
 **Version 11 and Poiyomi Pro** (11.0.50, from the dev project's `com.poiyomi.pro` download) are
 covered in [*Version 11 and Pro*](#version-11-and-pro), as differences from 10.0.29.
 
@@ -1143,6 +1144,54 @@ blend factors follow the fur mode; separate front- and back-face stencils are re
 this part the parser no longer reports unmapped sections: every Poiyomi 10 section is mapped
 or reports its own unmapped details.
 
+## Older versions
+
+Decided (2026-11-16): **pragmatic support.** Poiyomi 7.3 to 9.3 materials are read by 10's
+parser with version tables for settings whose names or meanings changed. Features Poiyomi 10
+rewrote are read with 10's meaning and noted once each while in use, as approximate.
+
+**Part 10a (9.0–9.3):** `AtlasPoiyomiToon9Parser` (detected from the 9 markers or the master
+label). Meaning changes handled: the depth rim's type (9: two or ten samples; 10: two, four or
+eight), and the SSS thickness, which 9 always read from the map's alpha (its channel setting
+was unused). Mislabelled enums in 9 (the SSS and internal parallax mask UVs, the push-back mask
+"channel" that is a UV) read the same as 10. Noted as read with 10's meaning while in use:
+decals (and their TPS masks), the AL decal (its UV position, scale, rotation), dissolve (edge
+hardness, detail edge smoothing, continuous dissolve, per-tile alphas, clamps, centre-out
+power), glitter (centre size), matcap, flipbook (scale and offset, panning, replace), depth rim,
+the Poiyomi rim style (sharpness), clear coat, reflections and specular, stylized specular,
+subsurface scattering, RGBA colour masking, voronoi, video screen, backlight, UV distortion and
+the outline's AL colour range. 9.0's anisotropy noise map, reflection and clear coat fresnel
+strengths and outline texture HSVG are reported when set. Lighting reads the same: 10 refined
+cookies, light volumes and additional lights.
+
+**Part 10b (8.0–8.1):** `AtlasPoiyomiToon8Parser`, on top of 9's handling. Meaning changes: the
+Poiyomi rim style's blend lived in `_RimBlendMode` (numbered as 10's `_RimPoiBlendMode`); the
+lilToon rim always added; the alpha map was `_ClippingMask` (red channel, *Inverse Clipping*).
+8.0 offered more colour blends on decals and the like, some on numbers 10 reuses (colour dodge
+is 7, subtract in 10): burns read as multiply, dodge as screen, the light modes as overlay,
+reported. 8.1's global mask blend listed colour blends while the shader used 10's mask blends,
+so screen read as average and the values past add gave 0; those are read as replace and
+reported. 8.0's world position UV was XZ, as 10's default. The notes also name 8's dropped
+settings (glitter panning, jitter and frequency; flipbook multiply and add; the rim's clamp;
+RGBA masking's vertex colour source, multiplicative blending and normals); the cubemap's
+replace, multiply and add weights are noted; iridescence (removed in 9) and 8.0's back face
+alpha are reported.
+
+**Part 10c (7.3):** `AtlasPoiyomiToon7Parser`, on top of 8's and 9's handling. 7.3 is a
+different generation (952 properties, 316 not in 10), so more is approximate. Read through a
+name table, same meanings: `_MainTextureUV`, `_ForceOpaque`, `_DitheringEnabled` and
+`_DitherGradient`, `_AlphaToMask`, `_MainAlphaToCoverage`, `_MainMipScale`, `_EnableRandom`
+(angular fade), `_EnableLighting` (shading), `_ParallaxMap`, `_ParallaxHeightMap`,
+`_ParallaxStrength`, `_ParallaxInternalMapEnabled`, and the distance fade's `_MainDistanceFade*`,
+`_MainMinAlpha`, `_MainMaxAlpha` and `_MainFadeType`. Meaning changes: UV index 4 is the
+distorted UV (7 since 8); the lighting types are Toon (by `_LightingRampType`: texture ramp,
+math gradient as multilayer math, shade mapping), Realistic, Wrapped, Skin and Flat; the height
+map has its own toggle and reads green; the distance fade has no toggle and applies unless its
+settings leave the alpha as is. Noted: the lighting (ramp mask, HSL shadows, shadow mix, colour
+modes and limits) and parallax. Reported: the two specular sections, metallics, the BRDF
+section, clear coat, subsurface scattering, the panosphere section, the AO, detail shadow and
+ramp mask maps, basic emission, the fade mask and emission AudioLink.
+
 ## Out of scope
 
 - **Poiyomi Toon World:** a world variant.
@@ -1200,7 +1249,7 @@ What Poiyomi adds to, or confirms in, the earlier drafts:
 3. **Stats Overlay:** treat as out of scope, like world-only features?
 4. **Poiyomi Pro:** resolved; the source is available now. See
    [*Version 11 and Pro*](#version-11-and-pro).
-5. **Older Poiyomi versions** (7.3–9.3): the parser has version detection. Keep supporting
-   them, or limit support to 10.x and report older versions?
+5. **Older Poiyomi versions** (7.3–9.3): resolved: pragmatic support (see
+   [*Older versions*](#older-versions)).
 6. **Fur length when atlasing:** bake the length ratio into the length mask and use the longest
    length as the constant, as proposed under *Lil Fur*?

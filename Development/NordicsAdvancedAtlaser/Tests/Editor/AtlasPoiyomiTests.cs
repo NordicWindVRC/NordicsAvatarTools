@@ -42,6 +42,24 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 return new AtlasPoiyomiToon10Parser().Parse(material);
         }
 
+        private AtlasUnifiedMaterial ParseSaved9()
+        {
+            using (new AtlasTestMaterials.SavedValuesOnly())
+                return new AtlasPoiyomiToon9Parser().Parse(material);
+        }
+
+        private AtlasUnifiedMaterial ParseSaved8()
+        {
+            using (new AtlasTestMaterials.SavedValuesOnly())
+                return new AtlasPoiyomiToon8Parser().Parse(material);
+        }
+
+        private AtlasUnifiedMaterial ParseSaved7()
+        {
+            using (new AtlasTestMaterials.SavedValuesOnly())
+                return new AtlasPoiyomiToon7Parser().Parse(material);
+        }
+
         [Test]
         public void ToonTenIsDetectedFromSavedValues()
         {
@@ -2958,6 +2976,203 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var d = ParseSaved();
             Assert.AreEqual(AtlasLightingFamily.Unlit, d.Lighting.Family);
             Assert.IsTrue(d.Issues.Any(i => i.Feature == "lighting.shading-off"));
+        }
+
+        [Test]
+        public void ToonNineIsDetectedFromSavedValues()
+        {
+            foreach (string name in new[] { "_ShaderOptimizerEnabled", "_LightingMode", "_AlphaMaskInvert" })
+                AtlasTestMaterials.AddSavedFloat(material, name);
+            AtlasTestMaterials.AddSavedColor(material, "_LightingShadowColor");
+            using (new AtlasTestMaterials.SavedValuesOnly())
+            {
+                var parser = AtlasShaderRegistry.Detect(material);
+                Assert.IsInstanceOf<AtlasPoiyomiToon9Parser>(parser);
+                // An untouched material: nothing in use, so nothing noted.
+                Assert.IsFalse(parser.Parse(material).Issues.Any(i => i.Feature.StartsWith("poiyomi9.")));
+            }
+        }
+
+        [Test]
+        public void ToonNineDepthRimHasTwoOrTenSamples()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableDepthRimLighting", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_DepthRimType", 1f);
+            var d = ParseSaved9();
+            var layer = d.Layers.OfType<AtlasAngleLayer>().First(l => l.DepthEdge != null);
+            Assert.AreEqual(10, layer.DepthEdge.Samples);
+            Assert.IsTrue(d.Issues.Any(i => i.Feature == "poiyomi9.depth-rim"));
+            Assert.AreEqual(4, ParseSaved().Layers.OfType<AtlasAngleLayer>().First(l => l.DepthEdge != null).DepthEdge.Samples, "10: four samples.");
+        }
+
+        [Test]
+        public void ToonNineSubsurfaceReadsTheAlpha()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_SubsurfaceScattering", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_SSSThicknessMapChannel", 1f);
+            var layer9 = ParseSaved9().Layers.OfType<AtlasSubsurfaceLayer>().Single();
+            Assert.AreEqual(AtlasChannel.Alpha, layer9.ThicknessChannel);
+            Assert.AreEqual(AtlasChannel.Red, ParseSaved().Layers.OfType<AtlasSubsurfaceLayer>().Single().ThicknessChannel);
+        }
+
+        [Test]
+        public void ToonNineRewrittenFeaturesAreNotedOnce()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_DecalEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_DecalEnabled2", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableDissolve", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableRimLighting", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableRim2Lighting", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_Rim2Style", 1f);
+            var d = ParseSaved9();
+            Assert.AreEqual(1, d.Issues.Count(i => i.Feature == "poiyomi9.decals"));
+            Assert.AreEqual(1, d.Issues.Count(i => i.Feature == "poiyomi9.dissolve"));
+            Assert.AreEqual(1, d.Issues.Count(i => i.Feature == "poiyomi9.rim"));
+            Assert.IsTrue(d.Issues.Where(i => i.Feature.StartsWith("poiyomi9.")).All(i => i.Kind == AtlasIssueKind.Note));
+            Assert.IsFalse(ParseSaved().Issues.Any(i => i.Feature.StartsWith("poiyomi9.")), "10 has no such notes.");
+        }
+
+        [Test]
+        public void ToonEightIsDetectedFromSavedValues()
+        {
+            foreach (string name in new[] { "_ShaderOptimizerEnabled", "_LightingMode", "_ALDecalBlendType" })
+                AtlasTestMaterials.AddSavedFloat(material, name);
+            AtlasTestMaterials.AddSavedColor(material, "_LightingShadowColor");
+            using (new AtlasTestMaterials.SavedValuesOnly())
+            {
+                var parser = AtlasShaderRegistry.Detect(material);
+                Assert.IsInstanceOf<AtlasPoiyomiToon8Parser>(parser);
+                Assert.IsFalse(parser.Parse(material).Issues.Any(i => i.Feature.StartsWith("poiyomi8.")), "An untouched material.");
+            }
+        }
+
+        [Test]
+        public void ToonEightPoiyomiRimBlendIsTheOldProperty()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableRimLighting", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_RimWidth", 0.5f);
+            AtlasTestMaterials.AddSavedFloat(material, "_RimBlendMode", 1f);
+            Assert.AreEqual(AtlasBlend.Replace, ParseSaved8().Layers.OfType<AtlasAngleLayer>().Single().Blend, "8: Add 0, Replace 1.");
+            Assert.AreEqual(AtlasBlend.Add, ParseSaved().Layers.OfType<AtlasAngleLayer>().Single().Blend, "10 reads _RimPoiBlendMode.");
+        }
+
+        [Test]
+        public void ToonEightLilRimAdds()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableRimLighting", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_RimStyle", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_RimBlendMode", 0f);
+            Assert.IsTrue(ParseSaved8().Layers.OfType<AtlasAngleLayer>().All(l => l.Blend == AtlasBlend.Add));
+            Assert.IsTrue(ParseSaved().Layers.OfType<AtlasAngleLayer>().All(l => l.Blend == AtlasBlend.Replace));
+        }
+
+        [Test]
+        public void ToonEightAlphaMapIsTheClippingMask()
+        {
+            AtlasTestMaterials.AddSavedTexture(material, "_ClippingMask", textureA);
+            AtlasTestMaterials.AddSavedFloat(material, "_Inverse_Clipping", 1f);
+            var alpha = ParseSaved8().Surface.Alpha;
+            Assert.AreSame(textureA, alpha.Mask.Map.Texture);
+            Assert.IsTrue(alpha.Mask.Invert);
+            Assert.AreEqual(AtlasAlphaMaskBlend.Multiply, alpha.MaskBlend);
+            Assert.IsNull(ParseSaved().Surface.Alpha.Mask, "10 has no clipping mask.");
+        }
+
+        [Test]
+        public void ToonEightOldBlendModesAreApproximatedAndReported()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_DecalEnabled", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_DecalTexture", textureA);
+            AtlasTestMaterials.AddSavedFloat(material, "_DecalBlendType", 7f);
+            AtlasTestMaterials.AddSavedFloat(material, "_AlphaGlobalMask", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_AlphaGlobalMaskBlendType", 8f);
+            var d = ParseSaved8();
+            Assert.AreEqual(AtlasBlend.Screen, d.Layers.OfType<AtlasSurfaceLayer>().Single().Targets[0].Blend, "8.0's colour dodge.");
+            Assert.IsTrue(d.Issues.Any(i => i.Feature == "poiyomi8.blend-modes"));
+            Assert.IsTrue(d.Issues.Any(i => i.Feature == "poiyomi8.mask-blend"));
+            Assert.IsTrue(d.Issues.Any(i => i.Feature == "poiyomi8.decals"));
+            var ten = ParseSaved();
+            Assert.AreEqual(AtlasBlend.Subtract, ten.Layers.OfType<AtlasSurfaceLayer>().Single().Targets[0].Blend);
+            Assert.IsFalse(ten.Issues.Any(i => i.Feature.StartsWith("poiyomi8.")));
+        }
+
+        [Test]
+        public void ToonEightIridescenceIsReported()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableIridescence", 1f);
+            Assert.IsTrue(ParseSaved8().Issues.Any(i => i.Feature == "poiyomi8.iridescence"));
+        }
+
+        [Test]
+        public void ToonSevenIsDetectedFromSavedValues()
+        {
+            foreach (string name in new[] { "_ShaderOptimizerEnabled", "_LightingMode" })
+                AtlasTestMaterials.AddSavedFloat(material, name);
+            AtlasTestMaterials.AddSavedColor(material, "_LightingShadowColor");
+            using (new AtlasTestMaterials.SavedValuesOnly())
+            {
+                var parser = AtlasShaderRegistry.Detect(material);
+                Assert.IsInstanceOf<AtlasPoiyomiToon7Parser>(parser);
+                var issues = parser.Parse(material).Issues.Where(i => i.Feature.StartsWith("poiyomi7.")).ToArray();
+                // An untouched material: only 7.3's lighting is noted.
+                CollectionAssert.AreEqual(new[] { "poiyomi7.lighting" }, issues.Select(i => i.Feature).ToArray());
+            }
+        }
+
+        [Test]
+        public void ToonSevenReadsItsOwnNames()
+        {
+            material.SetTexture("_MainTex", textureA);
+            AtlasTestMaterials.AddSavedFloat(material, "_MainTextureUV", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ForceOpaque", 0f);
+            AtlasTestMaterials.AddSavedFloat(material, "_DitheringEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_MainMaxAlpha", 0.5f);
+            AtlasTestMaterials.AddSavedFloat(material, "_MainDistanceFadeMax", 2f);
+            var d = ParseSaved7();
+            Assert.AreEqual(AtlasTextureSpace.UV1, d.Surface.BaseColor.Map.Space);
+            Assert.AreNotEqual(AtlasAlphaSource.None, d.Surface.Alpha.Source, "Not forced opaque.");
+            Assert.IsTrue(d.Surface.Alpha.Dithering);
+            var fade = d.Surface.Alpha.Modifiers.Single(x => x.Kind == AtlasAlphaModifierKind.DistanceFade);
+            Assert.AreEqual(0.5f, fade.MaxAlpha, 1e-6f);
+            Assert.AreEqual(2f, fade.MaxDistance, 1e-6f);
+            var ten = ParseSaved();
+            Assert.AreEqual(AtlasTextureSpace.UV0, ten.Surface.BaseColor.Map.Space);
+            Assert.AreEqual(AtlasAlphaSource.None, ten.Surface.Alpha.Source, "10's force opaque defaults on.");
+        }
+
+        [Test]
+        public void ToonSevenUvFourIsTheDistortedUv()
+        {
+            material.SetTexture("_MainTex", textureA);
+            AtlasTestMaterials.AddSavedFloat(material, "_MainTextureUV", 4f);
+            Assert.AreEqual(AtlasTextureSpace.UV0, ParseSaved7().Surface.BaseColor.Map.Space, "Distorted UV without distortion: UV0.");
+        }
+
+        [TestCase(4, 0, AtlasLightingFamily.Flat)]
+        [TestCase(1, 0, AtlasLightingFamily.PhysicallyBased)]
+        public void ToonSevenLightingTypesAreRenumbered(int mode, int ramp, AtlasLightingFamily family)
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_LightingMode", mode);
+            AtlasTestMaterials.AddSavedFloat(material, "_LightingRampType", ramp);
+            Assert.AreEqual(family, ParseSaved7().Lighting.Family);
+        }
+
+        [Test]
+        public void ToonSevenParallaxAndOldSections()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_ParallaxMap", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ParallaxHeightMapEnabled", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_ParallaxHeightMap", textureA);
+            AtlasTestMaterials.AddSavedFloat(material, "_ParallaxStrength", 0.3f);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableSpecular", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableSpecular1", 1f);
+            var d = ParseSaved7();
+            var parallax = d.Surface.Parallax;
+            Assert.IsTrue(parallax.Enabled);
+            Assert.AreSame(textureA, parallax.Height.Map.Texture);
+            Assert.AreEqual(AtlasChannel.Green, parallax.Height.Channel);
+            Assert.AreEqual(0.3f, parallax.Depth, 1e-6f);
+            Assert.AreEqual(1, d.Issues.Count(i => i.Feature == "poiyomi7.specular"));
         }
     }
 }

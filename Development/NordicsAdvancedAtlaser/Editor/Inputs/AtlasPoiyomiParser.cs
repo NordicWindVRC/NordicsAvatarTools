@@ -13,12 +13,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
         protected abstract int Major { get; }
         protected virtual bool Pro => false;
 
+        // The major version being parsed, for the few settings whose meaning changed (9 and older).
+        [System.ThreadStatic] private static int major;
+        // Set while reading when an 8.x blend value had no 10 equivalent (reported by Legacy).
+        [System.ThreadStatic] private static bool legacyColorBlend, legacyMaskBlend;
+
         // The Distortion UV section, which textures choosing Distorted UV share; null when off.
         [System.ThreadStatic] private static AtlasUVDistortion distortion;
         [System.ThreadStatic] private static int distortedChannel;
 
         protected override void Populate(Material m, AtlasUnifiedMaterial d)
         {
+            major = Major;
+            legacyColorBlend = legacyMaskBlend = false;
             UVOptions(m, d);
             Triplanar(m, d);
             MaskBus(m, d);
@@ -52,6 +59,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             GeometryVariants(m, d);
             Fur(m, d);
             Globals11(m, d);
+            if (major < 10) Legacy(m, d);
         }
 
         private static readonly AtlasChannel[] Channels = { AtlasChannel.Red, AtlasChannel.Green, AtlasChannel.Blue, AtlasChannel.Alpha };
@@ -62,6 +70,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         protected static AtlasTextureReference Texture(Material m, AtlasUnifiedMaterial d, string property,
             AtlasTextureInterpretation interpretation = AtlasTextureInterpretation.Color)
         {
+            property = Name(property);
             var map = AtlasSourceMapping.Texture(m, property, interpretation);
             if (map == null) return null;
             var pan = AtlasMaterialReader.Vector(m, property + "Pan", Vector4.zero);
@@ -75,6 +84,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     d.Report(AtlasIssueKind.Unmapped, "uv.hextile", "Hextile stochastic sampling isn't mapped yet; read as stochastic.");
             }
             int uv = Int(m, property + "UV", 0);
+            // 7.3's index 4 is the distorted UV (7 since 8).
+            if (major <= 7 && uv == 4) uv = 7;
             switch (uv)
             {
                 case 0: case 1: case 2: case 3:
@@ -198,13 +209,60 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return color;
         }
 
-        protected static float Float(Material m, string property, float fallback) => AtlasMaterialReader.Float(m, property, fallback);
-        protected static int Int(Material m, string property, int fallback) => Mathf.RoundToInt(AtlasMaterialReader.Float(m, property, fallback));
-        protected static bool On(Material m, string property, float fallback = 0f) => AtlasMaterialReader.Float(m, property, fallback) >= 0.5f;
+        protected static float Float(Material m, string property, float fallback) => AtlasMaterialReader.Float(m, Name(property), fallback);
+        protected static int Int(Material m, string property, int fallback) => Mathf.RoundToInt(AtlasMaterialReader.Float(m, Name(property), fallback));
+        protected static bool On(Material m, string property, float fallback = 0f) => AtlasMaterialReader.Float(m, Name(property), fallback) >= 0.5f;
+
+        // 7.3's names for settings 8 renamed with the same meaning; other versions read 10's names.
+        private static readonly System.Collections.Generic.Dictionary<string, string> Names7 = new System.Collections.Generic.Dictionary<string, string>
+        {
+            { "_MainTexUV", "_MainTextureUV" }, { "_AlphaForceOpaque", "_ForceOpaque" }, { "_AlphaDithering", "_DitheringEnabled" },
+            { "_AlphaDitherGradient", "_DitherGradient" }, { "_AlphaToCoverage", "_AlphaToMask" }, { "_AlphaSharpenedA2C", "_MainAlphaToCoverage" },
+            { "_AlphaMipScale", "_MainMipScale" }, { "_AlphaAngular", "_EnableRandom" }, { "_ShadingEnabled", "_EnableLighting" },
+            { "_PoiParallax", "_ParallaxMap" }, { "_HeightMap", "_ParallaxHeightMap" }, { "_HeightStrength", "_ParallaxStrength" },
+            { "_PoiInternalParallax", "_ParallaxInternalMapEnabled" },
+            { "_AlphaDistanceFadeMin", "_MainDistanceFadeMin" }, { "_AlphaDistanceFadeMax", "_MainDistanceFadeMax" },
+            { "_AlphaDistanceFadeMinAlpha", "_MainMinAlpha" }, { "_AlphaDistanceFadeMaxAlpha", "_MainMaxAlpha" },
+            { "_AlphaDistanceFadeType", "_MainFadeType" }
+        };
+
+        private static string Name(string property) =>
+            major <= 7 && property != null && Names7.TryGetValue(property, out var old) ? old : property;
         protected static Vector2 Vector2Of(Material m, string property, Vector2 fallback) =>
             AtlasMaterialReader.Vector(m, property, new Vector4(fallback.x, fallback.y, 0f, 0f));
         protected static Vector3 Vector3Of(Material m, string property, Vector3 fallback) =>
             AtlasMaterialReader.Vector(m, property, new Vector4(fallback.x, fallback.y, fallback.z, 0f));
+    }
+
+    // Toon 7.3 read on 10's parser (step 10c), as 8 with 7.3's names, lighting types and UVs.
+    public sealed class AtlasPoiyomiToon7Parser : AtlasPoiyomiParser
+    {
+        public override string ParserId => "poiyomi-toon-7";
+        public override string DisplayName => "Poiyomi Toon 7";
+        protected override int Major => 7;
+        public override bool CanParse(Material m) =>
+            AtlasPoiyomiVersionDetector.DetectVariant(m) == AtlasPoiyomiVariant.Toon && AtlasPoiyomiVersionDetector.Detect(m) == 7;
+    }
+
+    // Toon 8.0–8.1 read on 10's parser (step 10b), as 9 with 8's own differences.
+    public sealed class AtlasPoiyomiToon8Parser : AtlasPoiyomiParser
+    {
+        public override string ParserId => "poiyomi-toon-8";
+        public override string DisplayName => "Poiyomi Toon 8";
+        protected override int Major => 8;
+        public override bool CanParse(Material m) =>
+            AtlasPoiyomiVersionDetector.DetectVariant(m) == AtlasPoiyomiVariant.Toon && AtlasPoiyomiVersionDetector.Detect(m) == 8;
+    }
+
+    // Toon 9.0–9.3 read on 10's parser (step 10a): a few meanings differ by version, and the features
+    // Poiyomi 10 rewrote are read with 10's meaning and noted (AtlasPoiyomiLegacy.cs).
+    public sealed class AtlasPoiyomiToon9Parser : AtlasPoiyomiParser
+    {
+        public override string ParserId => "poiyomi-toon-9";
+        public override string DisplayName => "Poiyomi Toon 9";
+        protected override int Major => 9;
+        public override bool CanParse(Material m) =>
+            AtlasPoiyomiVersionDetector.DetectVariant(m) == AtlasPoiyomiVariant.Toon && AtlasPoiyomiVersionDetector.Detect(m) == 9;
     }
 
     public sealed class AtlasPoiyomiToon10Parser : AtlasPoiyomiParser

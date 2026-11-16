@@ -33,12 +33,15 @@ namespace NordicWind.AdvancedAtlaser.Tests
         // shader are written into the material's saved data directly, as an asset would have them.
         // Call it after the material's own Set* calls: the entry is appended, which breaks the
         // name order Unity looks saved properties up in, so a later Set* can miss its entry.
-        // Only for names the host shader doesn't declare: for those it does, Unity keeps the
-        // existing entry and drops the added one, so use Set* instead.
+        // Only for names the host shader doesn't declare in the same list: for those it does, Unity
+        // keeps the existing entry and drops the added one, so use Set* instead. A name it declares
+        // with another type (Poiyomi 7.3's float _ParallaxMap, Standard's texture) lives in another
+        // list and is kept.
         public static void AddSaved(Material material, string list, string name, Action<SerializedProperty> set)
         {
             // Unity would keep the existing entry and silently drop this one.
-            if (material.shader != null && material.shader.FindPropertyIndex(name) >= 0)
+            int index0 = material.shader != null ? material.shader.FindPropertyIndex(name) : -1;
+            if (index0 >= 0 && ListOf(material.shader.GetPropertyType(index0)) == list)
                 throw new ArgumentException(name + " is declared by " + material.shader.name + ": set it with Set*, not AddSaved.", nameof(name));
             using (var serialized = new SerializedObject(material))
             {
@@ -49,6 +52,19 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 entry.FindPropertyRelative("first").stringValue = name;
                 set(entry.FindPropertyRelative("second"));
                 serialized.ApplyModifiedPropertiesWithoutUndo();
+            }
+        }
+
+        // The saved-properties list a declared property of this type is stored in.
+        private static string ListOf(UnityEngine.Rendering.ShaderPropertyType type)
+        {
+            switch (type)
+            {
+                case UnityEngine.Rendering.ShaderPropertyType.Texture: return "m_TexEnvs";
+                case UnityEngine.Rendering.ShaderPropertyType.Color:
+                case UnityEngine.Rendering.ShaderPropertyType.Vector: return "m_Colors";
+                case UnityEngine.Rendering.ShaderPropertyType.Int: return "m_Ints";
+                default: return "m_Floats";
             }
         }
 

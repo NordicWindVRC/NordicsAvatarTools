@@ -54,7 +54,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Opacity = Float(m, n("_RimBlendStrength", "_Rim2BlendStrength"), 1f),
                 EmissionAmount = Float(m, n("_RimStrength", "_Rim2Strength"), 0f)
             };
-            int blend = Int(m, n("_RimPoiBlendMode", "_RimPoi2BlendMode"), 0);
+            // 8 kept the Poiyomi style's blend in _RimBlendMode, numbered as 10's _RimPoiBlendMode.
+            int blend = major <= 8 ? Int(m, n("_RimBlendMode", "_Rim2BlendMode"), 0) : Int(m, n("_RimPoiBlendMode", "_RimPoi2BlendMode"), 0);
             layer.Blend = blend == 1 ? AtlasBlend.Replace : blend == 2 ? AtlasBlend.Multiply : blend == 3 ? AtlasBlend.Mixed
                 : blend == 4 ? AtlasBlend.Screen : AtlasBlend.Add;
             layer.Color.Color = TintColor(m, d, n("_RimLightColor", "_Rim2LightColor"), n("_RimLightColorThemeIndex", "_Rim2LightColorThemeIndex"), layer.Color)
@@ -148,7 +149,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static void LilRim(Material m, AtlasUnifiedMaterial d, RimName n)
         {
             float border = Float(m, n("_RimBorder", "_Rim2Border"), 0.5f), blur = Float(m, n("_RimBlur", "_Rim2Blur"), 0.65f);
-            int blend = Int(m, n("_RimBlendMode", "_Rim2BlendMode"), 1);
+            // 8's lilToon rim always adds.
+            int blend = major <= 8 ? 1 : Int(m, n("_RimBlendMode", "_Rim2BlendMode"), 1);
             float lighting = Float(m, n("_RimEnableLighting", "_Rim2EnableLighting"), 1f);
             float parallax = Float(m, n("_RimVRParallaxStrength", "_Rim2VRParallaxStrength"), 1f);
             // Poiyomi 11's application stage: 0 after lighting (lit by all of it), 1 on the base colour

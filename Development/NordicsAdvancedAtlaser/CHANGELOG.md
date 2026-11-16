@@ -209,6 +209,14 @@ under *Added* describe the parsers before the rebuild.
 - **Poiyomi vertex options** (refactor step 8d-9): Basics & Fun as deformations. Deformations
   gain scale, axis rotation with spin, world translation, displacement, barrel, sphere, tornado
   and wind, and local, centred snapping; fur's wind becomes the shared wind with turbulence.
+- **Poiyomi Toon 7.3** (refactor step 10c): read on the Poiyomi 10 parser through a name
+  table, with 7.3's UVs, lighting types, parallax and distance fade; its older sections are
+  noted or reported.
+- **Poiyomi Toon 8** (refactor step 10b): 8.0–8.1 materials are read on the Poiyomi 10
+  parser, with 8's rim blends, alpha map and blend numbering; the rest as 9.
+- **Poiyomi Toon 9** (refactor step 10a): 9.0–9.3 materials are read on the Poiyomi 10
+  parser (they used the fallback before), with 9's depth rim samples and SSS thickness; the
+  features Poiyomi 10 rewrote are read with 10's meaning and noted once each.
 - **Poiyomi 11's remaining settings** (refactor step 9g-4f): the Skin section as a skin tone
   pattern kind; light, emission and final colour multipliers; additional lights combining by
   max (Poiyomi's default, Toon 10 included); the network clock; Early Z; the stochastic

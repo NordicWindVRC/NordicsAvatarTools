@@ -527,6 +527,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static AtlasTextureSpace UVSpace(Material m, AtlasUnifiedMaterial d, string property)
         {
             int uv = Int(m, property, 0);
+            if (major <= 7 && uv == 4) uv = 7;
             switch (uv)
             {
                 case 0: case 1: case 2: case 3: return AtlasTextureSpace.UV0 + uv;

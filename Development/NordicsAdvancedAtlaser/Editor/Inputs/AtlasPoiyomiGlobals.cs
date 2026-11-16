@@ -117,7 +117,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Poiyomi's blend selectors use the bus blends' order.
-        private static AtlasMaskBlend BusBlend(int type) => (AtlasMaskBlend)Mathf.Clamp(type, 0, 7);
+        // 8.1's inspector listed colour blends (screen, add, overlay, mixed) the mask blend doesn't
+        // have: past 7 the shader gave 0. Read as replace and reported.
+        private static AtlasMaskBlend BusBlend(int type)
+        {
+            if (major <= 8 && type > 7) legacyMaskBlend = true;
+            return (AtlasMaskBlend)Mathf.Clamp(type, 0, 7);
+        }
 
         // A consumer: the mask reads the channel the selector names (Off, 1R … 4A), combined by its
         // blend. Creates a mask when there's none.

@@ -8,6 +8,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Decal and Poiyomi blend types, by their enum values.
         private static AtlasBlend PoiyomiBlend(int type)
         {
+            // 8.0 offered more modes, some on numbers 10 reuses: burns read as multiply, colour
+            // dodge (7, subtract in 10) as screen, the light modes (10–19) as overlay; reported.
+            if (major <= 8 && (type == 3 || type == 4 || type == 7 || (type >= 10 && type < 20)))
+            {
+                legacyColorBlend = true;
+                return type == 7 ? AtlasBlend.Screen : type < 10 ? AtlasBlend.Multiply : AtlasBlend.Overlay;
+            }
             switch (type)
             {
                 case 1: return AtlasBlend.Darken;

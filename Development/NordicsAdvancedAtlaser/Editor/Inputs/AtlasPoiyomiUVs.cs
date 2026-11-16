@@ -68,11 +68,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static void Parallax(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_PoiParallax")) return;
+            // 7.3: the height map has its own toggle and reads green.
+            if (major <= 7 && !On(m, "_ParallaxHeightMapEnabled")) return;
             var parallax = d.Surface.Parallax;
             parallax.Enabled = true;
             parallax.Method = AtlasParallaxMethod.MultiStep;
             parallax.Height.Map = Texture(m, d, "_HeightMap", AtlasTextureInterpretation.Data);
-            parallax.Height.Channel = Channels[Mathf.Clamp(Int(m, "_HeightMapChannel", 0), 0, 3)];
+            parallax.Height.Channel = major <= 7 ? AtlasChannel.Green : Channels[Mathf.Clamp(Int(m, "_HeightMapChannel", 0), 0, 3)];
             parallax.Depth = Float(m, "_HeightStrength", 0.005f);
             parallax.HeightOffset = Float(m, "_HeightOffset", 0f);
             parallax.Steps = Mathf.Max(1, Int(m, "_HeightStepsMax", 128));

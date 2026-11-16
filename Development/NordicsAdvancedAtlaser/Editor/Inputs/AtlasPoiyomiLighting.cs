@@ -14,6 +14,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var lighting = d.Lighting;
             LightData(m, d);
             int type = Int(m, "_LightingMode", 5);
+            // 7.3: Toon (by its ramp type: texture, math gradient, shade map), Realistic, Wrapped,
+            // Skin, Flat.
+            if (major <= 7)
+            {
+                int ramp = Int(m, "_LightingRampType", 0);
+                type = type == 0 ? (ramp == 1 ? 1 : ramp == 2 ? 4 : 0) : type == 1 ? 6 : type == 4 ? 5 : type;
+            }
             switch (type)
             {
                 case 0: TextureRamp(m, d); break;

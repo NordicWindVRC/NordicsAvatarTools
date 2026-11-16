@@ -58,9 +58,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     else alpha.MaskBlend = mode == 3 ? AtlasAlphaMaskBlend.Add : mode == 4 ? AtlasAlphaMaskBlend.Subtract : AtlasAlphaMaskBlend.Multiply;
                 }
             }
+            // 8's alpha map: alpha × its red channel (inverted with Inverse Clipping).
+            if (major <= 8 && alpha.Mask == null)
+            {
+                var clipping = Mask(m, d, "_ClippingMask");
+                if (clipping != null)
+                {
+                    clipping.Invert = On(m, "_Inverse_Clipping");
+                    alpha.Mask = clipping;
+                    alpha.MaskBlend = AtlasAlphaMaskBlend.Multiply;
+                }
+            }
             alpha.Offset = Float(m, "_AlphaMod", 0f);
             alpha.Mask = BusMask(m, alpha.Mask, "_AlphaGlobalMask");
-            if (On(m, "_AlphaDistanceFade"))
+            if (On(m, "_AlphaDistanceFade") || (major <= 7 && DistanceFade7(m)))
             {
                 alpha.Modifiers.Add(new AtlasAlphaModifier { Kind = AtlasAlphaModifierKind.DistanceFade,
                     PixelPosition = Int(m, "_AlphaDistanceFadeType", 1) == 1,
@@ -101,6 +112,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             alpha.DitherCutout = Int(m, "_AlphaDitherMode", 0) == 1;
             d.Render.DitheredShadows = On(m, "_AlphaDitheredShadows");
             if (On(m, "_AlphaForceOpaque", 1f)) alpha.Source = AtlasAlphaSource.None;
+        }
+
+        // 7.3's distance fade has no toggle: it applies unless its settings leave the alpha as is.
+        private static bool DistanceFade7(Material m)
+        {
+            float minAlpha = Float(m, "_AlphaDistanceFadeMinAlpha", 0f), maxAlpha = Float(m, "_AlphaDistanceFadeMaxAlpha", 1f);
+            float near = Float(m, "_AlphaDistanceFadeMin", 0f), far = Float(m, "_AlphaDistanceFadeMax", 0f);
+            return !(minAlpha == 1f && maxAlpha == 1f) && !(maxAlpha == 1f && near == 0f && far == 0f);
         }
 
         // The alpha map's channel weights: one channel at full weight is a channel; anything else

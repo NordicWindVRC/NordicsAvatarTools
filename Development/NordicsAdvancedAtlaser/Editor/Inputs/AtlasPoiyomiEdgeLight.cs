@@ -53,7 +53,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 };
                 layer.Color.Color = new Color(color.r, color.g, color.b, 1f);
                 var edge = layer.DepthEdge;
-                edge.Samples = new[] { 2, 4, 8 }[Mathf.Clamp(Int(m, "_DepthRimType", 2), 0, 2)];
+                // 9 and older: two or ten samples.
+                edge.Samples = major < 10 ? new[] { 2, 10 }[Mathf.Clamp(Int(m, "_DepthRimType", 0), 0, 1)]
+                    : new[] { 2, 4, 8 }[Mathf.Clamp(Int(m, "_DepthRimType", 2), 0, 2)];
                 edge.Width = Float(m, "_DepthRimWidth", 0.08f);
                 edge.Sharpness = Float(m, "_DepthRimSharpness", 0.5f);
                 edge.Threshold = Float(m, "_DepthRimDepthThreshold", 0.25f);
@@ -151,7 +153,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 BaseColorMix = Float(m, "_SSSBaseColorMix", 0f),
                 Thickness = map,
                 // The channel enum: R 1, G 2, B 3, A 0.
-                ThicknessChannel = Channels[(Mathf.Clamp(Int(m, "_SSSThicknessMapChannel", 0), 0, 3) + 3) % 4],
+                // 9 and older always read the alpha (their channel setting was unused).
+                ThicknessChannel = major < 10 ? AtlasChannel.Alpha : Channels[(Mathf.Clamp(Int(m, "_SSSThicknessMapChannel", 0), 0, 3) + 3) % 4],
                 // Without a map the shader's thickness is 1.
                 ThicknessOffset = map == null ? offset + 1f : offset,
                 ThicknessPower = 1f,
