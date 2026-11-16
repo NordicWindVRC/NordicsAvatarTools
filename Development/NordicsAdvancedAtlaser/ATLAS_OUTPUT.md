@@ -56,7 +56,12 @@ What exists today, which this design builds on:
 | Source analysis cache | `Editor/AtlasSourceAnalysisCache.cs` | Each source's parse, kept until the material, its shader or an imported texture or shader changes |
 | Overview | `Editor/Outputs/AtlasOutputOverview.cs`, `AtlasTextureMemory.cs` | What an output uses: features with their modes and sources, the textures they need with sizes and memory |
 | Evaluator | `Editor/Outputs/AtlasMapEvaluator.cs` | The bakeable subset: a source's base colour texture with its tiling, offset and rotation on UV0, white without a texture |
-| Map baker | `Editor/Outputs/AtlasMapBaker.cs` | One virtual map: each source evaluated at its bake size, placed in its region, the rest of the atlas filled from the nearest region |
+| Map baker | `Editor/Outputs/AtlasMapBaker.cs` | One virtual map: each source evaluated at its bake size, its UV islands grown over what its meshes don't use, placed in its region, the rest of the atlas filled from the nearest region |
+| Coverage | `Editor/Outputs/AtlasCoverage.cs` | Each source's UV0 triangles (from the output's renderers in the manual bake, the avatar's in the build), painted at bake size; a triangle in another UV tile counts by whole tiles |
+| Packing | `Editor/Outputs/AtlasTexturePacker.cs` | One output texture from its virtual maps, each baked at the texture's size into its channels |
+| Writers | `Editor/Outputs/AtlasOutputShaders.cs` | Poiyomi Toon 10 and VRChat Mobile Toon Standard: the base colour texture and colour, opaque in the Geometry queue |
+| Export | `Editor/Outputs/AtlasTextureExport.cs` | PNG assets with the output's formats per platform, crunch where it saves 10% |
+| Manual bake | `Editor/Outputs/AtlasManualBake.cs` | Bake to Assets: the pipeline in edit mode, the textures and the material written as assets |
 | Texture library | Texture Wrapper (`API.md`) | Float textures with usage flags, `Blit` with blend modes, masks and padding, colour operations, triangle painting, normal difference baking, dilation, PNG and in-memory export, `OutputChannels.Auto` |
 
 The UV remapping of the meshes (moving each source's UVs into its region) is a separate,
@@ -294,10 +299,18 @@ Per renderer whose submeshes use a source material of an output:
    a material that isn't atlased, gets one copy per user. Every attribute is copied with it:
    position, normal, tangent, UVs, vertex colour, bone weights and each blend shape frame's
    deltas.
-3. **Write UV0:** each source vertex's UV, clamped to 0–1 (as decided; one information line
-   per material when it clamps), placed in the source's region: `region.min + uv ×
-   region.size`. Triangles that a kept UV-tile feature needs in their tile, such as the world
-   AO blocker's, keep their UV0.
+3. **Write UV0:** each source vertex's UV placed in the source's region: `region.min + uv ×
+   region.size`, with the UV first brought into 0–1:
+   - a triangle that lies within one UV tile is moved back into 0–1 by whole tiles, so it
+     shows the same texels it showed with a repeating texture (and the coverage counts them
+     the same way);
+   - a triangle that straddles a tile edge, which no whole-tile move can fix, is clamped to
+     0–1, with one information line per material giving how many;
+   - triangles that a kept UV-tile feature needs in their tile, such as the world AO
+     blocker's, keep their UV0. Tile features read the original tiles from the preserved UV
+     channels.
+
+   Split vertices (step 2) let the triangles of one vertex move by different tiles.
 4. **Write the preserved UV channels** the allocator assigned (see
    [*UV channels*](#uv-channels)), raw or with each source's tiling and offset.
 5. **Vertex colours:** with the *Vertex colours* feature live, vertices of sources that don't
@@ -406,10 +419,11 @@ The Advanced Atlaser component shows the totals over all its outputs as well.
 - **No unused alpha.** A texture gets an alpha channel only when a virtual map uses it. Where
   it does, `OutputChannels.Auto` still drops alpha that is 1 everywhere.
 - **Normal maps** are exported as normal maps.
-- **Crunch compression** is one setting per output, on by default. Each texture is compressed
-  both ways, and crunch is kept only when the crunched size is below 90% of the size without
-  it. Otherwise the texture keeps normal compression (DXT or BC) without crunch. Crunch changes
-  the download size, not the memory size.
+- **Crunch compression** is one setting per output, on by default. It applies where the
+  platform's format has a crunched form: BC1 and BC3 on PC (BC5, BC7 and ASTC have none). Each
+  such texture is compressed both ways, and crunch is kept only when the crunched size is below
+  90% of the size without it. Otherwise the texture keeps normal compression without crunch.
+  Crunch changes the download size, not the memory size.
 - **Colour space** follows the virtual map: colour maps sRGB, data and masks linear.
 
 ---
@@ -791,6 +805,8 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
 - **UV channels:** UV0 holds the atlas UVs. UV1 to UV3 carry preserved original UVs, with
   different content per source, allocated like masks: for tiled layers kept live, UV-tile
   features, and features that read other UV channels in the source.
+- **UVs outside 0–1:** a triangle within one UV tile is moved into 0–1 by whole tiles; only a
+  triangle straddling a tile edge is clamped. This replaces clamping every UV.
 - **Source analysis cache:** parsed sources are cached per material, keyed by the material's
   dirty count, its shader, and a version raised when textures or shaders are imported.
 - **Animation:** some animations will be supported, designed separately; this design only

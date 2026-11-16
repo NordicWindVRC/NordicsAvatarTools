@@ -10,11 +10,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static void Prepare(AtlasOutputJob job, AtlasBuildContext context)
         {
             if (job == null || job.Shader == null || job.Configuration == null) return;
-            var generatorJob = CreateJob(job.Configuration, job);
+            var generatorJob = CreateJob(job.Configuration, job, context.AvatarRoot.GetComponentsInChildren<Renderer>(true));
             job.Plan = AtlasOutputPipeline.Resolve(generatorJob, job.Shader.Capabilities);
         }
 
-        public static AtlasGeneratorJob CreateJob(AtlasOutputConfiguration config, AtlasOutputJob job)
+        public static AtlasGeneratorJob CreateJob(AtlasOutputConfiguration config, AtlasOutputJob job, IEnumerable<Renderer> renderers)
         {
             var generatorJob = new AtlasGeneratorJob
             {
@@ -31,12 +31,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 if (source.Input == null || source.Input.Unified == null) continue;
                 materials.Add(source.Input.SourceMaterial);
-                generatorJob.Sources.Add(new AtlasGeneratorSource
+                var generatorSource = new AtlasGeneratorSource
                 {
                     Material = source.Input.Unified, UVRegion = source.UVRegion,
                     GeometryBakingAvailable = source.Bakes != null, Bakes = source.Bakes,
                     PrebakedNormalMap = source.PrebakedNormalMap
-                });
+                };
+                generatorSource.Coverage.AddRange(AtlasCoverage.Triangles(source.Input.SourceMaterial, renderers));
+                generatorJob.Sources.Add(generatorSource);
             }
             AtlasOutputPipeline.AddChoices(config, materials, generatorJob);
             return generatorJob;

@@ -4,9 +4,10 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Step 3 of the pipeline (ATLAS_OUTPUT.md, "Pipeline" and "Memory budget"): one requested
-    // virtual map at a time, each source evaluated at its bake size, placed in its region of the
-    // atlas, and released before the next. The pixels between the regions take the colour of the
-    // nearest region, so filtering and mipmaps at a region's edge don't pull in other colours.
+    // virtual map at a time, each source evaluated at its bake size, its UV islands grown over
+    // the parts its meshes don't use, placed in its region of the atlas, and released before the
+    // next. The pixels between the regions take the colour of the nearest region, so filtering
+    // and mipmaps at an island's or region's edge don't pull in other colours.
     public static class AtlasMapBaker
     {
         public static NordicsTextureWrapper Bake(AtlasMapRequest request, AtlasGeneratorJob job, int width, int height)
@@ -20,8 +21,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     var source = job.Sources[index];
                     var bake = AtlasOutputLayout.BakeSize(source.UVRegion, size);
                     using (var content = AtlasMapEvaluator.Evaluate(request.Map, source.Material, bake.x, bake.y))
+                    {
+                        using (var coverage = AtlasCoverage.Paint(source.Coverage, bake.x, bake.y))
+                            if (coverage != null) AtlasCoverage.GrowIslands(content, coverage);
                         // Padding 0: the content's usage is copied, so the dilation knows the regions.
                         atlas.Blit(content, region: source.UVRegion, padding: 0, sampling: TextureSamplingMode.Area);
+                    }
                 }
                 atlas.Dilate();
                 return atlas;

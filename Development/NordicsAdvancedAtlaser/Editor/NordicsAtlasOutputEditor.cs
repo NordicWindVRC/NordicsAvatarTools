@@ -22,7 +22,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var owner = output.gameObject;
             var main = owner.GetComponent<NordicsAdvancedAtlaser>();
             if (main == null) EditorGUILayout.HelpBox("Add Nordic's Advanced Atlaser to this GameObject to enable source discovery and coordination.", MessageType.Warning);
-            EditorGUILayout.HelpBox("Configuration only. This output does not generate or modify any materials.", MessageType.Info);
+            EditorGUILayout.HelpBox("Builds don't use this output yet. Bake to Assets writes its material and textures to a folder.", MessageType.Info);
             EditorGUILayout.PropertyField(config.FindPropertyRelative("outputName"));
             DrawShaderSelection(config.FindPropertyRelative("shaderId"));
             // Padding separates source regions, so it only applies with two or more sources.
@@ -182,6 +182,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (analyses[i]?.Error != null)
                     EditorGUILayout.HelpBox($"{materials[i].name}: {analyses[i].Error}", MessageType.Info);
             serializedObject.ApplyModifiedProperties();
+            EditorGUILayout.Space();
+            using (new EditorGUI.DisabledScope(materials.Count == 0 || shader?.FindShader() == null))
+                if (GUILayout.Button("Bake to Assets…"))
+                    BakeToAssets(output);
             previewOpen = EditorGUILayout.Foldout(previewOpen, "UV Layout Preview", true);
             if (previewOpen)
             {
@@ -198,6 +202,30 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     EditorGUILayout.HelpBox(warning, MessageType.Warning);
             }
         }
+        // Asks for the material's folder and name (the output name by default), and before
+        // replacing a material that's there. Textures of the same names are overwritten.
+        private static void BakeToAssets(NordicsAtlasOutput output)
+        {
+            string name = string.IsNullOrWhiteSpace(output.configuration.outputName) ? "Atlas" : output.configuration.outputName;
+            string path = EditorUtility.SaveFilePanelInProject("Bake to Assets", name, "mat",
+                "Choose the folder and name of the material. Its textures are saved next to it, named after it.");
+            if (string.IsNullOrEmpty(path)) return;
+            if (AssetDatabase.LoadAssetAtPath<Material>(path) != null &&
+                !EditorUtility.DisplayDialog("Bake to Assets", $"{path} exists. Replace it?", "Replace", "Cancel"))
+                return;
+            try
+            {
+                var material = AtlasManualBake.Bake(output, path);
+                EditorGUIUtility.PingObject(material);
+            }
+            catch (Exception e)
+            {
+                EditorUtility.DisplayDialog("Bake to Assets", e.Message, "OK");
+                Debug.LogException(e, output);
+            }
+            GUIUtility.ExitGUI();
+        }
+
         // The assigned source materials, each once, in the sources' order.
         private static List<Material> SourceMaterials(AtlasOutputConfiguration configuration)
         {

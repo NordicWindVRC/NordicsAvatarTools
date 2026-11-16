@@ -169,7 +169,8 @@ supports.
 
 ## Limitations
 
-- No output material, texture or mesh is generated yet.
+- Builds don't generate the output material, textures or meshes yet. **Bake to Assets…** on an
+  output writes its material and textures to a folder: only the base colour texture so far.
 - Normals come from the mesh in its current pose, not from skinned animation. UV0 is used for bakes.
 - Matching original geometry to the surviving geometry is best-effort when AAO remaps it.
 - Development builds have no migration code. Configuration may need to be recreated after

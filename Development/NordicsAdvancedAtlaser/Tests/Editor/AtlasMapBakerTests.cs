@@ -104,6 +104,55 @@ namespace NordicWind.AdvancedAtlaser.Tests
             }
         }
 
+        // A quad over u 0 to width (or the same quad one UV tile further on).
+        private static AtlasUVTriangles LeftHalf(float tile = 0f, float width = 0.5f) => new AtlasUVTriangles
+        {
+            UV = new[] { new Vector2(tile, 0f), new Vector2(tile + width, 0f), new Vector2(tile + width, 1f), new Vector2(tile, 1f) },
+            Triangles = new[] { 0, 1, 2, 0, 2, 3 }
+        };
+
+        [Test]
+        public void CoverageMarksWhereTheTrianglesLie()
+        {
+            using (var mask = AtlasCoverage.Paint(new[] { LeftHalf() }, 8, 8))
+            {
+                Assert.IsTrue(mask.IsPixelUsed(1, 4));
+                Assert.IsFalse(mask.IsPixelUsed(6, 4));
+            }
+            using (var mask = AtlasCoverage.Paint(new[] { LeftHalf(tile: 1f) }, 8, 8))
+            {
+                Assert.IsTrue(mask.IsPixelUsed(1, 4), "A triangle in the next UV tile covers the same texels.");
+                Assert.IsFalse(mask.IsPixelUsed(6, 4));
+            }
+        }
+
+        [Test]
+        public void WithoutTrianglesThereIsNoCoverage()
+        {
+            Assert.IsNull(AtlasCoverage.Paint(new AtlasUVTriangles[0], 8, 8));
+            var degenerate = new AtlasUVTriangles { UV = new[] { Vector2.zero, Vector2.zero, Vector2.zero }, Triangles = new[] { 0, 1, 2 } };
+            Assert.IsNull(AtlasCoverage.Paint(new[] { degenerate }, 8, 8), "Nothing covered: the whole texture is used.");
+        }
+
+        [Test]
+        public void IslandsGrowOverTheTextureTheMeshDoesntUse()
+        {
+            var job = new AtlasGeneratorJob();
+            var source = new AtlasGeneratorSource { Material = WithBaseColor(Halves()), UVRegion = new Rect(0f, 0f, 1f, 1f) };
+            // The island ends inside the red half: where it ends at the colour change, its edge
+            // pixels are a filtered mix of both, and that mix is what grows.
+            source.Coverage.Add(LeftHalf(width: 0.375f));
+            job.Sources.Add(source);
+            var request = new AtlasMapRequest { Map = AtlasVirtualMap.BaseColor };
+            request.Sources.Add(0);
+            using (var atlas = AtlasMapBaker.Bake(request, job, 16, 16))
+            {
+                AssertColor(Color.red, atlas, 2, 8);
+                // The texture's green half isn't used by the mesh: the red island grows over it.
+                AssertColor(Color.red, atlas, 13, 8);
+            }
+        }
+
         [Test]
         public void SourcesArePlacedInTheirRegionsAndTheGapsTakeTheNearestColour()
         {

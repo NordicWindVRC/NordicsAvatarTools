@@ -25,6 +25,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // installed. Output shaders are only offered, and only built, when it's installed.
         Shader FindShader();
         AtlasOutputCapabilities Capabilities { get; }
+        // Sets the material's properties from the output unified material, whose textures are
+        // the packed output textures. The material is made with FindShader().
+        void Write(AtlasUnifiedMaterial output, Material material);
     }
 
     // New shader integration = one IAtlasOutputShader implementation; no central switch statement.

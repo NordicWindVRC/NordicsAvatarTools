@@ -47,5 +47,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public Texture2D PrebakedNormalMap;
         // Null when disabled; missing submeshes instead have an explicit empty/flat bake.
         public AtlasBakedInputSet Bakes;
+        // The UV triangles of the meshes that use the source, for its coverage; empty when
+        // unknown, and then the source's whole texture is used.
+        public readonly List<AtlasUVTriangles> Coverage = new List<AtlasUVTriangles>();
     }
 }

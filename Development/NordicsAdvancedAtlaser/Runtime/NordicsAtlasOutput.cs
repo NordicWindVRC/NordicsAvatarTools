@@ -131,6 +131,11 @@ namespace NordicWind.AdvancedAtlaser
         public AtlasTextureSize mainTexture = new AtlasTextureSize();
         public List<AtlasFeatureSetting> features = new List<AtlasFeatureSetting>();
         public List<AtlasTextureSetting> textures = new List<AtlasTextureSetting>();
+        /// <summary>
+        /// Crunch compression where a format has a crunched form (BC1, BC3), kept only when it
+        /// makes the texture at least 10% smaller.
+        /// </summary>
+        public bool crunch = true;
         /// <summary>The formats the textures get on PC; the memory estimates follow them.</summary>
         public AtlasPlatformFormats pcFormats = new AtlasPlatformFormats
         {

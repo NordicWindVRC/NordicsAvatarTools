@@ -87,6 +87,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 required.UnionWith(state.Mode.RequiredMaps);
                 optional.UnionWith(state.Mode.OptionalMaps.Where(capabilities.Provides));
             }
+            Textures.AddRange(TextureUses(config, capabilities, required, optional));
+            foreach (var use in Textures)
+            {
+                if (!use.Enabled) continue;
+                PcBytes += use.PcBytes;
+                AndroidBytes += use.AndroidBytes;
+            }
+        }
+
+        // The textures that hold the given virtual maps, required ones first, with their sizes
+        // (from the settings, or the defaults) and memory. Shared by the inspector, the manual
+        // bake and the build, so they agree.
+        public static List<AtlasTextureUse> TextureUses(AtlasOutputConfiguration config, AtlasOutputCapabilities capabilities,
+            ICollection<AtlasVirtualMap> required, ICollection<AtlasVirtualMap> optional)
+        {
+            var uses = new List<AtlasTextureUse>();
             var main = config.mainTexture ?? new AtlasTextureSize();
             foreach (var texture in capabilities.Textures)
             {
@@ -122,15 +138,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 use.Height = height;
                 use.PcBytes = AtlasTextureMemory.Bytes(width, height, AtlasTextureMemory.Format(config.pcFormats, use.Kind));
                 use.AndroidBytes = AtlasTextureMemory.Bytes(width, height, AtlasTextureMemory.Format(config.androidFormats, use.Kind));
-                Textures.Add(use);
-                if (!use.Enabled) continue;
-                PcBytes += use.PcBytes;
-                AndroidBytes += use.AndroidBytes;
+                uses.Add(use);
             }
             // Required textures first, then in the layout's order.
-            var ordered = Textures.OrderBy(t => t.Required ? 0 : 1).ToList();
-            Textures.Clear();
-            Textures.AddRange(ordered);
+            return uses.OrderBy(t => t.Required ? 0 : 1).ToList();
         }
     }
 }

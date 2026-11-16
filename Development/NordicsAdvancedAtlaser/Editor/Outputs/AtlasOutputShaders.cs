@@ -32,6 +32,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB)
             }
         };
+
+        // Poiyomi 10's main section: _Color (sRGB-authored, so set from the linear colour's
+        // gamma value) times _MainTex. A new material is opaque, in the Geometry queue.
+        public void Write(AtlasUnifiedMaterial output, Material material)
+        {
+            var baseColor = output.Surface.BaseColor;
+            material.SetColor("_Color", baseColor.Color.gamma);
+            material.SetTexture("_MainTex", baseColor.Map?.Texture);
+            material.SetTextureScale("_MainTex", Vector2.one);
+            material.SetTextureOffset("_MainTex", Vector2.zero);
+            material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
+        }
     }
     public sealed class VRChatMobileToonOutputShader : IAtlasOutputShader
     {
@@ -46,5 +58,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB)
             }
         };
+
+        // Toon Standard: _Color (sRGB-authored) times _MainTex. It's opaque only.
+        public void Write(AtlasUnifiedMaterial output, Material material)
+        {
+            var baseColor = output.Surface.BaseColor;
+            material.SetColor("_Color", baseColor.Color.gamma);
+            material.SetTexture("_MainTex", baseColor.Map?.Texture);
+            material.SetTextureScale("_MainTex", Vector2.one);
+            material.SetTextureOffset("_MainTex", Vector2.zero);
+            material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
+        }
     }
 }

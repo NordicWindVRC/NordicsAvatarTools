@@ -28,9 +28,16 @@ EditMode tests pass in Unity 2022.3.22.
   per-source switches. Sources are read through a cache, rebuilt only when a material, its
   shader, or an imported texture or shader changes.
 - **Base colour bake:** each source's base colour texture, with its tiling, offset and rotation,
-  placed in its region of the atlas map; the pixels between the regions take the nearest
+  placed in its region of the atlas map. Its UV islands, from the meshes that use it, grow over
+  the parts of the texture they don't use, and the pixels between the regions take the nearest
   region's colour. A source without a texture is white. Maps are baked one at a time, and
   sources one after another, to bound memory.
+- **Bake to Assets** on each output: its textures (`<material>_<texture>.png`) and material,
+  written where you choose; a material already there is replaced only after asking, and
+  textures of the same names are overwritten. Writers for Poiyomi Toon 10 and VRChat Mobile
+  Toon Standard set the base colour texture. Textures get the output's formats for PC and
+  Android, no alpha channel unless it's used, and crunch (on by default) only where it makes a
+  BC1 or BC3 texture at least 10% smaller.
 - **Input parsers** on the unified material (details in the `UNIFIED_MATERIAL_*.md`
   inventories):
   - VRChat Mobile Toon Lit, Standard Lite and Toon Standard (and Outline);

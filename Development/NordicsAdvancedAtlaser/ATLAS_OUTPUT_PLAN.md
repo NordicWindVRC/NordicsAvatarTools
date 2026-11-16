@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** phases 1.1 to 1.3 done; 1.4 is next. It implements the design in
+**Status:** phases 1.1 to 1.3 done, 1.4 implemented. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -88,7 +88,8 @@ descriptions; builds behave as before.
   white colour), an opaque
   surface mode, the render queue, and what Poiyomi needs to lock the material (Thry's
   animated-property tags, where values are animated).
-- Export rules: no unused alpha, colour space per virtual map, crunch with the 90% rule.
+- Export rules: no unused alpha, colour space per virtual map, crunch with the 90% rule
+  (where the PC format has a crunched form: BC1, BC3).
 - **Bake to Assets…**: folder and name (defaulting to the output name), textures named
   `<material>_<texture>.png`, overwriting textures, and asking before replacing the material.
 - **Tests:** a base-colour round trip for both writers; the crunch rule's choice; file names.
@@ -99,12 +100,14 @@ descriptions; builds behave as before.
 
 - The remapper's first version, as the design's *Mesh remapper* describes: copy the mesh,
   split shared vertices (with every attribute and blend shape frame), write UV0 into the
-  region (clamped), swap the materials, merge the submeshes that share the output material.
+  region (triangles within one UV tile moved into 0–1 by whole tiles, only straddling ones
+  clamped), swap the materials, merge the submeshes that share the output material.
 - The build creates the output materials and textures in memory and puts them on the
   remapped meshes.
 - **Tests:** synthetic meshes:
   - a vertex shared by two sources is split, with its blend shape deltas;
-  - UVs land in their regions, and clamped UVs are counted in one line;
+  - UVs land in their regions; a triangle one tile over lands on the same texels; a
+    straddling triangle is clamped and counted in one line;
   - submeshes merge, and other submeshes keep their order.
 
 **Workable — M1 reached:** an avatar builds with the atlased base colour texture on both
