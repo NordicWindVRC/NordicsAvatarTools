@@ -189,6 +189,37 @@ parser. Each inventory document describes its parser in detail.
 | Poiyomi Toon 7.3, 8.x and 9.x | Read on the Poiyomi 10 parser with version tables for renamed and re-meaning settings | Features Poiyomi 10 rewrote are read with 10's meaning and noted; 7.3's specular, metallics, BRDF, clear coat, SSS and panosphere sections are reported |
 | Fallback | Common property names with Unity's conventions: base colour, alpha mask, normal, metallic or specular colour, roughness or smoothness, occlusion, emission, culling, depth write and surface mode from blend factors | One warning per material says the result is a guess; a matcap is reported |
 
+## Future input shaders
+
+Shaders common on VRChat avatars that don't have a parser yet, in suggested order. Until one
+does, its materials go to the fallback parser. A parser starts with an inventory of the
+shader's inspector, as the existing `UNIFIED_MATERIAL_*.md` documents do.
+
+**VRChat Mobile (Quest avatars).** Android and Quest avatars may only use the shaders that ship
+with the current VRChat SDK, under `VRChat/Mobile/` (see VRChat's
+[Quest content limitations](https://creators.vrchat.com/platforms/android/quest-content-limitations/)).
+Toon Lit, Standard Lite and Toon Standard already have parsers. The rest are small:
+
+| Shader | Notes |
+|---|---|
+| Matcap Lit | A matcap on a base texture; a lookup layer |
+| Diffuse, Bumped Diffuse, Bumped Mapped Specular | Unity's legacy mobile shaders: base colour, normal map, a simple specular |
+| Particles/Additive, Particles/Multiply | Particle materials on avatars; additive and multiplicative surface modes |
+
+**PC avatars:**
+
+| Shader | Notes |
+|---|---|
+| lilToon (lilxyzw) | Very common, especially on Japanese avatars; open source ([GitHub](https://github.com/lilxyzw/lilToon)). Poiyomi already maps lilToon-style rims and stylized reflections. |
+| UnlitWF (whiteflare) | Common on Japanese avatars; stepped shading and metallics despite the name ([GitHub](https://github.com/whiteflare/Unlit_WF_ShaderSuite)). |
+| Unity-Chan Toon Shader (UTS2, UTS3) | Found in older and Japanese assets; UTS2 is no longer developed. Poiyomi already maps UTS-style rims and shade maps. |
+| Silent's Cel Shading | Anime cel shading following Unity's lighting, with Standard-style metalness and smoothness. |
+| Sunao Shader | Japanese avatar toon shader; inventory to be made from its source. |
+| MToon | VRM's toon shader, on avatars converted from VRM. |
+| Orels Toon and Standard | Community shaders on some avatars; inventory to be made from their source. |
+| Mochie Uber X | The paid build of Uber, adding geometry and dissolve effects. Its materials get an *unsupported* report until its source is available. |
+| Xiexe XSToon, Arktoon, CubedParadox Flat Lit Toon | Legacy shaders on older avatars; lowest priority. Arktoon remains as an MIT-licensed archive. |
+
 ## Parser responsibilities and testing
 
 1. Identify the source shader and version (Poiyomi reads `shader_master_label` from locked or
