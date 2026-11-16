@@ -10,6 +10,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // After the surface layers, where Pro applies them to the base colour.
         private void ScreenShadows(Material m, AtlasUnifiedMaterial d)
         {
+            if (!ProFeatures) return;
             // An animation toggle left off is off.
             if (On(m, "_SSAOEnabled") && On(m, "_SSAOAnimationToggle", 1f))
             {
@@ -19,13 +20,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     Intensity = Float(m, "_SSAOIntensity", 1f), Radius = Float(m, "_SSAORadius", 0.002f), Quality = Float(m, "_SSAOQuality", 2.4f),
                     CenterImportance = Float(m, "_SSAOCenterImportance", 0f), DepthBias = Float(m, "_SSAOBias", 0f), ConeBias = Float(m, "_SSAOCone", 0f),
                     Jitter = Float(m, "_SSAORandomScale", 0f), NormalAmount = Float(m, "_SSAOUseNormals", 0f), NormalRejection = Float(m, "_SSAONormalBias", 0f),
-                    ColorMap = Texture(m, d, "_SSAOColorMap"), ColorMapAsRamp = On(m, "_SSAOAsRamp"),
+                    ColorMap = SsaoMap(m, "_SSAOEnableColorTexture") ? Texture(m, d, "_SSAOColorMap") : null, ColorMapAsRamp = On(m, "_SSAOAsRamp"),
                     Hsvg = AtlasMaterialReader.Vector(m, "_SSAOHSV", Vector4.zero), SurfaceColorMix = Float(m, "_SSAOUseSurfaceColor", 0f),
-                    CameraClip = Float(m, "_SSAOCameraClip", 0.1f), HideInLight = Float(m, "_SSAOHideByRampedLightMap", 0f), AlphaFade = Float(m, "_SSAOAlphaFade", 1f),
+                    CameraClip = major < 10 ? 0f : Float(m, "_SSAOCameraClip", 0.1f), HideInLight = Float(m, "_SSAOHideByRampedLightMap", 0f), AlphaFade = Float(m, "_SSAOAlphaFade", 1f),
                     QualityFalloff = new Vector2(Float(m, "_SSAOFalloffStart", 6f), Float(m, "_SSAOFalloffEnd", 8f)),
                     MaxDistanceFalloff = AtlasMaterialReader.Vector(m, "_SSAOMaxDistanceFalloff", new Vector4(0.01f, 0.1f, 1f, 1f))
                 };
-                var mask = Mask(m, d, "_SSAOMask", Channels[Mathf.Clamp(Int(m, "_SSAOMaskChannel", 0), 0, 3)]);
+                var mask = SsaoMap(m, "_SSAOEnableMaskTexture") ? Mask(m, d, "_SSAOMask", Channels[Mathf.Clamp(Int(m, "_SSAOMaskChannel", 0), 0, 3)]) : null;
                 if (mask != null) mask.Invert = On(m, "_SSAOMaskInvert");
                 var layer = new AtlasPatternLayer
                 {
@@ -69,8 +70,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // TPS and Squish as deformations after the vertex options; squish's colour as a pattern layer.
+        // Pro 9: the screen-space AO's colour map and mask each have a toggle, and it has no camera
+        // clip (0 in Pro 10's meaning).
+        private bool SsaoMap(Material m, string toggle) => major >= 10 || On(m, toggle);
+
         private void ProDeformations(Material m, AtlasUnifiedMaterial d)
         {
+            if (!ProFeatures) return;
             if (On(m, "_TPSPenetratorEnabled") && On(m, "_TPS_AnimatedToggle", 1f))
                 AddDeformation(d, new AtlasDeformation
                 {
@@ -120,7 +126,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // After the truchet, where Pro applies it; the Triplanar Projection variant leaves it out.
         private void Constellation(Material m, AtlasUnifiedMaterial d)
         {
-            if (!On(m, "_ConstellationEnable") || d.Triplanar.Enabled) return;
+            if (!ProFeatures || !On(m, "_ConstellationEnable") || d.Triplanar.Enabled) return;
             var offset = AtlasMaterialReader.Vector(m, "_ConstellationOffset", Vector4.zero);
             bool audio = AudioLinkOn(m) && On(m, "_ConstellationAudioLinkEnabled");
             bool random = On(m, "_ConstellationRandomColors");
@@ -179,6 +185,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // particles are reported (one line each). Geom alone adds no settings.
         private void GeometryVariants(Material m, AtlasUnifiedMaterial d)
         {
+            if (!ProFeatures) return;
             if (IsVariant(m, d, "_TessellationType", "Tessellated"))
             {
                 var tessellation = d.Tessellation;
@@ -201,7 +208,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The Triplanar Projection variant: its settings exist only there, and it's always on.
         private void Triplanar(Material m, AtlasUnifiedMaterial d)
         {
-            if (!IsVariant(m, d, "_TriplanarMode", "Triplanar")) return;
+            if (!ProFeatures || !IsVariant(m, d, "_TriplanarMode", "Triplanar")) return;
             var triplanar = d.Triplanar;
             triplanar.Enabled = true;
             triplanar.Source = Int(m, "_TriplanarMode", 0) == 1 ? AtlasTriplanarSource.Mesh : AtlasTriplanarSource.Depth;
@@ -251,6 +258,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // GT7 tone mapping on the final colour (before emission); neutral surface emission on the emission.
         private void ProToneMapping(Material m, AtlasUnifiedMaterial d)
         {
+            if (!ProFeatures) return;
             if (On(m, "_GT7ToneMapping"))
                 d.ColorAdjustments.Add(new AtlasColorAdjustment
                 {

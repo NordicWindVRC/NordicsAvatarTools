@@ -79,6 +79,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (legacyMaskBlend)
                     d.Report(AtlasIssueKind.Unmapped, "poiyomi8.mask-blend", "A Poiyomi 8.1 global mask blend past Add (screen, add, overlay or mixed in its inspector, 0 in the shader) is read as replace.");
             }
+            // Pro 9's features that Pro 10 rewrote.
+            if (ProFeatures)
+            {
+                if (On(m, "_SSAOEnabled")) Note("ssao", "screen-space ambient occlusion (its sampling, and the colour map read as a ramp)");
+                if (On(m, "_ConstellationEnable")) Note("constellation", "constellation (its lines and sparkles)");
+                if (d.Fur.Enabled && d.Fur.Method == AtlasFurMethod.Shells)
+                    Note("fur-shells", "fur shells (their spacing at a distance, the root occlusion curve and the fur colour on the skin)");
+            }
             // 9.0's settings 9.3 already dropped.
             if (AtlasMaterialReader.Texture(m, "_AnisoNoiseMap") != null)
                 d.Report(AtlasIssueKind.Unmapped, "poiyomi9.aniso-noise", "Poiyomi 9.0's anisotropy noise map isn't mapped.");

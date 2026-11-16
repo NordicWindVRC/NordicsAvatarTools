@@ -11,18 +11,23 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public override int Priority => 100;
         protected abstract int Major { get; }
         // Toon and Pro read the same way: Pro's extra sections are read where their properties
-        // exist. The variant only names the parser.
+        // exist, from Pro 9 on. The variant only names the parser.
         protected abstract AtlasPoiyomiVariant Variant { get; }
 
         // The newest parser also takes versions it doesn't know (newer ones, or no version found).
+        // Pro before 9 is read as Toon of its version: its Pro features aren't read.
         public override bool CanParse(Material m)
         {
-            if (AtlasPoiyomiVersionDetector.DetectVariant(m) != Variant) return false;
+            var variant = AtlasPoiyomiVersionDetector.DetectVariant(m);
             int detected = AtlasPoiyomiVersionDetector.Detect(m);
+            if (variant == AtlasPoiyomiVariant.Pro && detected > 0 && detected < FirstPro) variant = AtlasPoiyomiVariant.Toon;
+            if (variant != Variant) return false;
             return detected == Major || (Major == Newest && (detected == 0 || detected > Newest));
         }
 
         internal const int Newest = 11;
+        // The first Pro version whose Pro features are read.
+        internal const int FirstPro = 9;
 
         // Each parse reads through its own reader, which holds the state the sections share.
         protected override void Populate(Material m, AtlasUnifiedMaterial d) => new AtlasPoiyomiReader(Major).Read(m, d);
@@ -73,7 +78,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
         protected override AtlasPoiyomiVariant Variant => AtlasPoiyomiVariant.Toon;
     }
 
-    // Pro is Toon plus extras.
+    // Pro is Toon plus extras. Pro 9.0–9.3 is read like Toon 9; the Pro features Pro 10 rewrote
+    // are read with 10's meaning and noted (AtlasPoiyomiLegacy.cs).
+    public sealed class AtlasPoiyomiPro9Parser : AtlasPoiyomiParser
+    {
+        public override string ParserId => "poiyomi-pro-9";
+        public override string DisplayName => "Poiyomi Pro 9";
+        protected override int Major => 9;
+        protected override AtlasPoiyomiVariant Variant => AtlasPoiyomiVariant.Pro;
+    }
+
     public sealed class AtlasPoiyomiPro10Parser : AtlasPoiyomiParser
     {
         public override string ParserId => "poiyomi-pro-10";

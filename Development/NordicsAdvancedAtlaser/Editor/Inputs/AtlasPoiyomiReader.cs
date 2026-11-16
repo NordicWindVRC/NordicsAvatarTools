@@ -23,6 +23,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         public AtlasPoiyomiReader(int major) { this.major = major; }
 
+        // Pro's own features are read from Pro 9 on; Pro before 9 is read as Toon. Toon materials
+        // don't have their properties, so this only affects Pro.
+        private bool ProFeatures => major >= AtlasPoiyomiParser.FirstPro;
+
         public void Read(Material m, AtlasUnifiedMaterial d)
         {
             ReportShader(m, d);
@@ -70,6 +74,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     d.Report(AtlasIssueKind.Unmapped, "shader.version",
                         "This Poiyomi version isn't known; it's read as Poiyomi " + Newest + ", so its look may differ.");
             }
+            if (!ProFeatures && AtlasPoiyomiVersionDetector.DetectVariant(m) == AtlasPoiyomiVariant.Pro)
+                d.Report(AtlasIssueKind.Ignored, "shader.pro-before-9",
+                    "Poiyomi Pro before 9 is read as Poiyomi Toon " + major + ": its Pro features aren't read.");
             if (AtlasPoiyomiVersionDetector.IsWorld(m))
                 d.Report(AtlasIssueKind.Ignored, "shader.world", "A world variant: read as the avatar shader, its world-only features ignored.");
         }

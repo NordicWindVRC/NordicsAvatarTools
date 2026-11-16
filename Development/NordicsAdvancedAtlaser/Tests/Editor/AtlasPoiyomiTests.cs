@@ -3092,6 +3092,54 @@ namespace NordicWind.AdvancedAtlaser.Tests
             }
         }
 
+        // Pro 9 reads its Pro features; Pro before 9 is read as Toon of its version, without them.
+        [TestCase("_AlphaMaskInvert", typeof(AtlasPoiyomiPro9Parser))]
+        [TestCase("_ALDecalBlendType", typeof(AtlasPoiyomiToon8Parser))]
+        public void ProNineIsProAndOlderProIsReadAsToon(string versionMarker, System.Type parser)
+        {
+            foreach (string name in new[] { "_ShaderOptimizerEnabled", "_LightingMode", versionMarker })
+                AtlasTestMaterials.AddSavedFloat(material, name);
+            AtlasTestMaterials.AddSavedColor(material, "_LightingShadowColor");
+            AtlasTestMaterials.AddSavedFloat(material, "_ConstellationEnable", 1f);
+            using (new AtlasTestMaterials.SavedValuesOnly())
+            {
+                var detected = AtlasShaderRegistry.Detect(material);
+                Assert.IsInstanceOf(parser, detected);
+                var d = AtlasTestMaterials.Checked(detected.Parse(material));
+                bool pro = parser == typeof(AtlasPoiyomiPro9Parser);
+                Assert.AreEqual(pro, d.Layers.OfType<AtlasPatternLayer>().Any(l => l.Kind == AtlasPatternKind.Constellation));
+                Assert.AreEqual(pro, d.Issues.Any(i => i.Feature == "poiyomi9.constellation"));
+                Assert.AreEqual(!pro, d.Issues.Any(i => i.Feature == "shader.pro-before-9"));
+            }
+        }
+
+        // Pro 9's screen-space AO: the colour map and the mask have their own toggles, and there's
+        // no camera clip.
+        [TestCase(false)]
+        [TestCase(true)]
+        public void ProNineScreenOcclusionMapsHaveTheirOwnToggles(bool toggles)
+        {
+            foreach (string name in new[] { "_ShaderOptimizerEnabled", "_LightingMode", "_AlphaMaskInvert" })
+                AtlasTestMaterials.AddSavedFloat(material, name);
+            AtlasTestMaterials.AddSavedColor(material, "_LightingShadowColor");
+            AtlasTestMaterials.AddSavedFloat(material, "_SSAOEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_SSAOEnableColorTexture", toggles ? 1f : 0f);
+            AtlasTestMaterials.AddSavedFloat(material, "_SSAOEnableMaskTexture", toggles ? 1f : 0f);
+            AtlasTestMaterials.AddSavedTexture(material, "_SSAOColorMap", textureA);
+            AtlasTestMaterials.AddSavedTexture(material, "_SSAOMask", textureB);
+            AtlasUnifiedMaterial d;
+            using (new AtlasTestMaterials.SavedValuesOnly())
+            {
+                Assert.IsInstanceOf<AtlasPoiyomiPro9Parser>(AtlasShaderRegistry.Detect(material));
+                d = AtlasTestMaterials.Checked(new AtlasPoiyomiPro9Parser().Parse(material));
+            }
+            var layer = d.Layers.OfType<AtlasPatternLayer>().Single(l => l.Kind == AtlasPatternKind.AmbientOcclusion);
+            Assert.AreEqual(toggles, layer.AmbientOcclusion.ColorMap != null);
+            Assert.AreEqual(toggles, layer.Mask != null);
+            Assert.AreEqual(0f, layer.AmbientOcclusion.CameraClip);
+            Assert.IsTrue(d.Issues.Any(i => i.Feature == "poiyomi9.ssao"));
+        }
+
         [Test]
         public void ToonNineDepthRimHasTwoOrTenSamples()
         {

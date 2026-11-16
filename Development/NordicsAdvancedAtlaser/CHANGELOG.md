@@ -25,7 +25,9 @@ EditMode tests pass in Unity 2022.3.22.
   - Poiyomi Toon 10 and 11 with their avatar variants (Two Pass, Early Outline, Grab Pass,
     Lil Fur), and Poiyomi Pro 10 and 11 with theirs (Pro Fur, Triple Outline, Self Grab,
     Triplanar Projection, Tessellated and the geometry variants);
-  - Poiyomi Toon 7.3, 8.x and 9.x, read on the Poiyomi 10 parser with version tables;
+  - Poiyomi Toon 7.3, 8.x and 9.x, and Poiyomi Pro 9.x, read on the Poiyomi 10 parser with
+    version tables. Poiyomi Pro before 9 is read as Toon of its version, without its Pro
+    features;
   - a fallback for any other shader, from common property names.
 - **Source shaders don't need to be installed.** When a material's shader is missing, the
   parsers read the values the material saved, through `AtlasMaterialReader` (new

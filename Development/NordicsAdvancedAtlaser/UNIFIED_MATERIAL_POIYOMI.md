@@ -13,7 +13,8 @@ flags. The section tree has **3,801 properties, about 2,640 visible.**
 Older versions (7.3 to 9.3) are read on this parser with version tables; see [*Older versions*](#older-versions). Their sources ship inside the Toon
 packages, under `_PoiyomiShaders/Shaders/<version>`.
 **Version 11 and Poiyomi Pro** (11.0.50, from the `com.poiyomi.pro` package) are
-covered in [*Version 11 and Pro*](#version-11-and-pro), as differences from 10.0.29.
+covered in [*Version 11 and Pro*](#version-11-and-pro), as differences from 10.0.29. The same
+package ships Pro 9.3 and 10.0; Pro 9 is under [*Older versions*](#older-versions).
 
 **Variants:** Poiyomi Toon, Two Pass, Early Outline, Grab Pass, Lil Fur and Lil Fur Two Pass
 share this feature set. Grab Pass adds screen-grab effects; Lil Fur adds a fur pass, covered in
@@ -1136,6 +1137,23 @@ subsurface scattering, RGBA colour masking, voronoi, video screen, backlight, UV
 the outline's AL colour range. 9.0's anisotropy noise map, reflection and clear coat fresnel
 strengths and outline texture HSVG are reported when set. Lighting reads the same: 10 refined
 cookies, light volumes and additional lights.
+
+**Pro 9.0–9.3:** `AtlasPoiyomiPro9Parser` (Pro by its shader name or the Pro markers, 9 as
+above), from the Pro 9.3 source in the `com.poiyomi.pro` package (`Shaders/9.3/Pro`). Pro 9 is
+Toon 9 plus Pro features, read as Toon 9 is. Its Pro features compared with Pro 10:
+- the same: GT7 tone mapping, TPS and tessellation;
+- not in Pro 9, so read as off: contact shadows, squish, the lava lamp, Self Grab, Triplanar
+  Projection, Triple Outline and the constellation's AudioLink colour override;
+- the screen-space AO's colour map and mask each have a toggle (`_SSAOEnableColorTexture`,
+  `_SSAOEnableMaskTexture`); without it the map isn't used. There's no camera clip (0 in Pro
+  10's meaning) and no normal rejection;
+- noted as read with Pro 10's meaning while in use: the screen-space AO (Pro 10 rewrote its
+  sampling, and reads the colour map as a ramp at the middle of its height), the constellation
+  (its lines and sparkles) and shell fur (the shells' spacing when fewer are drawn at a
+  distance, the root occlusion curve, and the fur colour on the skin).
+
+**Pro before 9** is read as Toon of its version: no Pro source before 9.3 is available, so its
+Pro features aren't read, and one *ignored* line says so.
 
 **8.0–8.1:** `AtlasPoiyomiToon8Parser`, on top of 9's handling. Meaning changes: the
 Poiyomi rim style's blend lived in `_RimBlendMode` (numbered as 10's `_RimPoiBlendMode`); the

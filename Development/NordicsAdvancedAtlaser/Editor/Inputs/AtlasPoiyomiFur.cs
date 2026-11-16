@@ -9,7 +9,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private void Fur(Material m, AtlasUnifiedMaterial d)
         {
             // Pro Fur has the shells' layer count; the Lil Fur variants have theirs.
-            if (IsVariant(m, d, "_FurLayerCount", "Pro Fur", "World Fur")) { Shells(m, d); return; }
+            if (ProFeatures && IsVariant(m, d, "_FurLayerCount", "Pro Fur", "World Fur")) { Shells(m, d); return; }
             if (!IsVariant(m, d, "_FurLayerNum", "Lil Fur")) return;
             var fur = d.Fur;
             fur.Enabled = true;

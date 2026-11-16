@@ -104,7 +104,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Pro Grab Pass's lava lamp, unlit like the grab, where the surface is see-through.
         private void LavaLamp(Material m, AtlasUnifiedMaterial d)
         {
-            if (!On(m, "_InternalWaterEnable")) return;
+            if (!ProFeatures || !On(m, "_InternalWaterEnable")) return;
             var lamp = new AtlasLavaLamp
             {
                 SdfVolume = AtlasSourceMapping.Texture(m, "_SDFTexture", AtlasTextureInterpretation.Data),
