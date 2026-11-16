@@ -71,7 +71,7 @@ feature count low. Each has its parameters below; see 1.0 for units.
 | interpretation | colour, data, tangent normal, direction, MSDF | colour | *direction* is a tangent-space direction map (fur), composited like a normal map; *MSDF* a multi-channel signed distance field: white, alpha `saturate((median(r, g, b) − 0.5) / its change across a pixel)`, sharp at any size |
 | space | UV0–UV3, object position, world position, panosphere, polar, view (matcap), screen, facing gradient (and its linear form) | UV0 | triplanar projection is a setting of the whole material, below |
 | tiling, offset | 2 × float | (1,1), (0,0) | |
-| rotation | degrees | 0 | the UV turned around (0.5, 0.5) before the tiling and offset |
+| rotation | degrees | 0 | the UV turned counterclockwise around (0.5, 0.5) before the tiling and offset: `uv′ = R(rotation)(uv − 0.5) + 0.5`, then `uv′ × tiling + offset` |
 | scroll | UV units per second | (0,0) | live |
 | spin | degrees per second | 0 | live |
 | sampling | default, stochastic, pixel | default | stochastic hides tiling (with a density of its tile grid, 1); *pixel*: sharp texels with anti-aliased edges, for pixel art |

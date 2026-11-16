@@ -27,6 +27,10 @@ EditMode tests pass in Unity 2022.3.22.
   formats; feature sections that fold to one line each (mode and source count), with
   per-source switches. Sources are read through a cache, rebuilt only when a material, its
   shader, or an imported texture or shader changes.
+- **Base colour bake:** each source's base colour texture, with its tiling, offset and rotation,
+  placed in its region of the atlas map; the pixels between the regions take the nearest
+  region's colour. A source without a texture is white. Maps are baked one at a time, and
+  sources one after another, to bound memory.
 - **Input parsers** on the unified material (details in the `UNIFIED_MATERIAL_*.md`
   inventories):
   - VRChat Mobile Toon Lit, Standard Lite and Toon Standard (and Outline);
@@ -115,7 +119,9 @@ EditMode tests pass in Unity 2022.3.22.
   avatar shader, Uber, replaces it. Mochie Standard materials go to the fallback parser.
 
 ### Fixed
-- With *Export Intermediate Maps* on, the tangent-frame maps were exported (which normalizes
+- **Mochie Uber's texture rotation** (main and detail) was taken over as it is, but Uber turns
+  the UV clockwise around its origin after the tiling. It's now converted to the unified
+  rotation, which is defined as counterclockwise around the centre, before the tiling.- With *Export Intermediate Maps* on, the tangent-frame maps were exported (which normalizes
   them) before the normal correction bake, so debug builds baked slightly different
   corrections. They're now exported after the bake.
 

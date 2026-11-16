@@ -472,8 +472,23 @@ namespace NordicWind.AdvancedAtlaser.Editor
             map.Space = AtlasTextureSpace.UV0 + Mathf.Clamp(Int(m, "_UVSec", 0), 0, 2);
             map.Distortion = detailDistortion;
             map.Scroll = Vector2Of(m, "_DetailScroll");
-            map.Rotation = Float(m, "_DetailRot", 0f);
+            UberRotation(map, Float(m, "_DetailRot", 0f));
             return map;
+        }
+
+        // Uber turns the UV clockwise around its origin, after the tiling, offset and scroll; the
+        // unified rotation turns it counterclockwise around (0.5, 0.5), before them. Turning the
+        // offset and scroll and moving the pivot gives the same UV when the tiling is the same on
+        // both axes; with different tilings per axis it's approximate.
+        private static void UberRotation(AtlasTextureReference map, float degrees)
+        {
+            if (degrees == 0f) return;
+            float radians = -degrees * Mathf.Deg2Rad, cos = Mathf.Cos(radians), sin = Mathf.Sin(radians);
+            Vector2 Turn(Vector2 v) => new Vector2(cos * v.x - sin * v.y, sin * v.x + cos * v.y);
+            var centre = new Vector2(0.5f, 0.5f);
+            map.Rotation = -degrees;
+            map.Offset = Turn(map.Offset) + Vector2.Scale(map.Tiling, Turn(centre) - centre);
+            map.Scroll = Turn(map.Scroll);
         }
 
         // Shading: physically based, or ramp toon with a ramp described by numbers or a texture.
@@ -1037,7 +1052,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var map = AtlasSourceMapping.Texture(m, property, interpretation, "_MainTex");
             if (map == null) return null;
             map.Scroll = Vector2Of(m, "_MainTexScroll");
-            map.Rotation = Float(m, "_MainTexRot", 0f);
+            UberRotation(map, Float(m, "_MainTexRot", 0f));
             map.Distortion = mainDistortion;
             return map;
         }

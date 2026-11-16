@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** phases 1.1 and 1.2 done; 1.3 is next. It implements the design in
+**Status:** phases 1.1 to 1.3 done; 1.4 is next. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -73,7 +73,8 @@ descriptions; builds behave as before.
 - The CPU evaluator's first **bakeable subset**: the base colour texture, with its tiling,
   offset and rotation on UV0 resolved into the region. A source without a texture fills its
   region with white. Everything else in the colour stack is left out until its phase.
-- Per-source bake at the bake size, blit into the source's region with padding, dilation.
+- Per-source bake at the bake size, blit into the source's region, and dilation: the pixels
+  between the regions, the region padding included, take the nearest region's colour.
 - The **memory budget** rules: one virtual map at a time, sources one after another.
 - **Tests:** a two-source atlas from small textures gives the expected texels in each region
   and in the padding.

@@ -55,6 +55,8 @@ What exists today, which this design builds on:
 | Inspector | `Editor/NordicsAtlasOutputEditor.cs`, `Editor/AtlasOutputUI.cs` | Sources, UV regions, auto setup, the *Textures* section (sizes, memory, formats), the feature sections with modes and per-source switches, UV preview |
 | Source analysis cache | `Editor/AtlasSourceAnalysisCache.cs` | Each source's parse, kept until the material, its shader or an imported texture or shader changes |
 | Overview | `Editor/Outputs/AtlasOutputOverview.cs`, `AtlasTextureMemory.cs` | What an output uses: features with their modes and sources, the textures they need with sizes and memory |
+| Evaluator | `Editor/Outputs/AtlasMapEvaluator.cs` | The bakeable subset: a source's base colour texture with its tiling, offset and rotation on UV0, white without a texture |
+| Map baker | `Editor/Outputs/AtlasMapBaker.cs` | One virtual map: each source evaluated at its bake size, placed in its region, the rest of the atlas filled from the nearest region |
 | Texture library | Texture Wrapper (`API.md`) | Float textures with usage flags, `Blit` with blend modes, masks and padding, colour operations, triangle painting, normal difference baking, dilation, PNG and in-memory export, `OutputChannels.Auto` |
 
 The UV remapping of the meshes (moving each source's UVs into its region) is a separate,

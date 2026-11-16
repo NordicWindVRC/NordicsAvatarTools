@@ -52,6 +52,31 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 Assert.IsInstanceOf<AtlasMochieUberParser>(AtlasShaderRegistry.Detect(material));
         }
 
+        // Uber turns the UV clockwise around its origin after the tiling and offset; read as the
+        // unified rotation (counterclockwise around the centre, before them), every UV lands on
+        // the same texel.
+        [Test]
+        public void MainTextureRotationGivesTheSameUV()
+        {
+            Uber();
+            material.SetTexture("_MainTex", textureA);
+            material.SetTextureScale("_MainTex", new Vector2(2f, 2f));
+            material.SetTextureOffset("_MainTex", new Vector2(0.1f, 0.3f));
+            material.SetFloat("_MainTexRot", 30f);
+            var map = Parse().Surface.BaseColor.Map;
+            float a = -30f * Mathf.Deg2Rad;
+            foreach (var uv in new[] { new Vector2(0.2f, 0.7f), new Vector2(0.9f, 0.1f), Vector2.zero })
+            {
+                var t = new Vector2(uv.x * 2f + 0.1f, uv.y * 2f + 0.3f);
+                var uber = new Vector2(Mathf.Cos(a) * t.x - Mathf.Sin(a) * t.y, Mathf.Sin(a) * t.x + Mathf.Cos(a) * t.y);
+                float b = map.Rotation * Mathf.Deg2Rad;
+                var p = uv - new Vector2(0.5f, 0.5f);
+                var turned = new Vector2(Mathf.Cos(b) * p.x - Mathf.Sin(b) * p.y, Mathf.Sin(b) * p.x + Mathf.Cos(b) * p.y) + new Vector2(0.5f, 0.5f);
+                var unified = Vector2.Scale(turned, map.Tiling) + map.Offset;
+                Assert.That(Vector2.Distance(uber, unified), Is.LessThan(1e-4f), uv.ToString());
+            }
+        }
+
         [Test]
         public void UntouchedShadedMaterialIsPhysicallyBasedWithoutReports()
         {

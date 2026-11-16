@@ -378,6 +378,10 @@ Every section follows its keyword, as the shader does (the inspector sets them).
   two-sided lighting; alpha strength; the alpha mask with its channel.
 - **Base colour:** texture × colour on the main transform (tiling, scroll, rotation); vertex
   colour by its amount.
+- **Rotation** (main and detail transforms): Uber turns the UV clockwise around its origin,
+  after the tiling, offset and scroll. The parser converts it to the unified rotation
+  (counterclockwise around the centre, before them) by turning the offset and scroll and moving
+  the pivot: exact when the tiling is the same on both axes, approximate otherwise.
 - **Shading off** is *not* unlit: the shader lights the base colour uniformly and clamps it to the
   base colour. It maps to the *flat* family with limited brightness.
 - **Workflows:** metallic (maps replace sliders; roughness, not smoothness), specular (colour,
