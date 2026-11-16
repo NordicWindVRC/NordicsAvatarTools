@@ -55,8 +55,31 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
             }
             if (AtlasDebugSettings.VerboseLogging && ctx.Diagnostics.Count>0)
+            {
+                string text = string.Join("\n", ctx.Diagnostics);
                 ReportInformation(new AtlasMessageError(ErrorSeverity.Information,
-                    "Nordic's Advanced Atlaser — Diagnostics", string.Join("\n",ctx.Diagnostics)));
+                    "Nordic's Advanced Atlaser — Diagnostics", text));
+                // The NDMF Console's text can't be selected, so the diagnostics are also written
+                // where they can be copied: one information line in Unity's console (and its
+                // Editor.log), and a file in the debug output folder, replaced on every build.
+                Debug.Log("[Nordic's Advanced Atlaser] Diagnostics:\n" + text);
+                WriteDiagnosticsFile(text);
+            }
+        }
+
+        private static void WriteDiagnosticsFile(string text)
+        {
+            string path = System.IO.Path.Combine(AtlasDebugSettings.OutputDirectory, "Diagnostics.txt");
+            try
+            {
+                System.IO.Directory.CreateDirectory(AtlasDebugSettings.OutputDirectory);
+                System.IO.File.WriteAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}\n{text}\n");
+            }
+            catch (Exception e)
+            {
+                // Debug output only: a failed write never affects the build.
+                Debug.LogWarning($"[Nordic's Advanced Atlaser] Couldn't write {path}: {e.Message}");
+            }
         }
 
         // NDMF's ReportError also writes "[NDMF] Error Reported" to Unity's console as a warning,
