@@ -49,6 +49,29 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
+        public void ModulatorPathsResolveToValuesInTheMaterial()
+        {
+            var material = new AtlasUnifiedMaterial();
+            var layer = new AtlasSurfaceLayer();
+            layer.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Emission, AtlasBlend.Add));
+            material.Layers.Add(layer);
+            material.Layers.Add(new AtlasPatternLayer { Kind = AtlasPatternKind.Glitter, Glitter = new AtlasGlitter() });
+            material.Outlines.Add(new AtlasOutline());
+            Assert.AreEqual(typeof(Color), AtlasModulatorPath.Resolve(material, "layers[0].source.color"));
+            Assert.AreEqual(typeof(float), AtlasModulatorPath.Resolve(material, "layers[0].source.color.a"));
+            Assert.AreEqual(typeof(float), AtlasModulatorPath.Resolve(material, "layers[0].targets[0].opacity"));
+            Assert.AreEqual(typeof(float), AtlasModulatorPath.Resolve(material, "layers[1].glitter.maxBrightness"));
+            Assert.AreEqual(typeof(float), AtlasModulatorPath.Resolve(material, "outlines[0].width"));
+            Assert.AreEqual(typeof(float), AtlasModulatorPath.Resolve(material, "fur.length"));
+            // A list position that doesn't exist, a part that isn't there, a field that isn't a value.
+            Assert.IsNull(AtlasModulatorPath.Resolve(material, "layers[2].opacity"));
+            Assert.IsNull(AtlasModulatorPath.Resolve(material, "layers[0].source.map.decal.rotation"));
+            Assert.IsNull(AtlasModulatorPath.Resolve(material, "layers[1].voronoi.innerEmission"));
+            Assert.IsNull(AtlasModulatorPath.Resolve(material, "layers[0].source"));
+            Assert.IsNull(AtlasModulatorPath.Resolve(material, "layers[0].nothing"));
+        }
+
+        [Test]
         public void ReportAddsOneLinePerKindAndFeature()
         {
             var material = new AtlasUnifiedMaterial();

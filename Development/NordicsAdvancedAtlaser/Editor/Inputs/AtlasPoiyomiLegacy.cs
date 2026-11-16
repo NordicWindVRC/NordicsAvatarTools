@@ -5,9 +5,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // Poiyomi 9 and older: read on 10's parser. The features Poiyomi 10 rewrote are read
     // with 10's meaning and noted once each while in use; their settings 10 dropped are part of
     // that note. Settings whose meaning changed are handled where they are read (major < 10).
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
-        private static void Legacy(Material m, AtlasUnifiedMaterial d)
+        private void Legacy(Material m, AtlasUnifiedMaterial d)
         {
             string v = "Poiyomi " + major + "'s ";
             void Note(string feature, string what) =>

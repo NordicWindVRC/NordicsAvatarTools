@@ -92,7 +92,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             {
                 var atlaser = go.AddComponent<NordicsAdvancedAtlaser>();
                 Assert.IsTrue(atlaser.enableGeometryBaking);
-                // The bake resolution is automatic now (AtlasOutputLayout.BakeSize).
+                // The bake resolution is derived (AtlasOutputLayout.BakeSize), not a setting.
                 Assert.IsNull(typeof(NordicsAdvancedAtlaser).GetField("geometryBakingResolution"));
                 Assert.IsNull(typeof(NordicsAdvancedAtlaser).GetField("GeometryNormalPadding"));
                 var output = go.AddComponent<NordicsAtlasOutput>();
@@ -113,7 +113,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 var output = go.AddComponent<NordicsAtlasOutput>();
                 output.configuration.mainTexture.width = 4096;
                 output.configuration.mainTexture.height = 1024;
-                // OnValidate used to overwrite this with hidden legacy 2048x2048.
+                // Validation must leave the main texture size as set.
                 output.SendMessage("OnValidate", SendMessageOptions.DontRequireReceiver);
                 Assert.AreEqual(4096, output.configuration.mainTexture.width);
                 Assert.AreEqual(1024, output.configuration.mainTexture.height);
@@ -132,6 +132,17 @@ namespace NordicWind.AdvancedAtlaser.Tests
         [TestCase(".poiyomi/Poiyomi Pro", "", AtlasPoiyomiVariant.Pro)]
         [TestCase("Hidden/Whatever", "Assets/Poiyomi/Shaders/Toon/Foo.shader", AtlasPoiyomiVariant.Toon)]
         [TestCase("Standard", "", AtlasPoiyomiVariant.None)]
+        // 8.0's outline shader and 8.1's grab pass don't say Toon, and locked copies sit next to their material.
+        [TestCase(".poiyomi/Old Versions/8.0/Poiyomi Outline", "", AtlasPoiyomiVariant.Toon)]
+        [TestCase(".poiyomi/Old Versions/8.1/Poiyomi Grab Pass", "Assets/_PoiyomiShaders/Shaders/8.1/Toon/Poiyomi Grab Pass.shader", AtlasPoiyomiVariant.Toon)]
+        [TestCase("Hidden/Locked/.poiyomi/Old Versions/8.0/Poiyomi Outline/4b521895809dade4ba59c5a295b8f6d4",
+            "Assets/Props/Materials/OptimizedShaders/Body/Poiyomi Outline.shader", AtlasPoiyomiVariant.Toon)]
+        [TestCase("Hidden/Locked/.poiyomi/Poiyomi Pro Two Pass/4b521895809dade4ba59c5a295b8f6d4",
+            "Assets/Cartoon/Materials/OptimizedShaders/Eyes/Poiyomi Pro Two Pass.shader", AtlasPoiyomiVariant.Pro)]
+        // 7.3 lives in a folder called Pro.
+        [TestCase(".poiyomi/• Poiyomi Toon •", "Assets/_PoiyomiShaders/Shaders/Pro/Shaders/S_Poiyomi_Toon.shader", AtlasPoiyomiVariant.Toon)]
+        [TestCase(".poiyomi/Poiyomi Pro World Fur", "", AtlasPoiyomiVariant.Pro)]
+        [TestCase(".poiyomi/Extras/Poiyomi Fake Shadow", "", AtlasPoiyomiVariant.None)]
         public void PoiyomiFamilyAndVariantDetection(string name, string path, AtlasPoiyomiVariant expected)
         {
             Assert.AreEqual(expected, AtlasPoiyomiVersionDetector.DetectVariantFromMetadata(name, path));
@@ -151,9 +162,24 @@ namespace NordicWind.AdvancedAtlaser.Tests
         [TestCase(".poiyomi/Old Versions/10.0/Poiyomi Pro", "", "<color=#E75898ff>Poiyomi 10.0.29</color>", 10)]
         [TestCase(".poiyomi/Poiyomi Toon", "", null, 0)]
         [TestCase("Standard", "", null, 0)]
+        [TestCase("Hidden/Locked/.poiyomi/Old Versions/8.0/Poiyomi Outline/4b521895809dade4ba59c5a295b8f6d4",
+            "Assets/Avatar 2.0/Materials/OptimizedShaders/Body/Poiyomi Outline.shader", "<color=#E75898ff>Poiyomi 8.0.426</color>", 8)]
+        // Without a label, neither the material id in a locked name nor a folder of the project is a version.
+        [TestCase("Hidden/Locked/.poiyomi/Poiyomi Toon/9a7e21895809dade4ba59c5a295b8f6d",
+            "Assets/Avatar 2.0/Materials/OptimizedShaders/Body 8/Poiyomi Toon.shader", null, 0)]
+        [TestCase(".poiyomi/Poiyomi Toon", "", "<color=#E75898ff>Poiyomi 12.0.3</color>", 12)]
         public void PoiyomiSourceNameAndPathDetection(string name, string path, string label, int expected)
         {
             Assert.AreEqual(expected, AtlasPoiyomiVersionDetector.DetectFromMetadata(name, path, label));
+        }
+
+        [TestCase(".poiyomi/Poiyomi Toon World", true)]
+        [TestCase(".poiyomi/Old Versions/8.0/Poiyomi World", true)]
+        [TestCase("Hidden/Locked/.poiyomi/Poiyomi Pro World Fur/4b521895809dade4ba59c5a295b8f6d4", true)]
+        [TestCase(".poiyomi/Poiyomi Toon", false)]
+        public void PoiyomiWorldVariantsAreToldByName(string name, bool world)
+        {
+            Assert.AreEqual(world, AtlasPoiyomiVersionDetector.IsWorldName(name));
         }
 
         [Test]

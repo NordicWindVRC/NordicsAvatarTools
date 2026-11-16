@@ -17,6 +17,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly Dictionary<string, (Texture Texture, Vector2 Scale, Vector2 Offset)> Textures =
             new Dictionary<string, (Texture, Vector2, Vector2)>();
         public readonly HashSet<string> Keywords = new HashSet<string>();
+        // The material's own (override) tags.
+        public readonly Dictionary<string, string> Tags = new Dictionary<string, string>();
 
         public bool Has(string name) => Floats.ContainsKey(name) || Vectors.ContainsKey(name) || Textures.ContainsKey(name);
 
@@ -54,6 +56,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     if (keywords == null || !keywords.isArray) continue;
                     for (int i = 0; i < keywords.arraySize; ++i) result.Keywords.Add(keywords.GetArrayElementAtIndex(i).stringValue);
                 }
+                ReadPairs(serialized.FindProperty("stringTagMap"), (name, value) => result.Tags[name] = value.stringValue);
                 var legacy = serialized.FindProperty("m_ShaderKeywords");
                 if (legacy != null && !string.IsNullOrEmpty(legacy.stringValue))
                     foreach (var keyword in legacy.stringValue.Split(' '))

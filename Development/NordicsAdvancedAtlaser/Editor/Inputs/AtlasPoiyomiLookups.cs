@@ -3,7 +3,7 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi: Matcaps (4) and CubeMap, as lookup layers.
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
         private static readonly AtlasLookupProjection[] MatcapProjections =
         {
@@ -11,7 +11,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             AtlasLookupProjection.Gradient, AtlasLookupProjection.LightHalfVector
         };
 
-        private static void LookupLayers(Material m, AtlasUnifiedMaterial d)
+        private void LookupLayers(Material m, AtlasUnifiedMaterial d)
         {
             for (int i = 0; i < 4; i++) Matcap(m, d, i);
             CubeMap(m, d);
@@ -19,7 +19,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // A matcap blends by weights in a fixed order (replace, multiply, add, screen, unlit add,
         // mixed): one layer per weight in use, sharing the source and mask.
-        private static void Matcap(Material m, AtlasUnifiedMaterial d, int index)
+        private void Matcap(Material m, AtlasUnifiedMaterial d, int index)
         {
             string p = index == 0 ? "_Matcap" : "_Matcap" + (index + 1);
             string ordinal = new[] { "", "2nd", "3rd", "4th" }[index];
@@ -68,7 +68,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     Tiling = tiling,
                     LookupRotation = Float(m, p + "Rotation", 0f) * 180f,
                     UVBlend = (Vector2)AtlasMaterialReader.Vector(m, index == 0 ? "_MatCapBlendUV1" : "_MatCap" + ordinal + "BlendUV1", Vector4.zero),
-                    UVBlendSpace = AtlasTextureSpace.UV0 + Mathf.Clamp(Int(m, p + "UVToBlend", 1), 0, 3),
+                    UVBlendSpace = UVSpace(m, d, p + "UVToBlend", 1),
                     MirrorFlip = mode != 3,
                     CentreEye = Float(m, index == 0 ? "_MatCapVRParallaxStrength" : "_MatCap" + ordinal + "VRParallaxStrength", 1f) < 0.5f,
                     SurfaceNormalAmount = Float(m, p + "Normal", 1f),
@@ -110,7 +110,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // A cubemap blended into the base colour: replace, multiply or add, by its alpha × blend amount.
-        private static void CubeMap(Material m, AtlasUnifiedMaterial d)
+        private void CubeMap(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_CubeMapEnabled")) return;
             int mode = Mathf.Clamp(Int(m, "_CubeMapUVMode", 1), 0, 3);

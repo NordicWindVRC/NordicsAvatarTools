@@ -85,6 +85,46 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float Low, High = 1f;
     }
 
+    // 1.9: finds what a modulator path points at. A path names fields from the material down,
+    // with list positions in brackets: "layers[3].source.color", "outlines[0].width",
+    // "deformations[1].amount.x". Names match the model's fields without regard to case.
+    public static class AtlasModulatorPath
+    {
+        // The type of the value the path ends at (a number, a vector or a colour, or one of their
+        // components), or null when the path doesn't lead to one in this material.
+        public static System.Type Resolve(AtlasUnifiedMaterial material, string path)
+        {
+            if (material == null || string.IsNullOrEmpty(path)) return null;
+            object current = material;
+            System.Type type = null;
+            foreach (string segment in path.Split('.'))
+            {
+                if (current == null) return null;
+                string name = segment;
+                int index = -1;
+                int bracket = segment.IndexOf('[');
+                if (bracket >= 0)
+                {
+                    if (!segment.EndsWith("]") || !int.TryParse(segment.Substring(bracket + 1, segment.Length - bracket - 2), out index) || index < 0) return null;
+                    name = segment.Substring(0, bracket);
+                }
+                var field = current.GetType().GetField(name, System.Reflection.BindingFlags.Public
+                    | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase);
+                if (field == null) return null;
+                current = field.GetValue(current);
+                type = field.FieldType;
+                if (index < 0) continue;
+                var list = current as System.Collections.IList;
+                if (list == null || index >= list.Count) return null;
+                current = list[index];
+                type = current?.GetType();
+            }
+            bool value = type == typeof(float) || type == typeof(int) || type == typeof(UnityEngine.Color)
+                || type == typeof(UnityEngine.Vector2) || type == typeof(UnityEngine.Vector3) || type == typeof(UnityEngine.Vector4);
+            return value ? type : null;
+        }
+    }
+
     public enum AtlasAudioBand { Bass, LowMids, HighMids, Highs, Volume }
 
     public enum AtlasAudioSpread

@@ -4,13 +4,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi: the Lil Fur variants' fur pass (catalogue 5.2): the LilFur category and the LilFur
     // Rendering section; Poiyomi Pro Fur's shells.
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
-        private static void Fur(Material m, AtlasUnifiedMaterial d)
+        private void Fur(Material m, AtlasUnifiedMaterial d)
         {
             // Pro Fur has the shells' layer count; the Lil Fur variants have theirs.
-            if (AtlasMaterialReader.Has(m, "_FurLayerCount")) { Shells(m, d); return; }
-            if (!AtlasMaterialReader.Has(m, "_FurLayerNum")) return;
+            if (IsVariant(m, d, "_FurLayerCount", "Pro Fur", "World Fur")) { Shells(m, d); return; }
+            if (!IsVariant(m, d, "_FurLayerNum", "Lil Fur")) return;
             var fur = d.Fur;
             fur.Enabled = true;
             fur.Method = AtlasFurMethod.Strands;
@@ -82,7 +82,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // A fur mask channel (0–3, 4 off) with 11's options and its strength: lerp(1, channel, strength).
-        private static AtlasMask FurMask(Material m, AtlasTextureReference masks, string channel)
+        private AtlasMask FurMask(Material m, AtlasTextureReference masks, string channel)
         {
             int c = Int(m, channel, 4);
             if (c > 3) return null;
@@ -92,13 +92,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // The global mask contact the fur bends away from; none while the contacts are off.
-        private static int FurContact(Material m) =>
+        private int FurContact(Material m) =>
             On(m, "_GlobalMaskContactsEnable") ? Mathf.Clamp(Int(m, "_FurContact", 0), 0, 8) : 0;
 
         // Pro Fur: shells. Shell i of the layer count is pushed out by i / count × length (× the
         // object scale) along the normal, sagging with gravity; a strand stays on a shell where
         // the height map and the mask reach the shell's height (+ taper × height²).
-        private static void Shells(Material m, AtlasUnifiedMaterial d)
+        private void Shells(Material m, AtlasUnifiedMaterial d)
         {
             var fur = d.Fur;
             fur.Enabled = true;

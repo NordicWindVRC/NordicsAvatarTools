@@ -363,7 +363,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // A band of a layered ramp. Edge e = (t − lo) / (hi − lo), lo = Border − Blur/2, hi = Border + Blur/2.
     public sealed class AtlasShadeBand
     {
-        // The band's shade colour: colour × texture, the texture's RGB + ColorAddition, saturated.
+        // The band's shade colour: colour × texture, the texture's RGB + ColorAddition (saturated)
+        // and faded toward white by the texture's alpha.
         public readonly AtlasColorInput Color = new AtlasColorInput();
         public float ColorAddition;
         // The colour (and map) times the base colour.
@@ -389,5 +390,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float VertexLights = 1f;
         // Ambient and light probes, including the lights Unity folds into them.
         public float Ambient = 1f;
+        // Without a real-time main light (most worlds are lit by probes alone): the ambient colour
+        // × AmbientAsMainLight stands in for the main light (0: none), and the ambient light counts
+        // by AmbientWithoutMainLight instead of Ambient.
+        public float AmbientAsMainLight;
+        public float AmbientWithoutMainLight = 1f;
     }
 }

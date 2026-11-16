@@ -30,8 +30,7 @@ inventoried; properties the inspector doesn't show are listed under *Not visual*
 
 A flat, unlit-looking toon shader for low-end avatars. There's no shading across the surface
 at all: the normal isn't used. Every pixel gets the same light: the main directional light's
-colour, times its shadow, plus the ambient colour. Other lights count only through the
-ambient term. It's always opaque, back-face culled, and multiplies by vertex colour.
+colour plus the ambient colour. Other lights count only through the ambient term. It's always opaque, back-face culled, and multiplies by vertex colour.
 
 ### Base colour
 Texture times vertex colour.
@@ -43,19 +42,17 @@ Texture times vertex colour.
 - **Parser:** mapped as above.
 
 ### Lighting
-Uniform light per object, no direction; receives shadows. When the world has no directional
-light, the direct light becomes 20% of the ambient colour.
+Uniform light per object, no direction. The shader skips every shadow variant, so it receives
+no shadows. When the world has no directional light, the direct light becomes 20% of the
+ambient colour.
 - **Controls:** none.
 - **Live or baked:** live.
 - **Unified:** a *flat* lighting family: no shading gradient across the surface, light =
-  direct colour × shadow + ambient. This is the same look as a toon ramp that's flat
-  everywhere, apart from receiving shadows, so it might merge into the ramp family as a
-  preset.
-- **Parser:** family *flat*, ambient model *average*, received
-  shadows on, additional and vertex light contributions 0 (the shader has no add pass and
-  doesn't read vertex lights).
-- **Not represented:** the shader's own fallback when the world has no directional light (20%
-  of the ambient colour). It's not a material setting; a flat writer has its own behaviour.
+  direct colour + ambient. This is the same look as a toon ramp that's flat everywhere, so it
+  might merge into the ramp family as a preset.
+- **Parser:** family *flat*, ambient model *average*, received shadows 0, additional and vertex
+  light contributions 0 (the shader has no add pass and doesn't read vertex lights), and
+  *ambient as main light* 0.2 for worlds without a directional light.
 
 ### Render
 Always opaque, back faces culled, depth written, queue Geometry: the unified render defaults.

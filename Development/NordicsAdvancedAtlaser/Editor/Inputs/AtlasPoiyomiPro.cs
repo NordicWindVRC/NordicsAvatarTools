@@ -5,10 +5,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // Poiyomi Pro: screen-space AO, contact shadows and constellation (pattern layers), TPS and
     // squish, the outline bake, GT7 tone mapping and neutral surface emission (colour operations). Pro is paid: the parser reads its properties;
     // none of its source is copied.
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
         // After the surface layers, where Pro applies them to the base colour.
-        private static void ScreenShadows(Material m, AtlasUnifiedMaterial d)
+        private void ScreenShadows(Material m, AtlasUnifiedMaterial d)
         {
             // An animation toggle left off is off.
             if (On(m, "_SSAOEnabled") && On(m, "_SSAOAnimationToggle", 1f))
@@ -69,7 +69,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // TPS and Squish as deformations after the vertex options; squish's colour as a pattern layer.
-        private static void ProDeformations(Material m, AtlasUnifiedMaterial d)
+        private void ProDeformations(Material m, AtlasUnifiedMaterial d)
         {
             if (On(m, "_TPSPenetratorEnabled") && On(m, "_TPS_AnimatedToggle", 1f))
                 AddDeformation(d, new AtlasDeformation
@@ -118,7 +118,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // After the truchet, where Pro applies it; the Triplanar Projection variant leaves it out.
-        private static void Constellation(Material m, AtlasUnifiedMaterial d)
+        private void Constellation(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_ConstellationEnable") || d.Triplanar.Enabled) return;
             var offset = AtlasMaterialReader.Vector(m, "_ConstellationOffset", Vector4.zero);
@@ -177,9 +177,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // The geometry variants: tessellation is mapped; Geometric Dissolve, ShatterWave and the
         // particles are reported (one line each). Geom alone adds no settings.
-        private static void GeometryVariants(Material m, AtlasUnifiedMaterial d)
+        private void GeometryVariants(Material m, AtlasUnifiedMaterial d)
         {
-            if (AtlasMaterialReader.Has(m, "_TessellationType"))
+            if (IsVariant(m, d, "_TessellationType", "Tessellated"))
             {
                 var tessellation = d.Tessellation;
                 tessellation.Enabled = true;
@@ -190,18 +190,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 tessellation.Phong = Float(m, "_TessellationPhong", 0f);
                 tessellation.CullMargin = Float(m, "_TessellationCullMargin", 0.1f);
             }
-            if (AtlasMaterialReader.Has(m, "_GeoDissolveAlpha"))
+            if (IsVariant(m, d, "_GeoDissolveAlpha", "Geometric Dissolve"))
                 d.Report(AtlasIssueKind.Unmapped, "geometry.dissolve", "Poiyomi Pro's Geometric Dissolve (triangles breaking away) isn't mapped yet.");
-            if (AtlasMaterialReader.Has(m, "_ShatterWaveEnabled") && On(m, "_ShatterWaveEnabled", 1f))
+            if (IsVariant(m, d, "_ShatterWaveEnabled", "ShatterWave") && On(m, "_ShatterWaveEnabled", 1f))
                 d.Report(AtlasIssueKind.Unmapped, "geometry.shatter-wave", "Poiyomi Pro's ShatterWave isn't mapped yet.");
-            if (AtlasMaterialReader.Has(m, "_ParticleDensity"))
+            if (IsVariant(m, d, "_ParticleDensity", "Particle"))
                 d.Report(AtlasIssueKind.Unmapped, "geometry.particles", "Poiyomi Pro's triangle particles aren't mapped yet.");
         }
 
         // The Triplanar Projection variant: its settings exist only there, and it's always on.
-        private static void Triplanar(Material m, AtlasUnifiedMaterial d)
+        private void Triplanar(Material m, AtlasUnifiedMaterial d)
         {
-            if (!AtlasMaterialReader.Has(m, "_TriplanarMode")) return;
+            if (!IsVariant(m, d, "_TriplanarMode", "Triplanar")) return;
             var triplanar = d.Triplanar;
             triplanar.Enabled = true;
             triplanar.Source = Int(m, "_TriplanarMode", 0) == 1 ? AtlasTriplanarSource.Mesh : AtlasTriplanarSource.Depth;
@@ -232,7 +232,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // The outline's baked curvature data (from Pro's bake tool).
-        private static AtlasOutlineCurvature OutlineCurvature(Material m)
+        private AtlasOutlineCurvature OutlineCurvature(Material m)
         {
             var data = AtlasSourceMapping.Texture(m, "_OutlineCurvatureData", AtlasTextureInterpretation.Data);
             if (data == null) return null;
@@ -249,7 +249,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // GT7 tone mapping on the final colour (before emission); neutral surface emission on the emission.
-        private static void ProToneMapping(Material m, AtlasUnifiedMaterial d)
+        private void ProToneMapping(Material m, AtlasUnifiedMaterial d)
         {
             if (On(m, "_GT7ToneMapping"))
                 d.ColorAdjustments.Add(new AtlasColorAdjustment

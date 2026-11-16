@@ -4,11 +4,11 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi: Flipbooks (2), Mirror/Camera Visibility, UV Tile Discard.
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
         // Poiyomi's decal placement: the scale fitted to the texture's aspect (1 shrink, 2 grow),
         // then the side offsets (left, right, down, up) widen it and move its centre.
-        private static AtlasDecal Placed(AtlasTextureReference map, Vector2 scale, int aspect, Vector4 side, Vector2 position)
+        private AtlasDecal Placed(AtlasTextureReference map, Vector2 scale, int aspect, Vector4 side, Vector2 position)
         {
             if (aspect > 0 && map.Texture.width > 0 && map.Texture.height > 0)
             {
@@ -24,14 +24,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             };
         }
 
-        private static void Flipbooks(Material m, AtlasUnifiedMaterial d)
+        private void Flipbooks(Material m, AtlasUnifiedMaterial d)
         {
             Flipbook(m, d, "");
             Flipbook(m, d, "1");
         }
 
         // A placed texture array played as frames, blended into the base colour by its alpha.
-        private static void Flipbook(Material m, AtlasUnifiedMaterial d, string s)
+        private void Flipbook(Material m, AtlasUnifiedMaterial d, string s)
         {
             if (!On(m, "_EnableFlipbook" + s)) return;
             // Without an array nothing is drawn.
@@ -90,7 +90,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // frame = (t × FPS + offset) mod count (+ start), or the current frame mod count when manual;
         // with start and end frames, count = min(max(start, end), slices) − start.
-        private static AtlasFrames FlipbookFrames(Material m, AtlasTextureReference map, string s)
+        private AtlasFrames FlipbookFrames(Material m, AtlasTextureReference map, string s)
         {
             int slices = map.Texture is Texture2DArray array ? array.depth : 0;
             var frames = new AtlasFrames
@@ -127,7 +127,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // Mirror/Camera Visibility: where the material is drawn, and a texture and colour in mirrors.
         // UV Tile Discard: hidden tiles, everywhere or on one side.
-        private static void Visibility(Material m, AtlasUnifiedMaterial d)
+        private void Visibility(Material m, AtlasUnifiedMaterial d)
         {
             if (On(m, "_EnableMirrorOptions"))
             {
@@ -144,7 +144,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // The VRChat toggles (mode 1: normal, mirror VR and desktop, camera VR and desktop,
         // screenshot) or the generic mirror choice (both, mirror only, not in mirror).
-        private static void ReadVisibility(Material m, AtlasVisibility visibility, string mode, string mirror, string vrc)
+        private void ReadVisibility(Material m, AtlasVisibility visibility, string mode, string mirror, string vrc)
         {
             if (Int(m, mode, 1) == 1)
             {
@@ -163,7 +163,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // In mirrors: lerp(base, blend(base, texture), texture alpha × colour alpha), then
         // × lerp(1, colour, colour alpha): two layers shown only in mirrors (everywhere when forced).
-        private static void MirrorTexture(Material m, AtlasUnifiedMaterial d)
+        private void MirrorTexture(Material m, AtlasUnifiedMaterial d)
         {
             var mirror = On(m, "_MirrorTextureForceEnabled") ? AtlasMirrorVisibility.Both : AtlasMirrorVisibility.MirrorOnly;
             var color = TintColor(m, d, "_MirrorColor", "_MirrorColorThemeIndex");
@@ -184,7 +184,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // A tile is hidden when its value (rows 0–3, columns 0–3) is above 0.001; vertex mode hides
         // the triangles touching a hidden vertex, pixel mode the pixels: the same for UV islands
         // moved whole into a tile.
-        private static void TileDiscard(Material m, AtlasUnifiedMaterial d, string prefix, AtlasFaces faces)
+        private void TileDiscard(Material m, AtlasUnifiedMaterial d, string prefix, AtlasFaces faces)
         {
             int tiles = 0;
             for (int row = 0; row < 4; row++)

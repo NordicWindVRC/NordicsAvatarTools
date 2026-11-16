@@ -5,11 +5,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // Poiyomi: RGBA Color Masking. Each enabled channel is a colour layer, and optionally a normal
     // layer and metallic and smoothness layers, all masked by its channel of the mask texture or
     // the vertex colour.
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
         private static readonly string[] MaskChannelNames = { "Red", "Green", "Blue", "Alpha" };
 
-        private static void ColorMasking(Material m, AtlasUnifiedMaterial d)
+        private void ColorMasking(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_RGBMaskEnabled")) return;
             for (int i = 0; i < 4; i++)
@@ -44,7 +44,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // Affect Alpha (Poiyomi 11): alpha = lerp(alpha, saturate(blend(alpha, saturate(colour alpha + add))), mask),
         // a layer of the same colour on the alpha.
-        private static void ColorMaskAlpha(Material m, AtlasUnifiedMaterial d, int index, string name, AtlasSurfaceLayer color, AtlasBlend blend)
+        private void ColorMaskAlpha(Material m, AtlasUnifiedMaterial d, int index, string name, AtlasSurfaceLayer color, AtlasBlend blend)
         {
             if (!On(m, "_RGBA" + name + "AffectsAlpha")) return;
             if (color.SourceAlphaOffset != 0f)
@@ -58,7 +58,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // AO (Poiyomi 11): occlusion = min(occlusion, lerp(1, the AO map's channel, mask × strength)), the
         // map sampled with its own settings or the region's (custom sampling), and the region's scale and offset.
-        private static void ColorMaskOcclusion(Material m, AtlasUnifiedMaterial d, int index, string name, Vector4 scaleOffset)
+        private void ColorMaskOcclusion(Material m, AtlasUnifiedMaterial d, int index, string name, Vector4 scaleOffset)
         {
             float strength = Float(m, "_RGBA" + name + "AOStrength", 0f);
             if (strength <= 0f) return;
@@ -88,7 +88,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // A region's own mask channel (4: the colour's) and global mask (17: the colour's).
-        private static AtlasMask RegionMask(Material m, AtlasUnifiedMaterial d, int index, string name, string channel, string global, string globalBlend)
+        private AtlasMask RegionMask(Material m, AtlasUnifiedMaterial d, int index, string name, string channel, string global, string globalBlend)
         {
             int c = Int(m, channel, 4);
             int g = Int(m, global, 17);
@@ -100,7 +100,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // The channel's normal: whiteout over the base normal, or replacing it when no source is chosen.
-        private static void ColorMaskNormal(Material m, AtlasUnifiedMaterial d, int index, string letter, Vector4 scaleOffset)
+        private void ColorMaskNormal(Material m, AtlasUnifiedMaterial d, int index, string letter, Vector4 scaleOffset)
         {
             float scale = Float(m, "_RgbNormal" + letter + "Scale", 0f);
             var map = Texture(m, d, "_RgbNormal" + letter, AtlasTextureInterpretation.TangentNormal);
@@ -116,7 +116,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // Metallic and smoothness: this channel's value in the shared maps replaces the surface's,
         // by the mask. Only with Reflections & Specular, and only where a map is set.
-        private static void ColorMaskSurface(Material m, AtlasUnifiedMaterial d, int index, string name)
+        private void ColorMaskSurface(Material m, AtlasUnifiedMaterial d, int index, string name)
         {
             if (!On(m, "_RGBAPBR" + name + "Enabled") || !On(m, "_MochieBRDF")) return;
             if (On(m, "_RGBA" + name + "PBRSplitMaskSample"))
@@ -143,7 +143,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Metallic and smoothness read the region's PBR mask channel and global mask (Poiyomi 11; the colour's in 10).
-        private static AtlasSurfaceLayer ValueLayer(Material m, AtlasUnifiedMaterial d, int index, string name, AtlasTextureReference map, AtlasLayerTarget target)
+        private AtlasSurfaceLayer ValueLayer(Material m, AtlasUnifiedMaterial d, int index, string name, AtlasTextureReference map, AtlasLayerTarget target)
         {
             string p = "_RGBA" + name + "PBR";
             var layer = new AtlasSurfaceLayer { Mask = RegionMask(m, d, index, name, p + "MaskChannel", p + "GlobalMaskChannel", p + "GlobalMaskBlendType") };
@@ -154,7 +154,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // The channel of the mask texture, or of the vertex colour, with its global mask
         // (_Rgb<Name>MaskChannel → _Rgb<Name>GlobalMaskChannel).
-        private static AtlasMask ColorMask(Material m, AtlasUnifiedMaterial d, string channelProperty, int fallback)
+        private AtlasMask ColorMask(Material m, AtlasUnifiedMaterial d, string channelProperty, int fallback)
         {
             var channel = Channels[Mathf.Clamp(Int(m, channelProperty, fallback), 0, 3)];
             var mask = Int(m, "_RGBMaskType", 0) == 1 ? new AtlasMask { VertexColor = true, Channel = channel } : Mask(m, d, "_RGBMask", channel);
@@ -162,7 +162,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Scale & Offset merges into the texture's own: tiling × scale, offset + offset.
-        private static AtlasTextureReference ScaledOffset(AtlasTextureReference map, Vector4 scaleOffset)
+        private AtlasTextureReference ScaledOffset(AtlasTextureReference map, Vector4 scaleOffset)
         {
             if (map == null) return null;
             map.Tiling = new Vector2(map.Tiling.x * scaleOffset.x, map.Tiling.y * scaleOffset.y);

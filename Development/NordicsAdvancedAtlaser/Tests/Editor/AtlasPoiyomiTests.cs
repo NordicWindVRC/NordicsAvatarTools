@@ -39,25 +39,25 @@ namespace NordicWind.AdvancedAtlaser.Tests
         private AtlasUnifiedMaterial ParseSaved()
         {
             using (new AtlasTestMaterials.SavedValuesOnly())
-                return new AtlasPoiyomiToon10Parser().Parse(material);
+                return AtlasTestMaterials.Checked(new AtlasPoiyomiToon10Parser().Parse(material));
         }
 
         private AtlasUnifiedMaterial ParseSaved9()
         {
             using (new AtlasTestMaterials.SavedValuesOnly())
-                return new AtlasPoiyomiToon9Parser().Parse(material);
+                return AtlasTestMaterials.Checked(new AtlasPoiyomiToon9Parser().Parse(material));
         }
 
         private AtlasUnifiedMaterial ParseSaved8()
         {
             using (new AtlasTestMaterials.SavedValuesOnly())
-                return new AtlasPoiyomiToon8Parser().Parse(material);
+                return AtlasTestMaterials.Checked(new AtlasPoiyomiToon8Parser().Parse(material));
         }
 
         private AtlasUnifiedMaterial ParseSaved7()
         {
             using (new AtlasTestMaterials.SavedValuesOnly())
-                return new AtlasPoiyomiToon7Parser().Parse(material);
+                return AtlasTestMaterials.Checked(new AtlasPoiyomiToon7Parser().Parse(material));
         }
 
         [Test]
@@ -1938,6 +1938,105 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
+        public void VariantWithoutShaderOrLockedNameIsAssumedAndReported()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_ModeTwoPass", 3f);
+            var d = ParseSaved();
+            Assert.IsTrue(d.Render.SecondPass.Enabled);
+            Assert.AreEqual(1, d.Issues.Count(i => i.Feature == "shader.variant" && i.IsWarning));
+        }
+
+        [Test]
+        public void LockedNameDecidesTheVariantWithoutTheShader()
+        {
+            // Left over from a variant the material used before: the name it was locked with says Toon.
+            AtlasTestMaterials.AddSavedFloat(material, "_ModeTwoPass", 3f);
+            AtlasTestMaterials.AddSavedFloat(material, "_TriplanarMode", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableGrabpass", 1f);
+            material.SetOverrideTag("OriginalShader", ".poiyomi/Poiyomi Toon");
+            var d = ParseSaved();
+            Assert.IsFalse(d.Render.SecondPass.Enabled);
+            Assert.IsFalse(d.Triplanar.Enabled);
+            Assert.IsFalse(d.Layers.OfType<AtlasRefractionLayer>().Any());
+            Assert.IsFalse(d.Issues.Any(i => i.Feature == "shader.variant"));
+
+            material.SetOverrideTag("OriginalShader", ".poiyomi/Poiyomi Toon Two Pass");
+            d = ParseSaved();
+            Assert.IsTrue(d.Render.SecondPass.Enabled);
+            Assert.IsFalse(d.Triplanar.Enabled);
+            Assert.IsFalse(d.Issues.Any(i => i.Feature == "shader.variant"));
+
+            // Lil Fur Two Pass has no second surface pass.
+            material.SetOverrideTag("OriginalShader", ".poiyomi/Poiyomi Toon + Lil Fur Two Pass");
+            Assert.IsFalse(ParseSaved().Render.SecondPass.Enabled);
+        }
+
+        [Test]
+        public void WorldVariantIsReadWithOneIgnoredLine()
+        {
+            material.SetOverrideTag("OriginalShader", ".poiyomi/Poiyomi Toon World");
+            var d = ParseSaved();
+            Assert.AreEqual(1, d.Issues.Count(i => i.Feature == "shader.world" && i.Kind == AtlasIssueKind.Ignored));
+            Assert.IsFalse(d.Issues.Any(i => i.IsWarning));
+        }
+
+        [Test]
+        public void GrabbedScreenSitsBelowTheDecals()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableGrabpass", 1f);
+            material.SetOverrideTag("OriginalShader", ".poiyomi/Poiyomi Toon Grab Pass");
+            AtlasTestMaterials.AddSavedFloat(material, "_DecalEnabled", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_DecalTexture", textureA);
+            var d = ParseSaved();
+            int grab = d.Layers.FindIndex(l => l is AtlasRefractionLayer);
+            int decal = d.Layers.FindIndex(l => l is AtlasSurfaceLayer s && s.Source.Map != null && s.Source.Map.Decal != null);
+            Assert.GreaterOrEqual(grab, 0);
+            Assert.Greater(decal, grab, "Poiyomi blends the screen in before the decals.");
+        }
+
+        [Test]
+        public void LtcgiAnimationToggleOffIsOff()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_LTCGIEnabled", 1f);
+            Assert.IsTrue(ParseSaved().Lighting.Ltcgi.Enabled);
+            AtlasTestMaterials.AddSavedFloat(material, "_LTCGI_AnimToggle", 0f);
+            Assert.IsFalse(ParseSaved().Lighting.Ltcgi.Enabled);
+        }
+
+        [Test]
+        public void StatsOverlayIsIgnoredWithoutAWarning()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_TextEnabled", 1f);
+            var d = ParseSaved();
+            Assert.AreEqual(1, d.Issues.Count(i => i.Feature == "poiyomi.stats-overlay" && i.Kind == AtlasIssueKind.Ignored));
+            Assert.IsFalse(d.Issues.Any(i => i.IsWarning));
+        }
+
+        [Test]
+        public void DecalsStayAboveTheDissolve()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_DecalEnabled", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_DecalTexture", textureA);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableDissolve", 1f);
+            var d = ParseSaved();
+            int dissolve = d.Layers.FindIndex(l => l is AtlasTransitionLayer);
+            int decal = d.Layers.FindIndex(l => l is AtlasSurfaceLayer s && s.Source.Map != null && s.Source.Map.Decal != null);
+            Assert.GreaterOrEqual(dissolve, 0);
+            Assert.Greater(decal, dissolve, "Poiyomi dissolves before it shades and applies decals after.");
+        }
+
+        [Test]
+        public void ToonSevenVertexColourHasNoToggle()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_MainVertexColoring", 0.5f);
+            var vertex = ParseSaved7().Surface.VertexColor;
+            Assert.IsTrue(vertex.MultiplyColor);
+            Assert.AreEqual(0.5f, vertex.Amount, 1e-6f);
+            // From 8 on the section has a toggle, off by default.
+            Assert.IsFalse(ParseSaved8().Surface.VertexColor.MultiplyColor);
+        }
+
+        [Test]
         public void ToonWithoutFurPropertiesHasNoFur()
         {
             Assert.IsFalse(ParseSaved().Fur.Enabled);
@@ -2687,7 +2786,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             AtlasTestMaterials.AddSavedFloat(material, "_GrabPassHueShift", 0.3f);
             var d = ParseSaved();
             var layer = d.Layers.OfType<AtlasRefractionLayer>().Single();
-            Assert.AreEqual(AtlasPlacement.Overlay, layer.Placement);
+            Assert.AreEqual(AtlasPlacement.Surface, layer.Placement, "Blended into the base colour, exempt from lighting.");
             Assert.IsTrue(layer.Refracts);
             Assert.AreEqual(1.5f, layer.IOR, 1e-5f);
             Assert.IsTrue(layer.ByAlpha);
@@ -2747,7 +2846,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsEmpty(d.Layers.OfType<AtlasRefractionLayer>(), "Toon materials have no grab pass.");
             var layer = d.Layers.OfType<AtlasPatternLayer>().Single();
             Assert.AreEqual(AtlasPatternKind.LavaLamp, layer.Kind);
-            Assert.AreEqual(AtlasPlacement.Overlay, layer.Placement);
+            Assert.AreEqual(AtlasPlacement.Surface, layer.Placement);
             Assert.AreEqual(0.7f, layer.Opacity, 1e-6f);
             Assert.AreSame(textureA, layer.Mask.Map.Texture);
             var lamp = layer.LavaLamp;

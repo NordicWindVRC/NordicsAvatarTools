@@ -3,11 +3,11 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi: Distortion UV, the projections' settings, Parallax Heightmapping.
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
         // Texture mode: ((map 1 × 2 − 1) × strength 1 + (map 2 × 2 − 1) × strength 2) ÷ 2 × the mask,
         // added to the chosen UV. A missing map reads as −1 (a constant shift).
-        private static void UVOptions(Material m, AtlasUnifiedMaterial d)
+        private void UVOptions(Material m, AtlasUnifiedMaterial d)
         {
             distortion = null;
             distortedChannel = 0;
@@ -40,7 +40,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // The projections' settings that differ from the defaults (polar standard around (0.5, 0.5)
         // on UV0, mono panosphere, local x and y, world x and z).
-        private static void ReportProjectionSettings(Material m, AtlasUnifiedMaterial d, AtlasTextureSpace space)
+        private void ReportProjectionSettings(Material m, AtlasUnifiedMaterial d, AtlasTextureSpace space)
         {
             bool custom;
             switch (space)
@@ -65,7 +65,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Parallax occlusion mapping: multi-step, the heightmap's red, strength as the depth, the offset.
-        private static void Parallax(Material m, AtlasUnifiedMaterial d)
+        private void Parallax(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_PoiParallax")) return;
             // 7.3: the height map has its own toggle and reads green.

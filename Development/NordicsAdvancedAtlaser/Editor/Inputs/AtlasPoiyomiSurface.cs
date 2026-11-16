@@ -3,7 +3,7 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi: Main, Alpha Options, the normal sections and Rendering.
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
         // Render presets: blend factors as the preset sets them (source, destination).
         private static readonly (int Preset, AtlasSurfaceMode Mode, int Source, int Destination)[] Presets =
@@ -14,14 +14,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
         };
 
         // Main: texture × colour, pixel mode, ignore alpha, vertex colouring.
-        private static void Main(Material m, AtlasUnifiedMaterial d)
+        private void Main(Material m, AtlasUnifiedMaterial d)
         {
             var surface = d.Surface;
             surface.BaseColor.Color = TintColor(m, d, "_Color", "_ColorThemeIndex", surface.BaseColor);
             surface.BaseColor.Map = Texture(m, d, "_MainTex");
             if (surface.BaseColor.Map != null && On(m, "_MainPixelMode")) surface.BaseColor.Map.Sampling = AtlasTextureSampling.Pixel;
             if (On(m, "_MainIgnoreTexAlpha")) surface.Alpha.Source = AtlasAlphaSource.BaseColorConstantAlpha;
-            if (On(m, "_MainVertexColoringEnabled"))
+            // 7.3 has no toggle: its vertex colour slider is always live.
+            if (major <= 7 || On(m, "_MainVertexColoringEnabled"))
             {
                 var vertex = surface.VertexColor;
                 vertex.Amount = Float(m, "_MainVertexColoring", 0f);
@@ -43,7 +44,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Alpha: the alpha map, offset, fades, dithering and coverage.
-        private static void Alpha(Material m, AtlasUnifiedMaterial d)
+        private void Alpha(Material m, AtlasUnifiedMaterial d)
         {
             var alpha = d.Surface.Alpha;
             int mode = Int(m, "_MainAlphaMaskMode", 2);
@@ -115,7 +116,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // 7.3's distance fade has no toggle: it applies unless its settings leave the alpha as is.
-        private static bool DistanceFade7(Material m)
+        private bool DistanceFade7(Material m)
         {
             float minAlpha = Float(m, "_AlphaDistanceFadeMinAlpha", 0f), maxAlpha = Float(m, "_AlphaDistanceFadeMaxAlpha", 1f);
             float near = Float(m, "_AlphaDistanceFadeMin", 0f), far = Float(m, "_AlphaDistanceFadeMax", 0f);
@@ -124,7 +125,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // The alpha map's channel weights: one channel at full weight is a channel; anything else
         // (mixed weights, levels, gamma) is reported and read as the strongest channel.
-        private static AtlasChannel AlphaMaskChannel(Material m, AtlasUnifiedMaterial d)
+        private AtlasChannel AlphaMaskChannel(Material m, AtlasUnifiedMaterial d)
         {
             float[] weights = { Float(m, "_AlphaMaskR", 1f), Float(m, "_AlphaMaskG", 0f), Float(m, "_AlphaMaskB", 0f), Float(m, "_AlphaMaskA", 0f) };
             int strongest = 0, used = 0;
@@ -143,7 +144,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // Normal maps: the main one, the second with its mask, the detail normal (its strength by the
         // detail mask's green), the bent normal, and normal correction.
-        private static void Normals(Material m, AtlasUnifiedMaterial d)
+        private void Normals(Material m, AtlasUnifiedMaterial d)
         {
             d.Surface.Normal.Map = Texture(m, d, "_BumpMap", AtlasTextureInterpretation.TangentNormal);
             d.Surface.Normal.Strength = Float(m, "_BumpScale", 1f);
@@ -173,7 +174,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
         }
 
-        private static void NormalLayer(AtlasUnifiedMaterial d, AtlasTextureReference map, float strength, AtlasMask mask)
+        private void NormalLayer(AtlasUnifiedMaterial d, AtlasTextureReference map, float strength, AtlasMask mask)
         {
             if (map == null) return;
             var layer = new AtlasSurfaceLayer { Mask = mask };
@@ -183,7 +184,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Rendering: the preset (or custom blend factors), culling, depth, colour mask, stencil, fog.
-        private static void Render(Material m, AtlasUnifiedMaterial d)
+        private void Render(Material m, AtlasUnifiedMaterial d)
         {
             var render = d.Render;
             int preset = Int(m, "_Mode", 0);
@@ -212,7 +213,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Culling, depth, colour mask and stencil; the second pass's names end in 2 (_Stencil2…).
-        private static void PassSettings(Material m, AtlasUnifiedMaterial d, AtlasPassSettings pass, string n)
+        private void PassSettings(Material m, AtlasUnifiedMaterial d, AtlasPassSettings pass, string n)
         {
             int cull = Int(m, "_Cull" + n, 2);
             pass.Cull = cull == 0 ? AtlasCull.Off : cull == 1 ? AtlasCull.Front : AtlasCull.Back;
@@ -238,9 +239,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // The Two Pass variants' second pass, and its pass masks (each writes 1 in its own pass and
         // 0 in the other).
-        private static void SecondPass(Material m, AtlasUnifiedMaterial d)
+        private void SecondPass(Material m, AtlasUnifiedMaterial d)
         {
-            if (!AtlasMaterialReader.Has(m, "_ModeTwoPass")) return;
+            // Lil Fur Two Pass has no second surface pass (its strands are drawn twice instead).
+            if (!IsVariant(m, d, "_ModeTwoPass", "Two Pass", "Self Grab", "-Lil Fur")) return;
             var second = d.Render.SecondPass;
             second.Enabled = true;
             int preset = Int(m, "_ModeTwoPass", 0);
@@ -270,7 +272,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             PassMask(m, d, "_TwoPassSecondPassGlobalMaskIndex", "_TwoPassSecondPassApplyGlobalMaskBlendType", true);
         }
 
-        private static void PassMask(Material m, AtlasUnifiedMaterial d, string index, string blend, bool second)
+        private void PassMask(Material m, AtlasUnifiedMaterial d, string index, string blend, bool second)
         {
             int channel = Int(m, index, 0);
             if (channel <= 0) return;

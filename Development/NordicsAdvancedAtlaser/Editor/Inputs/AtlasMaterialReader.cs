@@ -50,8 +50,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 int index = shader.FindPropertyIndex(property);
                 return index < 0 ? null : shader.GetPropertyDescription(index);
             }
-            catch
+            catch (System.Exception e)
             {
+                // A shader that failed to import has no readable properties.
+                Debug.LogWarning("[Nordic's Advanced Atlaser] Couldn't read " + property + " of " + shader.name + ": " + e.Message);
                 return null;
             }
         }
@@ -60,11 +62,65 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static string PropertyLabel(Material material, string property) =>
             ShaderName(material).Length == 0 ? null : PropertyLabel(material.shader, property);
 
+        // One of the material's own (override) tags, or empty. Tags are saved with the material, so
+        // they can be read without its shader.
+        public static string Tag(Material material, string name)
+        {
+            if (material == null) return "";
+            var saved = Saved(material);
+            if (saved != null) return saved.Tags.TryGetValue(name, out var value) ? value : "";
+            return material.GetTag(name, false, "");
+        }
+
+        // The shader's name as the user chose it, or empty when it can't be known. A shader locked
+        // by Thry's optimizer is named Hidden/Locked/<name>/<material id>. With the shader missing,
+        // the name is the one the optimizer tagged the material with when it was last locked, which
+        // is out of date if the shader was changed after unlocking.
+        public static string OriginalShaderName(Material material)
+        {
+            string name = ShaderName(material);
+            return name.Length > 0 ? UnlockedName(name) : Tag(material, "OriginalShader");
+        }
+
+        // A locked shader's name without the optimizer's prefix and material id.
+        public static string UnlockedName(string name)
+        {
+            const string locked = "Hidden/Locked/";
+            if (string.IsNullOrEmpty(name) || !name.StartsWith(locked, System.StringComparison.Ordinal)) return name ?? "";
+            int end = name.LastIndexOf('/');
+            return end > locked.Length ? name.Substring(locked.Length, end - locked.Length) : name.Substring(locked.Length);
+        }
+
         public static bool Has(Material material, string property)
         {
             if (material == null || string.IsNullOrEmpty(property)) return false;
             var saved = Saved(material);
-            return saved != null ? saved.Has(property) : material.HasProperty(property);
+            return saved != null ? saved.Has(property) : material.HasProperty(Declared(material, property));
+        }
+
+        // The name the installed shader declares a property under. Thry's optimizer renames the
+        // properties a material marks as renamed when locked (tag <name>Animated = 2) to
+        // <name>_<suffix> throughout the locked shader and moves their values there; the suffix is
+        // the material's rename tag or its name. Saved values keep the original name.
+        private static string Declared(Material material, string name)
+        {
+            if (material.HasProperty(name) || material.GetTag(name + "Animated", false, "") != "2") return name;
+            string renamed = name + "_" + RenameSuffix(material.GetTag("thry_rename_suffix", false, material.name));
+            return material.HasProperty(renamed) ? renamed : name;
+        }
+
+        // The optimizer's property-name form of a suffix: spaces removed; letters, digits and the
+        // underscore kept; every other byte written as two hexadecimal digits.
+        internal static string RenameSuffix(string text)
+        {
+            var result = new System.Text.StringBuilder();
+            foreach (byte b in System.Text.Encoding.UTF8.GetBytes(text.Trim().Replace(" ", "")))
+            {
+                bool word = (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9') || b == '_';
+                if (word) result.Append((char)b);
+                else result.Append(b.ToString("X2"));
+            }
+            return result.ToString();
         }
 
         public static Vector4 Vector(Material material, string name, Vector4 fallback)
@@ -72,6 +128,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (!Has(material, name)) return fallback;
             var saved = Saved(material);
             if (saved != null) return saved.Vectors.TryGetValue(name, out var value) ? value : fallback;
+            name = Declared(material, name);
             int index = material.shader.FindPropertyIndex(name);
             if (index < 0) return fallback;
             var type = material.shader.GetPropertyType(index);
@@ -89,14 +146,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var saved = Saved(material);
             if (saved != null) return saved.Textures.TryGetValue(name, out var t) ? t.Scale : Vector2.one;
-            return material.GetTextureScale(name);
+            return material.GetTextureScale(Declared(material, name));
         }
 
         public static Vector2 TextureOffset(Material material, string name)
         {
             var saved = Saved(material);
             if (saved != null) return saved.Textures.TryGetValue(name, out var t) ? t.Offset : Vector2.zero;
-            return material.GetTextureOffset(name);
+            return material.GetTextureOffset(Declared(material, name));
         }
 
         public static float Float(Material material, string name, float fallback)
@@ -104,6 +161,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (!Has(material, name)) return fallback;
             var saved = Saved(material);
             if (saved != null) return saved.Floats.TryGetValue(name, out var value) ? value : fallback;
+            name = Declared(material, name);
             int index = material.shader == null ? -1 : material.shader.FindPropertyIndex(name);
             if (index < 0) return fallback;
             var type = material.shader.GetPropertyType(index);
@@ -118,6 +176,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (!Has(material, name)) return fallback;
             var saved = Saved(material);
             if (saved != null) return saved.Vectors.TryGetValue(name, out var value) ? (Color)value : fallback;
+            name = Declared(material, name);
             int index = material.shader == null ? -1 : material.shader.FindPropertyIndex(name);
             if (index < 0 || material.shader.GetPropertyType(index) != ShaderPropertyType.Color) return fallback;
             return material.GetColor(name);
@@ -133,6 +192,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (!Has(material, name)) return null;
             var saved = Saved(material);
             if (saved != null) return saved.Textures.TryGetValue(name, out var t) ? t.Texture : null;
+            name = Declared(material, name);
             int index = material.shader == null ? -1 : material.shader.FindPropertyIndex(name);
             if (index < 0 || material.shader.GetPropertyType(index) != ShaderPropertyType.Texture) return null;
             return material.GetTexture(name);

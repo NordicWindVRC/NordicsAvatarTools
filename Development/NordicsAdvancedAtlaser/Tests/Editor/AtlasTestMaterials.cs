@@ -22,6 +22,14 @@ namespace NordicWind.AdvancedAtlaser.Tests
             public void Dispose() { Flag.SetValue(null, false); }
         }
 
+        // Every modulator a parser adds must point at a value that exists in the material it built.
+        public static AtlasUnifiedMaterial Checked(AtlasUnifiedMaterial unified)
+        {
+            foreach (var modulator in unified.Modulators)
+                Assert.NotNull(AtlasModulatorPath.Resolve(unified, modulator.Target), "Modulator path doesn't resolve: " + modulator.Target);
+            return unified;
+        }
+
         public static Material Standard()
         {
             var shader = Shader.Find("Standard");

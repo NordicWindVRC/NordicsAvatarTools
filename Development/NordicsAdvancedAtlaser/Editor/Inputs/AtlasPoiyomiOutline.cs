@@ -4,22 +4,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi: Outlines, with their rendering options, blending, stencil and AudioLink; Pro's Triple
     // Outline adds layers 2 and 3, each its own outline under renamed properties.
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
-        private static void Outline(Material m, AtlasUnifiedMaterial d)
+        private void Outline(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_EnableOutlines")) return;
             // Triple Outline's layer toggles; the other variants have only layer 1.
             if (On(m, "_EnableOutlineLayer1", 1f)) OutlineLayer(m, d, 0);
             for (int layer = 2; layer <= 3; layer++)
-                if (AtlasMaterialReader.Has(m, "_EnableOutlineLayer" + layer) && On(m, "_EnableOutlineLayer" + layer, 1f))
+                if (IsVariant(m, d, "_EnableOutlineLayer" + layer, "Triple Outline") && On(m, "_EnableOutlineLayer" + layer, 1f))
                     OutlineLayer(m, d, layer);
         }
 
         // A layer's name for a layer 1 property: _Outline… → _Outline2…, _LineWidth → _Outline2Width,
         // _AudioLinkOutline… → _AudioLinkOutline2…. The mask texture, blend factors, depth clip and
         // offsets, thin fade, camera depth and curvature bake are shared and keep their names.
-        private static string OutlineName(string name, int layer)
+        private string OutlineName(string name, int layer)
         {
             if (layer == 0) return name;
             string k = layer.ToString();
@@ -36,7 +36,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return "_Outline" + k + name.Substring("_Outline".Length);
         }
 
-        private static void OutlineLayer(Material m, AtlasUnifiedMaterial d, int layer)
+        private void OutlineLayer(Material m, AtlasUnifiedMaterial d, int layer)
         {
             string N(string name) => OutlineName(name, layer);
             var outline = new AtlasOutline();
@@ -129,7 +129,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 {
                     Kind = AtlasAlphaModifierKind.DistanceFade, PixelPosition = Int(m, N("_OutlineAlphaDistanceFadeType"), 1) == 1,
                     MinDistance = Float(m, N("_OutlineAlphaDistanceFadeMin"), 0f), MaxDistance = Float(m, N("_OutlineAlphaDistanceFadeMax"), 0f),
-                    MinAlpha = Float(m, N("_OutlineAlphaDistanceFadeMinAlpha"), 0f), MaxAlpha = Float(m, N("_OutlineAlphaDistanceFadeMaxAlpha"), 1f)
+                    MinAlpha = Float(m, N("_OutlineAlphaDistanceFadeMinAlpha"), 0f), MaxAlpha = Float(m, N("_OutlineAlphaDistanceFadeMaxAlpha"), 1f),
+                    Mask = MaskOf("_OutlineDistanceFadeMaskChannel", 4)
                 });
             if (On(m, N("_OutlineHueShift"))) OutlineColorAdjust(m, d, outline, N);
 
@@ -166,7 +167,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // Hue (with its speed, turns per 20 seconds), then saturation and value (HSV, old) or
         // saturation and brightness (clamped), then gamma.
-        private static void OutlineColorAdjust(Material m, AtlasUnifiedMaterial d, AtlasOutline outline, System.Func<string, string> N)
+        private void OutlineColorAdjust(Material m, AtlasUnifiedMaterial d, AtlasOutline outline, System.Func<string, string> N)
         {
             var list = outline.ColorAdjustments;
             AtlasColorAdjustment Add(AtlasColorOperation operation, float amount)
@@ -204,7 +205,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // Size (in hundredths), emission and highlight emission by bands; the colour overrides; the
         // texture's offset by a band and by chronotensity (Poiyomi 11).
-        private static void OutlineAudioLink(Material m, AtlasUnifiedMaterial d, int index, System.Func<string, string> N)
+        private void OutlineAudioLink(Material m, AtlasUnifiedMaterial d, int index, System.Func<string, string> N)
         {
             if (!AudioLinkOn(m)) return;
             string outline = "outlines[" + index + "]";

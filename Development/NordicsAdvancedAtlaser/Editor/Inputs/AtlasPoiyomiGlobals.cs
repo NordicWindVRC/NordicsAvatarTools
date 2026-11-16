@@ -4,13 +4,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi: Global Mask (the mask bus: textures, vertex colours, modifiers, options) and Global
     // Themes (theme colours, resolved to colours here).
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
         private const int BusChannels = 16;
 
         // The bus's producers, in the shader's order: textures, vertex colours, back face, mirror,
         // camera and distance modifiers, then the options.
-        private static void MaskBus(Material m, AtlasUnifiedMaterial d)
+        private void MaskBus(Material m, AtlasUnifiedMaterial d)
         {
             var steps = d.MaskBus.Steps;
             if (On(m, "_GlobalMaskTexturesEnable"))
@@ -119,7 +119,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Poiyomi's blend selectors use the bus blends' order.
         // 8.1's inspector listed colour blends (screen, add, overlay, mixed) the mask blend doesn't
         // have: past 7 the shader gave 0. Read as replace and reported.
-        private static AtlasMaskBlend BusBlend(int type)
+        private AtlasMaskBlend BusBlend(int type)
         {
             if (major <= 8 && type > 7) legacyMaskBlend = true;
             return (AtlasMaskBlend)Mathf.Clamp(type, 0, 7);
@@ -128,7 +128,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // A consumer: the mask reads the channel the selector names (Off, 1R … 4A), combined by its
         // blend. Creates a mask when there's none.
         // Global Mask Contacts (Poiyomi 11): up to 8 VRChat contacts, each writing its touch into a channel.
-        private static void Contacts(Material m, AtlasUnifiedMaterial d)
+        private void Contacts(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_GlobalMaskContactsEnable")) return;
             bool themed = false;
@@ -160,7 +160,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 d.Report(AtlasIssueKind.Unmapped, "contact.person-color", "A contact tinting a theme colour by who touches isn't mapped yet.");
         }
 
-        private static AtlasMask BusMask(Material m, AtlasMask mask, string selector, string blend = null)
+        private AtlasMask BusMask(Material m, AtlasMask mask, string selector, string blend = null)
         {
             int channel = Int(m, selector, 0);
             if (channel <= 0) return mask;
@@ -170,7 +170,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return mask;
         }
 
-        private static void BusScalar(Material m, AtlasScalarInput input, string selector, string blend = null)
+        private void BusScalar(Material m, AtlasScalarInput input, string selector, string blend = null)
         {
             int channel = Int(m, selector, 0);
             if (channel <= 0) return;
@@ -179,13 +179,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Every layer added since `from` reads the channel.
-        private static void BusLayers(Material m, AtlasUnifiedMaterial d, int from, string selector, string blend = null)
+        private void BusLayers(Material m, AtlasUnifiedMaterial d, int from, string selector, string blend = null)
         {
             for (int i = from; i < d.Layers.Count; i++) d.Layers[i].Mask = BusMask(m, d.Layers[i].Mask, selector, blend);
         }
 
         // A producer: the layer's coverage written into the channel the selector names.
-        private static void BusWrite(Material m, AtlasUnifiedMaterial d, AtlasLayer layer, string selector, string blend, bool invert = false)
+        private void BusWrite(Material m, AtlasUnifiedMaterial d, AtlasLayer layer, string selector, string blend, bool invert = false)
         {
             int channel = Int(m, selector, 0);
             if (channel <= 0 || layer == null) return;
@@ -197,7 +197,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // A colour, or the theme colour its selector names: Theme Color 0–3 are resolved here;
         // ColorChord 0–3 and AudioLink themes 0–3 go on the colour input when there is one.
-        private static Color TintColor(Material m, AtlasUnifiedMaterial d, string property, string themeIndex, AtlasColorInput input = null)
+        private Color TintColor(Material m, AtlasUnifiedMaterial d, string property, string themeIndex, AtlasColorInput input = null)
         {
             var color = LinearColor(m, property, Color.white);
             int theme = Int(m, themeIndex, 0);
@@ -218,7 +218,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // A theme colour as the shader computes it: the HDR colour split into colour and exposure,
         // hue shifted (Oklab or HSV) and saturated (old: HSV saturation and value offsets; new:
         // saturation and brightness as exposure), normalised to 1, the exposure applied.
-        private static Color ThemeColor(Material m, AtlasUnifiedMaterial d, int index)
+        private Color ThemeColor(Material m, AtlasUnifiedMaterial d, int index)
         {
             string i = index.ToString();
             var hdr = LinearColor(m, "_GlobalThemeColor" + i, Color.white);

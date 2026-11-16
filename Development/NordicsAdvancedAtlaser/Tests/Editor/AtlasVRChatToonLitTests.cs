@@ -26,7 +26,10 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 Assert.AreEqual(AtlasAlphaSource.None, unified.Surface.Alpha.Source);
                 Assert.AreEqual(AtlasLightingFamily.Flat, unified.Lighting.Family);
                 Assert.AreEqual(AtlasAmbientModel.Average, unified.Lighting.Ambient);
-                Assert.AreEqual(1f, unified.Lighting.ReceiveShadows);
+                // The shader skips the shadow variants, and lights itself by 20% of the ambient
+                // colour when the world has no real-time light.
+                Assert.AreEqual(0f, unified.Lighting.ReceiveShadows);
+                Assert.AreEqual(0.2f, unified.Lighting.Contributions.AmbientAsMainLight, 1e-6f);
                 Assert.AreEqual(1f, unified.Lighting.Contributions.MainLight);
                 Assert.AreEqual(0f, unified.Lighting.Contributions.AdditionalLights);
                 Assert.AreEqual(0f, unified.Lighting.Contributions.VertexLights);

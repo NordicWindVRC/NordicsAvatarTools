@@ -3,10 +3,10 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi: the surface layers: detail texture, back face, colour masking, decals (4), emissions (4).
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
         // Decal and Poiyomi blend types, by their enum values.
-        private static AtlasBlend PoiyomiBlend(int type)
+        private AtlasBlend PoiyomiBlend(int type)
         {
             // 8.0 offered more modes, some on numbers 10 reuses: burns read as multiply, colour
             // dodge (7, subtract in 10) as screen, the light modes (10–19) as overlay; reported.
@@ -29,18 +29,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
         }
 
-        private static void SurfaceLayers(Material m, AtlasUnifiedMaterial d)
+        private void SurfaceLayers(Material m, AtlasUnifiedMaterial d)
         {
             DetailTexture(m, d);
             SkinTone(m, d);
             BackFace(m, d);
             ColorMasking(m, d);
+            // Poiyomi dissolves before it shades and applies decals after, so decals stay on top.
+            Dissolve(m, d);
+            // The grabbed screen goes in before the decals too: everything after it draws on top.
+            GrabPass(m, d);
             for (int i = 0; i < 4; i++) Decal(m, d, i);
             for (int i = 0; i < 4; i++) Emission(m, d, i);
         }
 
         // base × lerp(1, texture × tint × brightness × 2 (in gamma), mask.r × intensity).
-        private static void DetailTexture(Material m, AtlasUnifiedMaterial d)
+        private void DetailTexture(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_DetailEnabled")) return;
             var layer = new AtlasSurfaceLayer { Mask = Mask(m, d, "_DetailMask") };
@@ -55,7 +59,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Back faces take the colour × texture, by mask × alpha (or replacing the alpha), and glow.
-        private static void BackFace(Material m, AtlasUnifiedMaterial d)
+        private void BackFace(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_BackFaceEnabled")) return;
             var layer = new AtlasSurfaceLayer
@@ -77,7 +81,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // A placed texture blended into the base colour by its alpha, replacing the emission under it.
-        private static void Decal(Material m, AtlasUnifiedMaterial d, int index)
+        private void Decal(Material m, AtlasUnifiedMaterial d, int index)
         {
             string s = index == 0 ? "" : index.ToString(), n = index.ToString();
             if (!On(m, "_DecalEnabled" + s)) return;
@@ -162,7 +166,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Emission: colour × map (× base colour) × strength × alpha, masked; modulators from EmissionModulators.
-        private static void Emission(Material m, AtlasUnifiedMaterial d, int index)
+        private void Emission(Material m, AtlasUnifiedMaterial d, int index)
         {
             string s = index == 0 ? "" : index.ToString(), n = index.ToString();
             if (!On(m, index == 0 ? "_EnableEmission" : "_EnableEmission" + n)) return;
@@ -204,7 +208,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // An emission's strength (its target's opacity) driven by light, blinking and scrolling.
-        private static void EmissionModulators(Material m, AtlasUnifiedMaterial d, int index, int layer)
+        private void EmissionModulators(Material m, AtlasUnifiedMaterial d, int index, int layer)
         {
             string s = index == 0 ? "" : index.ToString(), n = index.ToString();
             string target = "layers[" + layer + "].targets[0].opacity";

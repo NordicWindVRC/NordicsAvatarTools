@@ -34,7 +34,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         {
             var parser = AtlasShaderRegistry.Detect(material);
             Assert.IsInstanceOf<AtlasVRChatToonStandardParser>(parser);
-            return parser.Parse(material);
+            return AtlasTestMaterials.Checked(parser.Parse(material));
         }
 
         [Test]

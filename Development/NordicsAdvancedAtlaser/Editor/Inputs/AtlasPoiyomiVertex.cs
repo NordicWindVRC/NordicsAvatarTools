@@ -4,9 +4,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi: Vertex Options (Basics & Fun, LookAt, Glitching), Depth Bulge and View Clip
     // Prevention as deformations (catalogue 5.3), in the order Poiyomi applies them.
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
-        private static void Vertex(Material m, AtlasUnifiedMaterial d)
+        private void Vertex(Material m, AtlasUnifiedMaterial d)
         {
             VertexBasics(m, d);
             VertexLookAt(m, d);
@@ -18,7 +18,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         private static readonly string[] LookAtRigs = { "Red", "Green", "Blue", "Alpha" };
 
-        private static void VertexLookAt(Material m, AtlasUnifiedMaterial d)
+        private void VertexLookAt(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_VertexLookAtEnabled")) return;
             var masks = Texture(m, d, "_LookAtMask", AtlasTextureInterpretation.Data);
@@ -55,7 +55,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 AudioRange(m, d, "deformations[" + k + "].strength", AtlasModulatorMode.Add, "_VertexLookAtAudioLinkBand", "_VertexLookAtAlphaAudiolink");
         }
 
-        private static void VertexGlitch(Material m, AtlasUnifiedMaterial d)
+        private void VertexGlitch(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_VertexGlitchingEnabled")) return;
             bool useMap = On(m, "_VertexGlitchUseMap");
@@ -82,7 +82,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             AddDeformation(d, glitch);
         }
 
-        private static void DepthBulge(Material m, AtlasUnifiedMaterial d)
+        private void DepthBulge(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_EnableDepthBulge")) return;
             AddDeformation(d, new AtlasDeformation
@@ -95,7 +95,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // View Clip Prevention (Uzumore); its animation toggle off is off.
-        private static void CameraPush(Material m, AtlasUnifiedMaterial d)
+        private void CameraPush(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_UzumoreCategoryToggle") || !On(m, "_UzumoreEnabled", 1f)) return;
             AddDeformation(d, new AtlasDeformation
@@ -107,7 +107,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Mask = Mask(m, d, "_UzumoreMask", Channels[Mathf.Clamp(Int(m, "_UzumoreMaskChannel", 3), 0, 3)])
             });
         }
-        private static void VertexBasics(Material m, AtlasUnifiedMaterial d)
+        private void VertexBasics(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_VertexManipulationsEnabled")) return;
             // The effects mask; its UV property has no leading underscore.
@@ -260,14 +260,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 d.Report(AtlasIssueKind.Unmapped, "audiolink.vertex-spectrum", "Vertices moved by AudioLink's spectrum aren't mapped yet.");
         }
 
-        private static int AddDeformation(AtlasUnifiedMaterial d, AtlasDeformation deformation)
+        private int AddDeformation(AtlasUnifiedMaterial d, AtlasDeformation deformation)
         {
             d.Deformations.Add(deformation);
             return d.Deformations.Count - 1;
         }
 
         // amount.x, .y and .z + lerp(min, max, band), for the axes whose range moves.
-        private static void AudioVector(Material m, AtlasUnifiedMaterial d, int deformation, int band, Vector3 min, Vector3 max)
+        private void AudioVector(Material m, AtlasUnifiedMaterial d, int deformation, int band, Vector3 min, Vector3 max)
         {
             string[] axes = { "x", "y", "z" };
             for (int i = 0; i < 3; i++)
@@ -277,7 +277,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // A channel of the effects mask (0–3) or of the vertex colour (4–7); null when the map's
         // channel is chosen without a map.
-        private static AtlasMask VertexMask(Material m, AtlasTextureReference masks, string channel)
+        private AtlasMask VertexMask(Material m, AtlasTextureReference masks, string channel)
         {
             int c = Mathf.Clamp(Int(m, channel, 0), 0, 7);
             if (c >= 4) return new AtlasMask { VertexColor = true, Channel = Channels[c - 4] };

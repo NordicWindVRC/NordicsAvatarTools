@@ -4,9 +4,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi: Color Adjust (the base colour), Post Processing (the final colour), and the layers'
     // own hue shifts and colour adjusts.
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
-        private static void ColorAdjust(Material m, AtlasUnifiedMaterial d)
+        private void ColorAdjust(Material m, AtlasUnifiedMaterial d)
         {
             MainColorAdjust(m, d);
             PostProcessing(m, d);
@@ -16,7 +16,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // The final colour and or the emission × lerp(min colour, max colour, the camera distance
         // through its curve): a tint whose colour a camera distance modulator blends to the max.
-        private static void ProximityColor(Material m, AtlasUnifiedMaterial d)
+        private void ProximityColor(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_FXProximityColor")) return;
             var min = TintColor(m, d, "_FXProximityColorMinColor", "_FXProximityColorMinColorThemeIndex");
@@ -50,11 +50,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 d.Report(AtlasIssueKind.Unmapped, "proximity.edge", "Proximity colour's edge colour isn't mapped yet.");
             if (On(m, "_FXProximityColorBackFace"))
                 d.Report(AtlasIssueKind.Unmapped, "proximity.backface", "Proximity colour's forced back face colour isn't mapped yet.");
+            if (On(m, "_FXProximityColorOverrideAlpha"))
+                d.Report(AtlasIssueKind.Unmapped, "proximity.alpha", "Proximity colour overriding the alpha isn't mapped yet.");
         }
 
         // In the shader's order: hue (mask R), gradient map, gamma (A), saturation (B), chromatize
         // (R), tint, brightness (G), clamp.
-        private static void MainColorAdjust(Material m, AtlasUnifiedMaterial d)
+        private void MainColorAdjust(Material m, AtlasUnifiedMaterial d)
         {
             // 7.3's hue shift toggle switches the whole section (8 split it off).
             if (!On(m, major <= 7 ? "_MainHueShiftToggle" : "_MainColorAdjustToggle")) return;
@@ -140,7 +142,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // The finished colour: hue, tint, RGB, saturation, HDR boost (sRGB decode), contrast,
         // brightness, lightness, posterization, all by the mask.
-        private static void PostProcessing(Material m, AtlasUnifiedMaterial d)
+        private void PostProcessing(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_PostProcess")) return;
             var mask = Mask(m, d, "_PPMask", Channels[Mathf.Clamp(Int(m, "_PPMaskChannel", 0), 0, 3)]);
@@ -183,7 +185,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // Adds a hue shift (select or shift, Oklab or HSV). A shift speed (turns per 20 seconds)
         // adds a saw to the amount: a hue turns round, so adding frac(f t) is the same as frac(shift + f t).
-        private static AtlasColorAdjustment Hue(Material m, AtlasUnifiedMaterial d, AtlasAdjustmentTarget target, AtlasLayer layer,
+        private AtlasColorAdjustment Hue(Material m, AtlasUnifiedMaterial d, AtlasAdjustmentTarget target, AtlasLayer layer,
             string shift, string speed, string space, string selectOrShift, AtlasMask mask = null)
         {
             var adjustment = new AtlasColorAdjustment
@@ -213,11 +215,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // The hue colour space (0 Oklab, 1 HSV); 7.3 and 8.x always shift in HSV.
-        private static AtlasHueMethod HueMethodOf(Material m, string property) =>
+        private AtlasHueMethod HueMethodOf(Material m, string property) =>
             major <= 8 || Int(m, property, 0) == 1 ? AtlasHueMethod.HSV : AtlasHueMethod.Oklab;
 
         // A layer's hue shift, on every layer added since `from` (a section can add several).
-        private static void LayerHue(Material m, AtlasUnifiedMaterial d, int from, string prefix, string space = null, string select = null)
+        private void LayerHue(Material m, AtlasUnifiedMaterial d, int from, string prefix, string space = null, string select = null)
         {
             if (!On(m, prefix + "Enabled")) return;
             for (int i = from; i < d.Layers.Count; i++)
@@ -225,7 +227,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     space ?? prefix + "ColorSpace", select ?? prefix.Replace("HueShift", "HueSelectOrShift"));
         }
 
-        private static void LayerAdjust(AtlasUnifiedMaterial d, AtlasLayer layer, AtlasColorOperation operation, float amount, Vector3? luminance = null) =>
+        private void LayerAdjust(AtlasUnifiedMaterial d, AtlasLayer layer, AtlasColorOperation operation, float amount, Vector3? luminance = null) =>
             d.ColorAdjustments.Add(new AtlasColorAdjustment
             {
                 Target = AtlasAdjustmentTarget.Layer, Layer = layer, Operation = operation, Amount = amount,

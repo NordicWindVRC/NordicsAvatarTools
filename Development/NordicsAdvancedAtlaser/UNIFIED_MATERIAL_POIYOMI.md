@@ -17,7 +17,7 @@ covered in [*Version 11 and Pro*](#version-11-and-pro), as differences from 10.0
 
 **Variants:** Poiyomi Toon, Two Pass, Early Outline, Grab Pass, Lil Fur and Lil Fur Two Pass
 share this feature set. Grab Pass adds screen-grab effects; Lil Fur adds a fur pass, covered in
-[*Lil Fur*](#lil-fur-variants-lil-fur-and-lil-fur-two-pass). **Poiyomi Toon World** is world-only and out of scope. Poiyomi Pro's variants are listed under
+[*Lil Fur*](#lil-fur-variants-lil-fur-and-lil-fur-two-pass). **Poiyomi Toon World** is read as Poiyomi Toon, with one *ignored* line for its world-only features. Poiyomi Pro's variants are listed under
 [*Version 11 and Pro*](#version-11-and-pro).
 
 **Parser:** the Poiyomi parsers (`AtlasPoiyomi*.cs`) are described under
@@ -528,7 +528,21 @@ It contains Toon and Pro for both 10.0.29 (as *Old Versions*) and 11.0.50.
 
 **Detection:** Toon 11 keeps 10's shader names (`.poiyomi/Poiyomi Toon` and so on), so only the
 shader's version label ("Poiyomi 11.0.50") tells them apart. Pro shaders are named
-`.poiyomi/Poiyomi Pro…`.
+`.poiyomi/Poiyomi Pro…`; every other Poiyomi shader is Toon. A locked shader is named
+`Hidden/Locked/<name>/<material id>`, and its name is read without the prefix and the id. A
+version the parsers don't know (a newer one, or none found) is read by the newest parser and
+reported.
+
+**Variants** are told by a property only the variant declares (`_ModeTwoPass`,
+`_EnableGrabpass`, `_FurLayerNum`, `_FurLayerCount`, `_TessellationType`, `_TriplanarMode`,
+`_EnableOutlineLayer2` and the geometry variants' own). With the shader missing, such a property
+may be left over from a variant the material used before: the name the material was locked with
+(the optimizer's `OriginalShader` tag) decides, and without one the variant is assumed and
+reported.
+
+**Renamed properties:** a property marked *renamed when locked* is declared by the locked
+shader as `<name>_<suffix>` (the material's rename tag or its name, in the optimizer's
+property-name form); the reader reads it under that name.
 
 **Size:** Toon 11 has 4,825 properties, about 3,000 visible. Compared with 10.0.29 it adds 376
 properties and removes 25. Pro 11 adds another 159 on top of Toon 11, and removes none.
@@ -602,7 +616,7 @@ properties and removes 25. Pro 11 adds another 159 on top of Toon 11, and remove
 | Geom, Geometric Dissolve, Tessellated (and combinations) | A geometry stage; dissolving into pieces; tessellation | Deformation and geometry effects |
 | ShatterWave, Particle | Shattering, and particles spawned from triangles | Geometry effects |
 | Triplanar Projection | Triplanar texture projection | Mapping |
-| World, World Fur | World variants | Out of scope |
+| World, World Fur | World variants | Read as their avatar shaders; world-only features ignored, with one line |
 
 ### Parser
 `AtlasPoiyomiToon11Parser`, `AtlasPoiyomiPro10Parser` and `AtlasPoiyomiPro11Parser` share the
@@ -711,7 +725,8 @@ shift, vertex colour normals, distance LOD). Lil Fur 11: the fur mask's options,
 and push, the vertex colour modes (Poiyomi, LilToon), and Lil Fur Two Pass's cutout length.
 
 **Grab Pass and Self Grab:** Grab Pass (Toon and Pro) and Self Grab as a refraction layer placed
-*overlay* (the grab isn't lit): refraction (index, chromatic aberration, fresnel power, ignore
+*surface*, after the dissolve and before the decals as Poiyomi applies it, so decals, matcaps,
+flipbooks, rims and the patterns draw on top (the grab isn't lit): refraction (index, chromatic aberration, fresnel power, ignore
 foreground), blur (pattern, distance, quality, distance scaling, smoothness, centre importance,
 depth ramp), pixelation (size, distance scaling, gap), colour (tint, multiplicative and additive
 brightness, hue shift, vibrance, saturation), the colour ramp (presets, custom texture,
@@ -732,7 +747,7 @@ fades and depth blur; the constellation is left out, as the variant does.
 length, distance range, Phong, cull margin). Geometric Dissolve, ShatterWave and the Particle
 variants are reported, one line each (ShatterWave only while on); Geom adds no settings.
 
-**Lava lamp:** Pro Grab Pass's lava lamp as a pattern layer placed *overlay* after
+**Lava lamp:** Pro Grab Pass's lava lamp as a pattern layer placed *surface* right after
 the grab effects (its own toggle; the alpha and mask): the raymarching data (SDF volume, pixel
 size, lower corner, size, minimum thickness, bind data mode, world rescale), refraction, the
 blobs (scale, padding, steps, shape, smoothing, spacing, skip chance, sizes, speeds, flow
@@ -753,8 +768,10 @@ with a note. Parallax curvature and the world AO blocker (a world feature) are r
 
 ## Parser
 
-`AtlasPoiyomiParser` (split over `AtlasPoiyomi*.cs` by inspector section), `AtlasPoiyomiToon10Parser`
-for Toon 10. Section toggles are read from their properties, which Thry's locking keeps.
+`AtlasPoiyomiParser` with one parser class per version (`AtlasPoiyomiToon10Parser` for Toon 10),
+each reading through `AtlasPoiyomiReader`, which is split over `AtlasPoiyomi*.cs` by inspector
+section and made anew for each parse. Section toggles are read from their properties, which
+Thry's locking keeps.
 
 **Textures, main colour, alpha, normals and rendering:**
 - **Textures:** the UV choice (UV0–3, panosphere, world and local position, polar, matcap,
@@ -1064,7 +1081,7 @@ emission, depths, chrono pan, chrono hue and both colour overrides (the spatial 
 reported). Depth FX: colour and emission (blend, texture, the depth gradient UV, ranges), alpha
 (ranges), mask and global mask. AL Volume Color: UV and direction, the three colours (squared,
 as Poiyomi multiplies each by its theme colour), emissions, blend and alpha. The stats overlay
-is reported.
+is out of scope: one *ignored* line.
 
 **Video Effects** and AL Spectrum as pattern layers (catalogue 4.6). Video effects:
 the screen type, brightness, emission, pixel texture with its UV and the resolution, pixelate,
@@ -1097,9 +1114,8 @@ mode, the fur mask with its four strengths, the direction map and its scale, the
 length, the length and alpha mask channels, vertex colour direction, gravity, randomize, noise,
 AO, layer count, root width, width, the wind, the rim light, and the LilFur Rendering settings
 (cull, depth test and write, depth clip, offsets, colour mask, alpha to mask, stencil). The
-blend factors follow the fur mode; separate front- and back-face stencils are reported. With
-this part the parser no longer reports unmapped sections: every Poiyomi 10 section is mapped
-or reports its own unmapped details.
+blend factors follow the fur mode; separate front- and back-face stencils are reported. Every
+Poiyomi 10 section is mapped or reports its own unmapped details.
 
 ## Older versions
 
@@ -1144,7 +1160,8 @@ name table, same meanings: `_MainTextureUV`, `_ForceOpaque`, `_DitheringEnabled`
 `_ParallaxStrength`, `_ParallaxInternalMapEnabled`, and the distance fade's `_MainDistanceFade*`,
 `_MainMinAlpha`, `_MainMaxAlpha` and `_MainFadeType`. Meaning changes: UV index 4 is the
 distorted UV (7 since 8); the lighting types are Toon (by `_LightingRampType`: texture ramp,
-math gradient as multilayer math, shade mapping), Realistic, Wrapped, Skin and Flat; the height
+math gradient as multilayer math, shade mapping), Realistic, Wrapped, Skin and Flat; vertex
+colouring has no toggle (its slider is always live); the height
 map has its own toggle and reads green; the distance fade has no toggle and applies unless its
 settings leave the alpha as is; the hue shift toggle switches the whole Color Adjust section
 (8 gave the section its own toggle). Noted: the lighting (ramp mask, HSL shadows, shadow mix, colour
@@ -1154,7 +1171,8 @@ ramp mask maps, basic emission, the fade mask and emission AudioLink.
 
 ## Out of scope
 
-- **Poiyomi Toon World:** a world variant.
+- **World-only features** of the world variants (lightmaps and the like); the variants themselves
+  are read as their avatar shaders.
 - **Beatsaber support:** a third-party game, not VRChat.
 - **Raymarching:** an empty category in this version.
 - **Debug** views, the shader UI warnings, and the optimiser's own properties.
@@ -1163,7 +1181,7 @@ ramp mask maps, basic emission, the fade mask and emission AudioLink.
 
 ## Cross-shader notes
 
-What Poiyomi adds to, or confirms in, the earlier drafts:
+What Poiyomi adds to, or confirms in, the other inventories:
 - **Lighting families** settle at four: *unlit*, *flat*, *ramp toon*, *physically based*.
   - Ramp toon has a shading-term source (N·L, received shadows, SDF), a ramp, and shade
     colours from constants, the base colour or textures.

@@ -23,7 +23,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         UV0, UV1, UV2, UV3, ObjectPosition, WorldPosition, Panosphere, Polar,
         // View-space normal, as matcaps use.
         View,
-        Screen, Triplanar,
+        Screen,
         // u = v = 0.5 + 0.5 × abs(N·V) (the view from between the eyes): rings from the centre
         // of the view outward; Linear: the angle instead, 0.5 + 0.5 × (1 − angle / 90°).
         FacingGradient, FacingGradientLinear
@@ -34,7 +34,6 @@ namespace NordicWind.AdvancedAtlaser.Editor
         Default,
         // Hides visible tiling.
         Stochastic,
-        Supersampled,
         // Sharp texels with anti-aliased edges, for pixel art.
         Pixel
     }

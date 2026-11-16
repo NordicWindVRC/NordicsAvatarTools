@@ -39,7 +39,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         {
             var parser = AtlasShaderRegistry.Detect(material);
             Assert.IsInstanceOf<AtlasMochieUberParser>(parser);
-            return parser.Parse(material);
+            return AtlasTestMaterials.Checked(parser.Parse(material));
         }
 
         [Test]
@@ -68,6 +68,10 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(1f, d.Surface.Response.OcclusionDirect);
             Assert.AreEqual(0f, d.Surface.Response.OcclusionIndirect);
             Assert.IsTrue(d.Lighting.LightVolumes.Enabled);
+            // Baked lighting: without a real-time light, 0.6 of the probes as the main light and 0.5 as ambient.
+            Assert.AreEqual(0.6f, d.Lighting.Contributions.AmbientAsMainLight, 1e-6f);
+            Assert.AreEqual(0.5f, d.Lighting.Contributions.AmbientWithoutMainLight, 1e-6f);
+            Assert.IsTrue(d.Lighting.AdditionalLights.LimitBrightness, "Clamp Additive defaults to on.");
             Assert.IsEmpty(d.Layers);
             Assert.IsFalse(d.Issues.Exists(i => i.IsWarning));
         }

@@ -7,30 +7,25 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public enum AtlasPoiyomiVariant
     {
         None = 0,
-        Unknown = 1,
         Toon = 2,
         Pro = 3,
     }
 
-    // Hierarchical detection:
-    // 1) detect Poiyomi family,
-    // 2) refine to shader variant,
-    // 3) then detect the major version.
-    // Uses Poiyomi's shader_master_label first because it survives locked shaders.
+    // Detects the Poiyomi family, then Toon or Pro, then the major version. With the shader
+    // installed it goes by the shader's name (a locked shader's name holds the original), its
+    // master label and its path; without it, by the property names the material saved.
     public static class AtlasPoiyomiVersionDetector
     {
-        private static readonly Regex VersionRegex = new Regex(
-            @"(?<!\d)(7(?:\.\d+)?|8(?:\.\d+)?|9(?:\.\d+)?|1[01](?:\.\d+)?)(?!\d)",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        // "Poiyomi 10.0.29", "Poiyomi Toon V7.3.050".
+        private static readonly Regex LabelVersion = new Regex(@"Poiyomi\D*(\d+)\.\d", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        // A version folder in a shader name ("Old Versions/8.1/", "Poiyomi 7.3/") or in the shaders'
+        // asset path ("/Shaders/9.3/").
+        private static readonly Regex NameVersion = new Regex(@"(?:^|[/ ])(\d+)\.\d+(?=/)", RegexOptions.CultureInvariant);
+        private static readonly Regex PathVersion = new Regex(@"/Shaders/(\d+)\.\d+/", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        private static readonly Regex ProWord = new Regex(@"\bPro\b", RegexOptions.CultureInvariant);
+        private static readonly Regex WorldWord = new Regex(@"\bWorld\b", RegexOptions.CultureInvariant);
 
-        public static bool IsPoiyomi(Material material)
-        {
-            var saved = AtlasMaterialReader.Saved(material);
-            if (saved != null) return IsPoiyomiFromProperties(saved.Has);
-            string name = AtlasMaterialReader.ShaderName(material);
-            if (name.Length == 0) return false;
-            return IsPoiyomiFromMetadata(name, AtlasMaterialReader.ShaderPath(material));
-        }
+        public static bool IsPoiyomi(Material material) => DetectVariant(material) != AtlasPoiyomiVariant.None;
 
         public static AtlasPoiyomiVariant DetectVariant(Material material)
         {
@@ -41,6 +36,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return DetectVariantFromMetadata(name, AtlasMaterialReader.ShaderPath(material));
         }
 
+        // The major version; 0 when it's Poiyomi but the version can't be told.
         public static int Detect(Material material)
         {
             var saved = AtlasMaterialReader.Saved(material);
@@ -50,6 +46,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return DetectFromMetadata(name, AtlasMaterialReader.ShaderPath(material),
                 AtlasMaterialReader.PropertyLabel(material, "shader_master_label"));
         }
+
+        // A world variant (Toon World, Pro World, Pro World Fur). Without the shader it's known
+        // only when the material carries the name it was locked with.
+        public static bool IsWorld(Material material) => IsWorldName(AtlasMaterialReader.OriginalShaderName(material));
+
+        public static bool IsWorldName(string name) => WorldWord.IsMatch(LastSegment(AtlasMaterialReader.UnlockedName(name)));
 
         // ---- Without the shader: from the properties a material saved -------------------------
         // Markers were chosen from the released shaders: each version's markers first appear in
@@ -70,12 +72,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             foreach (var marker in FamilyMarkers) if (!has(marker)) return false;
             return true;
         }
+
         public static AtlasPoiyomiVariant DetectVariantFromProperties(Func<string, bool> has)
         {
             if (!IsPoiyomiFromProperties(has)) return AtlasPoiyomiVariant.None;
             foreach (var marker in ProMarkers) if (has(marker)) return AtlasPoiyomiVariant.Pro;
             return AtlasPoiyomiVariant.Toon;
         }
+
         // 7 when it's Poiyomi but no newer marker is present.
         public static int DetectFromProperties(Func<string, bool> has)
         {
@@ -86,68 +90,60 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return 7;
         }
 
+        // ---- With the shader: from its name, path and master label ----------------------------
+        // Poiyomi's shaders are named ".poiyomi/…"; other names count when the asset sits in a
+        // Poiyomi folder. The Extras (stencil and scanner helpers, the fake shadow) aren't materials
+        // this parser reads.
         public static bool IsPoiyomiFromMetadata(string name, string path)
         {
-            string combined = ((name ?? string.Empty) + "\n" + (path ?? string.Empty))
-                .Replace('\\', '/')
-                .ToLowerInvariant();
-            return combined.Contains("poiyomi") || combined.Contains(".poiyomi/");
+            name = AtlasMaterialReader.UnlockedName(name);
+            if (name.IndexOf("/Extras/", StringComparison.OrdinalIgnoreCase) >= 0) return false;
+            return IsPoiyomiName(name) || (path ?? "").Replace('\\', '/').IndexOf("poiyomi", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
+        // Pro when the shader's own name says so; every other Poiyomi shader is Toon, whatever its
+        // name: 8.0's "Poiyomi Outline" and 8.1's "Poiyomi Grab Pass" don't say Toon. The path
+        // decides only for shaders not named ".poiyomi/…": 7.3 lives in a folder called Pro.
         public static AtlasPoiyomiVariant DetectVariantFromMetadata(string name, string path)
         {
             if (!IsPoiyomiFromMetadata(name, path)) return AtlasPoiyomiVariant.None;
-            string combined = ((name ?? string.Empty) + "\n" + (path ?? string.Empty))
-                .Replace('\\', '/')
-                .ToLowerInvariant();
-            if (combined.Contains("toon")) return AtlasPoiyomiVariant.Toon;
-            if (combined.Contains("pro")) return AtlasPoiyomiVariant.Pro;
-            return AtlasPoiyomiVariant.Unknown;
+            name = AtlasMaterialReader.UnlockedName(name);
+            if (ProWord.IsMatch(LastSegment(name))) return AtlasPoiyomiVariant.Pro;
+            bool proFolder = (path ?? "").Replace('\\', '/').IndexOf("/Pro/", StringComparison.OrdinalIgnoreCase) >= 0;
+            return !IsPoiyomiName(name) && proFolder ? AtlasPoiyomiVariant.Pro : AtlasPoiyomiVariant.Toon;
         }
 
-        // Public for deterministic tests against actual shader names from released sources.
-        // Poiyomi 11 keeps 10's shader names, so the master label decides between them.
+        // The master label carries the version in every release and survives locking; the name
+        // and the path carry it for the versions kept under a version folder. 7.x used
+        // bullet-delimited shader names. 0: Poiyomi, but the version can't be told.
         public static int DetectFromMetadata(string name, string path, string shaderMasterLabel)
         {
-            var variant = DetectVariantFromMetadata(name, path);
-            if (variant != AtlasPoiyomiVariant.Toon && variant != AtlasPoiyomiVariant.Pro)
-                return 0;
-
-            int major = ExtractMajorVersion(shaderMasterLabel);
-            if (major == 0) major = ExtractMajorVersion(name);
-            if (major == 0) major = ExtractMajorVersion(path);
-            if (major != 0) return major;
-
-            // 7.x used bullet-delimited shader names.
-            if (!string.IsNullOrEmpty(name) && name.IndexOf('•') >= 0) return 7;
-
-            // When the family and variant are known but the exact version is not,
-            // prefer the generic Poiyomi Toon parser instead of guessing 9 or 10.
-            return 0;
-        }
-
-        // Compatibility overload for older tests/callers.
-        public static int DetectFromMetadata(string name, string path, bool hasSecondNormal)
-        {
-            return DetectFromMetadata(name, path, null);
+            if (DetectVariantFromMetadata(name, path) == AtlasPoiyomiVariant.None) return 0;
+            name = AtlasMaterialReader.UnlockedName(name);
+            int major = Major(LabelVersion, shaderMasterLabel);
+            if (major == 0) major = Major(NameVersion, name);
+            if (major == 0) major = Major(PathVersion, (path ?? "").Replace('\\', '/'));
+            if (major == 0 && name.IndexOf('•') >= 0) major = 7;
+            return major;
         }
 
         // For output shaders found by name.
         public static string GetShaderMasterLabel(Shader shader) => AtlasMaterialReader.PropertyLabel(shader, "shader_master_label");
 
-        private static int ExtractMajorVersion(string text)
+        private static bool IsPoiyomiName(string name) => name.StartsWith(".poiyomi/", StringComparison.OrdinalIgnoreCase);
+
+        private static string LastSegment(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "";
+            int slash = name.LastIndexOf('/');
+            return slash < 0 ? name : name.Substring(slash + 1);
+        }
+
+        private static int Major(Regex pattern, string text)
         {
             if (string.IsNullOrEmpty(text)) return 0;
-            var matches = VersionRegex.Matches(text.Replace('\\', '/'));
-            foreach (Match match in matches)
-            {
-                if (!match.Success) continue;
-                string token = match.Groups[1].Value;
-                int major;
-                if (int.TryParse(token.Split('.')[0], out major) && major >= 7 && major <= 11)
-                    return major;
-            }
-            return 0;
+            var match = pattern.Match(text);
+            return match.Success && int.TryParse(match.Groups[1].Value, out int major) ? major : 0;
         }
     }
 }

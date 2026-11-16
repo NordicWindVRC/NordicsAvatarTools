@@ -5,22 +5,23 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // Poiyomi: the Grab Pass and Self Grab variants' screen effects (catalogue 4.7): refraction,
     // blur, pixelation, colour, colour ramp and the blend onto the surface, each with a channel of
     // the blend map and a global mask; Pro's lava lamp after it.
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
-        private static void GrabPass(Material m, AtlasUnifiedMaterial d)
+        private void GrabPass(Material m, AtlasUnifiedMaterial d)
         {
             ScreenGrab(m, d);
             LavaLamp(m, d);
         }
 
-        // After the lighting: the grabbed screen isn't lit (Poiyomi divides it by the lighting).
-        private static void ScreenGrab(Material m, AtlasUnifiedMaterial d)
+        // Blended into the base colour where Poiyomi does it, after the dissolve and before the
+        // decals, and exempt from the lighting (Poiyomi divides the screen by it).
+        private void ScreenGrab(Material m, AtlasUnifiedMaterial d)
         {
-            if (!AtlasMaterialReader.Has(m, "_EnableGrabpass") || !On(m, "_EnableGrabpass", 1f)) return;
+            if (!IsVariant(m, d, "_EnableGrabpass", "Grab Pass", "Self Grab") || !On(m, "_EnableGrabpass", 1f)) return;
             var map = Texture(m, d, "_GrabPassBlendMap", AtlasTextureInterpretation.Data);
             var layer = new AtlasRefractionLayer
             {
-                Placement = AtlasPlacement.Overlay,
+                Placement = AtlasPlacement.Surface,
                 IOR = Float(m, "_RefractionIndex", 1.333333f), FieldOfViewScale = true,
                 FresnelPower = Float(m, "_RefractionFresnelPower", 0f),
                 IgnoreForeground = On(m, "_RefractionIgnoreForeground"),
@@ -28,7 +29,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 SourceBlend = (AtlasBlendFactor)Mathf.Clamp(Int(m, "_GrabSrcBlend", 5), 0, 10),
                 DestinationBlend = (AtlasBlendFactor)Mathf.Clamp(Int(m, "_GrabDstBlend", 10), 0, 10),
                 // Self Grab's extra pass blends with what the first pass drew, whatever its alpha.
-                SelfGrab = AtlasMaterialReader.Has(m, "_ModeTwoPass"),
+                SelfGrab = IsVariant(m, d, "_ModeTwoPass", "Self Grab"),
                 Tint = LinearColor(m, "_GrabpassColor", Color.white),
                 Brightness = Float(m, "_GrabPassBrightness", 1f), AddBrightness = Float(m, "_GrabPassAddBrightness", 0f),
                 Vibrance = Float(m, "_GrabVibrance", 0f), Saturation = Float(m, "_GrabSaturation", 1f)
@@ -101,7 +102,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Pro Grab Pass's lava lamp, unlit like the grab, where the surface is see-through.
-        private static void LavaLamp(Material m, AtlasUnifiedMaterial d)
+        private void LavaLamp(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_InternalWaterEnable")) return;
             var lamp = new AtlasLavaLamp
@@ -150,7 +151,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (AudioLinkOn(m) && On(m, "_LavaAudioLinkEnable")) lamp.AudioBand = Mathf.Clamp(Int(m, "_LavaAudioLinkBand", 0), 0, 4);
             d.Layers.Add(new AtlasPatternLayer
             {
-                Kind = AtlasPatternKind.LavaLamp, LavaLamp = lamp, Placement = AtlasPlacement.Overlay,
+                Kind = AtlasPatternKind.LavaLamp, LavaLamp = lamp, Placement = AtlasPlacement.Surface,
                 Blend = AtlasBlend.Replace, Opacity = Float(m, "_LavaLampAlpha", 1f), Mask = Mask(m, d, "_LavaLampMask")
             });
         }
@@ -158,7 +159,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // One effect's mask: a blend map channel (<prefix>MaskChannel, 4 off) with the map's options
         // and the effect's invert, then its global mask. Off when it's 0 everywhere (an inverted
         // channel without a map).
-        private static AtlasMask GrabMask(Material m, AtlasUnifiedMaterial d, AtlasTextureReference map, string prefix, int fallback, out bool off)
+        private AtlasMask GrabMask(Material m, AtlasUnifiedMaterial d, AtlasTextureReference map, string prefix, int fallback, out bool off)
         {
             off = false;
             int c = Int(m, prefix + "MaskChannel", fallback);

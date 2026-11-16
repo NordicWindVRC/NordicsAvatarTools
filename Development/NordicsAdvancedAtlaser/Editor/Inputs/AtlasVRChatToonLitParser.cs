@@ -20,10 +20,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // Always opaque, back faces culled (the render defaults); the texture's alpha is unused.
             d.Surface.Alpha.Source = AtlasAlphaSource.None;
 
-            // The same light everywhere: main light × shadow + the ambient average. No other
-            // per-pixel or per-vertex lights; lights Unity folds into the ambient still count.
+            // The same light everywhere: main light + the ambient average. The shader skips every
+            // shadow variant, so it receives no shadows. No other per-pixel or per-vertex lights;
+            // lights Unity folds into the ambient still count. Without a real-time main light, 20%
+            // of the ambient colour stands in for it.
             d.Lighting.Family = AtlasLightingFamily.Flat;
             d.Lighting.Ambient = AtlasAmbientModel.Average;
+            d.Lighting.ReceiveShadows = 0f;
+            d.Lighting.Contributions.AmbientAsMainLight = 0.2f;
             d.Lighting.Contributions.AdditionalLights = 0f;
             d.Lighting.Contributions.VertexLights = 0f;
         }

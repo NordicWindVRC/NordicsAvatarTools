@@ -8,6 +8,29 @@ namespace NordicWind.AdvancedAtlaser.Tests
     // declare go straight into its saved data.
     public sealed class AtlasFallbackTests
     {
+        // Thry's optimizer renames a property a material marks as renamed when locked (tag
+        // <name>Animated = 2) to <name>_<suffix>, the suffix made from the material's name.
+        [Test]
+        public void RenamedLockedPropertyIsReadUnderItsNewName()
+        {
+            var shader = UnityEditor.ShaderUtil.CreateShaderAsset(
+                "Shader \"Hidden/NordicWind/Tests/RenamedProperty\" { Properties { _MainTex (\"t\", 2D) = \"white\" {} "
+                + "_Cutoff_BodyMat2D1 (\"c\", Float) = 0.5 } SubShader { Pass { } } }", false);
+            var renamed = new Material(shader) { name = "Body Mat-1" };
+            try
+            {
+                renamed.SetFloat("_Cutoff_BodyMat2D1", 0.3f);
+                Assert.AreEqual(0.5f, new AtlasFallbackParser().Parse(renamed).Render.Cutoff, 1e-6f, "Not marked as renamed.");
+                renamed.SetOverrideTag("_CutoffAnimated", "2");
+                Assert.AreEqual(0.3f, new AtlasFallbackParser().Parse(renamed).Render.Cutoff, 1e-6f);
+            }
+            finally
+            {
+                Object.DestroyImmediate(renamed);
+                Object.DestroyImmediate(shader);
+            }
+        }
+
         private Material material;
         private Texture2D texture;
 

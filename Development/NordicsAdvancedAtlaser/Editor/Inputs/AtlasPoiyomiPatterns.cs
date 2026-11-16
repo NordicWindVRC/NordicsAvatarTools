@@ -6,27 +6,27 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // Poiyomi: the procedural patterns (catalogue 4.6): Glitter / Sparkle, Pathing, Internal Parallax,
     // Voronoi, Truchet, Depth FX, AL Volume Color, Video Effects, AL Spectrum; the stats overlay is
     // reported.
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
         // Before the mirror texture, as Poiyomi applies them.
-        private static void Patterns(Material m, AtlasUnifiedMaterial d)
+        private void Patterns(Material m, AtlasUnifiedMaterial d)
         {
             Glitter(m, d);
             Pathing(m, d);
         }
 
         // After the mirror texture.
-        private static void CellPatterns(Material m, AtlasUnifiedMaterial d)
+        private void CellPatterns(Material m, AtlasUnifiedMaterial d)
         {
             InternalParallax(m, d);
             Voronoi(m, d);
             Truchet(m, d);
             Constellation(m, d);
             if (On(m, "_TextEnabled"))
-                d.Report(AtlasIssueKind.Unmapped, "poiyomi.stats-overlay", "Poiyomi's stats overlay (text) isn't mapped.");
+                d.Report(AtlasIssueKind.Ignored, "poiyomi.stats-overlay", "Poiyomi's stats overlay (text) is out of scope and ignored.");
         }
 
-        private static void InternalParallax(Material m, AtlasUnifiedMaterial d)
+        private void InternalParallax(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_PoiInternalParallax")) return;
             var map = Texture(m, d, "_ParallaxInternalMap");
@@ -106,7 +106,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Depth FX: colour, emission and alpha by the distance to the scene behind.
-        private static void DepthEffect(Material m, AtlasUnifiedMaterial d)
+        private void DepthEffect(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_EnableTouchGlow")) return;
             var depth = new AtlasDepthEffect
@@ -144,7 +144,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // AL Volume Color: a three-colour gradient by AudioLink's spectrum along a UV axis.
-        private static void AudioVolumeColor(Material m, AtlasUnifiedMaterial d)
+        private void AudioVolumeColor(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_EnableVolumeColor")) return;
             // Without AudioLink nothing shows.
@@ -170,7 +170,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Video Effects: the base colour shown as a screen, right after the main colour.
-        private static void VideoScreen(Material m, AtlasUnifiedMaterial d)
+        private void VideoScreen(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_VideoEffectsEnable")) return;
             var resolution = (Vector2)AtlasMaterialReader.Vector(m, "_VideoResolution", new Vector4(1280f, 720f, 0f, 0f));
@@ -206,7 +206,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // AL Spectrum: AudioLink's spectrum drawn in a placed area.
-        private static void AudioSpectrum(Material m, AtlasUnifiedMaterial d)
+        private void AudioSpectrum(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_EnableALDecal")) return;
             // Without AudioLink nothing shows.
@@ -294,7 +294,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Poiyomi multiplies the colour by its theme colour, which is the colour itself without a theme.
-        private static Color VolumeColor(Material m, AtlasUnifiedMaterial d, string property)
+        private Color VolumeColor(Material m, AtlasUnifiedMaterial d, string property)
         {
             var color = LinearColor(m, property, Color.white) * TintColor(m, d, property, property + "ThemeIndex");
             return new Color(color.r, color.g, color.b, 1f);
@@ -302,7 +302,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         private static readonly string[] PathChannels = { "R", "G", "B", "A" };
 
-        private static void Pathing(Material m, AtlasUnifiedMaterial d)
+        private void Pathing(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_EnablePathing")) return;
             var path = new AtlasPath
@@ -373,7 +373,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // Time and width offsets, chronotensity and emission per channel; the history, the
         // autocorrelator and the ColorChord strip are reported.
-        private static void PathingAudioLink(Material m, AtlasUnifiedMaterial d, string prefix)
+        private void PathingAudioLink(Material m, AtlasUnifiedMaterial d, string prefix)
         {
             if (!AudioLinkOn(m)) return;
             bool history = false, correlator = false, strip = false;
@@ -402,7 +402,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (strip) d.Report(AtlasIssueKind.Unmapped, "audiolink.colorchord-strip", "A path coloured by the ColorChord strip isn't mapped yet.");
         }
 
-        private static void Voronoi(Material m, AtlasUnifiedMaterial d)
+        private void Voronoi(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_VoronoiEnabled")) return;
             var speed = AtlasMaterialReader.Vector(m, "_VoronoiSpeed", Vector4.one);
@@ -467,7 +467,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             AudioColorOverride(m, d, path + "innerColor", "_AudioLinkVoronoiInnerColorOverride");
         }
 
-        private static void Truchet(Material m, AtlasUnifiedMaterial d)
+        private void Truchet(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_EnableTruchet")) return;
             var panOffset = AtlasMaterialReader.Vector(m, "_TruchetPanOffset", Vector4.zero);
@@ -524,9 +524,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Poiyomi's UV choice as a texture space, for patterns that sample no texture of their own.
-        private static AtlasTextureSpace UVSpace(Material m, AtlasUnifiedMaterial d, string property)
+        private AtlasTextureSpace UVSpace(Material m, AtlasUnifiedMaterial d, string property, int fallback = 0)
         {
-            int uv = Int(m, property, 0);
+            int uv = Int(m, property, fallback);
             if (major <= 7 && uv == 4) uv = 7;
             switch (uv)
             {
@@ -543,7 +543,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
         }
 
-        private static void Glitter(Material m, AtlasUnifiedMaterial d)
+        private void Glitter(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_GlitterEnable")) return;
             int mode = Mathf.Clamp(Int(m, "_GlitterMode", 0), 0, 2);

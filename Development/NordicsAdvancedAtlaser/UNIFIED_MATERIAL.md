@@ -45,12 +45,26 @@ below.
     such as option names from the shader's declaration or a variant that differs only by
     name.
   - Anything lost without the shader is reported, never guessed.
+  - **Variants that differ only by a pass** (Poiyomi's Two Pass, Grab Pass, the furs and so on)
+    are told by a property only the variant declares. With the shader installed that settles
+    it. Without it, a saved property may be left over from a variant the material used before:
+    the shader name Thry's optimizer tagged the material with when it was locked decides, and
+    without that name the variant is assumed and reported. Mochie Uber and Uber (Outline)
+    declare the same properties, so without the shader the outline isn't read, with a note.
+  - **Locked Poiyomi materials** are read through their locked shader. Thry's optimizer renames
+    the properties a material marks as *renamed when locked* to `<name>_<suffix>`;
+    `AtlasMaterialReader` reads those under their new names.
   - **Typed features never depend on the shader.** Everything that decides the look is read
     from plain values, and each parser holds its own option tables as features get typed.
     The installed shader only adds detail to untyped values, reports and edge cases.
   - **Detection without the shader** uses the property names a material saved: Poiyomi by
     family, Pro and version marker properties; Mochie Uber by its own combination of controls.
     VRChat Mobile and Unity Standard shaders are always present.
+  - **Detection with the shader** goes by its name. For Poiyomi: a locked shader's name holds
+    the original; a name with the word *Pro* is Pro and every other Poiyomi shader is Toon
+    (8.0's *Poiyomi Outline* and 8.1's *Poiyomi Grab Pass* don't say Toon); the master label
+    gives the version. A version newer than the newest parser, or none at all, is read by the
+    newest parser and reported.
   - **Option names** that come from the shader's own declaration can't be read without it.
     Parsers hold their own option tables instead, so typed features never need them.
   - A material parsed this way gets an info note saying so.
@@ -72,8 +86,8 @@ below.
 - **Mapped by meaning, not copied 1:1.** A value is copied directly only when it means the same
   in the source and the unified material; otherwise the parser translates it.
 - **Layers are one ordered list** of a few layer types (surface, transition, lookup, angle,
-  subsurface, procedural pattern, refraction). A shader brand never justifies another list or
-  class.
+  subsurface, procedural pattern, refraction, highlight). A shader brand never justifies
+  another list or class.
 
 ### Coverage and fidelity
 
@@ -152,13 +166,18 @@ parser first needs it.
 - **Neutral enums** with the catalogue's names. No string-keyed values and no dictionaries of
   parameters; the only strings are modulator paths and report text.
 - **One parser per shader family,** reading top to bottom in the order of the shader's
-  inspector. The Poiyomi parser is split into one file per inspector section.
+  inspector. Poiyomi's reading is in `AtlasPoiyomiReader`, split into one file per inspector
+  section (`AtlasPoiyomi*.cs`); a reader is made for each parse and holds the state the sections
+  share (the version being read, the shared UV distortion), so the parsers keep no state.
 - **Option tables** (source enum value → unified choice) are small static arrays or switches
   next to where they're used. Typed features never ask the shader.
 - **Shared helpers only for real repetition,** such as a texture reference from a texture
   property with its tiling and UV choice.
 - **Units are converted once, in the parser:** colours to linear, hue to turns, smoothness to
   roughness.
+
+**Modulator paths** are checked by `AtlasModulatorPath.Resolve`, which finds the value a path
+points at; parser tests run every modulator through it.
 
 **Reading:** parsers read only through `AtlasMaterialReader` (shader or saved values) and the
 small helpers in `AtlasSourceMapping`. Colours are converted to linear with
@@ -167,7 +186,7 @@ small helpers in `AtlasSourceMapping`. Colours are converted to linear with
 **Reporting:** `AtlasUnifiedMaterial.Report` adds at most one line per kind and feature:
 - *unmapped:* affects the look but has no typed home;
 - *unsupported:* can't be read, such as Uber X;
-- *ignored:* deliberately not mapped, such as world-only features;
+- *ignored:* deliberately not mapped, such as a world variant's world-only features;
 - *note:* how the material was read, such as with its shader missing.
 
 Unmapped and unsupported lines are build warnings; the others are information.
@@ -179,13 +198,13 @@ parser. Each inventory document describes its parser in detail.
 
 | Input parser | What it reads | Reported or out of scope |
 |---|---|---|
-| VRChat Mobile Toon Lit | Base colour texture × vertex colour, flat lighting, opaque | — |
+| VRChat Mobile Toon Lit | Base colour texture × vertex colour, flat lighting without received shadows, the ambient colour standing in for a missing main light, opaque | — |
 | Unity Standard (metallic and specular) | Rendering modes, albedo, metallic or specular, smoothness, normal, parallax, occlusion, emission, detail, highlights and reflections, physically based lighting | — |
 | VRChat Mobile Standard Lite | Base colour × vertex colour, metallic and smoothness map times sliders, normal, occlusion, emission, detail, highlights, reflections, specular anti-aliasing, physically based lighting without shadows | — |
 | VRChat Mobile Toon Standard (and Outline) | Every section by its keyword: ramp toon lighting, specular, matcap, emission, detail, occlusion, rim, hue shift, colour mask, outline, AudioLink | AudioLink's rim mask and UV-based mode |
 | Mochie Uber (and Outline) | Render and alpha, base colour and cube mode, shading off as flat, workflows and map filters, detail, masks, ramp or physically based lighting, reflections, highlights, matcaps, rims, subsurface, refraction, iridescence, emission with pulse and light reactivity, filtering, dissolve, flipbooks, UV distortion, vertex manipulation, outline, hard edges, clear coat, static light direction, light volumes, mirror and near clip, AudioLink, the oscilloscope, stencil | Flipbook alpha, AudioLink rim pulse, AudioLink on vertex rotation and UV distortion; Uber X is unsupported |
 | Poiyomi Toon 10 and 11 (and their avatar variants) | Every section: textures and UV options, main colour and colour adjust, alpha, normals, rendering, all lighting types and Light Data, reflections and specular, clear coat, LTCGI, surface layers (detail, back face, colour masking, decals, emissions, skin tone), matcaps and cubemap, rims and the other angle layers, anisotropics and stylized reflections, post processing, the mask bus and contacts, theme colours, modulators (time, light, AudioLink), outlines, dissolve, flipbooks, visibility, UV tile discard, the procedural patterns, vertex options, fur; the Two Pass, Grab Pass and Lil Fur variants | A few details, each reported (for example hextile sampling, the newer UV distortion modes, lilToon-style stylized reflections); the stats overlay is out of scope |
-| Poiyomi Pro 10 and 11 (and their variants) | Everything Poiyomi Toon reads, plus SSAO, contact shadows, TPS, squish, constellation, the lava lamp, GT7 tone mapping and neutral emission, the outline bake, shell fur, Triple Outline, Self Grab, Triplanar Projection and tessellation | Geometric Dissolve, ShatterWave and the particle variants |
+| Poiyomi Pro 10 and 11 (and their variants) | Everything Poiyomi Toon reads, plus SSAO, contact shadows, TPS, squish, constellation, the lava lamp, GT7 tone mapping and neutral emission, the outline bake, shell fur, Triple Outline, Self Grab, Triplanar Projection and tessellation | Geometric Dissolve, ShatterWave and the particle variants; the world variants are read as their avatar shaders, with one ignored line |
 | Poiyomi Toon 7.3, 8.x and 9.x | Read on the Poiyomi 10 parser with version tables for renamed and re-meaning settings | Features Poiyomi 10 rewrote are read with 10's meaning and noted; 7.3's specular, metallics, BRDF, clear coat, SSS and panosphere sections are reported |
 | Fallback | Common property names with Unity's conventions: base colour, alpha mask, normal, metallic or specular colour, roughness or smoothness, occlusion, emission, culling, depth write and surface mode from blend factors | One warning per material says the result is a guess; a matcap is reported |
 

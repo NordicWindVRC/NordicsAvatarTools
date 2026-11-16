@@ -4,11 +4,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi 11: the Skin section, the add pass's blending, the time source, the emission and
     // final colour multipliers, Early Z and the world AO blocker.
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
         // After the detail texture: a skin colour from pigments, its masks the skin detail map's
         // channels (R: where it doesn't apply; G: freckles; B: tan).
-        private static void SkinTone(Material m, AtlasUnifiedMaterial d)
+        private void SkinTone(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_PoiSkinEnabled")) return;
             var map = AtlasSourceMapping.Texture(m, "_PoiSkinDetailMap", AtlasTextureInterpretation.Data);
@@ -51,7 +51,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // A skin detail map channel on its own UV and tiling, × its vertex colour source. With
         // neither map nor source it is 0 (null: the effect is off), or 1 when inverted.
-        private static AtlasMask SkinChannel(Material m, AtlasTextureReference map, int channel, string uv, string tiling)
+        private AtlasMask SkinChannel(Material m, AtlasTextureReference map, int channel, string uv, string tiling)
         {
             if (map != null)
             {
@@ -71,7 +71,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // The additional lights' pass: Max (Poiyomi's default) or add; other operations and factors
         // other than the preset's are reported.
-        private static void AddPass(Material m, AtlasUnifiedMaterial d)
+        private void AddPass(Material m, AtlasUnifiedMaterial d)
         {
             var additional = d.Lighting.AdditionalLights;
             int op = Int(m, "_AddBlendOp", AtlasMaterialReader.Has(m, "_AddBlendOp") ? 4 : 0);
@@ -93,7 +93,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Poiyomi 11's global odds and ends.
-        private static void Globals11(Material m, AtlasUnifiedMaterial d)
+        private void Globals11(Material m, AtlasUnifiedMaterial d)
         {
             // 11's default is network time; 10 has no setting (local).
             d.Clock = Int(m, "_PoiTimeSource", 0) == 1 ? AtlasClock.Network : AtlasClock.Local;

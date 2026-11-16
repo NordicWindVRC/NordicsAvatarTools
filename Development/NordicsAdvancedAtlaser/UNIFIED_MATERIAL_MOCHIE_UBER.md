@@ -80,7 +80,7 @@ Settings.
   the slider once a texture is set.
 - **Live or baked:** baked, apart from the parallax effect.
 - **Unified:** surface response scalars from any texture channel; specular colour; primary
-  normal; occlusion; parallax with a step count. All shapes seen in the earlier drafts.
+  normal; occlusion; parallax with a step count.
 
 ### Detail maps
 - **Controls:** UV set (0–2); detail base colour, metallic, roughness and occlusion, each with
@@ -391,8 +391,10 @@ Every section follows its keyword, as the shader does (the inspector sets them).
 - **Lighting:** physically based or ramp toon. *Manual Blend* becomes ramp keys (piecewise
   linear, with the shadow tint); *Ramp* the texture; shadow strength with the shadow mask; the
   painted detail shadow map as the term mask; received shadows from *Realtime Self-shadowing*.
-  Disney diffuse, light-probe strength as the ambient model, contributions, colour preservation
-  as limited brightness, light volumes.
+  Disney diffuse, light-probe strength as the ambient model, contributions (the real-time ones,
+  and the baked ones as the light without a main light: *ambient as main light* and the ambient
+  then), colour preservation as limited brightness, *Clamp Additive* as a limit of 1 on the
+  additional lights (Uber clamps each channel), light volumes.
 - **Reflections and highlights:** strength, tint, mask, fresnel, roughness override, probes,
   cubemap or fallback cubemap.
 - **Matcaps:** overlay lookup layers, alpha blend as source alpha, unlit or scaled by light,
@@ -467,5 +469,10 @@ rotation (Uber adds 90° per plane, so it isn't a factor) and on the shared UV d
 
 **Coverage:** every section is mapped, apart from the four details above.
 
-**Not represented:** the light with no real-time light (Uber's baked contributions), the
-non-linear probe evaluation, additive-light clamping, the diffuse mask.
+**Not represented:** the non-linear probe evaluation, shadow attenuation smoothing, the diffuse
+mask, the outline texture's alpha as the outline's alpha, the filter mask ignored on outlines,
+and flipbook frame clipping. Screen-space reflections are a
+world feature.
+
+**Without the shader:** Uber and Uber (Outline) declare the same properties, so the outline
+isn't read, with a note.

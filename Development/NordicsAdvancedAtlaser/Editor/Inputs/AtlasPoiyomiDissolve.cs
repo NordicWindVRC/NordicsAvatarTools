@@ -3,9 +3,9 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi: Dissolve, as a transition layer.
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
-        private static void Dissolve(Material m, AtlasUnifiedMaterial d)
+        private void Dissolve(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_EnableDissolve")) return;
             // The amount runs past both ends of the gradient by the padding, so 0 and 1 are fully in and out.

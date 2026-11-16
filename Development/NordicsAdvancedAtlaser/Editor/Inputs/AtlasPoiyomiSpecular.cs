@@ -3,10 +3,10 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi: Reflections & Specular (with its anisotropics and 2nd specular), Clear Coat, LTCGI.
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
         // Without Reflections & Specular, Poiyomi has no highlights or reflections (Cloth has its own).
-        private static void Specular(Material m, AtlasUnifiedMaterial d)
+        private void Specular(Material m, AtlasUnifiedMaterial d)
         {
             var response = d.Surface.Response;
             bool section = On(m, "_MochieBRDF");
@@ -32,7 +32,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // The Mochie BRDF: metallic, smoothness, reflection and specular masks from one packed map.
-        private static void SpecularSection(Material m, AtlasUnifiedMaterial d)
+        private void SpecularSection(Material m, AtlasUnifiedMaterial d)
         {
             var response = d.Surface.Response;
             var map = Texture(m, d, "_MochieMetallicMaps", AtlasTextureInterpretation.Data);
@@ -96,7 +96,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Pixel Normal Mix: 1 the normal map, 0 the mesh normal; in between isn't mapped.
-        private static void SpecularNormal(Material m, AtlasUnifiedMaterial d, float mix)
+        private void SpecularNormal(Material m, AtlasUnifiedMaterial d, float mix)
         {
             d.Surface.Response.SpecularFromMeshNormal = mix < 0.5f;
             if (mix > 0f && mix < 1f)
@@ -104,7 +104,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // A second reflective layer over the surface, dielectric.
-        private static void ClearCoat(Material m, AtlasUnifiedMaterial d)
+        private void ClearCoat(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_ClearCoatBRDF")) return;
             var coat = new AtlasClearCoat();
@@ -139,9 +139,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             highlights.Mask = BusMask(m, highlights.Mask, "_ClearCoatSpecularStrengthGlobalMask");
         }
 
-        private static void Ltcgi(Material m, AtlasUnifiedMaterial d)
+        private void Ltcgi(Material m, AtlasUnifiedMaterial d)
         {
-            if (!On(m, "_LTCGIEnabled")) return;
+            // An animation toggle left off is off.
+            if (!On(m, "_LTCGIEnabled") || !On(m, "_LTCGI_AnimToggle", 1f)) return;
             var ltcgi = d.Lighting.Ltcgi;
             ltcgi.Enabled = true;
             ltcgi.DiffuseTint = TintColor(m, d, "_LTCGI_DiffuseColor", "_LTCGI_DiffuseColorThemeIndex");
@@ -156,14 +157,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // A packed-map channel selector (R, G, B, A, White): the channel, or null for white.
-        private static AtlasChannel? PackedChannel(Material m, string property, int fallback)
+        private AtlasChannel? PackedChannel(Material m, string property, int fallback)
         {
             int channel = Int(m, property, fallback);
             return channel >= 0 && channel < 4 ? Channels[channel] : (AtlasChannel?)null;
         }
 
         // value = constant × channel, inverted after when asked: a scalar input exactly.
-        private static void Packed(AtlasScalarInput input, AtlasTextureReference map, AtlasChannel? channel, float constant, bool invertResult)
+        private void Packed(AtlasScalarInput input, AtlasTextureReference map, AtlasChannel? channel, float constant, bool invertResult)
         {
             input.Constant = constant;
             input.Map = channel.HasValue ? map : null;
@@ -173,7 +174,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // A strength × a packed channel, inverted after when asked, as a strength and a mask. With
         // a map, inverting is exact only at strength 1, and noted otherwise.
-        private static AtlasMask PackedStrength(AtlasUnifiedMaterial d, AtlasTextureReference map, AtlasChannel? channel,
+        private AtlasMask PackedStrength(AtlasUnifiedMaterial d, AtlasTextureReference map, AtlasChannel? channel,
             float strength, bool invert, out float resultStrength)
         {
             if (map == null || !channel.HasValue)
@@ -187,7 +188,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return new AtlasMask { Map = map, Channel = channel.Value, Invert = invert };
         }
 
-        private static void Fallback(Material m, AtlasReflections reflections, string cube, string force, string lit)
+        private void Fallback(Material m, AtlasReflections reflections, string cube, string force, string lit)
         {
             var map = AtlasSourceMapping.Texture(m, cube);
             reflections.CubemapLit = On(m, lit, 1f);

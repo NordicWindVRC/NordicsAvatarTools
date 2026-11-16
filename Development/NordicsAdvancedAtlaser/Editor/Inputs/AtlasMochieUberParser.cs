@@ -118,6 +118,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (Keyword(m, "_REFRACTION_ON")) Refraction(m, d);
             if (!shading && Keyword(m, "_FLIPBOOK_ON")) { Flipbook(m, d, ""); Flipbook(m, d, "1"); }
             if (Name(m) == "Mochie/Uber (Outline)") Outline(m, d);
+            // Uber and its Outline variant declare the same properties, so saved values can't tell them apart.
+            else if (AtlasMaterialReader.Saved(m) != null)
+                d.Report(AtlasIssueKind.Note, "shader.variant",
+                    "The shader isn't installed, so Uber (Outline) can't be told from Uber; read without an outline.");
             var volumes = d.Lighting.LightVolumes;
             volumes.Enabled = Float(m, "_LightVolumesToggle", 1f) > 0.5f;
             volumes.Strength = Float(m, "_LightVolumeStrength", 1f);
@@ -486,6 +490,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
             lighting.DirectionalAmount = probes > 0f ? probes : 1f;
             lighting.Contributions.MainLight = Float(m, "_RTDirectCont", 1f);
             lighting.Contributions.Ambient = Float(m, "_RTIndirectCont", 1f);
+            // Baked lighting: without a real-time light the probes stand in for it.
+            lighting.Contributions.AmbientAsMainLight = Float(m, "_DirectCont", 0.6f);
+            lighting.Contributions.AmbientWithoutMainLight = Float(m, "_IndirectCont", 0.5f);
+            // Clamp Additive saturates each additional light's colour: a limit of 1.
+            lighting.AdditionalLights.LimitBrightness = Int(m, "_ClampAdditive", 1) == 1;
             lighting.Contributions.VertexLights = Float(m, "_VLightCont", 1f);
             lighting.Contributions.AdditionalLights = Float(m, "_AddCont", 1f);
             lighting.LimitBrightness = Int(m, "_ColorPreservation", 1) == 1;

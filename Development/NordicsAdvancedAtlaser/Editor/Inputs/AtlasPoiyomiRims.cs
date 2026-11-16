@@ -4,9 +4,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi: Rim Lighting 0 and 1, in their three styles, as angle layers with the step profile.
     // A style's unlit-side rim (UTS2's antipodean, lilToon's indirect) is a second layer.
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
-        private static void Rims(Material m, AtlasUnifiedMaterial d)
+        private void Rims(Material m, AtlasUnifiedMaterial d)
         {
             for (int i = 0; i < 2; i++)
             {
@@ -33,7 +33,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private delegate string RimName(string rim0, string rim1);
 
         // rim = 1 − linstep(saturate(w − blur), w, facing^power), w = lerp(−0.05, 1, width).
-        private static void PoiyomiRim(Material m, AtlasUnifiedMaterial d, RimName n)
+        private void PoiyomiRim(Material m, AtlasUnifiedMaterial d, RimName n)
         {
             float width = Mathf.Lerp(-0.05f, 1f, Float(m, n("_RimWidth", "_Rim2Width"), 0.8f));
             var layer = new AtlasAngleLayer
@@ -92,7 +92,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // UTS2: rim = linstep(inside, 1, (1 − N·V)^(2^(3 − 3 × power))), added; a hard step with
         // feather off.
-        private static void Uts2Rim(Material m, AtlasUnifiedMaterial d, RimName n)
+        private void Uts2Rim(Material m, AtlasUnifiedMaterial d, RimName n)
         {
             float inside = Float(m, n("_RimLight_InsideMask", "_Rim2Light_InsideMask"), 0.0001f);
             var layer = new AtlasAngleLayer
@@ -146,7 +146,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // lilToon: rim = edge((1 − abs(N·V))^power, border, blur), blended after lighting.
-        private static void LilRim(Material m, AtlasUnifiedMaterial d, RimName n)
+        private void LilRim(Material m, AtlasUnifiedMaterial d, RimName n)
         {
             float border = Float(m, n("_RimBorder", "_Rim2Border"), 0.5f), blur = Float(m, n("_RimBlur", "_Rim2Blur"), 0.65f);
             // 8's lilToon rim always adds.
@@ -245,7 +245,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             d.Layers.Add(dark);
         }
 
-        private static void ReportRimLightDirection(AtlasUnifiedMaterial d) =>
+        private void ReportRimLightDirection(AtlasUnifiedMaterial d) =>
             d.Report(AtlasIssueKind.Unmapped, "rim.light-direction", "A rim's light direction options aren't mapped yet.");
     }
 }

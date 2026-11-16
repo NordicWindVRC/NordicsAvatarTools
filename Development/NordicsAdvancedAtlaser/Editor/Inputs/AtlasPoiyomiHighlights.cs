@@ -4,16 +4,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi: Anisotropics (strand highlights) and Stylized Reflections (toon highlights) as
     // highlight layers. Stylized Reflections' lilToon mode is reported.
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
-        private static void HighlightLayers(Material m, AtlasUnifiedMaterial d)
+        private void HighlightLayers(Material m, AtlasUnifiedMaterial d)
         {
             Anisotropics(m, d);
             StylizedReflections(m, d);
         }
 
         // Two strand lobes, added after lighting and replacing the base colour by weights: one layer each.
-        private static void Anisotropics(Material m, AtlasUnifiedMaterial d)
+        private void Anisotropics(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_EnableAniso")) return;
             int from = d.Layers.Count;
@@ -63,7 +63,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // A two-size toon highlight (UnityChan style); lilToon mode isn't mapped yet.
-        private static void StylizedReflections(Material m, AtlasUnifiedMaterial d)
+        private void StylizedReflections(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_StylizedSpecular")) return;
             if (Int(m, "_StylizedReflectionMode", 0) == 1)

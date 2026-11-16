@@ -3,13 +3,13 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi: Light Data and Shading (the lighting type).
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
         // _LightingMode, in the keyword enum's order.
         private static readonly string[] LightingTypes =
             { "TextureRamp", "Multilayer Math", "Wrapped", "Skin", "ShadeMap", "Flat", "Realistic", "Cloth", "SDF", "PBR" };
 
-        private static void Lighting(Material m, AtlasUnifiedMaterial d)
+        private void Lighting(Material m, AtlasUnifiedMaterial d)
         {
             var lighting = d.Lighting;
             LightData(m, d);
@@ -63,7 +63,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // Light Data: where the light's colour and direction come from, the light map (the shading
         // term), AO and shadow maps, received shadows, brightness limits, additional lights.
-        private static void LightData(Material m, AtlasUnifiedMaterial d)
+        private void LightData(Material m, AtlasUnifiedMaterial d)
         {
             var lighting = d.Lighting;
             int colorMode = Int(m, "_LightingColorMode", 0);
@@ -189,7 +189,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Poiyomi 11's PBR lighting type: Filament-style shading of one packed map (metallic,
         // occlusion, smoothness by channel), with its own clear coat, anisotropy, sheen and glints.
         // It replaces Reflections & Specular and Clear Coat.
-        private static void Pbr(Material m, AtlasUnifiedMaterial d)
+        private void Pbr(Material m, AtlasUnifiedMaterial d)
         {
             var lighting = d.Lighting;
             lighting.Family = AtlasLightingFamily.PhysicallyBased;
@@ -280,7 +280,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Mask options on a packed map feeding scalar inputs, which don't carry levels yet.
-        private static void ReportPackedOptions(Material m, AtlasUnifiedMaterial d, string property)
+        private void ReportPackedOptions(Material m, AtlasUnifiedMaterial d, string property)
         {
             if (AtlasMaterialReader.Vector(m, property + "VertexMask", Vector4.zero) != Vector4.zero
                 || AtlasMaterialReader.Vector(m, property + "MLInputMin", Vector4.zero) != Vector4.zero
@@ -294,7 +294,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // A packed RGBA map whose channels each apply by a strength (<prefix>R … A): the channel in
         // use, as a mask with its strength. More than one channel in use is reported.
-        private static AtlasMask PackedMask(Material m, AtlasUnifiedMaterial d, string property, string strengthPrefix, string feature)
+        private AtlasMask PackedMask(Material m, AtlasUnifiedMaterial d, string property, string strengthPrefix, string feature)
         {
             var map = Texture(m, d, property, AtlasTextureInterpretation.Data);
             if (map == null) return null;
@@ -315,7 +315,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // final = lerp(Shadow Tint × lerp(ambient, r × direct, ignore) × occlusion, direct, r),
         // r = lerp(1, ramp(term + offset), Shadow Strength).
-        private static void TextureRamp(Material m, AtlasUnifiedMaterial d)
+        private void TextureRamp(Material m, AtlasUnifiedMaterial d)
         {
             d.Lighting.Family = AtlasLightingFamily.RampToon;
             var ramp = d.Lighting.Ramp;
@@ -334,7 +334,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // The shadow side as most types share it: Shadow Tint × lerp(ambient, direct, ignore).
-        private static void ToonShadow(Material m, AtlasRampToon ramp)
+        private void ToonShadow(Material m, AtlasRampToon ramp)
         {
             ramp.ShadowTint.Color = LinearColor(m, "_LightingShadowColor", Color.white);
             float ignore = Float(m, "_LightingIgnoreAmbientColor", 1f);
@@ -345,7 +345,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // A face shaded by an SDF texture's threshold.
-        private static void Sdf(Material m, AtlasUnifiedMaterial d)
+        private void Sdf(Material m, AtlasUnifiedMaterial d)
         {
             d.Lighting.Family = AtlasLightingFamily.RampToon;
             var ramp = d.Lighting.Ramp;
@@ -362,7 +362,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // (direct × wrap(N·L) × Lit Side Color + wrapped ambient) × lerp(Shadow Tint, 1, r),
         // r a linear gradient of the wrapped light's relative brightness.
-        private static void Wrapped(Material m, AtlasUnifiedMaterial d)
+        private void Wrapped(Material m, AtlasUnifiedMaterial d)
         {
             d.Lighting.Family = AtlasLightingFamily.RampToon;
             var ramp = d.Lighting.Ramp;
@@ -384,7 +384,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Unity-Chan style: the base colour toward the 1st and 2nd shade colours by two steps.
-        private static void ShadeMap(Material m, AtlasUnifiedMaterial d)
+        private void ShadeMap(Material m, AtlasUnifiedMaterial d)
         {
             var lighting = d.Lighting;
             lighting.Family = AtlasLightingFamily.RampToon;
@@ -409,7 +409,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // A shade map step: mask = saturate(1 − (t − (step − feather)) / feather).
-        private static AtlasShadeBand ShadeBand(Material m, string color, string step, float stepFallback, string feather, float receiveShadows)
+        private AtlasShadeBand ShadeBand(Material m, string color, string step, float stepFallback, string feather, float receiveShadows)
         {
             var band = new AtlasShadeBand();
             var c = LinearColor(m, color, Color.white);
@@ -422,7 +422,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Pre-integrated skin: a lookup by half-Lambert and scattering.
-        private static void Skin(Material m, AtlasUnifiedMaterial d)
+        private void Skin(Material m, AtlasUnifiedMaterial d)
         {
             var lighting = d.Lighting;
             lighting.Family = AtlasLightingFamily.PhysicallyBased;
@@ -443,7 +443,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // Cloth: Burley diffuse, sheen or GGX highlights by the cloth map's mask, with its own
         // metallic (R), mask (G), reflectance (B) and smoothness (A).
-        private static void Cloth(Material m, AtlasUnifiedMaterial d)
+        private void Cloth(Material m, AtlasUnifiedMaterial d)
         {
             var lighting = d.Lighting;
             lighting.Family = AtlasLightingFamily.PhysicallyBased;
@@ -481,7 +481,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Up to three bands: the first gives the light map, the others shade the shadow colour.
-        private static void MultilayerMath(Material m, AtlasUnifiedMaterial d)
+        private void MultilayerMath(Material m, AtlasUnifiedMaterial d)
         {
             d.Lighting.Family = AtlasLightingFamily.RampToon;
             var ramp = d.Lighting.Ramp;
@@ -511,7 +511,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 d.Report(AtlasIssueKind.Unmapped, "lighting.band-border-map", "The band border (AO) map isn't mapped yet.");
         }
 
-        private static AtlasShadeBand Band(Material m, AtlasUnifiedMaterial d, string prefix)
+        private AtlasShadeBand Band(Material m, AtlasUnifiedMaterial d, string prefix)
         {
             var band = new AtlasShadeBand();
             var color = LinearColor(m, prefix + "Color", Color.white);

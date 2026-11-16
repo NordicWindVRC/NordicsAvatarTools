@@ -3,9 +3,9 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi: Depth Rim Lighting, Environmental Rim and Backlight (angle layers), Subsurface Scattering.
-    public abstract partial class AtlasPoiyomiParser
+    internal sealed partial class AtlasPoiyomiReader
     {
-        private static void EdgeLight(Material m, AtlasUnifiedMaterial d)
+        private void EdgeLight(Material m, AtlasUnifiedMaterial d)
         {
             DepthRim(m, d);
             EnvironmentalRim(m, d);
@@ -16,7 +16,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // A silhouette from the depth texture, blended by weights like a matcap: one layer per weight.
-        private static void DepthRim(Material m, AtlasUnifiedMaterial d)
+        private void DepthRim(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_EnableDepthRimLighting")) return;
             float ignoreLighting = Float(m, "_DepthRimIgnoreLighting", 0f);
@@ -83,7 +83,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // The reflection probe along the normal at the edge, less a threshold, × base, added after lighting.
-        private static void EnvironmentalRim(Material m, AtlasUnifiedMaterial d)
+        private void EnvironmentalRim(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_EnableEnvironmentalRim")) return;
             float width = Float(m, "_RimEnviroWidth", 0.45f);
@@ -111,7 +111,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Light shining through from behind, scaled by the light's colour, added after lighting.
-        private static void Backlight(Material m, AtlasUnifiedMaterial d, string s)
+        private void Backlight(Material m, AtlasUnifiedMaterial d, string s)
         {
             if (!On(m, "_BacklightEnabled" + s)) return;
             float border = Float(m, "_BacklightBorder" + s, 0.65f), blur = Float(m, "_BacklightBlur" + s, 0.05f);
@@ -143,10 +143,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // pow(saturate(V · −(L + N × distortion)), spread) × strength × saturate(1 − thickness − mod)
         // × lerp(1, light colour, mix) × colour × map × lerp(1, light map, shadow strength) × lerp(1, base, mix).
-        private static void Subsurface(Material m, AtlasUnifiedMaterial d)
+        private void Subsurface(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_SubsurfaceScattering")) return;
             var map = Texture(m, d, "_SSSThicknessMap");
+            ReportPackedOptions(m, d, "_SSSThicknessMap");
             float offset = Float(m, "_SSSThicknessMod", -1f);
             var layer = new AtlasSubsurfaceLayer
             {
