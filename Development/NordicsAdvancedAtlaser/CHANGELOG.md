@@ -32,10 +32,19 @@ EditMode tests pass in Unity 2022.3.22.
   the parts of the texture they don't use, and the pixels between the regions take the nearest
   region's colour. A source without a texture is white. Maps are baked one at a time, and
   sources one after another, to bound memory.
+- **The build generates the outputs:** each output's textures, compressed for the platform
+  being built (PC or Android formats, crunch where it saves 10%), and its material, saved with
+  NDMF. A **mesh remapper** then gives each renderer a new mesh: vertices shared with another
+  region or material are split with all their data (UVs, colours, bone weights, blend shape
+  deltas), UV0 is placed in the source's region (a triangle in another UV tile is moved back by
+  whole tiles; only one straddling a tile edge is clamped), the source materials become the
+  output material, and submeshes of one output are merged. Everything is made before anything
+  changes, and the replaced meshes are registered with NDMF.
 - **Bake to Assets** on each output: its textures (`<material>_<texture>.png`) and material,
   written where you choose; the save dialog asks before replacing a material already there,
   and textures of the same names are overwritten. Writers for Poiyomi Toon 10 and VRChat Mobile
-  Toon Standard set the base colour texture. Textures get the output's formats for PC and
+  Toon Standard set the base colour texture. Mipmaps are made with the Kaiser filter and
+  stream, in the build and in the manual bake. Textures get the output's formats for PC and
   Android, no alpha channel unless it's used, and crunch (on by default) only where it makes a
   BC1 or BC3 texture at least 10% smaller.
 - **Input parsers** on the unified material (details in the `UNIFIED_MATERIAL_*.md`
@@ -106,6 +115,10 @@ EditMode tests pass in Unity 2022.3.22.
   an empty list excludes nothing.
 - The output shaders' placeholder settings are removed. Output shaders declare their
   capabilities and texture layout; the settings belong to the shared output features.
+- **Build results no longer look like a failure.** NDMF writes every report to Unity's console
+  as an "[NDMF] Error Reported" warning, whatever its severity. The build summary and the
+  diagnostics are added with that line filtered out, so the NDMF Console still lists them and
+  Unity's console stays clean. Warnings are reported as they are.
 - **Input report lines are debug information.** How each source was read is listed in the
   build only with *Verbose Logging*, since atlasing is best effort.
 - **Serialized fields are camelCase**, as the design guidelines require. Existing Atlaser

@@ -50,13 +50,33 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     summary.AppendLine("Geometry bakes: " + bakes);
                     summary.AppendLine("Geometry baking: " + (group.Component!=null && group.Component.enableGeometryBaking
                         ? "enabled (each material at 1.5× its atlas area, up to " + AtlasOutputLayout.BakeLimit + " per side)" : "disabled"));
-                    ErrorReport.ReportError(new AtlasMessageError(ErrorSeverity.Information,
+                    ReportInformation(new AtlasMessageError(ErrorSeverity.Information,
                         "Nordic's Advanced Atlaser — Build Results", summary.ToString()));
                 }
             }
             if (AtlasDebugSettings.VerboseLogging && ctx.Diagnostics.Count>0)
-                ErrorReport.ReportError(new AtlasMessageError(ErrorSeverity.Information,
+                ReportInformation(new AtlasMessageError(ErrorSeverity.Information,
                     "Nordic's Advanced Atlaser — Diagnostics", string.Join("\n",ctx.Diagnostics)));
+        }
+
+        // NDMF's ReportError also writes "[NDMF] Error Reported" to Unity's console as a warning,
+        // whatever the severity, which makes information look like a failure. For information,
+        // Unity's logger is set to errors only for the duration of the call: the NDMF Console
+        // still lists the report, and Unity's console doesn't get the warning. Warnings and
+        // errors are reported as they are.
+        internal static void ReportInformation(IError information)
+        {
+            var logger = Debug.unityLogger;
+            var filter = logger.filterLogType;
+            logger.filterLogType = LogType.Error;
+            try
+            {
+                ErrorReport.ReportError(information);
+            }
+            finally
+            {
+                logger.filterLogType = filter;
+            }
         }
     }
     // Minimal NDMF-native informational/warning report; no Unity console spam.

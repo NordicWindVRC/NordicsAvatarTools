@@ -22,7 +22,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var owner = output.gameObject;
             var main = owner.GetComponent<NordicsAdvancedAtlaser>();
             if (main == null) EditorGUILayout.HelpBox("Add Nordic's Advanced Atlaser to this GameObject to enable source discovery and coordination.", MessageType.Warning);
-            EditorGUILayout.HelpBox("Builds don't use this output yet. Bake to Assets writes its material and textures to a folder.", MessageType.Info);
+            EditorGUILayout.HelpBox("The build bakes this output and remaps the meshes onto it. Bake to Assets writes its material and textures to a folder without building.", MessageType.Info);
             EditorGUILayout.PropertyField(config.FindPropertyRelative("outputName"));
             DrawShaderSelection(config.FindPropertyRelative("shaderId"));
             // Padding separates source regions, so it only applies with two or more sources.

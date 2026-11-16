@@ -59,7 +59,7 @@ and `ATLAS_OUTPUT.md` for the output design.
    only one output.
    - **Textures** lists the textures the chosen feature modes need, with their sizes and an
      estimate of their GPU memory on PC and Android (compressed, with mipmaps, as VRChat's
-     performance rank counts it), and the totals. *Formats* sets the compression per platform
+     performance rank counts it, which mip streaming doesn't lower), and the totals. *Formats* sets the compression per platform
      and kind of texture, which the estimates follow.
    - **Features** are grouped into sections (Surface, Lighting, Layers, Effects, Render). Each
      feature a source uses and the output shader supports folds to one line with its mode and
@@ -155,8 +155,8 @@ A few option names that only the shader declares are reported instead of read.
 
 | Output shader | ID | Features | Status |
 |---|---|---|---|
-| **Poiyomi Toon 10** | `poiyomi10` | Colour (the base colour texture) | Not generated yet |
-| **VRChat Mobile Toon Standard** | `mobiletoon` | Colour (the base colour texture) | Not generated yet |
+| **Poiyomi Toon 10** | `poiyomi10` | Colour (the base colour texture) | Generated |
+| **VRChat Mobile Toon Standard** | `mobiletoon` | Colour (the base colour texture) | Generated |
 
 **Output shaders must be installed,** since the new materials are made with them. The picker
 only lists installed ones. An output whose shader isn't installed shows a warning, and is
@@ -169,8 +169,12 @@ supports.
 
 ## Limitations
 
-- Builds don't generate the output material, textures or meshes yet. **Bake to Assets…** on an
-  output writes its material and textures to a folder: only the base colour texture so far.
+- Outputs carry only the base colour texture so far: the colour it's multiplied by, the
+  other maps and every other feature come in later versions. The build compresses the
+  textures for the platform being built; **Bake to Assets…** writes the same material and
+  textures to a folder without building.
+- Merging an output's submeshes removes material slots, so animations that swap materials by
+  slot on the same renderer aren't adjusted yet.
 - Normals come from the mesh in its current pose, not from skinned animation. UV0 is used for bakes.
 - Matching original geometry to the surviving geometry is best-effort when AAO remaps it.
 - Development builds have no migration code. Configuration may need to be recreated after

@@ -63,9 +63,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     EditorGUILayout.PrefixLabel(new GUIContent("Total (estimate)",
-                        "GPU memory of the compressed textures with their mipmaps, as VRChat's performance rank counts it. Crunch only changes the download size."));
+                        "GPU memory of the compressed textures with their full mip chain, as VRChat's performance rank counts it. " +
+                        "The mipmaps stream, so fewer levels may be loaded at a distance, but the rank counts the full texture. " +
+                        "Crunch only changes the download size."));
                     EditorGUILayout.LabelField(MemoryText(overview.PcBytes, overview.AndroidBytes), EditorStyles.boldLabel);
                 }
+                Description("Mipmaps are made with the Kaiser filter and streamed.");
                 if (Fold("formats", "Formats", false))
                     using (new EditorGUI.IndentLevelScope())
                     {

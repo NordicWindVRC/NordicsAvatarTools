@@ -3,6 +3,17 @@
 Newest first. Versions follow [SemVer](https://semver.org). This tool's version is independent
 of the *NordicWind - Avatar Tools* bundle version.
 
+## 0.1.37 — unreleased
+
+Not yet verified in Unity.
+
+### Changed
+- **The build results no longer look like a failure.** NDMF writes every report to Unity's
+  console as an "[NDMF] Error Reported" warning, whatever its severity. The results are now
+  added with that line filtered out: the NDMF Console (Tools > NDM Framework > Show NDMF
+  Console) still shows the full report, and Unity's console gets one plain information line
+  pointing to it. A failure to collect the statistics is still reported as a warning.
+
 ## 0.1.36 — 2026-11-04
 
 EditMode tests pass in Unity 2022.3.22 (2026-11-03). Not yet verified on an upload.

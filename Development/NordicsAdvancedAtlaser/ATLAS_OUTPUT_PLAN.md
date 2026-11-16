@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** phases 1.1 to 1.4 done; 1.5 (the mesh remapper) is next. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); 2.1 is next. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works

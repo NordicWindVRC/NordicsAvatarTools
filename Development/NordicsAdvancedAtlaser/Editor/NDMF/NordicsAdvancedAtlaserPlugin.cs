@@ -19,16 +19,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             UnityEngine.Debug.Log("[Nordic's Advanced Atlaser] Early capture: " + message, context.AvatarRootObject);
                     state.CaptureCompleted = true;
                 });
-            // After AAO, generate per-material maps, normalize, invoke output modules,
-            // then destroy both components on the build clone only.
+            // After AAO, so the meshes are merged and reduced: bake the per-material maps, build
+            // the outputs, remap the meshes onto them, then remove both components from the clone.
             InPhase(BuildPhase.Optimizing)
                 .AfterPlugin("com.anatawa12.avatar-optimizer")
-                .Run("Prepare Atlaser output jobs and clean clone", context =>
+                .Run("Build Atlaser outputs and remap meshes", context =>
                 {
                     var state = context.GetState<AtlasGeometryBuildState>();
                     try
                     {
-                        AtlasBuildCoordinator.Execute(context.AvatarRootObject,
+                        AtlasBuildCoordinator.Execute(context,
                             state.CaptureCompleted ? state.Original : null, state.CaptureCompleted);
                     }
                     finally

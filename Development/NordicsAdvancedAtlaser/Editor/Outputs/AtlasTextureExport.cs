@@ -1,13 +1,17 @@
 using System;
 using NordicWind.TextureWrapper;
+using Unity.Collections;
 using UnityEditor;
+using UnityEditor.AssetImporters;
 using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
 {
-    // Export rules (ATLAS_OUTPUT.md, "Export rules"): PNG assets with the output's formats per
-    // platform, no alpha channel unless a virtual map uses it, colour space per texture, and
-    // crunch only where it pays.
+    // Export rules (ATLAS_OUTPUT.md, "Export rules"): the output's formats per platform, no alpha
+    // channel unless a virtual map uses it, colour space per texture, mipmaps made with the
+    // Kaiser filter and streamed, and crunch only where it pays. PNG assets for the manual bake;
+    // the build makes the same textures in memory through Unity's texture generator, which runs
+    // the importer's own pipeline.
     public static class AtlasTextureExport
     {
         // Crunch's default quality, as Unity's importer uses.
@@ -24,6 +28,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 throw new InvalidOperationException($"[Nordic's Advanced Atlaser] The exported texture '{path}' has no texture importer.");
             int maxSize = MaxSize(use.Width, use.Height);
             importer.maxTextureSize = maxSize;
+            importer.mipmapFilter = TextureImporterMipFilter.KaiserFilter;
+            importer.streamingMipmaps = true;
             var pc = AtlasTextureMemory.Format(config.pcFormats, use.Kind);
             bool crunchPc = config.crunch && CrunchPays(packed, pc);
             importer.SetPlatformTextureSettings(Platform("Standalone", maxSize, ImporterFormat(pc, crunchPc)));
@@ -53,26 +59,77 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Compresses a copy with crunch and compares its size with the format's plain size.
         public static bool CrunchPays(NordicsTextureWrapper packed, AtlasTextureFormat format)
         {
-            var crunched = Crunched(format);
-            if (crunched == null) return false;
-            long size = CrunchedBytes(packed, crunched.Value);
+            if (Crunched(format) == null) return false;
+            long size = CrunchedBytes(packed, format);
             return KeepCrunch(size, AtlasTextureMemory.Bytes(packed.Width, packed.Height, format, packed.Settings.Mipmaps));
         }
 
-        // The size of the crunched data for this texture, with its mip chain.
-        public static long CrunchedBytes(NordicsTextureWrapper packed, TextureFormat crunched)
+        // The size of the crunched data for this texture in this format, with its mip chain.
+        public static long CrunchedBytes(NordicsTextureWrapper packed, AtlasTextureFormat format)
         {
-            var copy = new Texture2D(packed.Width, packed.Height, TextureFormat.RGBA32, packed.Settings.Mipmaps, !packed.Settings.SRGB);
+            var texture = Generate(packed, false, ImporterFormat(format, true), "Standalone", true, "Crunch measure");
             try
             {
-                copy.SetPixels(packed.GetEncodedPixels());
-                copy.Apply(packed.Settings.Mipmaps, false);
-                EditorUtility.CompressTexture(copy, crunched, CrunchQuality);
-                return copy.GetRawTextureData().LongLength;
+                return texture.GetRawTextureData().LongLength;
             }
             finally
             {
-                UnityEngine.Object.DestroyImmediate(copy);
+                UnityEngine.Object.DestroyImmediate(texture);
+            }
+        }
+
+        // A texture made in memory the way the importer would make it from these pixels: the
+        // format, Kaiser mipmaps, streaming mipmaps. `readable` keeps a CPU copy.
+        public static Texture2D Generate(NordicsTextureWrapper packed, bool alpha, TextureImporterFormat format, string platform, bool readable, string name)
+        {
+            var settings = new TextureGenerationSettings(TextureImporterType.Default);
+            var importer = settings.textureImporterSettings;
+            importer.sRGBTexture = packed.Settings.SRGB;
+            importer.mipmapEnabled = packed.Settings.Mipmaps;
+            importer.mipmapFilter = TextureImporterMipFilter.KaiserFilter;
+            importer.streamingMipmaps = true;
+            importer.alphaSource = alpha ? TextureImporterAlphaSource.FromInput : TextureImporterAlphaSource.None;
+            importer.alphaIsTransparency = alpha && packed.Settings.SRGB;
+            importer.wrapMode = packed.Settings.WrapMode;
+            importer.filterMode = packed.Settings.FilterMode;
+            importer.aniso = packed.Settings.AnisoLevel;
+            importer.readable = readable;
+            importer.npotScale = TextureImporterNPOTScale.None;
+            settings.textureImporterSettings = importer;
+            settings.platformSettings = Platform(platform, MaxSize(packed.Width, packed.Height), format);
+            settings.sourceTextureInformation = new SourceTextureInformation
+            {
+                width = packed.Width, height = packed.Height, containsAlpha = alpha, hdr = false
+            };
+            settings.enablePostProcessor = false;
+            var colors = packed.GetEncodedPixels();
+            var pixels = new NativeArray<Color32>(colors.Length, Allocator.Persistent);
+            try
+            {
+                for (int i = 0; i < colors.Length; i++) pixels[i] = colors[i];
+                var output = TextureGenerator.GenerateTexture(settings, pixels);
+                if (!(output.texture is Texture2D texture))
+                    throw new InvalidOperationException($"[Nordic's Advanced Atlaser] Unity's texture generator made no texture for '{name}'.");
+                texture.name = name;
+                StreamMipmaps(texture);
+                return texture;
+            }
+            finally
+            {
+                pixels.Dispose();
+            }
+        }
+
+        // NDMF checks the texture's own flag; the generator's settings are meant to set it, and
+        // this makes sure.
+        private static void StreamMipmaps(Texture2D texture)
+        {
+            using (var serialized = new SerializedObject(texture))
+            {
+                var streaming = serialized.FindProperty("m_StreamingMipmaps");
+                if (streaming == null || streaming.boolValue) return;
+                streaming.boolValue = true;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
             }
         }
 

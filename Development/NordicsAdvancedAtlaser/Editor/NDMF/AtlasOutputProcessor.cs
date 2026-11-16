@@ -11,6 +11,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             if (job == null || job.Shader == null || job.Configuration == null) return;
             var generatorJob = CreateJob(job.Configuration, job, context.AvatarRoot.GetComponentsInChildren<Renderer>(true));
+            job.GeneratorJob = generatorJob;
             job.Plan = AtlasOutputPipeline.Resolve(generatorJob, job.Shader.Capabilities);
         }
 

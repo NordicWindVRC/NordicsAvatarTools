@@ -7,8 +7,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
 {
     internal static class AtlasBuildCoordinator
     {
-        internal static void Execute(GameObject avatarRoot, AtlasOriginalGeometry original, bool captureCompleted = true)
+        internal static void Execute(nadena.dev.ndmf.BuildContext build, AtlasOriginalGeometry original, bool captureCompleted = true)
         {
+            var avatarRoot = build?.AvatarRootObject;
             if (avatarRoot == null) return;
             using(var context=new AtlasBuildContext(avatarRoot))
             {
@@ -21,8 +22,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 var atlasers=avatarRoot.GetComponentsInChildren<NordicsAdvancedAtlaser>(true);
                 for(int atlaserIndex=0;atlaserIndex<atlasers.Length;atlaserIndex++)
                     PrepareGroup(context,atlasers[atlaserIndex],atlaserIndex,original);
+                // Every output is prepared: make their materials and textures and remap the meshes.
+                AtlasOutputBuild.Apply(context, build);
                 AtlasBuildReporting.Publish(context, original);
-                    // All prepared generators have run; no output materials/meshes are created yet.
                 AtlasBuildCleanup.RemoveBuildComponents(avatarRoot);
             }
         }

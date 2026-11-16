@@ -40,6 +40,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             DataType = use.Texture.Srgb ? TextureDataType.Color : TextureDataType.LinearData,
             SRGB = use.Texture.Srgb,
             Mipmaps = true,
+            StreamingMipmaps = true,
             WrapMode = TextureWrapMode.Clamp,
             Compression = TextureCompression.Normal,
             OutputChannels = use.Alpha ? TextureOutputChannels.RGBA : TextureOutputChannels.RGB,

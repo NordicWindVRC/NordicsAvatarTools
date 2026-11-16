@@ -67,6 +67,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 Assert.AreEqual(1f, left.a, "Alpha keeps its neutral value.");
                 Assert.AreEqual(TextureFormat.RGB24, packed.GetOutputTextureFormat(), "No alpha channel when no map uses it.");
                 Assert.IsTrue(packed.Settings.SRGB);
+                Assert.IsTrue(packed.Settings.StreamingMipmaps);
             }
         }
 
@@ -110,7 +111,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             using (var packed = new NordicsTextureWrapper(256, 256, new TextureSettings { Mipmaps = true }))
             {
                 packed.Fill(new Color(0.2f, 0.5f, 0.8f, 1f));
-                long crunched = AtlasTextureExport.CrunchedBytes(packed, TextureFormat.DXT1Crunched);
+                long crunched = AtlasTextureExport.CrunchedBytes(packed, AtlasTextureFormat.BC1);
                 long plain = AtlasTextureMemory.Bytes(256, 256, AtlasTextureFormat.BC1);
                 Assert.Greater(crunched, 0);
                 Assert.Less(crunched, plain / 2, "A single colour crunches to far less than BC1.");

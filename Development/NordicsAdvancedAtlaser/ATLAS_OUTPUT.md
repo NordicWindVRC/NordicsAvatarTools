@@ -62,11 +62,13 @@ What exists today, which this design builds on:
 | Writers | `Editor/Outputs/AtlasOutputShaders.cs` | Poiyomi Toon 10 and VRChat Mobile Toon Standard: the base colour texture and colour, opaque in the Geometry queue |
 | Export | `Editor/Outputs/AtlasTextureExport.cs` | PNG assets with the output's formats per platform, crunch where it saves 10% |
 | Manual bake | `Editor/Outputs/AtlasManualBake.cs` | Bake to Assets: the pipeline in edit mode, the textures and the material written as assets |
+| Build generation | `Editor/Outputs/AtlasOutputGenerator.cs` | The build's textures, packed and compressed for the platform being built (crunch where it saves 10%), and the material |
+| Mesh remapper | `Editor/Build/AtlasMeshRemapper.cs` | A new mesh per renderer: vertices split, UV0 into the regions (whole tiles moved, straddling triangles clamped), materials swapped, submeshes of one output merged |
+| Build step | `Editor/NDMF/AtlasOutputBuild.cs` | Generates every output and remaps every mesh before changing anything, then saves the new assets with NDMF and registers the replaced meshes |
 | Texture library | Texture Wrapper (`API.md`) | Float textures with usage flags, `Blit` with blend modes, masks and padding, colour operations, triangle painting, normal difference baking, dilation, PNG and in-memory export, `OutputChannels.Auto` |
 
-The UV remapping of the meshes (moving each source's UVs into its region) is a separate,
-pending part of the build. Output materials can be generated and inspected without it, but
-can't be put on the built avatar until it exists.
+The build generates each output's material and textures in memory and remaps the avatar's
+meshes onto them; the manual bake writes the same material and textures as assets.
 
 ---
 
@@ -320,7 +322,9 @@ Per renderer whose submeshes use a source material of an output:
    atlasing saves draw calls. Other submeshes keep their order.
 
 Bones, bind poses and blend shape names are unchanged. Material swaps in animations that
-target a source material are part of the animation design and aren't handled yet.
+target a source material are part of the animation design and aren't handled yet. Merging
+submeshes removes material slots, so an animation that targets a later slot of the same
+renderer by its index would point at another slot: that's part of the animation design too.
 
 ---
 
@@ -399,7 +403,9 @@ computed, not measured, from:
   DXT/BC formats on PC, ASTC or ETC formats on Android. The format per kind and platform is a
   setting of the output, so the estimate always matches what the export writes.
 
-Crunch and the PNG file size don't count: crunch only changes the download size.
+Crunch and the PNG file size don't count: crunch only changes the download size. Mip
+streaming doesn't lower the figure either: fewer mip levels may be loaded at a distance, but
+the rank counts the full texture as the worst case.
 
 The *Textures* section shows each texture's memory on both platforms and the material's
 totals:
@@ -416,6 +422,9 @@ The Advanced Atlaser component shows the totals over all its outputs as well.
 
 ### Export rules
 
+- **Mipmaps** are made with the Kaiser filter, which keeps them sharper than a box filter, and
+  stream (NDMF warns about generated textures that don't). The build makes its textures with
+  Unity's texture generator, the importer's own pipeline, so they match the manual bake's.
 - **No unused alpha.** A texture gets an alpha channel only when a virtual map uses it. Where
   it does, `OutputChannels.Auto` still drops alpha that is 1 everywhere.
 - **Normal maps** are exported as normal maps.
