@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using NordicWind.TextureWrapper;
 using UnityEngine;
 
@@ -10,7 +11,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // and mipmaps at an island's or region's edge don't pull in other colours.
     public static class AtlasMapBaker
     {
-        public static NordicsTextureWrapper Bake(AtlasMapRequest request, AtlasGeneratorJob job, int width, int height)
+        // `timings` (optional) gets a "[Time] …" line for each step.
+        public static NordicsTextureWrapper Bake(AtlasMapRequest request, AtlasGeneratorJob job, int width, int height, List<string> timings = null)
         {
             var atlas = new NordicsTextureWrapper(width, height, AtlasMapEvaluator.Settings(request.Map));
             try
@@ -20,15 +22,25 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 {
                     var source = job.Sources[index];
                     var bake = AtlasOutputLayout.BakeSize(source.UVRegion, size);
+                    string label = $"{request.Map} source {index} ({bake.x}×{bake.y})";
+                    var evaluate = new AtlasStageTimer("evaluate " + label, timings);
                     using (var content = AtlasMapEvaluator.Evaluate(request.Map, source.Material, bake.x, bake.y))
                     {
-                        using (var coverage = AtlasCoverage.Paint(source.Coverage, bake.x, bake.y))
-                            if (coverage != null) AtlasCoverage.GrowIslands(content, coverage);
+                        evaluate.Dispose();
+                        NordicsTextureWrapper coverage;
+                        using (new AtlasStageTimer("paint coverage " + label, timings))
+                            coverage = AtlasCoverage.Paint(source.Coverage, bake.x, bake.y);
+                        using (coverage)
+                            if (coverage != null)
+                                using (new AtlasStageTimer("grow islands (dilate) " + label, timings))
+                                    AtlasCoverage.GrowIslands(content, coverage);
                         // Padding 0: the content's usage is copied, so the dilation knows the regions.
-                        atlas.Blit(content, region: source.UVRegion, padding: 0, sampling: TextureSamplingMode.Area);
+                        using (new AtlasStageTimer("place " + label, timings))
+                            atlas.Blit(content, region: source.UVRegion, padding: 0, sampling: TextureSamplingMode.Area);
                     }
                 }
-                atlas.Dilate();
+                using (new AtlasStageTimer($"fill between regions (dilate) {request.Map} ({width}×{height})", timings))
+                    atlas.Dilate();
                 return atlas;
             }
             catch

@@ -46,8 +46,24 @@ namespace NordicWind.TextureWrapper
     {
         private static int _minimum = 65536;
         private static int _threads = Environment.ProcessorCount;
+        private static int _minimumGpu = 512 * 512;
         public static int MinParallelPixels { get => _minimum; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _minimum = value; } }
         public static int MaxThreads { get => _threads; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _threads = value; } }
+        /// <summary>
+        /// Lets operations that have a GPU version use it. Off: everything runs on the CPU. The
+        /// results agree within each operation's documented tolerance.
+        /// </summary>
+        public static bool UseGpu { get; set; } = true;
+        /// <summary>
+        /// Operations on fewer pixels than this run on the CPU, where moving the data to the GPU
+        /// and back would cost more than it saves.
+        /// </summary>
+        public static int MinGpuPixels { get => _minimumGpu; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _minimumGpu = value; } }
+        /// <summary>
+        /// Whether there is a GPU that can render to float textures: false in batch mode without
+        /// graphics (<c>-nographics</c>), where everything runs on the CPU.
+        /// </summary>
+        public static bool GpuAvailable => TextureGpu.Available;
     }
     public sealed class TextureMaskOptions
     {

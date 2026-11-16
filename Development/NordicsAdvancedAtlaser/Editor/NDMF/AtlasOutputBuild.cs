@@ -23,8 +23,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     foreach (var job in group.Outputs)
                     {
                         if (job.Shader == null || job.Plan == null || job.GeneratorJob == null || job.GeneratorJob.Sources.Count == 0) continue;
-                        var output = AtlasOutputGenerator.Generate(job.GeneratorJob, job.Plan, job.Configuration, job.Shader, mobile);
+                        AtlasGeneratedOutput output;
+                        using (context.Time("output: " + job.Configuration.outputName))
+                            output = AtlasOutputGenerator.Generate(job.GeneratorJob, job.Plan, job.Configuration, job.Shader, mobile);
                         outputs.Add(output);
+                        context.Diagnostics.AddRange(output.Timings);
                         foreach (var source in job.Sources)
                             if (source.Input?.Unified != null)
                                 targets[source.Input.SourceMaterial] = new AtlasRemapTarget { Region = source.UVRegion, Output = output.Material };
@@ -34,7 +37,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     foreach (var renderer in context.AvatarRoot.GetComponentsInChildren<Renderer>(true))
                     {
                         var mesh = MeshOf(renderer);
-                        var result = AtlasMeshRemapper.Remap(mesh, renderer.sharedMaterials, targets);
+                        AtlasRemapResult result;
+                        using (context.Time("remap: " + renderer.name))
+                            result = AtlasMeshRemapper.Remap(mesh, renderer.sharedMaterials, targets);
                         if (result != null) remaps.Add((renderer, mesh, result));
                     }
             }

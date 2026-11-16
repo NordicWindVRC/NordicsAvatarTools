@@ -24,6 +24,10 @@ Newest first. Versions follow [SemVer](https://semver.org).
 - The `Mixed` blend mode is now `base + base × blend` instead of a copy of `Average`.
 
 ### Added
+- **GPU groundwork:** `TextureProcessingSettings.UseGpu`, `MinGpuPixels` and `GpuAvailable`,
+  and internal helpers that move pixels and usage flags to float render textures and back
+  without changing them. No operation uses the GPU yet; the plan is in `GPU_ACCELERATION.md`.
+  The CPU stays the reference and the fallback.
 - **Safety rules for normal correction.** A `BakeNormalDifference` overload takes
   `NormalDifferenceOptions` and returns `NormalDifferenceStatistics`. Where a rule applies, the
   correction fades to flat, so it never makes shading worse than no correction:

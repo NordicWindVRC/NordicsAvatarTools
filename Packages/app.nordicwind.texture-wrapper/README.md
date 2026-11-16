@@ -97,7 +97,8 @@ Known gaps, in no particular order:
 - **Loading with mipmap streaming:** textures without Read/Write are read from the GPU. When
   mipmap streaming is active (it's off in edit mode by default), the full-resolution level
   may not be loaded yet, and a lower level is read instead.
-- **GPU acceleration** for large textures.
+- **GPU acceleration** for large textures: dilation and triangle painting first (see
+  [GPU_ACCELERATION.md](GPU_ACCELERATION.md)).
 - **Performance benchmarks.**
 
 ## Key concepts

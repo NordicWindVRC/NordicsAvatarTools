@@ -30,7 +30,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (string.IsNullOrEmpty(folder) || !(folder == "Assets" || folder.StartsWith("Assets/", StringComparison.Ordinal)))
                 throw new ArgumentException($"[Nordic's Advanced Atlaser] The material must be saved inside Assets: {materialPath}", nameof(materialPath));
 
-            var job = Job(config, AtlasMaterialDiscovery.Discover(output.gameObject).Renderers);
+            var timings = new List<string>();
+            var total = new AtlasStageTimer("total", timings);
+            AtlasGeneratorJob job;
+            using (new AtlasStageTimer("parse", timings))
+                job = Job(config, AtlasMaterialDiscovery.Discover(output.gameObject).Renderers);
             if (job.Sources.Count == 0)
                 throw new InvalidOperationException($"[Nordic's Advanced Atlaser] {output.name}: no source material can be read.");
             var plan = AtlasOutputPipeline.Resolve(job, shader.Capabilities);
@@ -44,8 +48,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     if (!use.Enabled) continue;
                     EditorUtility.DisplayProgressBar("Bake to Assets", use.Texture.Label, (float)i / uses.Count);
                     Texture2D texture;
-                    using (var packed = AtlasTexturePacker.Pack(use, plan, job))
-                        texture = AtlasTextureExport.Png(packed, folder, TextureName(name, use.Texture), use, config);
+                    string label = $"{use.Texture.Id} ({use.Width}×{use.Height})";
+                    var pack = new AtlasStageTimer("pack " + label, timings);
+                    using (var packed = AtlasTexturePacker.Pack(use, plan, job, timings))
+                    {
+                        pack.Dispose();
+                        using (new AtlasStageTimer("export " + label, timings))
+                            texture = AtlasTextureExport.Png(packed, folder, TextureName(name, use.Texture), use, config);
+                    }
                     foreach (var request in plan.Maps)
                         if (use.Maps.Contains(request.Map)) request.Reference.Texture = texture;
                 }
@@ -57,7 +67,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
             var material = new Material(unityShader) { name = name };
             shader.Write(plan.Output, material);
-            return Save(material, materialPath);
+            var saved = Save(material, materialPath);
+            total.Dispose();
+            Debug.Log($"[Nordic's Advanced Atlaser] Bake to Assets: {materialPath}. " + string.Join("; ", timings).Replace("[Time] ", ""), saved);
+            return saved;
         }
 
         // The generator job for edit mode: every assigned source, parsed now, with its coverage

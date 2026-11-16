@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using NordicWind.TextureWrapper;
 using UnityEngine;
@@ -9,7 +10,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // its channels and released before the next, so at most two full-size maps exist at once.
     public static class AtlasTexturePacker
     {
-        public static NordicsTextureWrapper Pack(AtlasTextureUse use, AtlasOutputPlan plan, AtlasGeneratorJob job)
+        // `timings` (optional) gets a "[Time] …" line for each step of the maps' bakes.
+        public static NordicsTextureWrapper Pack(AtlasTextureUse use, AtlasOutputPlan plan, AtlasGeneratorJob job, List<string> timings = null)
         {
             var texture = use.Texture;
             var packed = new NordicsTextureWrapper(use.Width, use.Height, Settings(use));
@@ -22,7 +24,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     // One request per virtual map; a map no feature requested keeps its neutral value.
                     var request = plan.Maps.FirstOrDefault(r => r.Map == channel.Map);
                     if (request == null) continue;
-                    using (var map = AtlasMapBaker.Bake(request, job, use.Width, use.Height))
+                    using (var map = AtlasMapBaker.Bake(request, job, use.Width, use.Height, timings))
                         Copy(packed, map, channel.Channels);
                 }
                 return packed;

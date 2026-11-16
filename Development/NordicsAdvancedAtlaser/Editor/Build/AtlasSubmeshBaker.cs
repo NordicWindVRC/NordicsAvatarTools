@@ -111,7 +111,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         // Preserve the raw correction for debug inspection before padding.
                         TryExport(() => AtlasDebugExporter.Normal(debugFolder,
                             "TangentNormalCorrection_PreDilation", maps.Correction), diagnostics);
-                    });
+                    },diagnostics);
                 ReportCorrection(material.name,statistics,diagnostics);
                 diagnostics.Add(material.name+": full correction dilation completed; original coverage unchanged.");
                 diagnostics.Add(material.name+": combined "+originalSections.Count+
@@ -140,7 +140,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         /// </summary>
         internal static NordicsTextureWrapper BakeCorrection(IReadOnlyList<AtlasMeshSection> originals,
             AtlasMeshSection current,int width,int height,float maxAngle,out NormalDifferenceStatistics statistics,
-            Action<CorrectionMaps> inspect=null)
+            Action<CorrectionMaps> inspect=null, List<string> timings=null)
         {
             NordicsTextureWrapper correction;
             using(var originalNormals=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
@@ -151,16 +151,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 // Coverage per UV winding finds overlapping UVs (mirrored halves, stacked
                 // copies), which get no correction rather than a wrong one.
-                foreach(var src in originals)
-                    Rasterize(src,originalNormals,null,null,null,null,coverage,false);
+                using(new AtlasStageTimer($"paint original normals ({width}×{height})",timings))
+                    foreach(var src in originals)
+                        Rasterize(src,originalNormals,null,null,null,null,coverage,false);
                 // Tangent-space correction must be expressed in the current mesh's frame. The
                 // frame-normal map covers exactly the current triangles, so it also serves as
                 // the bake's coverage area.
-                Rasterize(current,null,null,tangent,bitangent,normalBasis,coverage,true);
-                correction=originalNormals.BakeNormalDifference(normalBasis,
-                    new TangentBasisData { Tangent=tangent,Bitangent=bitangent,Normal=normalBasis },
-                    new NormalDifferenceOptions { Coverage=coverage, MaxAngle=maxAngle },
-                    out statistics);
+                using(new AtlasStageTimer($"paint current frames ({width}×{height})",timings))
+                    Rasterize(current,null,null,tangent,bitangent,normalBasis,coverage,true);
+                using(new AtlasStageTimer($"normal difference ({width}×{height})",timings))
+                    correction=originalNormals.BakeNormalDifference(normalBasis,
+                        new TangentBasisData { Tangent=tangent,Bitangent=bitangent,Normal=normalBasis },
+                        new NormalDifferenceOptions { Coverage=coverage, MaxAngle=maxAngle },
+                        out statistics);
                 try
                 {
                     inspect?.Invoke(new CorrectionMaps { Original=originalNormals,Tangent=tangent,Bitangent=bitangent,
@@ -168,7 +171,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
                 catch { correction.Dispose(); throw; }
             }
-            AtlasNormalPadding.DilateAndFinalize(correction);
+            using(new AtlasStageTimer($"dilate correction ({width}×{height})",timings))
+                AtlasNormalPadding.DilateAndFinalize(correction);
             return correction;
         }
         // Bounded CPU diagnostic: detects systematic coordinate mismatches without

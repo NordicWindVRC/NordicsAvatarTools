@@ -92,7 +92,9 @@ the same UV layout. See `NORMAL_BAKER.md`.
 ### Debug options
 
 These are per-editor settings under **Tools → NordicWind → Advanced Atlaser**:
-- **Verbose Logging**
+- **Verbose Logging**: also lists each build stage's time (`[Time] …`): parsing, the geometry
+  bake's painting, normal difference and dilation, and each output's map bakes, packing and
+  compression. *Bake to Assets…* logs its stages' times in one line.
 - **Export Intermediate Maps**: EXR and PNG bakes written to `<project>/NordicWindDebug/AdvancedAtlaser/`
 - **Build Summary**: on by default
 - **Open Debug Output Folder**

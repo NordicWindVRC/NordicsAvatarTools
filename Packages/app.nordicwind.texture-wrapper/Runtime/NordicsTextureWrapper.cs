@@ -7,7 +7,7 @@ using UnityEngine.Experimental.Rendering;
 
 namespace NordicWind.TextureWrapper
 {
-    public sealed class NordicsTextureWrapper : IDisposable
+    public sealed partial class NordicsTextureWrapper : IDisposable
     {
         private Color[] _pixels;
         private byte[] _usage;

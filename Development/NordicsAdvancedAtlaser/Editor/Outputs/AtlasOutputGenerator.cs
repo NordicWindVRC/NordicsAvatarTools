@@ -12,6 +12,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public Material Material;
         public readonly List<Texture2D> Textures = new List<Texture2D>();
+        // "[Time] …" lines for each stage, for the build's diagnostics.
+        public readonly List<string> Timings = new List<string>();
     }
 
     // Steps 3 to 5 of the pipeline for the build: each texture packed and compressed for the
@@ -34,8 +36,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 {
                     if (!use.Enabled) continue;
                     Texture2D texture;
-                    using (var packed = AtlasTexturePacker.Pack(use, plan, job))
-                        texture = Compress(packed, use, config, mobile, $"{config.outputName}_{use.Texture.Id}");
+                    string label = $"{config.outputName} {use.Texture.Id} ({use.Width}×{use.Height})";
+                    var pack = new AtlasStageTimer("pack " + label, result.Timings);
+                    using (var packed = AtlasTexturePacker.Pack(use, plan, job, result.Timings))
+                    {
+                        pack.Dispose();
+                        using (new AtlasStageTimer("compress " + label, result.Timings))
+                            texture = Compress(packed, use, config, mobile, $"{config.outputName}_{use.Texture.Id}");
+                    }
                     result.Textures.Add(texture);
                     foreach (var request in plan.Maps)
                         if (use.Maps.Contains(request.Map)) request.Reference.Texture = texture;

@@ -119,6 +119,9 @@ EditMode tests pass in Unity 2022.3.22.
   as an "[NDMF] Error Reported" warning, whatever its severity. The build summary and the
   diagnostics are added with that line filtered out, so the NDMF Console still lists them and
   Unity's console stays clean. Warnings are reported as they are.
+- **Stage timings:** with *Verbose Logging*, the build lists how long each stage took
+  (parsing, the geometry bake's steps, each map bake, packing, compression, the remap), and
+  *Bake to Assets* logs its stages in one line, to measure where builds spend their time.
 - **Input report lines are debug information.** How each source was read is listed in the
   build only with *Verbose Logging*, since atlasing is best effort.
 - **Serialized fields are camelCase**, as the design guidelines require. Existing Atlaser

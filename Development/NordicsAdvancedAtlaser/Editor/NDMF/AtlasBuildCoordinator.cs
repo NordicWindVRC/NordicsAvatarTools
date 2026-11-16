@@ -89,7 +89,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // Normalize each unique source material once, irrespective of how many outputs use it.
             foreach(var input in group.Inputs)
             {
-                AtlasMaterialNormalizer.Prepare(input);
+                using (context.Time("parse: " + input.SourceMaterial.name))
+                    AtlasMaterialNormalizer.Prepare(input);
                 // Atlasing is best effort, so how each source was read is debug information:
                 // its report lines are listed only with Verbose Logging.
                 if (input.Unified == null || !AtlasDebugSettings.VerboseLogging) continue;
@@ -141,9 +142,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                                     source.Input.SourceMaterial.name,source.SourceKey); }
                                 catch(Exception e) { context.Diagnostics.Add("Debug directory creation failed: "+e.Message); }
                             }
-                            baked=AtlasSubmeshBaker.Bake(source.Input.SourceMaterial,size.x,size.y,
-                                originalSections,renderers,context.AvatarRoot.transform,context.Diagnostics,debugFolder,
-                                source.NormalCorrection);
+                            using (context.Time($"geometry bake: {source.Input.SourceMaterial.name} ({size.x}×{size.y})"))
+                                baked=AtlasSubmeshBaker.Bake(source.Input.SourceMaterial,size.x,size.y,
+                                    originalSections,renderers,context.AvatarRoot.transform,context.Diagnostics,debugFolder,
+                                    source.NormalCorrection);
                             source.Input.Bakes.Add(key,baked);
                         }
                         source.Bakes=baked;

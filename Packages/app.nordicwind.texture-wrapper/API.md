@@ -116,6 +116,11 @@ out-of-range values.
 |---|---|---|
 | `int MinParallelPixels` | `65536` | Operations on fewer pixels than this run on one thread. |
 | `int MaxThreads` | Processor count | `0` = automatic, `1` = single-threaded. |
+| `bool UseGpu` | `true` | Operations that have a GPU version may use it. Off: everything runs on the CPU. Results agree within each operation's documented tolerance. |
+| `int MinGpuPixels` | `262144` (512²) | Operations on fewer pixels than this run on the CPU: moving the data to the GPU and back would cost more than it saves. |
+| `bool GpuAvailable` | — | Read only. A GPU that renders to float textures is present; false in batch mode without graphics (`-nographics`). |
+
+No operation has a GPU version yet; see [GPU_ACCELERATION.md](GPU_ACCELERATION.md).
 
 ## `TextureMaskOptions` (class)
 

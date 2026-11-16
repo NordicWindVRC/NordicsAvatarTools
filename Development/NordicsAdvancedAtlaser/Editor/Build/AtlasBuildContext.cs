@@ -12,11 +12,36 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly List<AtlasBuildGroup> Groups = new List<AtlasBuildGroup>();
         public readonly List<string> Diagnostics = new List<string>();
         public AtlasBuildContext(GameObject root) { AvatarRoot = root; }
+
+        // Times a stage into the diagnostics (listed with Verbose Logging): `using (context.Time(...))`.
+        public IDisposable Time(string stage) => new AtlasStageTimer(stage, Diagnostics);
         public void Dispose()
         {
             foreach (var group in Groups)
                 foreach (var input in group.Inputs)
                     foreach (var set in input.Bakes.Values) set.Dispose();
+        }
+    }
+    // One stage's wall-clock time, added to a list of lines when disposed.
+    public sealed class AtlasStageTimer : IDisposable
+    {
+        private readonly string stage;
+        private readonly List<string> lines;
+        private readonly System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+
+        public AtlasStageTimer(string stage, List<string> lines)
+        {
+            this.stage = stage;
+            this.lines = lines;
+        }
+
+        public double Milliseconds => watch.Elapsed.TotalMilliseconds;
+
+        public void Dispose()
+        {
+            if (!watch.IsRunning) return;
+            watch.Stop();
+            lines?.Add($"[Time] {stage}: {watch.Elapsed.TotalMilliseconds:0} ms");
         }
     }
     public sealed class AtlasBuildGroup
