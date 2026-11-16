@@ -1,3 +1,4 @@
+using System.Linq;
 using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
@@ -46,6 +47,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             decal.ClipOutside = Int(m, "_FlipbookTiled" + s, 0) == 0;
             decal.Symmetry = (AtlasDecalSymmetry)Mathf.Clamp(Int(m, "_FlipbookSymmetryMode" + s, 0), 0, 2);
             decal.Mirror = (AtlasDecalMirror)Mathf.Clamp(Int(m, "_FlipbookMirroredUVMode" + s, 0), 0, 4);
+            decal.Depth = Float(m, "_FlipbookDepth" + s, 0f);
+            decal.FlipInMirror = On(m, "_FlipbookFlipInMirror" + s);
             map.Decal = decal;
             map.Frames = FlipbookFrames(m, map, s);
 
@@ -61,6 +64,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             layer.Mask = BusMask(m, Mask(m, d, "_FlipbookMask" + s, Channels[Mathf.Clamp(Int(m, "_FlipbookMaskChannel" + s, 0), 0, 3)]),
                 "_FlipbookMaskGlobalMask" + s, "_FlipbookMaskGlobalMaskBlendType" + s);
             layer.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.BaseColor, PoiyomiBlend(Int(m, "_FlipbookBlendType" + s, 0)), Float(m, "_FlipbookAlpha" + s, 1f)));
+            if (On(m, "_FlipbookUseVideoEffects" + s))
+                layer.Screen = d.Layers.OfType<AtlasPatternLayer>().Select(l => l.VideoScreen).FirstOrDefault(v => v != null);
             d.Layers.Add(layer);
             string path = "layers[" + (d.Layers.Count - 1) + "]";
 

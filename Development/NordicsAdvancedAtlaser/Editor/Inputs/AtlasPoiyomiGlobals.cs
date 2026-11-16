@@ -21,8 +21,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     if (On(m, "_GlobalMaskTexture" + t + "Split"))
                         d.Report(AtlasIssueKind.Unmapped, "mask.bus-split", "A global mask texture's split sampling isn't mapped yet; its own tiling is used.");
                     for (int c = 0; c < 4; c++)
-                        steps.Add(new AtlasMaskBusStep { Channel = t * 4 + c, Kind = AtlasMaskBusStepKind.Texture, Map = map, MapChannel = Channels[c] });
+                        steps.Add(new AtlasMaskBusStep
+                        {
+                            Channel = t * 4 + c, Kind = AtlasMaskBusStepKind.Texture,
+                            Mask = MaskOptions(m, new AtlasMask { Map = map, Channel = Channels[c] }, "_GlobalMaskTexture" + t, c)
+                        });
                 }
+            Contacts(m, d);
 
             bool linear = On(m, "_GlobalMaskVertexColorLinearSpace", 1f);
             string[] colors = { "Red", "Green", "Blue", "Alpha" };
@@ -116,6 +121,39 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // A consumer: the mask reads the channel the selector names (Off, 1R … 4A), combined by its
         // blend. Creates a mask when there's none.
+        // Global Mask Contacts (Poiyomi 11): up to 8 VRChat contacts, each writing its touch into a channel.
+        private static void Contacts(Material m, AtlasUnifiedMaterial d)
+        {
+            if (!On(m, "_GlobalMaskContactsEnable")) return;
+            bool themed = false;
+            for (int i = 0; i < 8; i++)
+            {
+                string s = "_" + i;
+                if (!On(m, "_GlobalMaskContactEnable" + s)) continue;
+                themed |= Int(m, "_GlobalMaskContactThemeColor" + s, 0) > 0;
+                int target = Int(m, "_GlobalMaskContactTarget" + s, 0);
+                if (target <= 0) continue;
+                var tags = AtlasMaterialReader.Vector(m, "_GlobalMaskContactTag" + s, Vector4.zero);
+                var contact = new AtlasContact
+                {
+                    People = (AtlasContactPeople)Mathf.Clamp(Int(m, "_GlobalMaskContactPeople" + s, 0), 0, 2),
+                    InnerRadius = Float(m, "_GlobalMaskContactRadius" + s, 0.05f),
+                    OuterRadius = Float(m, "_GlobalMaskContactFalloff" + s, 0.15f),
+                    ScaleWithToucher = On(m, "_GlobalMaskContactToucherScale" + s),
+                    AroundTouch = Int(m, "_GlobalMaskContactPosition" + s, 1) == 1,
+                    Invert = On(m, "_GlobalMaskContactInvert" + s)
+                };
+                for (int g = 0; g < 4; g++) contact.Tags[g] = Mathf.RoundToInt(tags[g]);
+                d.MaskBus.Steps.Add(new AtlasMaskBusStep
+                {
+                    Channel = Mathf.Min(target, BusChannels) - 1, Kind = AtlasMaskBusStepKind.Contact, Contact = contact,
+                    Blend = BusBlend(Int(m, "_GlobalMaskContactBlendType" + s, 2))
+                });
+            }
+            if (themed)
+                d.Report(AtlasIssueKind.Unmapped, "contact.person-color", "A contact tinting a theme colour by who touches isn't mapped yet.");
+        }
+
         private static AtlasMask BusMask(Material m, AtlasMask mask, string selector, string blend = null)
         {
             int channel = Int(m, selector, 0);

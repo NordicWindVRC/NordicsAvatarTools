@@ -11,6 +11,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             MainColorAdjust(m, d);
             PostProcessing(m, d);
             ProximityColor(m, d);
+            ProToneMapping(m, d);
         }
 
         // The final colour and or the emission × lerp(min colour, max colour, the camera distance
@@ -57,11 +58,40 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             if (!On(m, "_MainColorAdjustToggle")) return;
             var maps = Texture(m, d, "_MainColorAdjustTexture", AtlasTextureInterpretation.Data);
+            ReportPackedOptions(m, d, "_MainColorAdjustTexture");
             // The mask texture's channels, each also reading its global mask: R hue, G brightness, B saturation, A gamma.
             string[] globals = { "_MainHueGlobalMask", "_MainBrightnessGlobalMask", "_MainSaturationGlobalMask", "_MainGammaGlobalMask" };
             AtlasMask MaskOf(int channel) => BusMask(m, maps == null ? null : new AtlasMask { Map = maps, Channel = Channels[channel] }, globals[channel]);
             void Add(AtlasColorOperation operation, float amount, AtlasMask mask) =>
                 d.ColorAdjustments.Add(new AtlasColorAdjustment { Target = AtlasAdjustmentTarget.BaseColor, Operation = operation, Amount = amount, Mask = mask });
+
+            // Black & White (Poiyomi 11) comes first; its mask is one of the texture's channels.
+            if (On(m, "_MainBlackWhiteToggle"))
+            {
+                int channel = Int(m, "_MainBlackWhiteMaskChannel", 0);
+                d.ColorAdjustments.Add(new AtlasColorAdjustment
+                {
+                    Target = AtlasAdjustmentTarget.BaseColor, Operation = AtlasColorOperation.BlackWhite,
+                    Amount = Float(m, "_MainBlackWhiteStrength", 1f),
+                    Mask = channel > 0 && maps != null ? new AtlasMask { Map = maps, Channel = Channels[Mathf.Clamp(channel - 1, 0, 3)] } : null,
+                    BlackWhite = new AtlasBlackWhite
+                    {
+                        Lightness = Float(m, "_MainBlackWhiteLightness", 1f),
+                        Contrast = Float(m, "_MainBlackWhiteContrast", 1f),
+                        Tint = LinearColor(m, "_MainBlackWhiteTint", Color.white),
+                        // The texture range sliders are sRGB tones.
+                        Typical = Mathf.GammaToLinearSpace(Float(m, "_MainBlackWhiteTextureTone", 0.5f)),
+                        Highlight = Mathf.GammaToLinearSpace(Float(m, "_MainBlackWhiteTextureHighlight", 0.7f)),
+                        Picked = On(m, "_MainBlackWhitePick"),
+                        PickedBase = LinearColor(m, "_MainBlackWhiteBaseColor", new Color(0.5f, 0.5f, 0.5f, 1f)),
+                        PickedHighlight = LinearColor(m, "_MainBlackWhiteHighlightColor", Color.black),
+                        HighlightStrength = Float(m, "_MainBlackWhiteHighlightStrength", 1.6f),
+                        Select = On(m, "_MainBlackWhiteSelect"),
+                        SelectColor = LinearColor(m, "_MainBlackWhiteSelectColor", Color.red),
+                        SelectRange = Float(m, "_MainBlackWhiteSelectRange", 0.2f)
+                    }
+                });
+            }
 
             if (On(m, "_MainHueShiftToggle"))
             {
@@ -112,6 +142,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (!On(m, "_PostProcess")) return;
             var mask = Mask(m, d, "_PPMask", Channels[Mathf.Clamp(Int(m, "_PPMaskChannel", 0), 0, 3)]);
             if (mask != null) mask.Invert = On(m, "_PPMaskInvert");
+            mask = BusMask(m, mask, "_PPMaskGlobalMask");
             int before = d.ColorAdjustments.Count;
             void Add(AtlasColorOperation operation, float amount, Color? color = null) =>
                 d.ColorAdjustments.Add(new AtlasColorAdjustment
@@ -139,6 +170,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             float lightness = Float(m, "_PPLightness", 0f);
             if (lightness != 0f) Add(AtlasColorOperation.Lightness, lightness);
             if (On(m, "_PPPosterization")) Add(AtlasColorOperation.Posterize, Mathf.Floor(Float(m, "_PPPosterizationAmount", 4f)));
+            // Poiyomi 11: the emission goes through the chain too.
+            if (On(m, "_PPIncludeEmission"))
+                for (int i = before; i < d.ColorAdjustments.Count; i++) d.ColorAdjustments[i].IncludeEmission = true;
             // The shader masks the chain as a whole; per operation it differs where the mask is partial.
             if (mask != null && d.ColorAdjustments.Count - before > 1)
                 d.Report(AtlasIssueKind.Note, "postprocess.mask", "Post processing's mask is applied per operation, not to the chain as a whole.");

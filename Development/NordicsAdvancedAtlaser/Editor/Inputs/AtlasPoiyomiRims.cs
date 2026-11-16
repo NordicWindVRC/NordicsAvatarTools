@@ -151,11 +151,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
             int blend = Int(m, n("_RimBlendMode", "_Rim2BlendMode"), 1);
             float lighting = Float(m, n("_RimEnableLighting", "_Rim2EnableLighting"), 1f);
             float parallax = Float(m, n("_RimVRParallaxStrength", "_Rim2VRParallaxStrength"), 1f);
+            // Poiyomi 11's application stage: 0 after lighting (lit by all of it), 1 on the base colour
+            // (lit with the surface), 2 after lighting lit by the direct light alone.
+            int stage = Int(m, n("_RimApplicationStage", "_Rim2ApplicationStage"), 0);
+            var response = lighting < 0.5f ? AtlasLightResponse.IgnoreLight : stage == 2 ? AtlasLightResponse.ScaleByDirectLight : AtlasLightResponse.ScaleByLight;
+            if (stage == 1) response = AtlasLightResponse.IgnoreLight;
+            int mode = Int(m, "_Mode", 0);
             var layer = new AtlasAngleLayer
             {
-                Placement = AtlasPlacement.Overlay,
+                Placement = stage == 1 ? AtlasPlacement.Surface : AtlasPlacement.Overlay,
                 Profile = AtlasAngleProfile.Step,
                 StepBase = AtlasAngleBase.Edge,
+                AntiAliasing = Float(m, n("_RimAAStrength", "_Rim2AAStrength"), 1f),
+                // Fade and transparent only.
+                TimesAlpha = On(m, n("_RimApplyTransparency", "_Rim2ApplyTransparency")) && (mode == 2 || mode == 3),
                 Power = Float(m, n("_RimFresnelPower", "_Rim2FresnelPower"), 3.5f),
                 Low = Mathf.Clamp01(border - blur * 0.5f),
                 High = Mathf.Clamp01(border + blur * 0.5f),
@@ -163,13 +172,27 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 SourceAlphaIsOpacity = true,
                 SurfaceNormalAmount = Float(m, n("_RimNormalStrength", "_Rim2NormalStrength"), 1f),
                 BaseColorMix = Float(m, n("_RimMainStrength", "_Rim2MainStrength"), 0f),
-                LightResponse = lighting >= 0.5f ? AtlasLightResponse.ScaleByLight : AtlasLightResponse.IgnoreLight,
+                LightResponse = response,
                 PerEye = parallax >= 0.5f,
                 HideInShadow = Float(m, n("_RimShadowMask", "_Rim2ShadowMask"), 0.5f),
                 Faces = On(m, n("_RimBackfaceMask", "_Rim2BackfaceMask"), 1f) ? AtlasFaces.Front : AtlasFaces.Both
             };
             layer.Color.Color = TintColor(m, d, n("_RimColor", "_Rim2Color"), n("_RimLightColorThemeIndex", "_Rim2LightColorThemeIndex"), layer.Color);
             var texture = Texture(m, d, n("_RimColorTex", "_Rim2ColorTex"));
+            ReportPackedOptions(m, d, n("_RimColorTex", "_Rim2ColorTex"));
+            // Poiyomi 11: sampled through the main texture's UV, tiling and panning, then its own.
+            var main = d.Surface.BaseColor.Map;
+            if (texture != null && On(m, n("_RimUseMainTexUV", "_Rim2UseMainTexUV")))
+            {
+                if (main == null) texture.Space = AtlasTextureSpace.UV0 + Mathf.Clamp(Int(m, "_MainTexUV", 0), 0, 3);
+                else
+                {
+                    texture.Space = main.Space;
+                    texture.Offset = Vector2.Scale(main.Offset, texture.Tiling) + texture.Offset;
+                    texture.Scroll = Vector2.Scale(main.Scroll, texture.Tiling) + texture.Scroll;
+                    texture.Tiling = Vector2.Scale(main.Tiling, texture.Tiling);
+                }
+            }
             // Mask only: the texture's red is a mask instead of a colour.
             if (On(m, n("_RimMaskOnlyMask", "_Rim2MaskOnlyMask")))
             {
@@ -192,10 +215,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
             float indirBorder = Float(m, n("_RimIndirBorder", "_Rim2IndirBorder"), 0.5f), indirBlur = Float(m, n("_RimIndirBlur", "_Rim2IndirBlur"), 0.1f);
             var dark = new AtlasAngleLayer
             {
-                Placement = AtlasPlacement.Overlay,
                 Profile = AtlasAngleProfile.Step,
                 StepBase = AtlasAngleBase.Edge,
                 Power = layer.Power,
+                AntiAliasing = layer.AntiAliasing,
+                TimesAlpha = layer.TimesAlpha,
+                Placement = layer.Placement,
                 Low = Mathf.Clamp01(indirBorder - indirBlur * 0.5f),
                 High = Mathf.Clamp01(indirBorder + indirBlur * 0.5f),
                 Blend = layer.Blend,

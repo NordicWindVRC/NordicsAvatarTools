@@ -28,6 +28,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float AlphaAmount = 1f;
         // Off: vertex colours are used as stored, as linear values. On: converted from sRGB first.
         public bool SrgbData;
+        // The colour's hue shifted (after the conversion) by HueShift + HueSpeed × t turns, or set to it.
+        public bool HueEnabled;
+        public float HueShift;
+        public float HueSpeed;
+        public AtlasHueMethod HueMethod = AtlasHueMethod.Oklab;
+        public bool HueSet;
     }
 
     public enum AtlasAlphaSource
@@ -62,6 +68,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool Dithering;
         public float DitherGradient = 0.1f;
         public float DitherBias;
+        // Screen-door transparency instead: a pixel is kept where alpha exceeds the dither (from 1/64
+        // to 1, less half a step), then alpha is 1.
+        public bool DitherCutout;
         // 0–1: lerp(1, alpha, strength).
         public float Strength = 1f;
     }
@@ -123,6 +132,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // CorrectOrigin (object space), by CorrectAmount, before normal maps.
         public float CorrectAmount;
         public UnityEngine.Vector3 CorrectOrigin;
+        // The amount × the mask (a vertex colour channel); null: everywhere.
+        public AtlasMask CorrectMask;
         // The triangle's face normal instead of the smooth normal: a faceted look.
         public bool FlatShading;
     }
@@ -156,6 +167,48 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly AtlasAnisotropy Anisotropy = new AtlasAnisotropy();
         // A clear reflective layer over the surface; null: none.
         public AtlasClearCoat ClearCoat;
+        // Occlusion brightened by interreflection on light surfaces (Jimenez's multi-bounce fit).
+        public bool MultiBounceOcclusion;
+        // A soft cloth-like lobe at grazing angles; null: none.
+        public AtlasSheen Sheen;
+        // Sparkling flakes in the highlights; null: none.
+        public AtlasGlints Glints;
+    }
+
+    // 2.4: Charlie sheen: D = (2 + 1/α) sin(θh)^(1/α) / 2π, α = roughness² (roughness at least
+    // 0.07), visibility 1 / (4(N·L + N·V − N·L N·V)), × Color × Strength; the base layers below give
+    // up the sheen's energy.
+    public sealed class AtlasSheen
+    {
+        // Linear.
+        public UnityEngine.Color Color = UnityEngine.Color.white;
+        public readonly AtlasScalarInput Strength = new AtlasScalarInput(0f);
+        public float Roughness = 0.5f;
+    }
+
+    // 2.4: glints: a multi-scale grid of flakes on a UV at Density flakes per UV unit, each with a
+    // hashed position and normal; a flake sparkles where its normal is the half vector (spread by
+    // FlakeRoughness, sized by Size), filtered by the pixel's footprint so distant flakes average
+    // into a smooth lobe of Roughness. Flake colour lerp(Color, the base F0, BaseReflectanceMix),
+    // varied toward rainbow hues by ColorVariation; the mask keeps that fraction of the flakes.
+    public sealed class AtlasGlints
+    {
+        public AtlasTextureSpace Space = AtlasTextureSpace.UV0;
+        // Null: everywhere.
+        public AtlasMask Mask;
+        // Linear.
+        public UnityEngine.Color Color = new UnityEngine.Color(0.95f, 0.95f, 0.95f, 1f);
+        public float BaseReflectanceMix;
+        public float ColorVariation;
+        public float Roughness = 0.5f;
+        public float Density = 2000f;
+        public float FlakeRoughness = 0.02f;
+        public float Size;
+        // 0–1: the view from each eye toward the view from between them (VR).
+        public float EyeBlend;
+        // 0–2: sparkle from the ambient light.
+        public float Ambient;
+        public bool VertexLights;
     }
 
     // 2.4: anisotropic GGX. a = clamp(Amount + (sample × 2 − 1), −1, 1), the sample from the map's
@@ -175,6 +228,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float RoughnessAnisotropy = 1f;
         // Tangent-space direction (RG, 0.5 neutral) the stretch follows; null: the tangent.
         public AtlasTextureReference DirectionMap;
+        // a = clamp(Amount × sample, −1, 1) instead (a missing map samples 1).
+        public bool MapMultiplies;
+        // Degrees: the stretch direction turned around the normal from the tangent.
+        public float Rotation;
     }
 
     // 2.4: a dielectric coat (F0 4%) over the surface, with its own highlights and reflections.

@@ -25,6 +25,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static void SurfaceLayers(Material m, AtlasUnifiedMaterial d)
         {
             DetailTexture(m, d);
+            SkinTone(m, d);
             BackFace(m, d);
             ColorMasking(m, d);
             for (int i = 0; i < 4; i++) Decal(m, d, i);
@@ -73,7 +74,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             string s = index == 0 ? "" : index.ToString(), n = index.ToString();
             if (!On(m, "_DecalEnabled" + s)) return;
-            var map = Texture(m, d, "_DecalTexture" + s);
+            // An MSDF texture is a shape: white, its alpha from the distance field.
+            var map = Texture(m, d, "_DecalTexture" + s, On(m, "_Decal" + n + "MSDF") ? AtlasTextureInterpretation.Msdf : AtlasTextureInterpretation.Color);
             if (map == null)
             {
                 d.Report(AtlasIssueKind.Unmapped, "decal.no-texture", "A decal without a texture (a placed colour) isn't mapped yet.");
@@ -89,6 +91,21 @@ namespace NordicWind.AdvancedAtlaser.Editor
             decal.Symmetry = (AtlasDecalSymmetry)Mathf.Clamp(Int(m, "_DecalSymmetryMode" + s, 0), 0, 2);
             decal.Mirror = (AtlasDecalMirror)Mathf.Clamp(Int(m, "_DecalMirroredUVMode" + s, 0), 0, 4);
             decal.Depth = Float(m, "_Decal" + n + "Depth", 0f);
+            decal.SmoothBorder = On(m, "_DecalSmoothBorder" + s);
+            decal.FlipInMirror = On(m, "_Decal" + n + "FlipInMirror");
+            if (On(m, "_Decal" + n + "SpriteSheetEnabled"))
+            {
+                // frame = floor(start + t × FPS) mod frames.
+                string p = "_Decal" + n + "SpriteSheet";
+                map.Frames = new AtlasFrames
+                {
+                    Source = AtlasFrameSource.SpriteSheet,
+                    Columns = Mathf.Max(1, Int(m, p + "Columns", 1)), Rows = Mathf.Max(1, Int(m, p + "Rows", 1)),
+                    Count = Mathf.Max(0, Int(m, p + "Frames", 0)), Rate = Float(m, p + "FPS", 10f),
+                    Offset = Float(m, p + "Frame", 0f),
+                    Area = AtlasMaterialReader.Vector(m, p + "Area", new Vector4(1f, 1f, 0f, 0f)), Inset = Float(m, p + "Inset", 0f)
+                };
+            }
 
             map.Decal = decal;
             var layer = new AtlasSurfaceLayer
@@ -147,7 +164,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Placement = AtlasPlacement.Emission,
                 SourceAlphaIsOpacity = true,
                 SourceTimesBaseColor = On(m, "_EmissionBaseColorAsMap" + s),
-                OverridesBaseColor = On(m, "_EmissionReplace" + n)
+                OverridesBaseColor = On(m, "_EmissionReplace" + n),
+                // Poiyomi 11, with premultiplied alpha.
+                EmissionTimesAlpha = On(m, "_EmissionApplyTransparency" + s) && On(m, "_AlphaPremultiply")
             };
             layer.Source.Color = TintColor(m, d, "_EmissionColor" + s, index == 0 ? "_EmissionColorThemeIndex" : "_EmissionColor" + n + "ThemeIndex", layer.Source);
             layer.Source.Map = Texture(m, d, "_EmissionMap" + s);

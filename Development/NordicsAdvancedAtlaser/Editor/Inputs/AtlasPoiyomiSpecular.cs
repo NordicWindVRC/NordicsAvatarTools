@@ -10,6 +10,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var response = d.Surface.Response;
             bool section = On(m, "_MochieBRDF");
+            // The PBR lighting type has its own reflections, highlights and clear coat.
+            if (Int(m, "_LightingMode", 5) == 9)
+            {
+                Ltcgi(m, d);
+                return;
+            }
             if (d.Lighting.Cloth != null)
             {
                 if (section)
@@ -30,6 +36,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var response = d.Surface.Response;
             var map = Texture(m, d, "_MochieMetallicMaps", AtlasTextureInterpretation.Data);
+            ReportPackedOptions(m, d, "_MochieMetallicMaps");
             Packed(response.Metallic, map, PackedChannel(m, "_MochieMetallicMapsMetallicChannel", 0),
                 Float(m, "_MochieMetallicMultiplier", 0f), On(m, "_MochieMetallicMapInvert"));
             // Roughness = 1 − smoothness; Invert Smoothness turns the slider and map into roughness.
@@ -102,6 +109,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (!On(m, "_ClearCoatBRDF")) return;
             var coat = new AtlasClearCoat();
             var map = Texture(m, d, "_ClearCoatMaps", AtlasTextureInterpretation.Data);
+            ReportPackedOptions(m, d, "_ClearCoatMaps");
             Packed(coat.Strength, map, PackedChannel(m, "_ClearCoatMapsClearCoatMaskChannel", 0),
                 Float(m, "_ClearCoatStrength", 1f), On(m, "_ClearCoatMaskInvert"));
             Packed(coat.Roughness, map, PackedChannel(m, "_ClearCoatMapsRoughnessChannel", 1),

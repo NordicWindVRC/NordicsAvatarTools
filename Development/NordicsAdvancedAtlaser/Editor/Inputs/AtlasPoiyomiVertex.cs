@@ -13,6 +13,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             VertexGlitch(m, d);
             DepthBulge(m, d);
             CameraPush(m, d);
+            ProDeformations(m, d);
         }
 
         private static readonly string[] LookAtRigs = { "Red", "Green", "Blue", "Alpha" };
@@ -29,7 +30,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (!On(m, r + "MaskEnabled", i == 0 ? 1f : 0f)) continue;
                 lookAt.Rigs.Add(new AtlasLookAtRig
                 {
-                    Mask = masks == null ? null : new AtlasMask { Map = masks, Channel = Channels[i] },
+                    Mask = MaskOptions(m, masks == null ? null : new AtlasMask { Map = masks, Channel = Channels[i] }, "_LookAtMask", i),
                     Strength = Float(m, r + "Alpha", 1f),
                     TargetUp = (AtlasLookAtUp)Mathf.Clamp(Int(m, r + "TargetUp", 0), 0, 3),
                     Forward = Vector3Of(m, r + "ForwardDirection", Vector3.forward),
@@ -280,7 +281,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             int c = Mathf.Clamp(Int(m, channel, 0), 0, 7);
             if (c >= 4) return new AtlasMask { VertexColor = true, Channel = Channels[c - 4] };
-            return masks == null ? null : new AtlasMask { Map = masks, Channel = Channels[c] };
+            return MaskOptions(m, masks == null ? null : new AtlasMask { Map = masks, Channel = Channels[c] }, "_VertexBasicsMask", c);
         }
     }
 }

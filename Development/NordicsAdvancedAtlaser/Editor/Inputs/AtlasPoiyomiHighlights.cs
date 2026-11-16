@@ -50,6 +50,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         OffsetMapStrength = Float(m, p + "OffsetMapStrength", 0f),
                         // The binormal unless switched to the tangent.
                         Bitangent = !On(m, p + "SwitchDirection"),
+                        EvenWidth = On(m, p + "EvenWidth"),
                         Tint = TintColor(m, d, p + "Tint", p + "TintIndex"),
                         Stylised = On(m, p + "ToonMode"),
                         Edge = Float(m, p + "Edge", 0.5f),

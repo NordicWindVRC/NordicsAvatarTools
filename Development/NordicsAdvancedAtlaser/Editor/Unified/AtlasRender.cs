@@ -101,6 +101,32 @@ namespace NordicWind.AdvancedAtlaser.Editor
     }
 
     // 6: how the material is drawn.
+    // The second pass's colour: the base colour's (Same), its own colour and alpha, or only its alpha.
+    public enum AtlasPassColor { Same, ColorAndAlpha, AlphaOnly }
+
+    // 6: the whole surface drawn again after the first pass (Poiyomi's Two Pass), with its own
+    // surface mode, blend factors and pass settings. Its alpha is pow(alpha, AlphaPower) (1 when
+    // opaque or ForceOpaque); pixels where it (1 − it with CutoffInvert) is below Cutoff are
+    // discarded whatever the mode. Mask bus steps of kind SecondPass tell the passes apart.
+    public sealed class AtlasSecondPass
+    {
+        public bool Enabled;
+        public AtlasSurfaceMode SurfaceMode = AtlasSurfaceMode.Opaque;
+        public AtlasBlendFactor SourceBlend = AtlasBlendFactor.One;
+        public AtlasBlendFactor DestinationBlend = AtlasBlendFactor.Zero;
+        public float Cutoff = 0.5f;
+        public bool CutoffInvert;
+        public float AlphaPower = 1f;
+        public bool AlphaToCoverage;
+        public bool ForceOpaque;
+        // ColorAndAlpha: the base colour's constant colour and alpha replaced by Color (linear);
+        // AlphaOnly: its alpha by Alpha.
+        public AtlasPassColor ColorSource = AtlasPassColor.Same;
+        public UnityEngine.Color Color = UnityEngine.Color.white;
+        public float Alpha = 1f;
+        public readonly AtlasPassSettings Pass = new AtlasPassSettings();
+    }
+
     public sealed class AtlasRender
     {
         public AtlasSurfaceMode SurfaceMode = AtlasSurfaceMode.Opaque;
@@ -118,11 +144,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasTextureReference MirrorBaseColor;
         public readonly AtlasNearClip NearClip = new AtlasNearClip();
         public bool Invisible;
+        // The shadow is as see-through as the surface, by a dither of its alpha.
+        public bool DitheredShadows;
         // Fade and transparent also discard below the cutoff.
         public bool CutoffInTransparent;
         public bool Fog = true;
         // Geometry very close to the camera isn't cut by the near plane.
         public bool ReduceNearClipping;
         public readonly AtlasPassSettings Pass = new AtlasPassSettings();
+        public readonly AtlasSecondPass SecondPass = new AtlasSecondPass();
+        // A depth-only pass first, so a see-through surface shows only its nearest layer.
+        public bool DepthPrepass;
     }
 }

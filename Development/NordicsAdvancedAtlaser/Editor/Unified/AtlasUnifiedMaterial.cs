@@ -24,7 +24,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly List<AtlasOutline> Outlines = new List<AtlasOutline>();
         // 5.3: applied in list order.
         public readonly List<AtlasDeformation> Deformations = new List<AtlasDeformation>();
+        public readonly AtlasTessellation Tessellation = new AtlasTessellation();
         public readonly AtlasFur Fur = new AtlasFur();
+        // The screen texture space's layout.
+        public readonly AtlasScreenSpace ScreenSpace = new AtlasScreenSpace();
+        public readonly AtlasTriplanar Triplanar = new AtlasTriplanar();
+        // Time for animation and modulators: the local clock, or VRChat's network time (the same
+        // for every viewer).
+        public AtlasClock Clock = AtlasClock.Local;
         public readonly AtlasRender Render = new AtlasRender();
         public readonly List<AtlasIssue> Issues = new List<AtlasIssue>();
 

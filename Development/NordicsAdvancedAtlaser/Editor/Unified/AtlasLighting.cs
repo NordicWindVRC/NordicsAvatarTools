@@ -13,6 +13,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
         PhysicallyBased
     }
 
+    // The physically based family's specular and energy conventions.
+    public enum AtlasPhysicalModel
+    {
+        // Unity Standard's.
+        Standard,
+        // Filament-style: GGX with height-correlated Smith visibility, multi-scattering energy
+        // compensation from a DFG lookup, diffuse × (1 − metallic) × (1 − the reflected energy),
+        // specular occlusion from N·V and occlusion, anisotropy as α(1 ± a) along a rotated tangent,
+        // and Charlie sheen (Poiyomi 11's PBR lighting type).
+        Calibrated
+    }
+
     public enum AtlasDiffuseModel
     {
         Lambert,
@@ -77,6 +89,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public sealed class AtlasLighting
     {
         public AtlasLightingFamily Family = AtlasLightingFamily.PhysicallyBased;
+        public AtlasPhysicalModel PhysicalModel = AtlasPhysicalModel.Standard;
+        // Every light colour (direct, ambient, additional) × LightMultiplier + LightAddition, at
+        // least 0.
+        public float LightMultiplier = 1f;
+        public float LightAddition;
+        // Flat: features reading the shading's light map see smoothstep(0.4, 0.6, the half-Lambert
+        // N·L; the vertex normal's for additional lights) instead of 1.
+        public bool FlatLightMap;
         // 3.2: the ramp toon family's ramp.
         public readonly AtlasRampToon Ramp = new AtlasRampToon();
         // 3.3: the physically based family's diffuse; Disney blends from Lambert by its amount.
@@ -118,6 +138,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float BrightnessCeiling = 1f;
         // 0–1: the direct light's limit blends from per channel to scaling by luminance, keeping the hue.
         public float LimitByLuminance;
+        // The limit scales the colour so its brightest channel is at the ceiling, keeping the hue
+        // (LimitByLuminance then unused).
+        public bool LimitKeepsHue;
         // 0–1: raises the light's luminance (direct and ambient) to at least this, keeping the hue.
         public float MinimumLight;
         // 0–1: base × value is added after lighting, like emission.
@@ -130,13 +153,21 @@ namespace NordicWind.AdvancedAtlaser.Editor
     }
 
     // 3.4: how per-pixel and vertex lights other than the main light behave.
+    // How each additional light joins the surface: added, or the brighter of the two per channel.
+    public enum AtlasLightCombine { Add, Max }
+
     public sealed class AtlasAdditionalLights
     {
+        // Poiyomi's default is Max (its add pass blend operation), with the alpha × MaxAlphaBoost
+        // (saturated) in that pass.
+        public AtlasLightCombine Combine = AtlasLightCombine.Add;
+        public float MaxAlphaBoost = 1f;
         public AtlasAdditionalLightShading Shading = AtlasAdditionalLightShading.SameAsMain;
         public float GradientStart, GradientEnd = 0.5f;
-        // Clamps each light's luminance to the ceiling.
+        // Clamps each light's luminance to the ceiling (its brightest channel with LimitKeepsHue).
         public bool LimitBrightness;
         public float BrightnessCeiling = 1f;
+        public bool LimitKeepsHue;
         // 0–1, as the main light's.
         public float ReceiveShadows = 1f;
         public float Monochrome;
@@ -201,6 +232,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float VerticalBlend = 1f;
         // Blended: samples a blurrier mip, 0–1.
         public float Softness;
+        // The map's blue blends the term toward half-Lambert; its alpha scales the shadow strength.
+        public bool MaskChannels;
     }
 
     // 3.5: LTCGI, area lights from video screens in worlds that have them.
@@ -230,6 +263,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float SpecularStrength = 1f;
         // Offsets the sample point along the normal.
         public float Bias;
+        // Only the first this many volume lights add highlights; 0: all.
+        public int SpecularMaxLights;
     }
 
     // A ramp described by numbers: piecewise linear between keys.
@@ -277,6 +312,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public sealed class AtlasRampToon
     {
         public AtlasShadingTerm Term = AtlasShadingTerm.HalfLambert;
+        // 0–1: back faces' term × (1 − it), so they fall into shadow.
+        public float BackFaceShadow;
         // Sampled along u at the shading term; a colour. Without a ramp or keys: white, fully lit.
         public AtlasTextureReference Ramp;
         // Instead of a texture: piecewise linear keys, in position order.

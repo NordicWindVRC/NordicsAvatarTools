@@ -6,8 +6,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // stacked, pushed-out layers with a strand pattern cut into each.
     public enum AtlasFurMethod { Strands, Shells }
 
+    // Vertex colours as a fur direction: off, RGB × 2 − 1 (Signed) or RGB as is (Unsigned).
+    public enum AtlasFurVertexDirection { Off, Signed, Unsigned }
+
     // 5.2: fur grown from the surface by an extra pass. The fur uses the material's own surface,
     // lighting and layers; these settings describe its shape, transparency and fur-only shading.
+    // Shells draw in the surface's own passes (6), so Transparent, AlphaToCoverage and Pass are
+    // the strands' only.
     public sealed class AtlasFur
     {
         public bool Enabled;
@@ -17,11 +22,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool AlphaToCoverage = true;
         // Colour of the fur itself; white when the fur simply shows the surface colour.
         public readonly AtlasColorInput Color = new AtlasColorInput();
+        // On the fur's colour, in order (target BaseColor: the fur colour).
+        public readonly System.Collections.Generic.List<AtlasColorAdjustment> ColorAdjustments = new System.Collections.Generic.List<AtlasColorAdjustment>();
         // Whether the fur colour texture also tints the skin underneath.
         public bool ColorAppliesToSurface;
         // 0–1: how much the strands narrow toward the tip.
         public float TipTaper;
-        // Fur bends away from a VRChat contact (1–8 selects which; 0 = none).
+        // Fur bends away from a VRChat contact (the mask bus's contact 1–8; 0 = none).
         public int ContactIndex;
         public float ContactPush = 1f;
         // Fewer layers from LevelOfDetailStart, down to one by LevelOfDetailEnd (metres from the
@@ -36,19 +43,28 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Per-texel direction (interpretation Direction); null when unused.
         public AtlasTextureReference DirectionMap;
         public float DirectionMapStrength = 1f;
-        // Take the strand direction from vertex colours instead of the map or the constant.
-        public bool DirectionFromVertexColors;
+        // Strands: the colour's xy added to the direction's, its z multiplying it. Shells: the
+        // signed colour replaces the normal as a tangent-space direction.
+        public AtlasFurVertexDirection VertexDirection;
         // 0–1: how far strands bend downward under gravity.
         public float Gravity = 0.25f;
         // Random per-strand variation of the direction.
         public float Randomness;
-        // Strand pattern; strands appear where it is bright.
+        // Strand pattern; strands appear where it is bright. Shells: its first channel is the
+        // strand height, saturate(remap(x, 0 → StrandNoiseRange.x, StrandNoiseRange.y → 1)).
         public AtlasTextureReference StrandNoise;
+        public Vector2 StrandNoiseRange = new Vector2(0f, 1f);
         // Thins the fur; null when unused.
         public AtlasMask AlphaMask;
-        // 0–1 darkening toward the strand roots.
+        // 0–1 darkening toward the strand roots. Shells: the colour × lerp(1, the strand height
+        // inverse-lerped between OcclusionRange.x and .y (clamped), RootOcclusion × AlphaMask).
         public float RootOcclusion;
+        public Vector2 OcclusionRange = new Vector2(0f, 1f);
+        // Strands 1–3; shells 1–31.
         public int LayerCount = 2;
+        // Strands drawn twice (Lil Fur Two Pass): first cut out at Length × CutoutLength, then in
+        // the fur's own mode. 0: once.
+        public float CutoutLength;
         // 0–1: how much of the strand keeps full width from the root up.
         public float RootWidth;
         // 0–1: strand thickness relative to the pattern.

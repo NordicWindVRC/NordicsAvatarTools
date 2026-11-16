@@ -125,6 +125,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 EmissionAmount = Float(m, "_CubeMapEmissionStrength", 0f),
                 HideInShadow = Float(m, "_CubeMapLightMask", 0f),
                 Blur = 1f - Float(m, "_CubeMapSmoothness", 1f),
+                // Poiyomi 11: the material's smoothness, with Reflections & Specular.
+                BlurFromRoughness = On(m, "_CubeMapUseMaterialSmoothness") && On(m, "_MochieBRDF"),
                 SurfaceNormalAmount = mode == 2 ? Float(m, "_CubeMapWorldNormalsStrength", 1f) : Int(m, "_CubeMapNormal", 1)
             };
             layer.Mask = Mask(m, d, "_CubeMapMask", Channels[Mathf.Clamp(Int(m, "_CubeMapMaskChannel", 0), 0, 3)]);

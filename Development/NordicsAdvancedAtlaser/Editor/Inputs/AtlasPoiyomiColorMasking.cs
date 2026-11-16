@@ -28,12 +28,75 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 };
                 layer.Source.Color = TintColor(m, d, "_" + name + "Color", "_" + name + "ColorThemeIndex", layer.Source);
                 layer.Source.Map = ScaledOffset(Texture(m, d, "_" + name + "Texture"), scaleOffset);
-                layer.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.BaseColor, PoiyomiBlend(Int(m, "_RGBA" + name + "BlendType", 0))));
+                var blend = PoiyomiBlend(Int(m, "_RGBA" + name + "BlendType", 0));
+                layer.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.BaseColor, blend));
                 d.Layers.Add(layer);
+                ColorMaskAlpha(m, d, i, name, layer, blend);
 
                 ColorMaskNormal(m, d, i, letter, scaleOffset);
                 ColorMaskSurface(m, d, i, name);
+                ColorMaskOcclusion(m, d, i, name, scaleOffset);
             }
+            ReportPackedOptions(m, d, "_RGBAMetallicMaps");
+            ReportPackedOptions(m, d, "_RGBASmoothnessMaps");
+            ReportPackedOptions(m, d, "_RGBAAOMaps");
+        }
+
+        // Affect Alpha (Poiyomi 11): alpha = lerp(alpha, saturate(blend(alpha, saturate(colour alpha + add))), mask),
+        // a layer of the same colour on the alpha.
+        private static void ColorMaskAlpha(Material m, AtlasUnifiedMaterial d, int index, string name, AtlasSurfaceLayer color, AtlasBlend blend)
+        {
+            if (!On(m, "_RGBA" + name + "AffectsAlpha")) return;
+            if (color.SourceAlphaOffset != 0f)
+                d.Report(AtlasIssueKind.Unmapped, "rgba.affects-alpha", "A colour mask region's alpha add on the material's alpha isn't mapped yet.");
+            var layer = new AtlasSurfaceLayer { Mask = color.Mask };
+            layer.Source.Color = color.Source.Color;
+            layer.Source.Map = color.Source.Map;
+            layer.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Alpha, blend) { Channel = AtlasChannel.Alpha });
+            d.Layers.Add(layer);
+        }
+
+        // AO (Poiyomi 11): occlusion = min(occlusion, lerp(1, the AO map's channel, mask × strength)), the
+        // map sampled with its own settings or the region's (custom sampling), and the region's scale and offset.
+        private static void ColorMaskOcclusion(Material m, AtlasUnifiedMaterial d, int index, string name, Vector4 scaleOffset)
+        {
+            float strength = Float(m, "_RGBA" + name + "AOStrength", 0f);
+            if (strength <= 0f) return;
+            string p = "_RGBA" + name + "AO";
+            AtlasTextureReference map;
+            if (On(m, p + "CustomSampling"))
+            {
+                map = AtlasSourceMapping.Texture(m, "_RGBAAOMaps", AtlasTextureInterpretation.Data);
+                if (map != null)
+                {
+                    var st = AtlasMaterialReader.Vector(m, p + "ScaleOffset", new Vector4(1f, 1f, 0f, 0f));
+                    map.Tiling = new Vector2(st.x, st.y);
+                    map.Offset = new Vector2(st.z, st.w);
+                    map.Space = UVSpace(m, d, p + "UV");
+                    var pan = AtlasMaterialReader.Vector(m, p + "Pan", Vector4.zero);
+                    map.Scroll = new Vector2(pan.x, pan.y) * 0.05f;
+                    if (On(m, p + "Stochastic")) map.Sampling = AtlasTextureSampling.Stochastic;
+                }
+            }
+            else map = Texture(m, d, "_RGBAAOMaps", AtlasTextureInterpretation.Data);
+            if (map == null) return;
+            var layer = new AtlasSurfaceLayer { Mask = RegionMask(m, d, index, name, p + "MaskChannel", p + "GlobalMaskChannel", p + "GlobalMaskBlendType") };
+            layer.Source.Map = ScaledOffset(map, scaleOffset);
+            // The darker wins, as Poiyomi's min; the same where regions don't overlap.
+            layer.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Occlusion, AtlasBlend.Darken, strength) { Channel = Channels[index] });
+            d.Layers.Add(layer);
+        }
+
+        // A region's own mask channel (4: the colour's) and global mask (17: the colour's).
+        private static AtlasMask RegionMask(Material m, AtlasUnifiedMaterial d, int index, string name, string channel, string global, string globalBlend)
+        {
+            int c = Int(m, channel, 4);
+            int g = Int(m, global, 17);
+            string colorChannel = "_Rgb" + name + "MaskChannel";
+            var maskChannel = Channels[Mathf.Clamp(c > 3 ? Int(m, colorChannel, index) : c, 0, 3)];
+            // Poiyomi 10's vertex colour mask type.
+            var mask = Int(m, "_RGBMaskType", 0) == 1 ? new AtlasMask { VertexColor = true, Channel = maskChannel } : Mask(m, d, "_RGBMask", maskChannel);
+            return g > 16 ? BusMask(m, mask, "_Rgb" + name + "GlobalMaskChannel", "_Rgb" + name + "GlobalMaskBlendType") : BusMask(m, mask, global, globalBlend);
         }
 
         // The channel's normal: whiteout over the base normal, or replacing it when no source is chosen.
@@ -61,17 +124,29 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var channel = Channels[index];
             var metallic = Texture(m, d, "_RGBAMetallicMaps", AtlasTextureInterpretation.Data);
             if (metallic != null)
-                d.Layers.Add(ValueLayer(m, d, index, metallic, new AtlasLayerTarget(AtlasSurfaceTarget.Metallic, AtlasBlend.Replace)
+                d.Layers.Add(ValueLayer(m, d, index, name, metallic, new AtlasLayerTarget(AtlasSurfaceTarget.Metallic, AtlasBlend.Replace)
                     { Channel = channel, InvertChannel = On(m, "_RGBA" + name + "MetallicInvert") }));
             var smoothness = Texture(m, d, "_RGBASmoothnessMaps", AtlasTextureInterpretation.Data);
             if (smoothness != null)
-                d.Layers.Add(ValueLayer(m, d, index, smoothness, new AtlasLayerTarget(AtlasSurfaceTarget.Roughness, AtlasBlend.Replace)
+            {
+                // Smoothness blends (Poiyomi 11) on roughness: min and max swap; add, subtract and
+                // multiply don't carry over.
+                int blend = Int(m, "_RGBA" + name + "SmoothnessBlend", 0);
+                var roughnessBlend = blend == 4 ? AtlasBlend.Lighten : blend == 5 ? AtlasBlend.Darken : AtlasBlend.Replace;
+                if (blend != 0 && blend != 4 && blend != 5)
+                    d.Report(AtlasIssueKind.Unmapped, "rgba.smoothness-blend", "A colour mask region's smoothness blended by add, subtract or multiply isn't mapped yet; replaced.");
+                d.Layers.Add(ValueLayer(m, d, index, name, smoothness, new AtlasLayerTarget(AtlasSurfaceTarget.Roughness, roughnessBlend)
                     { Channel = channel, InvertChannel = !On(m, "_RGBA" + name + "SmoothnessInvert") }));
+            }
+            if (On(m, "_RGBASmoothnessAffectsSecondSpecular") && On(m, "_Specular2ndLayer"))
+                d.Report(AtlasIssueKind.Unmapped, "rgba.second-specular", "Colour mask smoothness on the second specular lobe isn't mapped yet.");
         }
 
-        private static AtlasSurfaceLayer ValueLayer(Material m, AtlasUnifiedMaterial d, int index, AtlasTextureReference map, AtlasLayerTarget target)
+        // Metallic and smoothness read the region's PBR mask channel and global mask (Poiyomi 11; the colour's in 10).
+        private static AtlasSurfaceLayer ValueLayer(Material m, AtlasUnifiedMaterial d, int index, string name, AtlasTextureReference map, AtlasLayerTarget target)
         {
-            var layer = new AtlasSurfaceLayer { Mask = ColorMask(m, d, "_Rgb" + MaskChannelNames[index] + "MaskChannel", index) };
+            string p = "_RGBA" + name + "PBR";
+            var layer = new AtlasSurfaceLayer { Mask = RegionMask(m, d, index, name, p + "MaskChannel", p + "GlobalMaskChannel", p + "GlobalMaskBlendType") };
             layer.Source.Map = map;
             layer.Targets.Add(target);
             return layer;

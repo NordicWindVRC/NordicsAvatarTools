@@ -432,8 +432,9 @@ Every section follows its keyword, as the shader does (the inspector sets them).
   scale, rotation, on wrapped UV0 with scroll) with frames (sprite sheet or texture array,
   rate or fixed frame); blended by their alpha with the flipbook blend; unlit ones placed
   *overlay*. A flipbook replacing the alpha is reported.
-- **Refraction:** a refraction layer (IOR, tint, opacity, chromatic aberration, blur, the cut
-  mask), placement *lit* or *overlay* (unlit).
+- **Refraction:** a refraction layer (IOR, tint, opacity as the blend amount `1 − opacity`
+  with the factors zero and one, chromatic aberration, blur, the cut mask), placement *lit* or
+  *overlay* (unlit).
 - **Iridescence:** an angle layer on highlights and reflections only, scaled by metallic: hue
   rotation by the power band, or the ramp.
 - **UV distortion:** one shared distortion (simplex noise or a normal map, strength × 0.1, the

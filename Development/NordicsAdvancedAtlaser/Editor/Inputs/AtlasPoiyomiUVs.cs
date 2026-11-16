@@ -11,6 +11,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             distortion = null;
             distortedChannel = 0;
+            d.ScreenSpace.ObjectRelative = On(m, "_ScreenSpaceUVObjectScale");
+            d.ScreenSpace.WorldSize = Float(m, "_ScreenSpaceUVWorldSize", 1f);
             if (On(m, "_UVSettingsShiftBackfaceUV"))
                 d.Report(AtlasIssueKind.Unmapped, "uv.backface-shift", "Shifting back faces' UVs isn't mapped yet.");
             if (!On(m, "_EnableDistortion")) return;
@@ -70,6 +72,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             parallax.Enabled = true;
             parallax.Method = AtlasParallaxMethod.MultiStep;
             parallax.Height.Map = Texture(m, d, "_HeightMap", AtlasTextureInterpretation.Data);
+            parallax.Height.Channel = Channels[Mathf.Clamp(Int(m, "_HeightMapChannel", 0), 0, 3)];
             parallax.Depth = Float(m, "_HeightStrength", 0.005f);
             parallax.HeightOffset = Float(m, "_HeightOffset", 0f);
             parallax.Steps = Mathf.Max(1, Int(m, "_HeightStepsMax", 128));
@@ -77,6 +80,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 d.Report(AtlasIssueKind.Unmapped, "parallax.channel", "Parallax on a UV channel other than UV0 isn't mapped yet.");
             if (Mask(m, d, "_Heightmask") != null || Int(m, "_HeightmaskGlobalMask", 0) > 0)
                 d.Report(AtlasIssueKind.Unmapped, "parallax.mask", "A parallax mask isn't mapped yet.");
+            if (Float(m, "_CurvatureU", 0f) != 0f || Float(m, "_CurvatureV", 0f) != 0f)
+                d.Report(AtlasIssueKind.Unmapped, "parallax.curvature", "Parallax curvature (the height fading with the offset) isn't mapped yet.");
             d.Report(AtlasIssueKind.Note, "parallax.occlusion", "Poiyomi's cone-stepped parallax occlusion is read as multi-step parallax.");
         }
     }

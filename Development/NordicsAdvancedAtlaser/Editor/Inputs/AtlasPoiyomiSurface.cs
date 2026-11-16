@@ -30,6 +30,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 vertex.MultiplyAlpha = vertex.AlphaAmount > 0f;
                 // "Linear Colors" converts the vertex colours from sRGB to linear.
                 vertex.SrgbData = On(m, "_MainVertexColoringLinearSpace", 1f);
+                if (On(m, "_MainVertexColorHueShiftEnabled"))
+                {
+                    vertex.HueEnabled = true;
+                    vertex.HueShift = Float(m, "_MainVertexColorHueShift", 0f);
+                    // Turns per 20 seconds.
+                    vertex.HueSpeed = Float(m, "_MainVertexColorHueShiftSpeed", 0f) * 0.05f;
+                    vertex.HueMethod = Int(m, "_MainVertexColorHueShiftColorSpace", 0) == 1 ? AtlasHueMethod.HSV : AtlasHueMethod.Oklab;
+                    vertex.HueSet = Int(m, "_MainVertexColorHueSelectOrShift", 1) == 0;
+                }
             }
         }
 
@@ -89,6 +98,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             alpha.Dithering = On(m, "_AlphaDithering");
             alpha.DitherGradient = Float(m, "_AlphaDitherGradient", 0.1f);
             alpha.DitherBias = Float(m, "_AlphaDitherBias", 0f);
+            alpha.DitherCutout = Int(m, "_AlphaDitherMode", 0) == 1;
+            d.Render.DitheredShadows = On(m, "_AlphaDitheredShadows");
             if (On(m, "_AlphaForceOpaque", 1f)) alpha.Source = AtlasAlphaSource.None;
         }
 
@@ -138,6 +149,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 d.Surface.Normal.CorrectAmount = Float(m, "_NormalCorrectAmount", 0.9f);
                 d.Surface.Normal.CorrectOrigin = Vector3Of(m, "_NormalCorrectOrigin", new Vector3(0f, 0.4f, -0.025f));
+                int vertex = Int(m, "_NormalCorrectVertexColorMask", 0);
+                if (vertex > 0) d.Surface.Normal.CorrectMask = new AtlasMask { VertexColor = true, Channel = Channels[Mathf.Clamp(vertex - 1, 0, 3)] };
             }
         }
 
@@ -171,30 +184,82 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (Int(m, "_BlendOp", 0) != 0)
                 d.Report(AtlasIssueKind.Unmapped, "render.blend-op", "A blend operation other than add isn't mapped yet.");
 
-            var pass = render.Pass;
-            int cull = Int(m, "_Cull", 2);
-            pass.Cull = cull == 0 ? AtlasCull.Off : cull == 1 ? AtlasCull.Front : AtlasCull.Back;
-            pass.DepthTest = (AtlasDepthTest)Mathf.Clamp(Int(m, "_ZTest", 4), 0, 8);
-            pass.DepthWrite = On(m, "_ZWrite", 1f);
-            pass.DepthClip = On(m, "_ZClip", 1f);
-            pass.DepthOffsetFactor = Float(m, "_OffsetFactor", 0f);
-            pass.DepthOffsetUnits = Float(m, "_OffsetUnits", 0f);
-            pass.ColorMask = Int(m, "_ColorMask", 15);
-            var stencil = pass.Stencil;
-            stencil.Reference = Int(m, "_StencilRef", 0);
-            stencil.ReadMask = Int(m, "_StencilReadMask", 255);
-            stencil.WriteMask = Int(m, "_StencilWriteMask", 255);
-            stencil.Compare = (AtlasDepthTest)Mathf.Clamp(Int(m, "_StencilCompareFunction", 8), 0, 8);
-            stencil.Pass = (AtlasStencilOperation)Mathf.Clamp(Int(m, "_StencilPassOp", 0), 0, 7);
-            stencil.Fail = (AtlasStencilOperation)Mathf.Clamp(Int(m, "_StencilFailOp", 0), 0, 7);
-            stencil.DepthFail = (AtlasStencilOperation)Mathf.Clamp(Int(m, "_StencilZFailOp", 0), 0, 7);
-            stencil.Enabled = stencil.Reference != 0 || stencil.Compare != AtlasDepthTest.Always || stencil.Pass != AtlasStencilOperation.Keep;
-            if (Int(m, "_StencilType", 0) == 1)
-                d.Report(AtlasIssueKind.Unmapped, "render.stencil-faces", "Separate front- and back-face stencils aren't mapped yet.");
+            PassSettings(m, d, render.Pass, "");
 
             render.Fog = !On(m, "_IgnoreFog");
             render.TwoSidedLighting = On(m, "_FlipBackfaceNormals", 1f);
             render.ReduceNearClipping = On(m, "_RenderingReduceClipDistance");
+            SecondPass(m, d);
+        }
+
+        // Culling, depth, colour mask and stencil; the second pass's names end in 2 (_Stencil2…).
+        private static void PassSettings(Material m, AtlasUnifiedMaterial d, AtlasPassSettings pass, string n)
+        {
+            int cull = Int(m, "_Cull" + n, 2);
+            pass.Cull = cull == 0 ? AtlasCull.Off : cull == 1 ? AtlasCull.Front : AtlasCull.Back;
+            pass.DepthTest = (AtlasDepthTest)Mathf.Clamp(Int(m, "_ZTest" + n, 4), 0, 8);
+            pass.DepthWrite = On(m, "_ZWrite" + n, 1f);
+            pass.DepthClip = On(m, "_ZClip" + n, 1f);
+            pass.DepthOffsetFactor = Float(m, "_OffsetFactor" + n, 0f);
+            pass.DepthOffsetUnits = Float(m, "_OffsetUnits" + n, 0f);
+            pass.ColorMask = Int(m, "_ColorMask" + n, 15);
+            string s = "_Stencil" + n;
+            var stencil = pass.Stencil;
+            stencil.Reference = Int(m, s + "Ref", 0);
+            stencil.ReadMask = Int(m, s + "ReadMask", 255);
+            stencil.WriteMask = Int(m, s + "WriteMask", 255);
+            stencil.Compare = (AtlasDepthTest)Mathf.Clamp(Int(m, s + "CompareFunction", 8), 0, 8);
+            stencil.Pass = (AtlasStencilOperation)Mathf.Clamp(Int(m, s + "PassOp", 0), 0, 7);
+            stencil.Fail = (AtlasStencilOperation)Mathf.Clamp(Int(m, s + "FailOp", 0), 0, 7);
+            stencil.DepthFail = (AtlasStencilOperation)Mathf.Clamp(Int(m, s + "ZFailOp", 0), 0, 7);
+            stencil.Enabled = stencil.Reference != 0 || stencil.Compare != AtlasDepthTest.Always || stencil.Pass != AtlasStencilOperation.Keep;
+            if (Int(m, s + "Type", 0) == 1)
+                d.Report(AtlasIssueKind.Unmapped, "render.stencil-faces", "Separate front- and back-face stencils aren't mapped yet.");
+        }
+
+        // The Two Pass variants' second pass, and its pass masks (each writes 1 in its own pass and
+        // 0 in the other).
+        private static void SecondPass(Material m, AtlasUnifiedMaterial d)
+        {
+            if (!AtlasMaterialReader.Has(m, "_ModeTwoPass")) return;
+            var second = d.Render.SecondPass;
+            second.Enabled = true;
+            int preset = Int(m, "_ModeTwoPass", 0);
+            int source = Int(m, "_SrcBlend2", 1), destination = Int(m, "_DstBlend2", 0);
+            var match = System.Array.Find(Presets, p => p.Preset == preset);
+            if (match.Source == source && match.Destination == destination) second.SurfaceMode = match.Mode;
+            else
+            {
+                second.SurfaceMode = AtlasSurfaceMode.Custom;
+                second.SourceBlend = (AtlasBlendFactor)Mathf.Clamp(source, 0, 10);
+                second.DestinationBlend = (AtlasBlendFactor)Mathf.Clamp(destination, 0, 10);
+            }
+            if (Int(m, "_BlendOp2", 0) != 0)
+                d.Report(AtlasIssueKind.Unmapped, "render.blend-op", "A blend operation other than add isn't mapped yet.");
+            second.Cutoff = Float(m, "_TwoPassAlphaCutoff", 0.5f);
+            second.CutoffInvert = On(m, "_TwoPassAlphaCutoffInvert");
+            second.AlphaPower = Float(m, "_TwoPassAlphaPower", 1f);
+            second.AlphaToCoverage = On(m, "_AlphaToCoverage2");
+            second.ForceOpaque = On(m, "_AlphaForceOpaque2");
+            int color = Int(m, "_TwoPassOverrideFirstPassColor", 0);
+            second.ColorSource = color == 1 ? AtlasPassColor.ColorAndAlpha : color == 2 ? AtlasPassColor.AlphaOnly : AtlasPassColor.Same;
+            if (color == 1) second.Color = TintColor(m, d, "_TwoPassColor", "_TwoPassColorThemeIndex");
+            second.Alpha = Float(m, "_TwoPassAlphaOverride", 1f);
+            PassSettings(m, d, second.Pass, "2");
+
+            PassMask(m, d, "_TwoPassFirstPassGlobalMaskIndex", "_TwoPassFirtstPassApplyGlobalMaskBlendType", false);
+            PassMask(m, d, "_TwoPassSecondPassGlobalMaskIndex", "_TwoPassSecondPassApplyGlobalMaskBlendType", true);
+        }
+
+        private static void PassMask(Material m, AtlasUnifiedMaterial d, string index, string blend, bool second)
+        {
+            int channel = Int(m, index, 0);
+            if (channel <= 0) return;
+            d.MaskBus.Steps.Add(new AtlasMaskBusStep
+            {
+                Channel = Mathf.Clamp(channel - 1, 0, 15), Kind = AtlasMaskBusStepKind.SecondPass, Inside = second,
+                Blend = (AtlasMaskBlend)Mathf.Clamp(Int(m, blend, 0), 0, 7)
+            });
         }
     }
 }

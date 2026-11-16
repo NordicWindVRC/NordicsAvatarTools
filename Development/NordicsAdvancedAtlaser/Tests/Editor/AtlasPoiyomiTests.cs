@@ -203,7 +203,8 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [TestCase(5, AtlasLightingFamily.Flat, false)]
-        [TestCase(9, AtlasLightingFamily.PhysicallyBased, true)]
+        [TestCase(9, AtlasLightingFamily.PhysicallyBased, false)]
+        [TestCase(10, AtlasLightingFamily.PhysicallyBased, true)]
         public void FlatIsMappedAndUnknownTypesAreReported(int type, AtlasLightingFamily family, bool reported)
         {
             AtlasTestMaterials.AddSavedFloat(material, "_LightingMode", type);
@@ -1922,6 +1923,1041 @@ namespace NordicWind.AdvancedAtlaser.Tests
         public void ToonWithoutFurPropertiesHasNoFur()
         {
             Assert.IsFalse(ParseSaved().Fur.Enabled);
+        }
+
+        [TestCase("_MainBlackWhiteStrength", null, typeof(AtlasPoiyomiToon11Parser))]
+        [TestCase("_MainBlackWhiteStrength", "_ConstellationEnable", typeof(AtlasPoiyomiPro11Parser))]
+        [TestCase(null, "_ConstellationEnable", typeof(AtlasPoiyomiPro10Parser))]
+        public void ElevenAndProAreDetectedFromSavedValues(string elevenMarker, string proMarker, System.Type parser)
+        {
+            AddToon10Markers();
+            if (elevenMarker != null) AtlasTestMaterials.AddSavedFloat(material, elevenMarker);
+            if (proMarker != null) AtlasTestMaterials.AddSavedFloat(material, proMarker);
+            using (new AtlasTestMaterials.SavedValuesOnly())
+            {
+                var detected = AtlasShaderRegistry.Detect(material);
+                Assert.IsInstanceOf(parser, detected);
+                var features = detected.Parse(material).Issues.Select(i => i.Feature).ToArray();
+                // Every section is mapped or reported on its own now (step 9g-4f).
+                Assert.IsFalse(features.Contains("poiyomi.v11-sections"));
+                Assert.IsFalse(features.Contains("poiyomi.pro-sections"));
+            }
+        }
+
+        [Test]
+        public void MaskLevelsReshapeAMask()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_BackFaceEnabled", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_BackFaceMask", textureA);
+            AtlasTestMaterials.AddSavedColor(material, "_BackFaceMaskMLInputMin", new Color(0.5f, 0f, 0f, 0f));
+            AtlasTestMaterials.AddSavedColor(material, "_BackFaceMaskMLMidpoint", new Color(0.25f, 0.5f, 0.5f, 0.5f));
+            AtlasTestMaterials.AddSavedColor(material, "_BackFaceMaskMLInvert", new Color(1f, 0f, 0f, 0f));
+            AtlasTestMaterials.AddSavedColor(material, "_BackFaceMaskMLNormalize", new Color(1f, 0f, 0f, 0f));
+            AtlasTestMaterials.AddSavedColor(material, "_BackFaceMaskMLBoundsMin", new Color(0.2f, 0f, 0f, 0f));
+            AtlasTestMaterials.AddSavedColor(material, "_BackFaceMaskMLBoundsMax", new Color(0.6f, 1f, 1f, 1f));
+            var mask = ParseSaved().Layers.OfType<AtlasSurfaceLayer>().Single().Mask;
+            Assert.AreEqual(0.4f, mask.Levels.InputMin, 1e-5f, "Normalised into the bounds.");
+            Assert.AreEqual(0.6f, mask.Levels.InputMax, 1e-5f);
+            Assert.AreEqual(0.25f, mask.Levels.Midpoint, 1e-5f);
+            Assert.IsTrue(mask.Levels.Invert, "Without a vertex colour source the levels invert.");
+            Assert.IsFalse(mask.Invert);
+            Assert.AreEqual(1f, mask.Evaluate(0.3f), 1e-5f, "Below the input range, inverted.");
+        }
+
+        [Test]
+        public void VertexColourMaskSources()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableEmission", 1f);
+            AtlasTestMaterials.AddSavedColor(material, "_EmissionMaskVertexMask", new Color(3f, 0f, 0f, 0f));
+            AtlasTestMaterials.AddSavedFloat(material, "_EmissionMaskInvert", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_DecalEnabled1", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_DecalTexture1", textureA);
+            AtlasTestMaterials.AddSavedTexture(material, "_DecalMask", textureB);
+            AtlasTestMaterials.AddSavedColor(material, "_DecalMaskVertexMask", new Color(1f, 4f, 0f, 0f));
+            AtlasTestMaterials.AddSavedColor(material, "_DecalMaskMLInvert", new Color(0f, 1f, 0f, 0f));
+            var layers = ParseSaved().Layers.OfType<AtlasSurfaceLayer>().ToArray();
+            var decal = layers.Single(l => l.Placement == AtlasPlacement.Surface).Mask;
+            Assert.AreSame(textureB, decal.Map.Texture);
+            Assert.AreEqual(AtlasChannel.Green, decal.Channel, "Decal 1 reads green.");
+            Assert.IsTrue(decal.TimesVertexColor);
+            Assert.AreEqual(AtlasChannel.Alpha, decal.VertexChannel, "The decal mask's source is per channel.");
+            Assert.IsTrue(decal.Invert, "With a vertex colour source the invert comes after it.");
+            var emission = layers.Single(l => l.Placement == AtlasPlacement.Emission).Mask;
+            Assert.IsTrue(emission.VertexColor, "No texture: the vertex colour alone.");
+            Assert.AreEqual(AtlasChannel.Blue, emission.Channel);
+            Assert.IsTrue(emission.Invert, "The emission mask's own invert.");
+        }
+
+        [Test]
+        public void PbrLightingTypeIsCalibratedPhysicallyBased()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_LightingMode", 9f);
+            AtlasTestMaterials.AddSavedFloat(material, "_MochieBRDF", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_PoiPBRMaskMap", textureA);
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiPBRMetallic", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiPBRSmoothness", 0.8f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiPBRReflectance", 0.3f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiPBRMultiBounceAO", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiPBRClearCoat", 0.5f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiPBRAnisotropy", 0.4f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiPBRAnisotropyRotation", 30f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiPBRSheen", 0.6f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiPBRSheenChannel", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiPBRGlints", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiPBRGlintDensity", 500f);
+            var d = ParseSaved();
+            Assert.AreEqual(AtlasLightingFamily.PhysicallyBased, d.Lighting.Family);
+            Assert.AreEqual(AtlasPhysicalModel.Calibrated, d.Lighting.PhysicalModel);
+            var response = d.Surface.Response;
+            Assert.AreSame(textureA, response.Metallic.Map.Texture);
+            Assert.AreEqual(AtlasChannel.Red, response.Metallic.Channel);
+            Assert.AreEqual(AtlasChannel.Alpha, response.Roughness.Channel, "Smoothness in alpha.");
+            Assert.AreEqual(0.2f, response.Roughness.Evaluate(1f), 1e-5f);
+            Assert.AreEqual(AtlasChannel.Green, response.Occlusion.Channel);
+            Assert.AreEqual(0.3f, response.Reflectance.Constant, 1e-5f);
+            Assert.IsTrue(response.MultiBounceOcclusion);
+            Assert.AreEqual(0.5f, response.ClearCoat.Strength.Constant, 1e-5f);
+            Assert.AreEqual(0.1f, response.ClearCoat.Roughness.Constant, 1e-5f);
+            Assert.IsTrue(response.Anisotropy.MapMultiplies);
+            Assert.IsNull(response.Anisotropy.Map, "White.");
+            Assert.AreEqual(30f, response.Anisotropy.Rotation, 1e-5f);
+            Assert.AreEqual(0.6f, response.Sheen.Strength.Constant, 1e-5f);
+            Assert.AreEqual(AtlasChannel.Blue, response.Sheen.Strength.Channel);
+            Assert.AreEqual(500f, response.Glints.Density, 1e-5f);
+            Assert.IsTrue(response.Highlights.Enabled, "The BRDF section doesn't apply.");
+        }
+
+        [Test]
+        public void ElevenLightingAdditions()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_LightingCapMode", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_LightingAdditiveLimitMode", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_BackfaceForceShadow", 0.5f);
+            AtlasTestMaterials.AddSavedFloat(material, "_LightingLightVolumesSpecularMaxLights", 4f);
+            AtlasTestMaterials.AddSavedFloat(material, "_LightingMapMode", 4f);
+            AtlasTestMaterials.AddSavedTexture(material, "_LightDataSDFMap", textureA);
+            AtlasTestMaterials.AddSavedFloat(material, "_LightDataSDFChannelsBA", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableEnvironmentalRim", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_RimEnviroExposureOcclusion", 0.3f);
+            var d = ParseSaved();
+            Assert.IsTrue(d.Lighting.LimitKeepsHue);
+            Assert.IsTrue(d.Lighting.AdditionalLights.LimitKeepsHue);
+            Assert.AreEqual(0.5f, d.Lighting.Ramp.BackFaceShadow, 1e-5f);
+            Assert.AreEqual(4, d.Lighting.LightVolumes.SpecularMaxLights);
+            Assert.IsTrue(d.Lighting.Ramp.Sdf.MaskChannels);
+            Assert.AreEqual(0.3f, d.Layers.OfType<AtlasAngleLayer>().Single().ExposureOcclusion, 1e-5f);
+        }
+
+        [Test]
+        public void PackedMapMaskOptionsAreReported()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_MochieBRDF", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_MochieMetallicMaps", textureA);
+            AtlasTestMaterials.AddSavedColor(material, "_MochieMetallicMapsVertexMask", new Color(1f, 0f, 0f, 0f));
+            Assert.IsTrue(ParseSaved().Issues.Any(i => i.Feature == "mask.levels-packed"));
+        }
+
+        [Test]
+        public void BlackAndWhiteComesFirst()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_MainColorAdjustToggle", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_MainBlackWhiteToggle", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_MainBlackWhiteStrength", 0.8f);
+            AtlasTestMaterials.AddSavedFloat(material, "_MainBlackWhiteContrast", 1.5f);
+            AtlasTestMaterials.AddSavedFloat(material, "_MainBlackWhiteSelect", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_Saturation", 0.5f);
+            var adjustments = ParseSaved().ColorAdjustments;
+            Assert.AreEqual(AtlasColorOperation.BlackWhite, adjustments[0].Operation);
+            Assert.AreEqual(0.8f, adjustments[0].Amount, 1e-5f);
+            Assert.AreEqual(1.5f, adjustments[0].BlackWhite.Contrast, 1e-5f);
+            Assert.AreEqual(Mathf.GammaToLinearSpace(0.5f), adjustments[0].BlackWhite.Typical, 1e-5f, "The texture tone is an sRGB value.");
+            Assert.IsTrue(adjustments[0].BlackWhite.Select);
+            Assert.AreEqual(AtlasColorOperation.Saturation, adjustments[1].Operation);
+        }
+
+        [Test]
+        public void DecalMsdfSpriteSheetAndMirrorFlip()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_DecalEnabled", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_DecalTexture", textureA);
+            AtlasTestMaterials.AddSavedFloat(material, "_Decal0MSDF", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_Decal0FlipInMirror", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_DecalSmoothBorder", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_Decal0SpriteSheetEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_Decal0SpriteSheetColumns", 4f);
+            AtlasTestMaterials.AddSavedFloat(material, "_Decal0SpriteSheetRows", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_Decal0SpriteSheetFPS", 6f);
+            AtlasTestMaterials.AddSavedColor(material, "_Decal0SpriteSheetArea", new Color(0.5f, 1f, 0f, 0f));
+            var map = ParseSaved().Layers.OfType<AtlasSurfaceLayer>().Single().Source.Map;
+            Assert.AreEqual(AtlasTextureInterpretation.Msdf, map.Interpretation);
+            Assert.IsTrue(map.Decal.FlipInMirror);
+            Assert.IsTrue(map.Decal.SmoothBorder);
+            Assert.AreEqual(AtlasFrameSource.SpriteSheet, map.Frames.Source);
+            Assert.AreEqual(4, map.Frames.Columns);
+            Assert.AreEqual(6f, map.Frames.Rate, 1e-5f);
+            Assert.AreEqual(0.5f, map.Frames.Area.x, 1e-5f);
+        }
+
+        [Test]
+        public void ColorMaskRegionsGainAlphaAndOcclusion()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_RGBMaskEnabled", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_RGBMask", textureA);
+            AtlasTestMaterials.AddSavedFloat(material, "_RGBAGreenEnable", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_RGBAGreenAffectsAlpha", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_RGBAGreenAOStrength", 0.7f);
+            AtlasTestMaterials.AddSavedTexture(material, "_RGBAAOMaps", textureB);
+            AtlasTestMaterials.AddSavedFloat(material, "_RGBAGreenAOMaskChannel", 3f);
+            var layers = ParseSaved().Layers.OfType<AtlasSurfaceLayer>().ToArray();
+            Assert.AreEqual(3, layers.Length, "Colour, alpha, occlusion.");
+            Assert.AreEqual(AtlasSurfaceTarget.Alpha, layers[1].Targets[0].Target);
+            Assert.AreEqual(AtlasChannel.Alpha, layers[1].Targets[0].Channel);
+            var occlusion = layers[2];
+            Assert.AreSame(textureB, occlusion.Source.Map.Texture);
+            Assert.AreEqual(AtlasSurfaceTarget.Occlusion, occlusion.Targets[0].Target);
+            Assert.AreEqual(AtlasBlend.Darken, occlusion.Targets[0].Blend);
+            Assert.AreEqual(0.7f, occlusion.Targets[0].Opacity, 1e-5f);
+            Assert.AreEqual(AtlasChannel.Green, occlusion.Targets[0].Channel, "The region's AO channel.");
+            Assert.AreEqual(AtlasChannel.Alpha, occlusion.Mask.Channel, "Its own mask channel.");
+        }
+
+        [Test]
+        public void VertexColourHueDitherModeAndDitheredShadows()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_MainVertexColoringEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_MainVertexColoring", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_MainVertexColorHueShiftEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_MainVertexColorHueShift", 0.25f);
+            AtlasTestMaterials.AddSavedFloat(material, "_MainVertexColorHueShiftSpeed", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_AlphaDithering", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_AlphaDitherMode", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_AlphaDitheredShadows", 1f);
+            var d = ParseSaved();
+            var vertex = d.Surface.VertexColor;
+            Assert.IsTrue(vertex.HueEnabled);
+            Assert.AreEqual(0.25f, vertex.HueShift, 1e-5f);
+            Assert.AreEqual(0.1f, vertex.HueSpeed, 1e-5f, "Turns per 20 seconds.");
+            Assert.IsTrue(d.Surface.Alpha.DitherCutout);
+            Assert.IsTrue(d.Render.DitheredShadows);
+        }
+
+        [TestCase(0, AtlasPlacement.Overlay, AtlasLightResponse.ScaleByLight)]
+        [TestCase(1, AtlasPlacement.Surface, AtlasLightResponse.IgnoreLight)]
+        [TestCase(2, AtlasPlacement.Overlay, AtlasLightResponse.ScaleByDirectLight)]
+        public void LilToonRimApplicationStage(int stage, AtlasPlacement placement, AtlasLightResponse response)
+        {
+            material.SetTexture("_MainTex", textureA);
+            material.SetTextureScale("_MainTex", new Vector2(2f, 2f));
+            material.SetFloat("_Mode", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableRimLighting", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_RimStyle", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_RimApplicationStage", stage);
+            AtlasTestMaterials.AddSavedFloat(material, "_RimAAStrength", 0.3f);
+            AtlasTestMaterials.AddSavedFloat(material, "_RimApplyTransparency", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_RimColorTex", textureB);
+            AtlasTestMaterials.AddSavedFloat(material, "_RimUseMainTexUV", 1f);
+            var rim = ParseSaved().Layers.OfType<AtlasAngleLayer>().Single();
+            Assert.AreEqual(placement, rim.Placement);
+            Assert.AreEqual(response, rim.LightResponse);
+            Assert.AreEqual(0.3f, rim.AntiAliasing, 1e-5f);
+            Assert.IsTrue(rim.TimesAlpha, "Fade mode.");
+            Assert.AreEqual(new Vector2(2f, 2f), rim.Color.Map.Tiling, "Through the main texture's tiling.");
+        }
+
+        [Test]
+        public void SecondBacklight()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_BacklightEnabled__1", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_BacklightBorder__1", 0.4f);
+            AtlasTestMaterials.AddSavedFloat(material, "_BacklightApplyToOutlines__1", 0f);
+            var backlight = ParseSaved().Layers.OfType<AtlasAngleLayer>().Single();
+            Assert.AreEqual(AtlasAngleSource.Backlight, backlight.Source);
+            Assert.AreEqual(0.375f, backlight.Low, 1e-5f, "Border − blur / 2.");
+            Assert.IsFalse(backlight.OnOutlines);
+        }
+
+        [Test]
+        public void ContactsWriteTheMaskBus()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_GlobalMaskContactsEnable", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GlobalMaskContactEnable_2", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GlobalMaskContactTarget_2", 5f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GlobalMaskContactRadius_2", 0.1f);
+            AtlasTestMaterials.AddSavedColor(material, "_GlobalMaskContactTag_2", new Color(3f, 0f, 0f, 0f));
+            AtlasTestMaterials.AddSavedFloat(material, "_GlobalMaskContactPeople_2", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GlobalMaskContactPosition_2", 0f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GlobalMaskContactThemeColor_2", 1f);
+            var d = ParseSaved();
+            var step = d.MaskBus.Steps.Single();
+            Assert.AreEqual(AtlasMaskBusStepKind.Contact, step.Kind);
+            Assert.AreEqual(4, step.Channel, "2R.");
+            Assert.AreEqual(0.1f, step.Contact.InnerRadius, 1e-5f);
+            Assert.AreEqual(3, step.Contact.Tags[0]);
+            Assert.AreEqual(AtlasContactPeople.Others, step.Contact.People);
+            Assert.IsFalse(step.Contact.AroundTouch, "Whole mesh.");
+            Assert.IsTrue(d.Issues.Any(i => i.Feature == "contact.person-color"));
+        }
+
+        [Test]
+        public void GlobalMaskTexturesTakeMaskLevels()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_GlobalMaskTexturesEnable", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_GlobalMaskTexture0", textureA);
+            AtlasTestMaterials.AddSavedColor(material, "_GlobalMaskTexture0MLOutputMax", new Color(1f, 0.5f, 1f, 1f));
+            var steps = ParseSaved().MaskBus.Steps;
+            Assert.IsNull(steps[0].Mask.Levels, "Red unchanged.");
+            Assert.AreEqual(0.5f, steps[1].Mask.Levels.OutputMax, 1e-5f, "Green's levels.");
+            Assert.AreSame(textureA, steps[1].Mask.Map.Texture);
+        }
+
+        [Test]
+        public void OutlineMaskChannelsPerProperty()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableOutlines", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_OutlineMask", textureA);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineMaskChannel", 4f);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineColorMaskChannel", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineHighlightMaskChannel", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineGlobalMask", 3f);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineEdgeFade", 0.4f);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineThinFade", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineCameraDepth", 0f);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineZClip", 0f);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineOffsetUnits", -2f);
+            var outline = ParseSaved().Outlines.Single();
+            Assert.IsNull(outline.WidthMask, "The size mask is off.");
+            Assert.AreSame(textureA, outline.ColorMask.Map.Texture);
+            Assert.AreEqual(AtlasChannel.Green, outline.ColorMask.Channel);
+            Assert.AreEqual(AtlasChannel.Blue, outline.Highlight.Mask.Channel);
+            Assert.IsNull(outline.AlphaMask);
+            Assert.AreEqual(2, outline.Mask.Bus, "1B.");
+            Assert.AreEqual(0.4f, outline.EdgeFade, 1e-5f);
+            Assert.IsTrue(outline.SmoothThin);
+            Assert.IsFalse(outline.WritesCameraDepth);
+            Assert.IsFalse(outline.Pass.DepthClip);
+            Assert.AreEqual(-2f, outline.Pass.DepthOffsetUnits, 1e-5f);
+        }
+
+        [Test]
+        public void LightFacingOutlineSideWidths()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableOutlines", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineExpansionMode", 2f);
+            AtlasTestMaterials.AddSavedColor(material, "_OutlineRimFalloff", new Color(0.2f, 0.8f, 0f, 1f));
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineRimSizeFollowsLight", 0.5f);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineRimDarkWidth", 2f);
+            var outline = ParseSaved().Outlines.Single();
+            Assert.AreEqual(AtlasOutlineShape.LightFacing, outline.Shape);
+            Assert.AreEqual(0.2f, outline.LightFalloff.x, 1e-5f);
+            Assert.AreEqual(0.5f, outline.SizeFollowsLight, 1e-5f);
+            Assert.AreEqual(0.02f, outline.DarkSideWidth, 1e-6f, "In hundredths, like the width.");
+        }
+
+        [Test]
+        public void OutlineColorAdjustAndEmissionColour()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableOutlines", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineHueShift", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineHue", 0.25f);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineHueOffsetSpeed", 4f);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineSaturation", 0.5f);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineGamma", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineEmissionCustomColor", 1f);
+            AtlasTestMaterials.AddSavedColor(material, "_OutlineEmissionColor", Color.red);
+            var d = ParseSaved();
+            var outline = d.Outlines.Single();
+            CollectionAssert.AreEqual(new[] { AtlasColorOperation.Hue, AtlasColorOperation.Saturation, AtlasColorOperation.Clamp, AtlasColorOperation.Power },
+                outline.ColorAdjustments.Select(a => a.Operation).ToArray());
+            Assert.AreEqual(0.25f, outline.ColorAdjustments[0].Amount, 1e-5f);
+            Assert.AreEqual(1.5f, outline.ColorAdjustments[1].Amount, 1e-5f);
+            var turning = d.Modulators.Single();
+            Assert.AreEqual("outlines[0].colorAdjustments[0].amount", turning.Target);
+            Assert.AreEqual(0.2f, turning.Time.Frequency, 1e-5f, "Turns per 20 seconds.");
+            Assert.AreEqual(Color.red, outline.EmissionColor.Color);
+            Assert.IsFalse(d.Issues.Any(i => i.Feature == "outline.color-adjust"));
+        }
+
+        [Test]
+        public void ElevenSmallSurfaceAdditions()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_NormalCorrect", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_NormalCorrectVertexColorMask", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ScreenSpaceUVObjectScale", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ScreenSpaceUVWorldSize", 0.5f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PostProcess", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PPContrast", 1.2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PPIncludeEmission", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PPMaskGlobalMask", 2f);
+            var d = ParseSaved();
+            Assert.AreEqual(AtlasChannel.Green, d.Surface.Normal.CorrectMask.Channel);
+            Assert.IsTrue(d.Surface.Normal.CorrectMask.VertexColor);
+            Assert.IsTrue(d.ScreenSpace.ObjectRelative);
+            Assert.AreEqual(0.5f, d.ScreenSpace.WorldSize, 1e-5f);
+            var contrast = d.ColorAdjustments.Single();
+            Assert.IsTrue(contrast.IncludeEmission);
+            Assert.AreEqual(1, contrast.Mask.Bus, "1G.");
+        }
+
+        [Test]
+        public void ElevenSmallLayerAdditions()
+        {
+            var array = new Texture2DArray(4, 4, 2, TextureFormat.RGBA32, false);
+            try
+            {
+                AtlasTestMaterials.AddSavedFloat(material, "_EnableFlipbook", 1f);
+                AtlasTestMaterials.AddSavedTexture(material, "_FlipbookTexArray", array);
+                AtlasTestMaterials.AddSavedFloat(material, "_FlipbookDepth", 0.3f);
+                AtlasTestMaterials.AddSavedFloat(material, "_FlipbookFlipInMirror", 1f);
+                AtlasTestMaterials.AddSavedFloat(material, "_EnableEmission", 1f);
+                AtlasTestMaterials.AddSavedFloat(material, "_EmissionApplyTransparency", 1f);
+                AtlasTestMaterials.AddSavedFloat(material, "_AlphaPremultiply", 1f);
+                AtlasTestMaterials.AddSavedFloat(material, "_GlitterEnable", 1f);
+                AtlasTestMaterials.AddSavedFloat(material, "_GlitterAngleOffset", 30f);
+                AtlasTestMaterials.AddSavedFloat(material, "_EnableDissolve", 1f);
+                AtlasTestMaterials.AddSavedFloat(material, "_DissolveHueShiftEnabled", 1f);
+                AtlasTestMaterials.AddSavedFloat(material, "_DissolveGamma", 2f);
+                var d = ParseSaved();
+                var flipbook = d.Layers.OfType<AtlasSurfaceLayer>().Single(l => l.Source.Map?.Frames != null);
+                Assert.AreEqual(0.3f, flipbook.Source.Map.Decal.Depth, 1e-5f);
+                Assert.IsTrue(flipbook.Source.Map.Decal.FlipInMirror);
+                Assert.IsTrue(d.Layers.OfType<AtlasSurfaceLayer>().Single(l => l.Placement == AtlasPlacement.Emission).EmissionTimesAlpha);
+                Assert.AreEqual(30f, d.Layers.OfType<AtlasPatternLayer>().Single().Glitter.AngleOffset, 1e-5f);
+                var transition = d.Layers.OfType<AtlasTransitionLayer>().Single();
+                Assert.IsTrue(d.ColorAdjustments.Any(a => a.Layer == transition && a.Operation == AtlasColorOperation.Power && a.Amount == 2f));
+            }
+            finally { Object.DestroyImmediate(array); }
+        }
+
+        [Test]
+        public void ElevenPathingMotionAndMasks()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_EnablePathing", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_PathingMap", textureA);
+            AtlasTestMaterials.AddSavedTexture(material, "_PathingMaskMap", textureB);
+            AtlasTestMaterials.AddSavedFloat(material, "_PathingMaskChannelG", 0f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PathingMaskChannelR", 4f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PathDirectionChannelG", 3f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PathMotionG", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PathEasingG", 3f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PathEdgesG", 1f);
+            AtlasTestMaterials.AddSavedColor(material, "_PathHeadSoftness", new Color(0.1f, 0.3f, 0.1f, 0.1f));
+            AtlasTestMaterials.AddSavedFloat(material, "_PathOverlapMode", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PathAntialiasing", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PathingUseColorMapAlpha", 0f);
+            var path = ParseSaved().Layers.OfType<AtlasPatternLayer>().Single().Path;
+            Assert.AreEqual(AtlasPathOverlap.Brightest, path.Overlap);
+            Assert.IsTrue(path.Antialiasing);
+            Assert.IsFalse(path.ColorMapAlphaMasks);
+            Assert.IsNull(path.Channels[0].PackedMask, "None.");
+            var green = path.Channels[1];
+            Assert.AreSame(textureB, green.PackedMask.Map.Texture);
+            Assert.AreEqual(AtlasChannel.Red, green.PackedMask.Channel);
+            Assert.AreEqual(2, green.GradientChannel, "The map's blue.");
+            Assert.AreEqual(-1, path.Channels[0].GradientChannel, "Its own.");
+            Assert.IsTrue(green.PingPong);
+            Assert.AreEqual(AtlasPathEasing.InOut, green.Easing);
+            Assert.IsTrue(green.SeparateEdges);
+            Assert.AreEqual(0.3f, green.HeadSoftness, 1e-5f);
+        }
+
+        [Test]
+        public void ElevenVoronoiAndInternalParallax()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableAudioLink", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_VoronoiEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_VoronoiCellMotion", 0.5f);
+            AtlasTestMaterials.AddSavedFloat(material, "_VoronoiHueShiftEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_VoronoiHueShift", 0.2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_AudioLinkVoronoiCellsEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_AudioLinkVoronoiCellsBand", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiInternalParallax", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_ParallaxInternalMap", textureA);
+            AtlasTestMaterials.AddSavedFloat(material, "_ParallaxInternalEmissionStrength", 3f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ParallaxInternalRefractionEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ParallaxInternalRefractionIOR", 1.5f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ParallaxInternalFogEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ParallaxInternalSmooth", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ParallaxInternalAlpha", 0.4f);
+            var d = ParseSaved();
+            var layers = d.Layers.OfType<AtlasPatternLayer>().ToArray();
+            var voronoi = layers.Single(l => l.Kind == AtlasPatternKind.Voronoi);
+            Assert.AreEqual(0.5f, voronoi.Voronoi.CellMotion, 1e-5f);
+            Assert.AreEqual(1, voronoi.Voronoi.AudioCells.Band);
+            var hue = d.ColorAdjustments.Single(a => a.Layer == voronoi);
+            Assert.AreEqual(0.2f, hue.Amount, 1e-5f);
+            var parallax = layers.Single(l => l.Kind == AtlasPatternKind.InternalParallax);
+            Assert.AreEqual(3f, parallax.EmissionAmount, 1e-5f);
+            Assert.IsTrue(parallax.InternalParallax.Refraction);
+            Assert.AreEqual(1.5f, parallax.InternalParallax.RefractionIor, 1e-5f);
+            Assert.IsTrue(parallax.InternalParallax.Fog);
+            Assert.IsTrue(parallax.InternalParallax.Smooth);
+            Assert.AreEqual(0.4f, parallax.InternalParallax.AlphaAdd, 1e-5f);
+        }
+
+        [Test]
+        public void ElevenAudioSpectrum()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableAudioLink", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableALDecal", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ALDecalFlip", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ALDecalUVMode", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ALDecalRadialMode", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ALDecalArcDegrees", 180f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ALDecalDisplayMode", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ALDecalSamplingMode", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ALDecalFrequencyMax", 8000f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ALDecalResponse", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ALDecalColorMode", 2f);
+            AtlasTestMaterials.AddSavedTexture(material, "_ALDecalGradient", textureA);
+            AtlasTestMaterials.AddSavedFloat(material, "_ALDecalMasterOpacity", 0.5f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ALDecalPreview", 3f);
+            var d = ParseSaved();
+            var spectrum = d.Layers.OfType<AtlasPatternLayer>().Single().AudioSpectrum;
+            Assert.IsFalse(spectrum.FlipU);
+            Assert.IsTrue(spectrum.FlipV);
+            Assert.IsTrue(spectrum.Circle);
+            Assert.IsTrue(spectrum.Arc);
+            Assert.AreEqual(180f, spectrum.ArcDegrees, 1e-5f);
+            Assert.AreEqual(AtlasSpectrumDisplay.SmoothLine, spectrum.Display);
+            Assert.IsTrue(spectrum.FrequencyMapping);
+            Assert.AreEqual(8000f, spectrum.FrequencyMax, 1e-5f);
+            Assert.AreEqual(AtlasSpectrumResponse.Responsive, spectrum.Response);
+            Assert.AreEqual(AtlasSpectrumColorMode.Gradient, spectrum.ColorMode);
+            Assert.AreSame(textureA, spectrum.Gradient.Texture);
+            Assert.AreEqual(0.5f, spectrum.MasterOpacity, 1e-5f);
+            Assert.IsTrue(d.Issues.Any(i => i.Feature == "spectrum.debug"), "A static preview level.");
+        }
+
+        [Test]
+        public void ProScreenShadowsAndToneMapping()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_SSAOEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_SSAOIntensity", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_SSAOApplyGlobalMaskIndex", 3f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ContactShadowsEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ContactShadowsApplyMode", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ContactShadowsLightSource", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ContactShadowsCustomLightSpace", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GT7ToneMapping", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GT7TM_ColorAccuracy", 0.8f);
+            AtlasTestMaterials.AddSavedFloat(material, "_NeutralEmission", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_NeutralEmissionHueCorrection", 0.5f);
+            var d = ParseSaved();
+            var layers = d.Layers.OfType<AtlasPatternLayer>().ToArray();
+            var ao = layers.Single(l => l.Kind == AtlasPatternKind.AmbientOcclusion);
+            Assert.AreEqual(2f, ao.AmbientOcclusion.Intensity, 1e-5f);
+            Assert.AreEqual(AtlasBlend.Multiply, ao.Blend);
+            Assert.AreSame(ao, d.MaskBus.Steps.Single().Layer, "Written into 1C.");
+            var contact = layers.Single(l => l.Kind == AtlasPatternKind.ContactShadow).ContactShadow;
+            Assert.IsTrue(contact.ApplyToColor);
+            Assert.IsTrue(contact.ApplyToLightMap);
+            Assert.IsTrue(contact.CustomDirection);
+            Assert.AreEqual(AtlasDirectionSpace.Object, contact.DirectionSpace);
+            var gt7 = d.ColorAdjustments.Single(a => a.Operation == AtlasColorOperation.ToneMapGt7);
+            Assert.AreEqual(AtlasAdjustmentTarget.FinalColor, gt7.Target);
+            Assert.AreEqual(0.8f, gt7.Settings.x, 1e-5f);
+            var neutral = d.ColorAdjustments.Single(a => a.Operation == AtlasColorOperation.NeutralEmission);
+            Assert.AreEqual(AtlasAdjustmentTarget.Emission, neutral.Target);
+            Assert.AreEqual(0.5f, neutral.Settings.y, 1e-5f);
+        }
+
+        [Test]
+        public void ProTpsSquishAndOutlineBake()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_TPSPenetratorEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_TPS_PenetratorLength", 0.2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_TPS_Channel", 3f);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableSquish", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_SquishSource", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_SquishStrength", 0.5f);
+            AtlasTestMaterials.AddSavedTexture(material, "_SquishGradient", textureA);
+            AtlasTestMaterials.AddSavedFloat(material, "_SquishApplyGlobalMaskIndex", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableOutlines", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_OutlineCurvatureData", textureB);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineCurvatureTipStyle", 1f);
+            var d = ParseSaved();
+            CollectionAssert.AreEqual(new[] { AtlasDeformationKind.Tps, AtlasDeformationKind.Squish }, d.Deformations.Select(x => x.Kind).ToArray());
+            Assert.AreEqual(0.2f, d.Deformations[0].Tps.Length, 1e-5f);
+            Assert.AreEqual(3, d.Deformations[0].Tps.Channel);
+            var squish = d.Deformations[1].Squish;
+            Assert.IsTrue(squish.Orifice);
+            Assert.AreEqual(0.5f, squish.Strength, 1e-5f);
+            var layer = d.Layers.OfType<AtlasPatternLayer>().Single();
+            Assert.AreSame(squish, layer.Squish, "The deformation and its colour share the settings.");
+            Assert.AreSame(layer, d.MaskBus.Steps.Single().Layer);
+            var curvature = d.Outlines.Single().Curvature;
+            Assert.AreSame(textureB, curvature.Data.Texture);
+            Assert.AreEqual(AtlasOutlineTipStyle.Taper, curvature.TipStyle);
+        }
+
+        [Test]
+        public void TpsAnimationToggleOffIsOff()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_TPSPenetratorEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_TPS_AnimatedToggle", 0f);
+            Assert.IsEmpty(ParseSaved().Deformations);
+        }
+
+        [Test]
+        public void ProConstellationWithAudioLink()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_ConstellationEnable", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ConstellationBlendMode", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ConstellationDensity", 20f);
+            AtlasTestMaterials.AddSavedColor(material, "_ConstellationOffset", new Color(0.1f, 0.2f, 0.3f, 0f));
+            AtlasTestMaterials.AddSavedFloat(material, "_ConstellationRandomColors", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ConstellationApplyGlobalMaskIndex", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableAudioLink", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ConstellationAudioLinkEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ConstellationALThemeColor", 2f);
+            AtlasTestMaterials.AddSavedColor(material, "_ConstellationALSizeMod", new Color(0f, 0.5f, 0f, 0f));
+            AtlasTestMaterials.AddSavedFloat(material, "_ConstellationALHueShiftSpeed", 0.2f);
+            var d = ParseSaved();
+            var layer = d.Layers.OfType<AtlasPatternLayer>().Single();
+            Assert.AreEqual(AtlasPatternKind.Constellation, layer.Kind);
+            Assert.AreEqual(AtlasBlend.Multiply, layer.Blend);
+            Assert.AreEqual(3f, layer.EmissionAmount, 1e-5f);
+            var c = layer.Constellation;
+            Assert.AreEqual(20f, c.Density, 1e-5f);
+            Assert.AreEqual(0.3f, c.Phase, 1e-5f);
+            Assert.AreEqual(new Vector2(0.1f, 0.2f), c.Offset);
+            Assert.IsTrue(c.RandomColors);
+            Assert.AreEqual(2, c.AudioThemeColor);
+            Assert.AreSame(layer, d.MaskBus.Steps.Single().Layer);
+            string path = "layers[" + d.Layers.IndexOf(layer) + "]";
+            CollectionAssert.AreEquivalent(new[] { path + ".constellation.starSize", path + ".constellation.hueOffset" },
+                d.Modulators.Select(x => x.Target).ToArray());
+        }
+
+        [Test]
+        public void ConstellationWithoutAudioLinkIgnoresItsAudioSettings()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_ConstellationEnable", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ConstellationRandomColors", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ConstellationAudioLinkEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ConstellationALThemeColor", 2f);
+            var d = ParseSaved();
+            var layer = d.Layers.OfType<AtlasPatternLayer>().Single();
+            Assert.AreEqual(AtlasBlend.Add, layer.Blend, "Add by default.");
+            Assert.AreEqual(0, layer.Constellation.AudioThemeColor);
+            Assert.IsEmpty(d.Modulators);
+        }
+
+        [Test]
+        public void TwoPassReadsTheSecondPassAndItsMasks()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_ModeTwoPass", 3f);
+            AtlasTestMaterials.AddSavedFloat(material, "_SrcBlend2", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_DstBlend2", 10f);
+            AtlasTestMaterials.AddSavedFloat(material, "_Cull2", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ZWrite2", 0f);
+            AtlasTestMaterials.AddSavedFloat(material, "_Stencil2Ref", 7f);
+            AtlasTestMaterials.AddSavedFloat(material, "_TwoPassAlphaCutoff", 0.2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_TwoPassAlphaPower", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_TwoPassOverrideFirstPassColor", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_TwoPassAlphaOverride", 0.4f);
+            AtlasTestMaterials.AddSavedFloat(material, "_TwoPassFirstPassGlobalMaskIndex", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_TwoPassSecondPassGlobalMaskIndex", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_TwoPassSecondPassApplyGlobalMaskBlendType", 7f);
+            var d = ParseSaved();
+            var second = d.Render.SecondPass;
+            Assert.IsTrue(second.Enabled);
+            Assert.AreEqual(AtlasSurfaceMode.Transparent, second.SurfaceMode);
+            Assert.AreEqual(AtlasCull.Front, second.Pass.Cull);
+            Assert.IsFalse(second.Pass.DepthWrite);
+            Assert.AreEqual(7, second.Pass.Stencil.Reference);
+            Assert.IsTrue(second.Pass.Stencil.Enabled);
+            Assert.AreEqual(0.2f, second.Cutoff, 1e-5f);
+            Assert.AreEqual(2f, second.AlphaPower, 1e-5f);
+            Assert.AreEqual(AtlasPassColor.AlphaOnly, second.ColorSource);
+            Assert.AreEqual(0.4f, second.Alpha, 1e-5f);
+            Assert.AreEqual(AtlasCull.Back, d.Render.Pass.Cull, "The first pass keeps its own settings.");
+            var steps = d.MaskBus.Steps.Where(x => x.Kind == AtlasMaskBusStepKind.SecondPass).ToArray();
+            Assert.AreEqual(2, steps.Length);
+            Assert.AreEqual(0, steps[0].Channel);
+            Assert.IsFalse(steps[0].Inside);
+            Assert.AreEqual(1, steps[1].Channel);
+            Assert.IsTrue(steps[1].Inside);
+            Assert.AreEqual(AtlasMaskBlend.Add, steps[1].Blend);
+        }
+
+        [Test]
+        public void WithoutTwoPassThereIsNoSecondPass()
+        {
+            var d = ParseSaved();
+            Assert.IsFalse(d.Render.SecondPass.Enabled);
+            Assert.IsFalse(d.MaskBus.Steps.Any(x => x.Kind == AtlasMaskBusStepKind.SecondPass));
+        }
+
+        [Test]
+        public void ProFurReadsShells()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_FurLayerCount", 20f);
+            AtlasTestMaterials.AddSavedFloat(material, "_FurLength", 0.01f);
+            AtlasTestMaterials.AddSavedFloat(material, "_FurGravityStrength", -0.25f);
+            AtlasTestMaterials.AddSavedFloat(material, "_FurTipTaper", 0.3f);
+            AtlasTestMaterials.AddSavedFloat(material, "_FurContact", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GlobalMaskContactsEnable", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_FurTexture", textureA);
+            AtlasTestMaterials.AddSavedFloat(material, "_FurTextureApplyToSkin", 0f);
+            AtlasTestMaterials.AddSavedTexture(material, "_FurHeightMap", textureB);
+            AtlasTestMaterials.AddSavedColor(material, "_FurHeightMapMinMax", new Color(0.2f, 0.8f, 0f, 1f));
+            AtlasTestMaterials.AddSavedFloat(material, "_FurUseVertexColorNormals", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_FurHueShiftEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_FurHueShift", 0.25f);
+            AtlasTestMaterials.AddSavedFloat(material, "_FurHueShiftSpeed", 1f);
+            var d = ParseSaved();
+            var fur = d.Fur;
+            Assert.IsTrue(fur.Enabled);
+            Assert.AreEqual(AtlasFurMethod.Shells, fur.Method);
+            Assert.AreEqual(20, fur.LayerCount);
+            Assert.AreEqual(0.01f, fur.Length, 1e-6f);
+            Assert.AreEqual(-0.25f, fur.Gravity, 1e-6f);
+            Assert.AreEqual(0.3f, fur.TipTaper, 1e-6f);
+            Assert.AreEqual(2, fur.ContactIndex);
+            Assert.AreSame(textureA, fur.Color.Map.Texture);
+            Assert.IsFalse(fur.ColorAppliesToSurface);
+            Assert.AreSame(textureB, fur.StrandNoise.Texture);
+            Assert.AreEqual(new Vector2(0.2f, 0.8f), fur.StrandNoiseRange);
+            Assert.AreEqual(0.5f, fur.RootOcclusion, 1e-6f, "Pro's default.");
+            Assert.AreEqual(AtlasFurVertexDirection.Signed, fur.VertexDirection);
+            Assert.AreEqual(5f, fur.LevelOfDetailStart, 1e-6f);
+            Assert.AreEqual(0.25f, fur.ColorAdjustments.Single().Amount, 1e-6f);
+            Assert.AreEqual("fur.colorAdjustments[0].amount", d.Modulators.Single().Target);
+        }
+
+        [Test]
+        public void LilFurElevenAdditions()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_FurLayerNum", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_VertexColor2FurVector", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_FurContact", 3f);
+            AtlasTestMaterials.AddSavedFloat(material, "_FurContactPush", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_FurCutoutLength", 0.8f);
+            AtlasTestMaterials.AddSavedFloat(material, "_FurLengthChannel", 2f);
+            AtlasTestMaterials.AddSavedColor(material, "_FurMaskVertexMask", new Color(0f, 0f, 4f, 0f));
+            var d = ParseSaved();
+            var fur = d.Fur;
+            Assert.AreEqual(AtlasFurMethod.Strands, fur.Method);
+            Assert.AreEqual(AtlasFurVertexDirection.Unsigned, fur.VertexDirection);
+            Assert.AreEqual(0, fur.ContactIndex, "Without the global mask contacts there is no contact.");
+            Assert.AreEqual(2f, fur.ContactPush, 1e-6f);
+            Assert.AreEqual(0.8f, fur.CutoutLength, 1e-6f);
+            // No mask texture: the blue channel's vertex colour source (alpha) alone.
+            Assert.IsTrue(fur.LengthMask.VertexColor);
+            Assert.AreEqual(AtlasChannel.Alpha, fur.LengthMask.Channel);
+        }
+
+        [Test]
+        public void GrabPassReadsItsEffects()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableGrabpass", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_RefractionIndex", 1.5f);
+            AtlasTestMaterials.AddSavedTexture(material, "_GrabPassBlendMap", textureA);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableBlur", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GrabBlurPattern", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GrabBlurMaskChannel", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GrabBlurMaskInvert", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GrabPixelationEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GrabPixelSize", 16f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GrabRampEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GrabRampPreset", 4f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GrabSrcBlend", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GrabDstBlend", 0f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GrabAlphaGlobalMask", 3f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GrabPassHueShiftToggle", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GrabPassHueShift", 0.3f);
+            var d = ParseSaved();
+            var layer = d.Layers.OfType<AtlasRefractionLayer>().Single();
+            Assert.AreEqual(AtlasPlacement.Overlay, layer.Placement);
+            Assert.IsTrue(layer.Refracts);
+            Assert.AreEqual(1.5f, layer.IOR, 1e-5f);
+            Assert.IsTrue(layer.ByAlpha);
+            Assert.IsFalse(layer.SelfGrab);
+            Assert.AreEqual(AtlasBlendFactor.One, layer.SourceBlend);
+            Assert.AreEqual(AtlasBlendFactor.Zero, layer.DestinationBlend);
+            Assert.AreEqual(AtlasBlurPattern.Hexagon, layer.Blur.Pattern);
+            Assert.AreSame(textureA, layer.Blur.Mask.Map.Texture);
+            Assert.AreEqual(AtlasChannel.Green, layer.Blur.Mask.Channel);
+            Assert.IsTrue(layer.Blur.Mask.Invert);
+            Assert.AreEqual(16f, layer.Pixelation.Size, 1e-5f);
+            Assert.AreEqual(AtlasScreenRampPalette.Sepia, layer.Ramp.Palette);
+            Assert.AreEqual(AtlasChannel.Red, layer.AlphaMask.Channel, "The alpha mask reads red by default.");
+            Assert.AreEqual(2, layer.AlphaMask.Bus);
+            Assert.IsNull(layer.ColorMask);
+            Assert.AreSame(layer, d.ColorAdjustments.Single(a => a.Operation == AtlasColorOperation.Hue).Layer);
+        }
+
+        [Test]
+        public void SelfGrabBlendsWithTheFirstPass()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableGrabpass", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ModeTwoPass", 0f);
+            var d = ParseSaved();
+            var layer = d.Layers.OfType<AtlasRefractionLayer>().Single();
+            Assert.IsTrue(layer.SelfGrab);
+            Assert.IsFalse(layer.ByAlpha);
+            Assert.IsTrue(d.Render.SecondPass.Enabled);
+        }
+
+        [Test]
+        public void GrabPassInvertedChannelWithoutAMapIsOff()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableGrabpass", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GrabAlphaMaskInvert", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GrabRefractionMaskChannel", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_GrabRefractionMaskInvert", 1f);
+            var layer = ParseSaved().Layers.OfType<AtlasRefractionLayer>().Single();
+            Assert.AreEqual(0f, layer.Amount, 1e-5f);
+            Assert.IsFalse(layer.Refracts);
+        }
+
+        [Test]
+        public void LavaLampIsAPatternLayer()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_InternalWaterEnable", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_LavaShape", 3f);
+            AtlasTestMaterials.AddSavedFloat(material, "_LavaLampAlpha", 0.7f);
+            AtlasTestMaterials.AddSavedFloat(material, "_BindDataMode", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_LavaLampMask", textureA);
+            AtlasTestMaterials.AddSavedColor(material, "_LavaFlowDirection0", new Color(1f, 0f, 0f, 0f));
+            AtlasTestMaterials.AddSavedFloat(material, "_LavaTopLightBrightness0", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_LavaAudioLinkEnable", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_LavaAudioLinkBand", 2f);
+            var d = ParseSaved();
+            Assert.IsFalse(d.Issues.Any(i => i.Feature == "poiyomi.lava-lamp"));
+            Assert.IsEmpty(d.Layers.OfType<AtlasRefractionLayer>(), "Toon materials have no grab pass.");
+            var layer = d.Layers.OfType<AtlasPatternLayer>().Single();
+            Assert.AreEqual(AtlasPatternKind.LavaLamp, layer.Kind);
+            Assert.AreEqual(AtlasPlacement.Overlay, layer.Placement);
+            Assert.AreEqual(0.7f, layer.Opacity, 1e-6f);
+            Assert.AreSame(textureA, layer.Mask.Map.Texture);
+            var lamp = layer.LavaLamp;
+            Assert.AreEqual(AtlasLavaShape.Hearts, lamp.Shape);
+            Assert.AreEqual(AtlasBindData.On, lamp.BindData);
+            Assert.AreEqual(Vector3.right, lamp.FlowDirection);
+            Assert.AreEqual(2f, lamp.TopEmission, 1e-6f);
+            Assert.AreEqual(-1, lamp.AudioBand, "AudioLink's section is off.");
+        }
+
+        [Test]
+        public void LavaLampOffAddsNothing()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_InternalWaterEnable", 0f);
+            AtlasTestMaterials.AddSavedFloat(material, "_LavaShape", 3f);
+            Assert.IsEmpty(ParseSaved().Layers);
+        }
+
+        [Test]
+        public void TripleOutlineReadsEachLayer()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableOutlines", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableOutlineLayer1", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableOutlineLayer2", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableOutlineLayer3", 0f);
+            AtlasTestMaterials.AddSavedFloat(material, "_Outline2Width", 4f);
+            AtlasTestMaterials.AddSavedFloat(material, "_Outline2ExpansionMode", 4f);
+            AtlasTestMaterials.AddSavedColor(material, "_Outline2DropShadowOffset", new Color(0f, -1f, 0f, 0f));
+            AtlasTestMaterials.AddSavedFloat(material, "_Outline2Cull", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_Outline2StencilRef", 3f);
+            AtlasTestMaterials.AddSavedFloat(material, "_OutlineSrcBlend", 5f);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableAudioLink", 1f);
+            AtlasTestMaterials.AddSavedColor(material, "_AudioLinkOutline2Size", new Color(0f, 2f, 0f, 0f));
+            var d = ParseSaved();
+            Assert.AreEqual(2, d.Outlines.Count, "Layer 3 is off.");
+            Assert.AreEqual(0.01f, d.Outlines[0].Width, 1e-6f);
+            var second = d.Outlines[1];
+            Assert.AreEqual(0.04f, second.Width, 1e-6f);
+            Assert.AreEqual(AtlasOutlineShape.DropShadow, second.Shape);
+            Assert.AreEqual(new Vector3(0f, -1f, 0f), second.Direction);
+            Assert.AreEqual(AtlasCull.Back, second.Pass.Cull);
+            Assert.AreEqual(AtlasCull.Front, d.Outlines[0].Pass.Cull);
+            Assert.AreEqual(3, second.Pass.Stencil.Reference);
+            Assert.AreEqual(AtlasBlendFactor.SourceAlpha, second.SourceBlend, "The blend factors are shared.");
+            Assert.AreEqual(AtlasBlendFactor.SourceAlpha, d.Outlines[0].SourceBlend);
+            var width = d.Modulators.Single(x => x.Target == "outlines[1].width");
+            Assert.AreEqual(0.02f, width.Max, 1e-6f);
+        }
+
+        [Test]
+        public void TripleOutlineWithoutLayerOne()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableOutlines", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableOutlineLayer1", 0f);
+            AtlasTestMaterials.AddSavedFloat(material, "_EnableOutlineLayer2", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_Outline2Width", 3f);
+            var outline = ParseSaved().Outlines.Single();
+            Assert.AreEqual(0.03f, outline.Width, 1e-6f);
+        }
+
+        [Test]
+        public void TriplanarProjectionIsReadAndDropsTheConstellation()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_TriplanarMode", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_TriplanarBlendType", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_TriplanarScaleWithObject", 0.5f);
+            AtlasTestMaterials.AddSavedTexture(material, "_TriplanarMask", textureA);
+            AtlasTestMaterials.AddSavedFloat(material, "_TriplanarMaskChannel", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_TriplanarMaskInvert", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ConstellationEnable", 1f);
+            var d = ParseSaved();
+            var triplanar = d.Triplanar;
+            Assert.IsTrue(triplanar.Enabled);
+            Assert.AreEqual(AtlasTriplanarSource.Mesh, triplanar.Source);
+            Assert.AreEqual(AtlasTriplanarBlend.Asymmetric, triplanar.Blend);
+            Assert.AreEqual(0.5f, triplanar.ScaleWithObject, 1e-6f);
+            Assert.AreSame(textureA, triplanar.Mask.Map.Texture);
+            Assert.AreEqual(AtlasChannel.Blue, triplanar.Mask.Channel);
+            Assert.IsTrue(triplanar.Mask.Levels.Invert);
+            Assert.IsFalse(triplanar.Mask.Invert);
+            Assert.IsEmpty(d.Layers.OfType<AtlasPatternLayer>(), "The triplanar variant draws no constellation.");
+        }
+
+        [Test]
+        public void TriplanarInvertedWithoutAMaskHidesEverything()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_TriplanarMode", 0f);
+            AtlasTestMaterials.AddSavedFloat(material, "_TriplanarMaskInvert", 1f);
+            var triplanar = ParseSaved().Triplanar;
+            Assert.AreEqual(AtlasTriplanarSource.Depth, triplanar.Source);
+            Assert.AreEqual(0f, triplanar.MaskStrength, 1e-6f);
+        }
+
+        [Test]
+        public void WithoutTheVariantThereIsNoTriplanar()
+        {
+            Assert.IsFalse(ParseSaved().Triplanar.Enabled);
+        }
+
+        [Test]
+        public void TessellationIsRead()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_TessellationType", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_TessellationUniform", 4f);
+            AtlasTestMaterials.AddSavedColor(material, "_TessellationDistance", new Color(1f, 5f, 0f, 0f));
+            AtlasTestMaterials.AddSavedFloat(material, "_TessellationPhong", 0.5f);
+            var tessellation = ParseSaved().Tessellation;
+            Assert.IsTrue(tessellation.Enabled);
+            Assert.AreEqual(AtlasTessellationMode.Distance, tessellation.Mode);
+            Assert.AreEqual(4f, tessellation.Factor, 1e-6f);
+            Assert.AreEqual(new Vector2(1f, 5f), tessellation.Distance);
+            Assert.AreEqual(0.5f, tessellation.Phong, 1e-6f);
+        }
+
+        [Test]
+        public void GeometryEffectsAreReportedOnce()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_GeoDissolveAlpha", 0f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ShatterWaveEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ParticleDensity", 0.15f);
+            var d = ParseSaved();
+            Assert.IsFalse(d.Tessellation.Enabled);
+            foreach (var feature in new[] { "geometry.dissolve", "geometry.shatter-wave", "geometry.particles" })
+                Assert.AreEqual(1, d.Issues.Count(i => i.Feature == feature), feature);
+        }
+
+        [Test]
+        public void ShatterWaveOffIsNotReported()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_ShatterWaveEnabled", 0f);
+            Assert.IsFalse(ParseSaved().Issues.Any(i => i.Feature.StartsWith("geometry.")));
+        }
+
+        [Test]
+        public void SkinToneIsAPatternLayer()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiSkinEnabled", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_PoiSkinLUT", textureA);
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiSkinMelanin", 0.6f);
+            AtlasTestMaterials.AddSavedTexture(material, "_PoiSkinDetailMap", textureB);
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiSkinFrecklesEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiSkinFreckleMapUV", 1f);
+            AtlasTestMaterials.AddSavedColor(material, "_PoiSkinFreckleMapTiling", new Color(4f, 4f, 0f, 0f));
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiSkinBlendMode", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiSkinBlend", 0.5f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiSkinBrightness", 2f);
+            var layer = ParseSaved().Layers.OfType<AtlasPatternLayer>().Single();
+            Assert.AreEqual(AtlasPatternKind.SkinTone, layer.Kind);
+            Assert.AreEqual(AtlasBlend.Multiply, layer.Blend);
+            Assert.AreEqual(0.5f, layer.Opacity, 1e-6f);
+            Assert.AreEqual(2f, layer.Color.r, 1e-5f);
+            var skin = layer.SkinTone;
+            Assert.AreSame(textureA, skin.Lut.Texture);
+            Assert.AreEqual(0.6f, skin.Melanin, 1e-6f);
+            Assert.AreEqual(AtlasChannel.Green, skin.FreckleMask.Channel);
+            Assert.AreEqual(AtlasTextureSpace.UV1, skin.FreckleMask.Map.Space);
+            Assert.AreEqual(new Vector2(4f, 4f), skin.FreckleMask.Map.Tiling);
+            Assert.IsNull(skin.TanMask, "The tan is off.");
+            // Applies where the red channel is dark.
+            Assert.AreEqual(AtlasChannel.Red, layer.Mask.Channel);
+            Assert.IsTrue(layer.Mask.Levels.Invert);
+        }
+
+        [Test]
+        public void SkinFrecklesWithoutAMapAreOff()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiSkinEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiSkinFrecklesEnabled", 1f);
+            var layer = ParseSaved().Layers.OfType<AtlasPatternLayer>().Single();
+            Assert.IsNull(layer.SkinTone.FreckleMask);
+            Assert.IsNull(layer.Mask);
+        }
+
+        [Test]
+        public void AdditionalLightsCombineByMaxByDefault()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_AddBlendOp", 4f);
+            AtlasTestMaterials.AddSavedFloat(material, "_AlphaBoostFA", 10f);
+            var additional = ParseSaved().Lighting.AdditionalLights;
+            Assert.AreEqual(AtlasLightCombine.Max, additional.Combine);
+            Assert.AreEqual(10f, additional.MaxAlphaBoost, 1e-6f);
+        }
+
+        [TestCase(0, 1, 1, false)]
+        [TestCase(0, 5, 1, true)]
+        [TestCase(1, 1, 1, false)]
+        public void AdditionalLightsAddedWithOtherFactorsAreReported(int op, int source, int destination, bool reported)
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_AddBlendOp", op);
+            AtlasTestMaterials.AddSavedFloat(material, "_AddSrcBlend", source);
+            AtlasTestMaterials.AddSavedFloat(material, "_AddDstBlend", destination);
+            var d = ParseSaved();
+            Assert.AreEqual(AtlasLightCombine.Add, d.Lighting.AdditionalLights.Combine);
+            Assert.AreEqual(reported, d.Issues.Any(i => i.Feature == "lighting.add-pass-blend"));
+            Assert.AreEqual(op == 1, d.Issues.Any(i => i.Feature == "render.blend-op"));
+        }
+
+        [Test]
+        public void ElevenGlobalsAreRead()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_PoiTimeSource", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_RenderingEarlyZEnabled", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PPLightingMultiplier", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PPLightingAddition", 0.1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PPEmissionMultiplier", 3f);
+            AtlasTestMaterials.AddSavedFloat(material, "_PPFinalColorMultiplier", 0.5f);
+            AtlasTestMaterials.AddSavedFloat(material, "_ForceFlatRampedLightmap", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_StochasticDeliotHeitzDensity", 2f);
+            AtlasTestMaterials.AddSavedFloat(material, "_MainTexStochastic", 1f);
+            material.SetTexture("_MainTex", textureA);
+            var d = ParseSaved();
+            Assert.AreEqual(AtlasClock.Network, d.Clock);
+            Assert.IsTrue(d.Render.DepthPrepass);
+            Assert.AreEqual(2f, d.Lighting.LightMultiplier, 1e-6f);
+            Assert.AreEqual(0.1f, d.Lighting.LightAddition, 1e-6f);
+            Assert.IsTrue(d.Lighting.FlatLightMap);
+            Assert.AreEqual(3f, d.ColorAdjustments.Single(a => a.Target == AtlasAdjustmentTarget.Emission).Amount, 1e-6f);
+            Assert.AreEqual(0.5f, d.ColorAdjustments.Single(a => a.Target == AtlasAdjustmentTarget.FinalColor).Amount, 1e-6f);
+            Assert.AreEqual(2f, d.Surface.BaseColor.Map.StochasticDensity, 1e-6f);
+        }
+
+        [Test]
+        public void ShadingOffIsUnlit()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_ShadingEnabled", 0f);
+            var d = ParseSaved();
+            Assert.AreEqual(AtlasLightingFamily.Unlit, d.Lighting.Family);
+            Assert.IsTrue(d.Issues.Any(i => i.Feature == "lighting.shading-off"));
         }
     }
 }

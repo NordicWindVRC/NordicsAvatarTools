@@ -3,12 +3,13 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi: the Lil Fur variants' fur pass (catalogue 5.2): the LilFur category and the LilFur
-    // Rendering section.
+    // Rendering section; Poiyomi Pro Fur's shells.
     public abstract partial class AtlasPoiyomiParser
     {
         private static void Fur(Material m, AtlasUnifiedMaterial d)
         {
-            // Only the Lil Fur variants have the fur properties.
+            // Pro Fur has the shells' layer count; the Lil Fur variants have theirs.
+            if (AtlasMaterialReader.Has(m, "_FurLayerCount")) { Shells(m, d); return; }
             if (!AtlasMaterialReader.Has(m, "_FurLayerNum")) return;
             var fur = d.Fur;
             fur.Enabled = true;
@@ -22,11 +23,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
             fur.Length = vector.w;
             fur.DirectionMap = Texture(m, d, "_FurVectorTex", AtlasTextureInterpretation.Direction);
             fur.DirectionMapStrength = Float(m, "_FurVectorScale", 1f);
-            fur.DirectionFromVertexColors = On(m, "_VertexColor2FurVector");
+            // 10's toggle is 11's Poiyomi mode.
+            int vertex = Int(m, "_VertexColor2FurVector", 0);
+            fur.VertexDirection = vertex == 1 ? AtlasFurVertexDirection.Signed : vertex == 2 ? AtlasFurVertexDirection.Unsigned : AtlasFurVertexDirection.Off;
             fur.Gravity = Float(m, "_FurGravity", 0.25f);
             fur.Randomness = Float(m, "_FurRandomize", 0f);
             var masks = Texture(m, d, "_FurMask", AtlasTextureInterpretation.Data);
             fur.LengthMask = FurMask(m, masks, "_FurLengthChannel");
+            fur.ContactIndex = FurContact(m);
+            fur.ContactPush = Float(m, "_FurContactPush", 1f);
+            // Only Lil Fur Two Pass has it.
+            fur.CutoutLength = Float(m, "_FurCutoutLength", 0f);
 
             // Appearance and layers.
             fur.StrandNoise = Texture(m, d, "_FurNoiseMask", AtlasTextureInterpretation.Data);
@@ -74,12 +81,68 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 d.Report(AtlasIssueKind.Unmapped, "render.stencil-faces", "Separate front- and back-face stencils aren't mapped yet.");
         }
 
-        // A fur mask channel (0–3, 4 off) with its strength: lerp(1, channel, strength).
+        // A fur mask channel (0–3, 4 off) with 11's options and its strength: lerp(1, channel, strength).
         private static AtlasMask FurMask(Material m, AtlasTextureReference masks, string channel)
         {
             int c = Int(m, channel, 4);
-            if (c > 3 || masks == null) return null;
-            return new AtlasMask { Map = masks, Channel = Channels[c], Strength = Float(m, "_FurMaskStrength" + "RGBA"[c], 1f) };
+            if (c > 3) return null;
+            var mask = MaskOptions(m, masks == null ? null : new AtlasMask { Map = masks, Channel = Channels[c] }, "_FurMask", c);
+            if (mask != null) mask.Strength = Float(m, "_FurMaskStrength" + "RGBA"[c], 1f);
+            return mask;
+        }
+
+        // The global mask contact the fur bends away from; none while the contacts are off.
+        private static int FurContact(Material m) =>
+            On(m, "_GlobalMaskContactsEnable") ? Mathf.Clamp(Int(m, "_FurContact", 0), 0, 8) : 0;
+
+        // Pro Fur: shells. Shell i of the layer count is pushed out by i / count × length (× the
+        // object scale) along the normal, sagging with gravity; a strand stays on a shell where
+        // the height map and the mask reach the shell's height (+ taper × height²).
+        private static void Shells(Material m, AtlasUnifiedMaterial d)
+        {
+            var fur = d.Fur;
+            fur.Enabled = true;
+            fur.Method = AtlasFurMethod.Shells;
+            fur.LayerCount = Mathf.Clamp(Int(m, "_FurLayerCount", 15), 1, 31);
+            fur.Length = Float(m, "_FurLength", 0.005f);
+            fur.Gravity = Float(m, "_FurGravityStrength", 0.5f);
+            fur.TipTaper = Float(m, "_FurTipTaper", 0f);
+            fur.ContactIndex = FurContact(m);
+            fur.ContactPush = Float(m, "_FurContactPush", 1f);
+            fur.Color.Color = TintColor(m, d, "_FurColor", "_FurColorThemeIndex", fur.Color);
+            fur.Color.Map = Texture(m, d, "_FurTexture");
+            fur.ColorAppliesToSurface = On(m, "_FurTextureApplyToSkin", 1f);
+            fur.AlphaMask = Mask(m, d, "_FurMask");
+            fur.StrandNoise = Texture(m, d, "_FurHeightMap", AtlasTextureInterpretation.Data);
+            fur.StrandNoiseRange = Vector2Of(m, "_FurHeightMapMinMax", new Vector2(0f, 1f));
+            fur.RootOcclusion = Float(m, "_FurAO", 0.5f);
+            fur.OcclusionRange = Vector2Of(m, "_FurAOMinMax", new Vector2(0f, 1f));
+            fur.VertexDirection = On(m, "_FurUseVertexColorNormals") ? AtlasFurVertexDirection.Signed : AtlasFurVertexDirection.Off;
+            fur.LevelOfDetailStart = Float(m, "_FurMinDistance", 5f);
+            fur.LevelOfDetailEnd = Float(m, "_FurMaxDistance", 10f);
+            fur.AlphaToCoverage = On(m, "_AlphaToCoverage");
+            if (On(m, "_FurHueShiftEnabled"))
+            {
+                var hue = new AtlasColorAdjustment
+                {
+                    Target = AtlasAdjustmentTarget.BaseColor, Operation = AtlasColorOperation.Hue, Amount = Float(m, "_FurHueShift", 0f),
+                    HueMethod = Int(m, "_FurHueShiftColorSpace", 0) == 1 ? AtlasHueMethod.HSV : AtlasHueMethod.Oklab,
+                    HueSet = Int(m, "_FurHueSelectOrShift", 1) == 0
+                };
+                fur.ColorAdjustments.Add(hue);
+                float rate = Float(m, "_FurHueShiftSpeed", 0f) * 0.05f;
+                if (rate != 0f)
+                {
+                    var turning = new AtlasModulator
+                    {
+                        Target = "fur.colorAdjustments[0].amount", Source = AtlasModulatorSource.Time,
+                        Mode = AtlasModulatorMode.Add, Min = 0f, Max = 1f
+                    };
+                    turning.Time.Waveform = rate > 0f ? AtlasWaveform.Saw : AtlasWaveform.ReverseSaw;
+                    turning.Time.Frequency = Mathf.Abs(rate);
+                    d.Modulators.Add(turning);
+                }
+            }
         }
     }
 }

@@ -88,6 +88,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             string path = "layers[" + index + "]";
 
             LayerHue(m, d, index, "_DissolveHueShift");
+            // Poiyomi 11: the revealed colour's gamma, saturation and brightness, after the hue (with it on).
+            if (On(m, "_DissolveHueShiftEnabled"))
+            {
+                float gamma = Float(m, "_DissolveGamma", 1f), saturation = Float(m, "_DissolveSaturation", 0f), brightness = Float(m, "_DissolveBrightness", 0f);
+                if (gamma != 1f) LayerAdjust(d, layer, AtlasColorOperation.Power, gamma);
+                if (saturation != 0f) LayerAdjust(d, layer, AtlasColorOperation.Saturation, 1f + saturation);
+                if (brightness != 0f) LayerAdjust(d, layer, AtlasColorOperation.Brightness, 1f + brightness);
+            }
             BusWrite(m, d, layer, "_DissolveApplyGlobalMaskIndex", "_DissolveApplyGlobalMaskBlendType");
             BusWrite(m, d, layer, "_DissolveInverseApplyGlobalMaskIndex", "_DissolveInverseApplyGlobalMaskBlendType", invert: true);
 

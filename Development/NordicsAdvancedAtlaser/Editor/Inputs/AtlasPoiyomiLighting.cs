@@ -7,7 +7,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         // _LightingMode, in the keyword enum's order.
         private static readonly string[] LightingTypes =
-            { "TextureRamp", "Multilayer Math", "Wrapped", "Skin", "ShadeMap", "Flat", "Realistic", "Cloth", "SDF" };
+            { "TextureRamp", "Multilayer Math", "Wrapped", "Skin", "ShadeMap", "Flat", "Realistic", "Cloth", "SDF", "PBR" };
 
         private static void Lighting(Material m, AtlasUnifiedMaterial d)
         {
@@ -31,10 +31,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     break;
                 case 7: Cloth(m, d); break;
                 case 8: Sdf(m, d); break;
+                case 9: Pbr(m, d); break;
                 default:
                     string name = type >= 0 && type < LightingTypes.Length ? LightingTypes[type] : type.ToString();
                     d.Report(AtlasIssueKind.Unmapped, "lighting.type", "The " + name + " lighting type isn't mapped yet.");
                     break;
+            }
+            lighting.FlatLightMap = lighting.Family == AtlasLightingFamily.Flat && On(m, "_ForceFlatRampedLightmap", 1f);
+            if (!On(m, "_ShadingEnabled", 1f))
+            {
+                lighting.Family = AtlasLightingFamily.Unlit;
+                d.Report(AtlasIssueKind.Note, "lighting.shading-off",
+                    "With shading off Poiyomi also skips the features applied with the lighting (grab pass, lava lamp, lighting-stage rims); read as unlit.");
             }
             // Shadow Masks scale the shadow strength.
             var shadowMask = PackedMask(m, d, "_LightingShadowMasks", "_LightingShadowMaskStrength", "lighting.shadow-masks");
@@ -99,7 +107,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     ramp.Sdf = new AtlasSdfFace
                     {
                         Style = AtlasSdfStyle.Blended, Map = sdfMap,
-                        VerticalBlend = Float(m, "_LightDataSDFBlendY", 1f), Softness = Float(m, "_LightDataSDFMapLOD", 0f)
+                        VerticalBlend = Float(m, "_LightDataSDFBlendY", 1f), Softness = Float(m, "_LightDataSDFMapLOD", 0f),
+                        MaskChannels = On(m, "_LightDataSDFChannelsBA")
                     };
                     break;
             }
@@ -131,6 +140,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             lighting.LimitBrightness = On(m, "_LightingCapEnabled", 1f);
             lighting.BrightnessCeiling = Float(m, "_LightingCap", 1f);
             lighting.LimitByLuminance = Float(m, "_LightingCapLuminance", 0f);
+            lighting.LimitKeepsHue = Int(m, "_LightingCapMode", 0) == 1;
+            ramp.BackFaceShadow = Float(m, "_BackfaceForceShadow", 0f);
             lighting.MinimumLight = Float(m, "_LightingMinLightBrightness", 0f);
             lighting.FixedLightColor = On(m, "_LightingForceColorEnabled");
             if (lighting.FixedLightColor)
@@ -148,18 +159,130 @@ namespace NordicWind.AdvancedAtlaser.Editor
             additional.GradientEnd = Float(m, "_LightingAdditiveGradientEnd", 0.5f);
             additional.LimitBrightness = On(m, "_LightingAdditiveLimited", 1f);
             additional.BrightnessCeiling = Float(m, "_LightingAdditiveLimit", 1f);
+            additional.LimitKeepsHue = Int(m, "_LightingAdditiveLimitMode", 0) == 1;
             additional.ReceiveShadows = Float(m, "_LightingAdditiveCastedShadows", 1f);
             additional.Monochrome = Float(m, "_LightingAdditiveMonochromatic", 0f);
             additional.Passthrough = Float(m, "_LightingAdditivePassthrough", 0f);
             additional.Falloff = AtlasMaterialReader.Vector(m, "_LightingAdditiveAttenCurve", additional.Falloff);
             additional.Directional = !On(m, "_DisableDirectionalInAdd");
             additional.VertexLightsInMirrors = On(m, "_LightingMirrorVertexLightingEnabled", 1f);
+            AddPass(m, d);
+            // The PP Animations section.
+            lighting.LightMultiplier = Float(m, "_PPLightingMultiplier", 1f);
+            lighting.LightAddition = Float(m, "_PPLightingAddition", 0f);
 
             var volumes = lighting.LightVolumes;
             volumes.Enabled = On(m, "_LightingEnableLightVolumes", 1f);
             volumes.SpecularStrength = Float(m, "_LightingLightVolumesSpecular", 1f);
             volumes.Specular = volumes.SpecularStrength > 0f;
             volumes.Bias = Float(m, "_LightingLightVolumesNormalBias", 0f);
+            volumes.SpecularMaxLights = Int(m, "_LightingLightVolumesSpecularMaxLights", 0);
+        }
+
+        // Poiyomi 11's PBR lighting type: Filament-style shading of one packed map (metallic,
+        // occlusion, smoothness by channel), with its own clear coat, anisotropy, sheen and glints.
+        // It replaces Reflections & Specular and Clear Coat.
+        private static void Pbr(Material m, AtlasUnifiedMaterial d)
+        {
+            var lighting = d.Lighting;
+            lighting.Family = AtlasLightingFamily.PhysicallyBased;
+            lighting.Diffuse = AtlasDiffuseModel.Lambert;
+            lighting.PhysicalModel = AtlasPhysicalModel.Calibrated;
+            var response = d.Surface.Response;
+            var map = Texture(m, d, "_PoiPBRMaskMap", AtlasTextureInterpretation.Data);
+            ReportPackedOptions(m, d, "_PoiPBRMaskMap");
+            Packed(response.Metallic, map, PackedChannel(m, "_PoiPBRMetallicChannel", 0), Float(m, "_PoiPBRMetallic", 0f), false);
+            Packed(response.Roughness, map, PackedChannel(m, "_PoiPBRSmoothnessChannel", 3), Float(m, "_PoiPBRSmoothness", 0.5f), true);
+            response.Reflectance.Constant = Float(m, "_PoiPBRReflectance", 0.5f);
+            // Occlusion: lerp(1, channel, strength) × Light Data's AO.
+            var occlusion = PackedChannel(m, "_PoiPBROcclusionChannel", 1);
+            if (map != null && occlusion.HasValue)
+            {
+                if (response.Occlusion.Map != null)
+                    d.Report(AtlasIssueKind.Unmapped, "pbr.occlusion", "The PBR occlusion map together with Light Data's AO map isn't mapped yet; the PBR map is used.");
+                response.Occlusion.Map = map;
+                response.Occlusion.Channel = occlusion.Value;
+                response.Occlusion.Constant = Float(m, "_PoiPBROcclusionStrength", 1f);
+            }
+            response.MultiBounceOcclusion = On(m, "_PoiPBRMultiBounceAO");
+            BusScalar(m, response.Metallic, "_PoiPBRMetallicGlobalMask");
+            BusScalar(m, response.Roughness, "_PoiPBRSmoothnessGlobalMask");
+            BusScalar(m, response.Occlusion, "_PoiPBROcclusionGlobalMask");
+            response.Highlights.Enabled = true;
+            response.Reflections.Enabled = true;
+            response.SpecularAntiAliasing.Enabled = On(m, "_PoiPBRGSAA", 1f);
+            response.SpecularAntiAliasing.Variance = Float(m, "_PoiPBRGSAAVariance", 0.15f);
+            response.SpecularAntiAliasing.Threshold = Float(m, "_PoiPBRGSAAThreshold", 0.2f);
+
+            float coat = Float(m, "_PoiPBRClearCoat", 0f);
+            if (coat > 0f)
+            {
+                var clearCoat = new AtlasClearCoat { NormalMapAmount = 1f };
+                clearCoat.Strength.Constant = coat;
+                clearCoat.Roughness.Constant = 1f - Float(m, "_PoiPBRClearCoatSmoothness", 0.9f);
+                clearCoat.SpecularAntiAliasing.Enabled = response.SpecularAntiAliasing.Enabled;
+                clearCoat.SpecularAntiAliasing.Variance = response.SpecularAntiAliasing.Variance;
+                clearCoat.SpecularAntiAliasing.Threshold = response.SpecularAntiAliasing.Threshold;
+                response.ClearCoat = clearCoat;
+            }
+
+            float anisotropy = Float(m, "_PoiPBRAnisotropy", 0f);
+            if (anisotropy != 0f)
+            {
+                var stretch = response.Anisotropy;
+                var channel = PackedChannel(m, "_PoiPBRAnisotropyChannel", 4);
+                stretch.Enabled = true;
+                stretch.Amount = anisotropy;
+                stretch.MapMultiplies = true;
+                stretch.Map = channel.HasValue ? map : null;
+                if (channel.HasValue) stretch.Channel = channel.Value;
+                stretch.Rotation = Float(m, "_PoiPBRAnisotropyRotation", 0f);
+            }
+
+            float sheen = Float(m, "_PoiPBRSheen", 0f);
+            if (sheen > 0f)
+            {
+                var layer = new AtlasSheen
+                {
+                    Color = LinearColor(m, "_PoiPBRSheenColor", Color.white),
+                    Roughness = Mathf.Clamp(1f - Float(m, "_PoiPBRSheenSmoothness", 0.5f), 0.07f, 1f)
+                };
+                Packed(layer.Strength, map, PackedChannel(m, "_PoiPBRSheenChannel", 4), sheen, false);
+                response.Sheen = layer;
+            }
+
+            if (On(m, "_PoiPBRGlints"))
+            {
+                var channel = PackedChannel(m, "_PoiPBRGlintMaskChannel", 4);
+                response.Glints = new AtlasGlints
+                {
+                    Space = AtlasTextureSpace.UV0 + Mathf.Clamp(Int(m, "_PoiPBRGlintUV", 0), 0, 3),
+                    Mask = BusMask(m, channel.HasValue && map != null ? new AtlasMask { Map = map, Channel = channel.Value } : null, "_PoiPBRGlintGlobalMask"),
+                    Color = LinearColor(m, "_PoiPBRGlintColor", new Color(0.95f, 0.95f, 0.95f, 1f)),
+                    BaseReflectanceMix = Float(m, "_PoiPBRGlintUseBaseColor", 0f),
+                    ColorVariation = Float(m, "_PoiPBRGlintColorVariation", 0f),
+                    Roughness = 1f - Float(m, "_PoiPBRGlintSmoothness", 0.5f),
+                    Density = Float(m, "_PoiPBRGlintDensity", 2000f),
+                    FlakeRoughness = Float(m, "_PoiPBRGlintMicroRoughness", 0.02f),
+                    Size = Float(m, "_PoiPBRGlintSize", 0f),
+                    EyeBlend = Float(m, "_PoiPBRGlintEyeBlend", 0f),
+                    Ambient = Float(m, "_PoiPBRGlintAmbient", 0f),
+                    VertexLights = On(m, "_PoiPBRGlintVertexLights")
+                };
+            }
+        }
+
+        // Mask options on a packed map feeding scalar inputs, which don't carry levels yet.
+        private static void ReportPackedOptions(Material m, AtlasUnifiedMaterial d, string property)
+        {
+            if (AtlasMaterialReader.Vector(m, property + "VertexMask", Vector4.zero) != Vector4.zero
+                || AtlasMaterialReader.Vector(m, property + "MLInputMin", Vector4.zero) != Vector4.zero
+                || AtlasMaterialReader.Vector(m, property + "MLInputMax", Vector4.one) != Vector4.one
+                || AtlasMaterialReader.Vector(m, property + "MLMidpoint", Vector4.one * 0.5f) != Vector4.one * 0.5f
+                || AtlasMaterialReader.Vector(m, property + "MLOutputMin", Vector4.zero) != Vector4.zero
+                || AtlasMaterialReader.Vector(m, property + "MLOutputMax", Vector4.one) != Vector4.one
+                || AtlasMaterialReader.Vector(m, property + "MLInvert", Vector4.zero) != Vector4.zero)
+                d.Report(AtlasIssueKind.Unmapped, "mask.levels-packed", "Mask levels and vertex colour sources on a map that isn't a plain mask aren't mapped yet.");
         }
 
         // A packed RGBA map whose channels each apply by a strength (<prefix>R … A): the channel in
@@ -178,7 +301,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     d.Report(AtlasIssueKind.Unmapped, feature, "More than one channel of a packed " + property + " map isn't mapped yet; the first is used.");
                     break;
                 }
-                mask = new AtlasMask { Map = map, Channel = Channels[c], Strength = strength };
+                mask = MaskOptions(m, new AtlasMask { Map = map, Channel = Channels[c], Strength = strength }, property, c);
             }
             return mask;
         }
@@ -320,6 +443,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             lighting.Diffuse = AtlasDiffuseModel.Disney;
             lighting.DisneyAmount = 1f;
             var map = Texture(m, d, "_ClothMetallicSmoothnessMap", AtlasTextureInterpretation.Data);
+            ReportPackedOptions(m, d, "_ClothMetallicSmoothnessMap");
             var response = d.Surface.Response;
             // metallic = (R × Metallic)²: exact without a map; with one, the map is read linearly.
             float metallic = Float(m, "_ClothMetallic", 0f);

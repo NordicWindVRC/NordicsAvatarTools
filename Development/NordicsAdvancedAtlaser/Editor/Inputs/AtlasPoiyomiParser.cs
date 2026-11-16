@@ -11,6 +11,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public override int Priority => 100;
         protected abstract int Major { get; }
+        protected virtual bool Pro => false;
 
         // The Distortion UV section, which textures choosing Distorted UV share; null when off.
         [System.ThreadStatic] private static AtlasUVDistortion distortion;
@@ -19,6 +20,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         protected override void Populate(Material m, AtlasUnifiedMaterial d)
         {
             UVOptions(m, d);
+            Triplanar(m, d);
             MaskBus(m, d);
             ReportAudioLinkGlobals(m, d);
             Main(m, d);
@@ -38,14 +40,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
             Patterns(m, d);
             Visibility(m, d);
             CellPatterns(m, d);
+            ScreenShadows(m, d);
             ColorAdjust(m, d);
             Outline(m, d);
             Lighting(m, d);
             Specular(m, d);
+            GrabPass(m, d);
             Render(m, d);
             Parallax(m, d);
             Vertex(m, d);
+            GeometryVariants(m, d);
             Fur(m, d);
+            Globals11(m, d);
         }
 
         private static readonly AtlasChannel[] Channels = { AtlasChannel.Red, AtlasChannel.Green, AtlasChannel.Blue, AtlasChannel.Alpha };
@@ -64,6 +70,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (Float(m, property + "Stochastic", 0f) > 0.5f && Int(m, "_StochasticMode", 0) != 2)
             {
                 map.Sampling = AtlasTextureSampling.Stochastic;
+                map.StochasticDensity = Float(m, "_StochasticDeliotHeitzDensity", 1f);
                 if (Int(m, "_StochasticMode", 0) == 1)
                     d.Report(AtlasIssueKind.Unmapped, "uv.hextile", "Hextile stochastic sampling isn't mapped yet; read as stochastic.");
             }
@@ -115,11 +122,73 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 d.Report(AtlasIssueKind.Note, "uv.channel-rotation", "A UV channel's rotation with its own tiling or offset is read as turning before them.");
         }
 
-        // A mask texture's single channel; null without a texture.
+        // A mask texture's single channel with Poiyomi 11's options; null without a texture or a
+        // vertex colour source.
         protected static AtlasMask Mask(Material m, AtlasUnifiedMaterial d, string property, AtlasChannel channel = AtlasChannel.Red)
         {
             var map = Texture(m, d, property, AtlasTextureInterpretation.Data);
-            return map == null ? null : new AtlasMask { Map = map, Channel = channel };
+            return MaskOptions(m, map == null ? null : new AtlasMask { Map = map, Channel = channel }, property, System.Array.IndexOf(Channels, channel));
+        }
+
+        // Masks whose vertex colour source is per channel; the others take it from x.
+        private static readonly System.Collections.Generic.HashSet<string> FourChannelMasks = new System.Collections.Generic.HashSet<string>
+        {
+            "_DecalMask", "_RGBMask", "_MatcapMask", "_Matcap2Mask", "_Matcap3Mask", "_Matcap4Mask", "_AlphaMask", "_DetailMask",
+            "_OutlineMask", "_LightingAOMaps", "_LightingShadowMasks", "_LightingDetailShadowMaps", "_ShadowBorderMask",
+            "_MochieMetallicMaps", "_ClearCoatMaps", "_PoiPBRMaskMap", "_RGBAMetallicMaps", "_RGBASmoothnessMaps", "_RGBAAOMaps",
+            "_ClothMetallicSmoothnessMap", "_MainColorAdjustTexture", "_PathingMaskMap", "_LookAtMask", "_VertexBasicsMask",
+            "_PoiSkinDetailMap", "_FurMask", "_GrabPassBlendMap", "_GlobalMaskTexture0", "_GlobalMaskTexture1", "_GlobalMaskTexture2", "_GlobalMaskTexture3"
+        };
+
+        // Poiyomi 11's mask options, named after the mask texture: levels (<mask>ML*, with bounds to
+        // normalise the input range), a vertex colour source (<mask>VertexMask: 1–4 multiply by R–A)
+        // and the levels' invert (<mask>MLInvert), which comes after the vertex colour when there is
+        // one. Masks with an Invert toggle of their own invert after everything (set by the caller).
+        // Missing properties (Poiyomi 10) leave the mask as it is.
+        private static AtlasMask MaskOptions(Material m, AtlasMask mask, string property, int channel)
+        {
+            channel = Mathf.Clamp(channel, 0, 3);
+            var sources = AtlasMaterialReader.Vector(m, property + "VertexMask", Vector4.zero);
+            int source = Mathf.RoundToInt(FourChannelMasks.Contains(property) ? sources[channel] : sources.x);
+            bool invert = AtlasMaterialReader.Vector(m, property + "MLInvert", Vector4.zero)[channel] >= 0.5f;
+            if (mask == null)
+            {
+                // No texture: 1 × the vertex colour.
+                if (source <= 0) return null;
+                return new AtlasMask { VertexColor = true, Channel = Channels[Mathf.Clamp(source - 1, 0, 3)], Invert = invert };
+            }
+            mask.Levels = MaskLevels(m, property, channel);
+            if (source > 0)
+            {
+                mask.TimesVertexColor = true;
+                mask.VertexChannel = Channels[Mathf.Clamp(source - 1, 0, 3)];
+                mask.Invert = invert;
+            }
+            else if (invert)
+            {
+                if (mask.Levels != null) mask.Levels.Invert = true;
+                else mask.Invert = true;
+            }
+            return mask;
+        }
+
+        // Null for the identity settings.
+        private static AtlasMaskLevels MaskLevels(Material m, string property, int channel)
+        {
+            float Get(string name, float fallback) => AtlasMaterialReader.Vector(m, property + "ML" + name, Vector4.one * fallback)[channel];
+            var levels = new AtlasMaskLevels
+            {
+                InputMin = Get("InputMin", 0f), InputMax = Get("InputMax", 1f), Midpoint = Get("Midpoint", 0.5f),
+                OutputMin = Get("OutputMin", 0f), OutputMax = Get("OutputMax", 1f)
+            };
+            float boundsMin = Get("BoundsMin", 0f), boundsMax = Get("BoundsMax", 1f);
+            if (Get("Normalize", 0f) > 0.5f && boundsMax > boundsMin)
+            {
+                levels.InputMin = Mathf.Lerp(boundsMin, boundsMax, levels.InputMin);
+                levels.InputMax = Mathf.Lerp(boundsMin, boundsMax, levels.InputMax);
+            }
+            bool identity = levels.InputMin == 0f && levels.InputMax == 1f && levels.Midpoint == 0.5f && levels.OutputMin == 0f && levels.OutputMax == 1f;
+            return identity ? null : levels;
         }
 
 
@@ -132,6 +201,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         protected static float Float(Material m, string property, float fallback) => AtlasMaterialReader.Float(m, property, fallback);
         protected static int Int(Material m, string property, int fallback) => Mathf.RoundToInt(AtlasMaterialReader.Float(m, property, fallback));
         protected static bool On(Material m, string property, float fallback = 0f) => AtlasMaterialReader.Float(m, property, fallback) >= 0.5f;
+        protected static Vector2 Vector2Of(Material m, string property, Vector2 fallback) =>
+            AtlasMaterialReader.Vector(m, property, new Vector4(fallback.x, fallback.y, 0f, 0f));
         protected static Vector3 Vector3Of(Material m, string property, Vector3 fallback) =>
             AtlasMaterialReader.Vector(m, property, new Vector4(fallback.x, fallback.y, fallback.z, 0f));
     }
@@ -143,5 +214,36 @@ namespace NordicWind.AdvancedAtlaser.Editor
         protected override int Major => 10;
         public override bool CanParse(Material m) =>
             AtlasPoiyomiVersionDetector.DetectVariant(m) == AtlasPoiyomiVariant.Toon && AtlasPoiyomiVersionDetector.Detect(m) == 10;
+    }
+
+    // Toon 11 keeps 10's names; its additions read as their defaults (no effect) in 10.
+    public sealed class AtlasPoiyomiToon11Parser : AtlasPoiyomiParser
+    {
+        public override string ParserId => "poiyomi-toon-11";
+        public override string DisplayName => "Poiyomi Toon 11";
+        protected override int Major => 11;
+        public override bool CanParse(Material m) =>
+            AtlasPoiyomiVersionDetector.DetectVariant(m) == AtlasPoiyomiVariant.Toon && AtlasPoiyomiVersionDetector.Detect(m) == 11;
+    }
+
+    // Pro is Toon plus extras.
+    public sealed class AtlasPoiyomiPro10Parser : AtlasPoiyomiParser
+    {
+        public override string ParserId => "poiyomi-pro-10";
+        public override string DisplayName => "Poiyomi Pro 10";
+        protected override int Major => 10;
+        protected override bool Pro => true;
+        public override bool CanParse(Material m) =>
+            AtlasPoiyomiVersionDetector.DetectVariant(m) == AtlasPoiyomiVariant.Pro && AtlasPoiyomiVersionDetector.Detect(m) == 10;
+    }
+
+    public sealed class AtlasPoiyomiPro11Parser : AtlasPoiyomiParser
+    {
+        public override string ParserId => "poiyomi-pro-11";
+        public override string DisplayName => "Poiyomi Pro 11";
+        protected override int Major => 11;
+        protected override bool Pro => true;
+        public override bool CanParse(Material m) =>
+            AtlasPoiyomiVersionDetector.DetectVariant(m) == AtlasPoiyomiVariant.Pro && AtlasPoiyomiVersionDetector.Detect(m) == 11;
     }
 }

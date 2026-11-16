@@ -1,6 +1,6 @@
 # Unified material — refactor plan
 
-**Status:** steps 1 to 8 done (2026-11-16); step 8d-11 waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
+**Status:** steps 1 to 9 done (2026-11-16); step 9g-4f waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
 the [feature catalogue](UNIFIED_MATERIAL_FEATURES.md), then rebuilding every input parser on it.
 
 **Goal:** the code matches the catalogue. Every supported input shader maps into typed
@@ -283,7 +283,50 @@ The largest step, in four parts. Each part ends with tests and your test run.
 11's PBR, sheen, glints and clear coat; mask levels and vertex-colour mask sources; black and
 white; Pro: shell fur, outline layers, screen-space lighting, squish, TPS, GT7 tone mapping,
 constellation as a pattern kind. Pro variants (tessellation, shatter and the others) are
-reported as geometry effects.
+reported as geometry effects. Toon 11 adds about 1,000 properties over 10.0.29, so in seven parts:
+- **9a (done):** parsers for Toon 11, Pro 10 and Pro 11 (Toon 11 keeps 10's names; its additions
+  read as their defaults in 10); mask levels and vertex-colour mask sources on every mask the
+  shared helper builds; the rest of 11 and Pro reported, one line each.
+- **9b (done):** 11's lighting: the PBR type, sheen, glints, clear coat, lighting limits, Light
+  Data and shading additions.
+- **9c (done):** colour, alpha and layers: Black & White, RGBA colour masking, the colour adjust
+  texture, vertex colour hue, alpha dithering, decal sprite sheets, MSDF, flip in mirror and
+  smooth border.
+- **9d (done):** rims (application stage, anti-aliasing, transparency, main texture UV), two
+  backlights, contacts and the global mask textures' levels.
+- **9e (done):** the outline additions.
+- **9f:** the smaller effect additions, in three parts:
+  - **9f-1 (done):** the small ones: normal correct's vertex colour mask, cubemap material
+    smoothness, dissolve colour adjust, flipbook depth, mirror flip and video effects, emission
+    transparency, glitter angle offset, screen-space UV sizing, the height map channel, post
+    processing's emission and global mask.
+  - **9f-2 (done):** pathing, voronoi and internal parallax.
+  - **9f-3 (done):** the reworked AL spectrum.
+- **9g:** Pro (about 260 properties over Toon 11, and the variants), in four parts:
+  - **9g-1 (done):** GT7 tone mapping, neutral emission, SSAO and contact shadows.
+  - **9g-2 (done):** TPS, squish and the outline curvature bake.
+  - **9g-3 (done):** constellation as a pattern kind.
+  - **9g-4:** the variants. Each adds its own properties (60 to 265; about 1,300 in all, Toon's
+    Two Pass and Grab Pass included), so in four parts:
+    - **9g-4a (done):** Two Pass's second pass and its pass masks; Pro Fur's shells; Lil Fur
+      11's additions (mask options, contact, vertex colour modes, cutout length).
+    - **9g-4b (done):** Grab Pass (Toon and Pro) and Self Grab: the refraction layer rewritten
+      with the screen-grab effects (blur patterns, pixelation, colour, ramp, masks, blend
+      factors); Uber's refraction moved onto it.
+    - **9g-4c (done):** Triple Outline (the outline list) and Triplanar Projection (a
+      material-level mapping setting).
+    - **9g-4d (done):** the geometry variants: tessellation mapped (5.4); Geometric Dissolve,
+      ShatterWave and the particles reported, one line each; Geom adds no settings.
+    - **9g-4f (done):** the leftovers a property audit of Pro 11.0.50 found: the Skin section
+      as a pattern kind; the light, emission and final colour multipliers; the flat light map;
+      the additional lights' combine (max, Poiyomi's default, with its alpha boost; other add
+      pass factors reported); the time source; Early Z as a depth prepass; the stochastic
+      density; shading off as unlit; parallax curvature and the world AO blocker reported. The
+      rest were already handled or reported, or are editor-only, internal look-up tables or
+      unused properties (the dissolve edge's second border, TPS idle gravity, the SSS bleed
+      weights). The "poiyomi.v11-sections" and "poiyomi.pro-sections" reports are gone.
+    - **9g-4e (done):** Pro Grab Pass's lava lamp as a pattern kind (the container and its SDF
+      volume, blobs, shading, reservoirs, haze, AudioLink).
 
 ### 10. Poiyomi 7.3 to 9.3
 - **Version tables:** names and meanings that differ from 10, read from the sources on disk.

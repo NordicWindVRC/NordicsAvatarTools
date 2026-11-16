@@ -209,6 +209,61 @@ under *Added* describe the parsers before the rebuild.
 - **Poiyomi vertex options** (refactor step 8d-9): Basics & Fun as deformations. Deformations
   gain scale, axis rotation with spin, world translation, displacement, barrel, sphere, tornado
   and wind, and local, centred snapping; fur's wind becomes the shared wind with turbulence.
+- **Poiyomi 11's remaining settings** (refactor step 9g-4f): the Skin section as a skin tone
+  pattern kind; light, emission and final colour multipliers; additional lights combining by
+  max (Poiyomi's default, Toon 10 included); the network clock; Early Z; the stochastic
+  density; the flat light map. The catch-all "not mapped yet" reports for 11 and Pro are gone.
+- **Poiyomi Pro's lava lamp** (refactor step 9g-4e): a pattern kind with its container,
+  blobs, shading, reservoirs, haze and AudioLink.
+- **Poiyomi Pro's geometry variants** (refactor step 9g-4d): tessellation as a geometry
+  effect; Geometric Dissolve, ShatterWave and the particles reported.
+- **Poiyomi Pro's Triple Outline and Triplanar Projection** (refactor step 9g-4c): outline
+  layers 2 and 3 as further outlines; triplanar projection as a material-level mapping setting.
+- **Poiyomi's Grab Pass and Self Grab** (refraction layer rewritten, refactor step 9g-4b): the
+  refraction layer gains the screen-grab effects (blur patterns, pixelation, colour, a colour
+  ramp, per-effect masks, blend factors and self grab); Uber's opacity becomes its blend amount.
+- **Poiyomi's Two Pass and fur variants** (refactor step 9g-4a): a second pass in the render
+  settings (with mask bus steps that tell the passes apart); Pro Fur's shells; Lil Fur 11's
+  mask options, contact, vertex colour modes and cutout length.
+- **Poiyomi Pro's constellation** (refactor step 9g-3): a pattern kind with its stars, lines,
+  layers, random colours and AudioLink.
+- **Poiyomi Pro's TPS, squish and outline bake** (refactor step 9g-2): TPS and squish
+  deformations (squish's colour as a pattern layer sharing its settings) and baked outline
+  curvature data.
+- **Poiyomi Pro's screen-space effects and tone mapping** (refactor step 9g-1): ambient
+  occlusion and contact shadows as pattern kinds; GT7 tone mapping and neutral emission as
+  colour operations (with per-operation settings).
+- **Poiyomi 11's AL spectrum** (refactor step 9f-3): the audio spectrum gains flips, an arc,
+  three display styles, lit steps, frequency mapping, bar sampling, response rows,
+  compression, a gradient colour mode, mask coordinates, master opacity and emission controls.
+- **Poiyomi 11's pathing, voronoi and internal parallax** (refactor step 9f-2): path lines gain
+  direction channels, ping-pong motion, easing, head and tail softness, packed masks, overlap
+  modes and anti-aliasing; voronoi gains cell motion and AudioLink cells; internal parallax
+  gains mip maps, smooth layers, alpha, refraction and depth fog.
+- **Poiyomi 11's small effect additions** (refactor step 9f-1): a material-wide screen space
+  layout; surface layers can go through a video screen and fade their emission by alpha;
+  normal correction gets a mask; final colour operations can include the emission; glitter's
+  angle offset; dissolve's revealed colour adjust; flipbook depth and mirror flip.
+- **Poiyomi 11's outlines** (refactor step 9e): outlines gain per-property masks, colour
+  adjustments (also mapped for Poiyomi 10 now), a bus mask, edge fade, smooth thin outlines,
+  light facing side widths, an emission colour and camera depth writing; a new HSV offset
+  colour operation.
+- **Poiyomi 11's rims, backlights and contacts** (refactor step 9d): angle layers gain
+  anti-aliasing, *times alpha* and a direct-light response; the lilToon rim's application stage
+  and main texture UV; a second backlight; VRChat contacts as a mask bus step; the mask bus's
+  texture step takes a full mask with levels.
+- **Poiyomi 11's colour, alpha and decals** (refactor step 9c): a black and white colour
+  operation; MSDF textures; decal smooth borders, mirror flips and sprite sheets with area and
+  inset; vertex colour hue; dither cutout and dithered shadows; RGBA colour masking's AO, alpha
+  and per-region PBR masks.
+- **Poiyomi 11's lighting** (refactor step 9b): the PBR lighting type as the physically based
+  family's new *calibrated* model; the surface response gains sheen, glints, multi-bounce
+  occlusion and a rotated, multiplied anisotropy; limits that keep the hue, SDF mask channels,
+  back face shadow, a light volume specular light count, strand even width and environmental
+  rim exposure occlusion.
+- **Poiyomi Toon 11, Pro 10 and Pro 11 parsers** (refactor step 9a) on Toon 10's parser. Masks
+  gain levels (input and output range, midpoint, invert) and a vertex colour multiplier, read
+  from Poiyomi 11's mask options.
 - **Poiyomi Lil Fur** (refactor step 8d-11) into the material's fur, with a fur mode and alpha to
   coverage; the Poiyomi 10 parser is complete and no longer reports unmapped sections.
 - **Poiyomi look-at, glitching, depth bulge and view clip prevention** (refactor step 8d-10) as

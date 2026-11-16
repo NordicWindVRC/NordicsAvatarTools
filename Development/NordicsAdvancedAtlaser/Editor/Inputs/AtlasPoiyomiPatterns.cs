@@ -21,6 +21,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             InternalParallax(m, d);
             Voronoi(m, d);
             Truchet(m, d);
+            Constellation(m, d);
             if (On(m, "_TextEnabled"))
                 d.Report(AtlasIssueKind.Unmapped, "poiyomi.stats-overlay", "Poiyomi's stats overlay (text) isn't mapped.");
         }
@@ -57,7 +58,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 MaxFade = Float(m, "_ParallaxInternalMaxFade", 0.1f),
                 MinColor = TintColor(m, d, "_ParallaxInternalMinColor", "_ParallaxInternalMinColorThemeIndex"),
                 MaxColor = TintColor(m, d, "_ParallaxInternalMaxColor", "_ParallaxInternalMaxColorThemeIndex"),
-                HuePerLevel = On(m, "_ParallaxInternalHueShiftEnabled") ? Float(m, "_ParallaxInternalHueShiftPerLevel", 0f) : 0f
+                HuePerLevel = On(m, "_ParallaxInternalHueShiftEnabled") ? Float(m, "_ParallaxInternalHueShiftPerLevel", 0f) : 0f,
+                // Poiyomi 11.
+                MipMaps = On(m, "_ParallaxInternalMipMaps"),
+                Smooth = On(m, "_ParallaxInternalSmooth"),
+                SmoothSteps = Mathf.Max(8, Int(m, "_ParallaxInternalSmoothSteps", 64)),
+                AlphaAdd = Float(m, "_ParallaxInternalAlpha", 0f),
+                Refraction = On(m, "_ParallaxInternalRefractionEnabled"),
+                RefractionIor = Float(m, "_ParallaxInternalRefractionIOR", 1.33f),
+                RefractionNormalAmount = Float(m, "_ParallaxInternalRefractionNormal", 1f),
+                Fog = On(m, "_ParallaxInternalFogEnabled"),
+                FogColor = TintColor(m, d, "_ParallaxInternalFogColor", "_ParallaxInternalFogColorThemeIndex"),
+                FogDensity = Float(m, "_ParallaxInternalFogDensity", 2f)
             };
             var mask = Mask(m, d, "_ParallaxInternalMapMask", Channels[Mathf.Clamp(Int(m, "_ParallaxInternalMapMaskChannel", 0), 0, 3)]);
             if (mask != null) mask.Invert = On(m, "_ParallaxInternalMapMaskInvert");
@@ -65,6 +77,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 Kind = AtlasPatternKind.InternalParallax,
                 InternalParallax = parallax,
+                EmissionAmount = Float(m, "_ParallaxInternalEmissionStrength", 0f),
                 Placement = AtlasPlacement.Surface,
                 Blend = PoiyomiBlend(Int(m, "_ParallaxInternalSurfaceBlendMode", 8)),
                 Mask = BusMask(m, mask, "_ParallaxInternalMapMaskGlobalMask")
@@ -227,8 +240,32 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 ShapeClip = On(m, "_ALDecalShapeClip"),
                 ShapeClipVolumeWidth = Float(m, "_ALDecalShapeClipVolumeWidth", 0.5f),
                 ShapeClipBandWidth = Float(m, "_ALDecalShapeClipBandWidth", 0.5f),
-                ColorChord = Int(m, "_ALDecalColorMode", 0) == 1,
+                ColorMode = (AtlasSpectrumColorMode)Mathf.Clamp(Int(m, "_ALDecalColorMode", 0), 0, 2),
                 ColorChordEmission = Float(m, "_ALDecalColorChordEmission", 0f),
+                // Poiyomi 11.
+                Gradient = AtlasSourceMapping.Texture(m, "_ALDecalGradient", AtlasTextureInterpretation.Color),
+                GradientEmission = Float(m, "_ALDecalGradientEmission", 0f),
+                FlipU = (Int(m, "_ALDecalFlip", 0) & 1) != 0,
+                FlipV = (Int(m, "_ALDecalFlip", 0) & 2) != 0,
+                Arc = Int(m, "_ALDecalRadialMode", 0) == 1,
+                InnerRadius = Float(m, "_ALDecalInnerRadius", 0.25f),
+                OuterRadius = Float(m, "_ALDecalOuterRadius", 1f),
+                StartAngle = Float(m, "_ALDecalStartAngle", 0f),
+                ArcDegrees = Float(m, "_ALDecalArcDegrees", 360f),
+                Display = (AtlasSpectrumDisplay)Mathf.Clamp(Int(m, "_ALDecalDisplayMode", 0), 0, 2),
+                LineThickness = Float(m, "_ALDecalLineThickness", 2f),
+                LitSteps = Float(m, "_ALDecalLitSegments", 1f),
+                // 10 has no frequency mapping: the band range.
+                FrequencyMapping = Int(m, "_ALDecalSamplingMode", AtlasMaterialReader.Has(m, "_ALDecalSamplingMode") ? 1 : 0) == 1,
+                FrequencyMin = Float(m, "_ALDecalFrequencyMin", 20f),
+                FrequencyMax = Float(m, "_ALDecalFrequencyMax", 14080f),
+                BandSampling = (AtlasSpectrumBandSampling)Mathf.Clamp(Int(m, "_ALDecalBandSampling", 0), 0, 2),
+                Response = (AtlasSpectrumResponse)Mathf.Clamp(Int(m, "_ALDecalResponse", 0), 0, 2),
+                Compression = Float(m, "_ALDecalCompression", 1f),
+                MaskFollowsSpectrum = Int(m, "_ALDecalMaskSpace", 0) == 1,
+                MasterOpacity = Float(m, "_ALDecalMasterOpacity", 1f),
+                EmissionStrength = Float(m, "_ALDecalEmissionStrength", 1f),
+                TintEmission = On(m, "_ALDecalTintEmission"),
                 ColorSource = (AtlasSpectrumColorSource)Mathf.Clamp(Int(m, "_ALDecalVolumeColorSource", 1), 0, 2),
                 Low = TintColor(m, d, "_ALDecalVolumeColorLow", "_ALDecalVolumeColorLowThemeIndex"),
                 Mid = TintColor(m, d, "_ALDecalVolumeColorMid", "_ALDecalVolumeColorMidThemeIndex"),
@@ -241,8 +278,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             };
             if (On(m, "_ALDecalUseVideoEffects"))
                 spectrum.Screen = d.Layers.OfType<AtlasPatternLayer>().Select(l => l.VideoScreen).FirstOrDefault(s => s != null);
-            if (On(m, "_ALDecalDebug"))
+            int preview = Int(m, "_ALDecalPreview", 0);
+            if ((preview == 0 && On(m, "_ALDecalDebug")) || preview >= 2 || Int(m, "_ALDecalShowBounds", 0) == 2)
                 d.Report(AtlasIssueKind.Note, "spectrum.debug", "An AL spectrum's debug preview is read as the live spectrum.");
+            ReportPackedOptions(m, d, "_ALDecalColorMask");
             d.Layers.Add(new AtlasPatternLayer
             {
                 Kind = AtlasPatternKind.AudioSpectrum,
@@ -274,8 +313,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 PointSampling = On(m, "_PathPointSampling", 1f),
                 ColorMap = Texture(m, d, "_PathingColorMap"),
                 Remapping = On(m, "_EnablePathRemapping"),
-                OverrideAlpha = On(m, "_PathingOverrideAlpha")
+                OverrideAlpha = On(m, "_PathingOverrideAlpha"),
+                Overlap = (AtlasPathOverlap)Mathf.Clamp(Int(m, "_PathOverlapMode", 0), 0, 2),
+                Antialiasing = On(m, "_PathAntialiasing"),
+                ColorMapAlphaMasks = On(m, "_PathingUseColorMapAlpha", 1f)
             };
+            var packed = Texture(m, d, "_PathingMaskMap", AtlasTextureInterpretation.Data);
+            var head = AtlasMaterialReader.Vector(m, "_PathHeadSoftness", Vector4.one * 0.1f);
+            var tail = AtlasMaterialReader.Vector(m, "_PathTailSoftness", Vector4.one);
             if (path.Source == AtlasPathSource.UV) path.Space = UVSpace(m, d, "_PathingUVSelect");
             var emission = AtlasMaterialReader.Vector(m, "_PathEmissionStrength", Vector4.zero);
             var softness = AtlasMaterialReader.Vector(m, "_PathSoftness", Vector4.one);
@@ -304,6 +349,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 channel.Segments = Mathf.Abs(segments[i]);
                 channel.Remap = AtlasMaterialReader.Vector(m, "_PathRemap" + c, new Vector4(0f, 1f, 0f, 1f));
                 channel.Mask = BusMask(m, null, "_PathGlobalMask" + c, "_PathGlobalMask" + c + "BlendType");
+                // Poiyomi 11.
+                channel.GradientChannel = Mathf.Clamp(Int(m, "_PathDirectionChannel" + c, 0), 0, 4) - 1;
+                channel.PingPong = Int(m, "_PathMotion" + c, 0) == 1;
+                channel.Easing = (AtlasPathEasing)Mathf.Clamp(Int(m, "_PathEasing" + c, 0), 0, 3);
+                channel.SeparateEdges = Int(m, "_PathEdges" + c, 0) == 1;
+                channel.HeadSoftness = head[i];
+                channel.TailSoftness = tail[i];
+                int maskChannel = Int(m, "_PathingMaskChannel" + c, 3);
+                if (packed != null && maskChannel < 4)
+                    channel.PackedMask = MaskOptions(m, new AtlasMask { Map = packed, Channel = Channels[Mathf.Clamp(maskChannel, 0, 3)] }, "_PathingMaskMap", maskChannel);
             }
             int blend = Int(m, "_PathSurfaceBlendMode", 0);
             d.Layers.Add(new AtlasPatternLayer
@@ -371,8 +426,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 SaturationRange = AtlasMaterialReader.Vector(m, "_VoronoiRandomMinMaxSaturation", new Vector4(0.8f, 1f, 0f, 1f)),
                 BrightnessRange = AtlasMaterialReader.Vector(m, "_VoronoiRandomMinMaxBrightness", new Vector4(0.8f, 1f, 0f, 1f)),
                 EmissionOnly = Int(m, "_VoronoiBlend", 0) == 1,
-                AffectsAlpha = On(m, "_VoronoiAffectsMaterialAlpha")
+                AffectsAlpha = On(m, "_VoronoiAffectsMaterialAlpha"),
+                CellMotion = Float(m, "_VoronoiCellMotion", 0f),
+                CellMotionSpeed = Float(m, "_VoronoiCellMotionSpeed", 1f)
             };
+            if (AudioLinkOn(m) && On(m, "_AudioLinkVoronoiCellsEnabled"))
+                voronoi.AudioCells = new AtlasVoronoiAudioCells
+                {
+                    Band = Mathf.Clamp(Int(m, "_AudioLinkVoronoiCellsBand", 4), 0, 4),
+                    History = Float(m, "_AudioLinkVoronoiCellsHistory", 0.5f),
+                    Emission = Float(m, "_AudioLinkVoronoiCellsEmission", 2f),
+                    Dim = Float(m, "_AudioLinkVoronoiCellsDim", 0.5f)
+                };
             if (voronoi.Space == AtlasVoronoiSpace.UV) voronoi.UV = UVSpace(m, d, "_VoronoiUV");
             d.Layers.Add(new AtlasPatternLayer
             {
@@ -382,6 +447,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Blend = AtlasBlend.Replace,
                 Mask = BusMask(m, Mask(m, d, "_VoronoiMask", Channels[Mathf.Clamp(Int(m, "_VoronoiMaskChannel", 0), 0, 3)]), "_VoronoiGlobalMask")
             });
+            // Poiyomi 11: the resolved colour's hue, for colour and emission alike.
+            if (On(m, "_VoronoiHueShiftEnabled"))
+                Hue(m, d, AtlasAdjustmentTarget.Layer, d.Layers[d.Layers.Count - 1], "_VoronoiHueShift", "_VoronoiHueShiftSpeed",
+                    "_VoronoiHueShiftColorSpace", "_VoronoiHueSelectOrShift");
 
             if (!AudioLinkOn(m)) return;
             string path = "layers[" + (d.Layers.Count - 1) + "].voronoi.";
@@ -499,6 +568,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Speed = linear ? Float(m, "_GlitterLinearSpeed", 0.25f) : Float(m, "_GlitterSpeed", 10f),
                 AngleRange = Float(m, "_GlitterAngleRange", 90f),
                 Bias = Float(m, "_GlitterBias", 0.8f),
+                AngleOffset = Float(m, "_GlitterAngleOffset", 0f),
                 Contrast = Float(m, "_GlitterContrast", 300f),
                 JaggyFix = Float(m, "_GlitterJaggyFix", 0f),
                 DistanceLOD = On(m, linear ? "_GlitterLinearDistanceLOD" : "_GlitterDistanceLOD", 1f),

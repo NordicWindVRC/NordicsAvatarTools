@@ -12,7 +12,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         Data,
         TangentNormal,
         // A tangent-space direction map, composited like a normal map (fur).
-        Direction
+        Direction,
+        // A multi-channel signed distance field: white, with alpha saturate((median(r, g, b) − 0.5) /
+        // the median's change across a pixel), so shapes stay sharp at any size.
+        Msdf
     }
 
     public enum AtlasTextureSpace
@@ -53,6 +56,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Degrees per second.
         public float Spin;
         public AtlasTextureSampling Sampling = AtlasTextureSampling.Default;
+        // Stochastic: the tile grid's density (1: the standard cell size).
+        public float StochasticDensity = 1f;
         // A decal: placed on the wrapped UV; null: tiled over the surface.
         public AtlasDecal Decal;
         // Animation frames; null: one image.
@@ -96,6 +101,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasDecalMirror Mirror = AtlasDecalMirror.None;
         // Parallax depth: the decal appears this far behind (positive) the surface.
         public float Depth;
+        // With ClipOutside, the edge is anti-aliased over a pixel instead of cut.
+        public bool SmoothBorder;
+        // In mirrors, u = 1 − u (text reads the right way round).
+        public bool FlipInMirror;
     }
 
     public enum AtlasFrameSource
@@ -126,6 +135,53 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float FixedFrame;
         public bool Crossfade;
         public Vector2 CrossfadeRange = new Vector2(0.75f, 1f);
+        // Sprite sheets: the part of the texture the grid covers (from the top left), and an inset
+        // pulling each frame's samples toward its centre (0–1).
+        public Vector2 Area = Vector2.one;
+        public float Inset;
+    }
+
+    // How the screen texture space is laid out: square, centred on each eye's optical centre (so
+    // it fuses in stereo); with ObjectRelative, sized to WorldSize world units at the object's
+    // distance and anchored to its origin, so it keeps its size on the object.
+    public sealed class AtlasScreenSpace
+    {
+        public bool ObjectRelative;
+        public float WorldSize = 1f;
+    }
+
+    public enum AtlasClock { Local, Network }
+
+    public enum AtlasTriplanarSource { Mesh, Depth }
+    public enum AtlasTriplanarBlend { Normal, Sharp, Asymmetric }
+
+    // 1.1: the whole material projected three ways (Poiyomi Pro's Triplanar Projection). UV0
+    // becomes three planar projections of a position p ÷ lerp(1, the object's scale,
+    // ScaleWithObject): (p.z × sign n.x, p.y), (p.x × sign n.y, p.z) and (−p.x × sign n.z, p.y),
+    // + 0.5. Mesh: p is the object-space position and n the object normal. Depth: p is the scene
+    // behind, read from the depth texture relative to the object's origin, and n its normal
+    // (from depth samples DepthBlur pixels apart), so the material lands on its surroundings,
+    // within MaxSize of the origin (faded over the last EdgeFade.y − EdgeFade.x) and while the
+    // camera is nearer than CameraFade.y (faded from CameraFade.x); nothing without a depth
+    // texture. The surface is evaluated once per projection and blended by weights from n
+    // (Normal: |n| − Sharpness, normalised; Sharp: |n|⁶, normalised; Asymmetric: the sides where
+    // the horizontal normal passes 0.67, the top where |n.y| passes 0.675): colour, alpha, normals,
+    // emission, additive light and the mask bus. Then base = lerp(the first projection's, the
+    // blend, mask), alpha = the blended alpha × mask × the fades, and emission and lighting ×
+    // that alpha. The mask is Mask's value (sampled per projection and blended) × MaskStrength.
+    public sealed class AtlasTriplanar
+    {
+        public bool Enabled;
+        public AtlasTriplanarSource Source = AtlasTriplanarSource.Depth;
+        public AtlasTriplanarBlend Blend = AtlasTriplanarBlend.Normal;
+        public float Sharpness = 0.2f;
+        public float ScaleWithObject = 1f;
+        public AtlasMask Mask;
+        public float MaskStrength = 1f;
+        public float MaxSize = 1f;
+        public Vector2 EdgeFade = new Vector2(0f, 0.5f);
+        public Vector2 CameraFade = new Vector2(10f, 15f);
+        public float DepthBlur = 1f;
     }
 
     public enum AtlasDistortionSource { Noise, NormalMap }
@@ -223,6 +279,31 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // How a value combines with a mask bus channel (1.5), in Poiyomi's order.
     public enum AtlasMaskBlend { Replace, Subtract, Multiply, Divide, Min, Max, Average, Add }
 
+    // 1.4: a curve on a mask value v: t = saturate((v − InputMin) / (InputMax − InputMin))
+    // (step(InputMax, v) for an empty range), t = pow(t, log 0.5 / log Midpoint) (Midpoint clamped
+    // to 0.01–0.99, none at 0.5), 1 − t when Invert, then lerp(OutputMin, OutputMax, t).
+    public sealed class AtlasMaskLevels
+    {
+        public float InputMin;
+        public float InputMax = 1f;
+        public float Midpoint = 0.5f;
+        public float OutputMin;
+        public float OutputMax = 1f;
+        public bool Invert;
+
+        public float Evaluate(float v)
+        {
+            float range = InputMax - InputMin;
+            float t = range > 0.00001f ? Mathf.Clamp01((v - InputMin) / range) : (v >= InputMax ? 1f : 0f);
+            if (Midpoint != 0.5f) t = Mathf.Pow(t, Mathf.Log(0.5f) / Mathf.Log(Mathf.Clamp(Midpoint, 0.01f, 0.99f)));
+            if (Invert) t = 1f - t;
+            return Mathf.Lerp(OutputMin, OutputMax, t);
+        }
+    }
+
+    // The value: the map's channel (1 without a map; the vertex colour's channel with VertexColor),
+    // through Levels, × a vertex colour channel (TimesVertexColor), inverted, lerp(1, v, Strength),
+    // then blended with a bus channel.
     public sealed class AtlasMask
     {
         public AtlasTextureReference Map;
@@ -233,13 +314,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The channel is read from the vertex colour instead of a map.
         public bool VertexColor;
         public AtlasChannel Channel = AtlasChannel.Red;
+        // Null: the value as it is.
+        public AtlasMaskLevels Levels;
+        public bool TimesVertexColor;
+        public AtlasChannel VertexChannel = AtlasChannel.Red;
         public bool Invert;
         // lerp(1, value, strength)
         public float Strength = 1f;
 
+        // Without vertex colours: the map's sample through the levels and the invert.
         public float Evaluate(float sample = 1f)
         {
-            float value = Map == null ? 1f : Invert ? 1f - sample : sample;
+            if (Map == null) return 1f;
+            float value = Levels != null ? Levels.Evaluate(sample) : sample;
+            if (Invert) value = 1f - value;
             return Mathf.Lerp(1f, value, Strength);
         }
     }

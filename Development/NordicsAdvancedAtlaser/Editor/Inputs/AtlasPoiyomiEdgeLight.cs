@@ -9,7 +9,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             DepthRim(m, d);
             EnvironmentalRim(m, d);
-            Backlight(m, d);
+            Backlight(m, d, "");
+            // Poiyomi 11's second backlight: the same properties + "__1".
+            Backlight(m, d, "__1");
             Subsurface(m, d);
         }
 
@@ -26,7 +28,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 ("_DepthRimAdd", AtlasBlend.Add, placement, 0f), ("_DepthRimScreen", AtlasBlend.Screen, placement, 1f),
                 ("_DepthRimMultiply", AtlasBlend.Multiply, placement, 0f)
             };
-            var mask = Mask(m, d, "_DepthRimMask", Channels[Mathf.Clamp(Int(m, "_DepthRimMaskChannel", 0), 0, 3)]);
+            var mask = BusMask(m, Mask(m, d, "_DepthRimMask", Channels[Mathf.Clamp(Int(m, "_DepthRimMaskChannel", 0), 0, 3)]), "_DepthRimGlobalMask");
             var color = TintColor(m, d, "_DepthRimColor", "_DepthRimColorThemeIndex") * Float(m, "_DepthRimBrightness", 1f);
             float emission = Float(m, "_DepthRimEmission", 0f);
             bool first = true;
@@ -97,6 +99,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 EnvironmentRoughnessOverride = true,
                 EnvironmentRoughness = Float(m, "_RimEnviroBlur", 0.7f),
                 EnvironmentThreshold = Float(m, "_RimEnviroMinBrightness", 0f),
+                ExposureOcclusion = Float(m, "_RimEnviroExposureOcclusion", 0f),
                 BaseColorMix = 1f,
                 Blend = AtlasBlend.Add,
                 Opacity = Float(m, "_RimEnviroIntensity", 1f),
@@ -106,10 +109,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Light shining through from behind, scaled by the light's colour, added after lighting.
-        private static void Backlight(Material m, AtlasUnifiedMaterial d)
+        private static void Backlight(Material m, AtlasUnifiedMaterial d, string s)
         {
-            if (!On(m, "_BacklightEnabled")) return;
-            float border = Float(m, "_BacklightBorder", 0.65f), blur = Float(m, "_BacklightBlur", 0.05f);
+            if (!On(m, "_BacklightEnabled" + s)) return;
+            float border = Float(m, "_BacklightBorder" + s, 0.65f), blur = Float(m, "_BacklightBlur" + s, 0.05f);
             var layer = new AtlasAngleLayer
             {
                 Source = AtlasAngleSource.Backlight,
@@ -118,21 +121,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Power = 1f,
                 Low = Mathf.Clamp01(border - blur * 0.5f),
                 High = Mathf.Clamp01(border + blur * 0.5f),
-                Directivity = Mathf.Max(0f, Float(m, "_BacklightDirectivity", 5f)),
-                ViewStrength = Float(m, "_BacklightViewStrength", 1f),
-                ReceiveShadows = On(m, "_BacklightReceiveShadow", 1f),
-                SurfaceNormalAmount = Float(m, "_BacklightNormalStrength", 1f),
-                BaseColorMix = Float(m, "_BacklightMainStrength", 0f),
+                Directivity = Mathf.Max(0f, Float(m, "_BacklightDirectivity" + s, 5f)),
+                ViewStrength = Float(m, "_BacklightViewStrength" + s, 1f),
+                ReceiveShadows = On(m, "_BacklightReceiveShadow" + s, 1f),
+                SurfaceNormalAmount = Float(m, "_BacklightNormalStrength" + s, 1f),
+                BaseColorMix = Float(m, "_BacklightMainStrength" + s, 0f),
                 LightColorMix = 1f,
                 SourceAlphaIsOpacity = true,
                 Blend = AtlasBlend.Add,
-                Faces = On(m, "_BacklightBackfaceMask", 1f) ? AtlasFaces.Front : AtlasFaces.Both
+                Faces = On(m, "_BacklightBackfaceMask" + s, 1f) ? AtlasFaces.Front : AtlasFaces.Both,
+                OnOutlines = On(m, "_BacklightApplyToOutlines" + s, 1f)
             };
-            layer.Color.Color = LinearColor(m, "_BacklightColor", new Color(0.85f, 0.8f, 0.7f, 1f));
-            layer.Color.Map = Texture(m, d, "_BacklightColorTex");
+            layer.Color.Color = LinearColor(m, "_BacklightColor" + s, new Color(0.85f, 0.8f, 0.7f, 1f));
+            layer.Color.Map = Texture(m, d, "_BacklightColorTex" + s);
             d.Layers.Add(layer);
-            layer.Mask = BusMask(m, layer.Mask, "_BacklightGlobalMask");
-            BusWrite(m, d, layer, "_BacklightApplyGlobalMaskIndex", "_BacklightApplyGlobalMaskBlendType");
+            layer.Mask = BusMask(m, layer.Mask, "_BacklightGlobalMask" + s);
+            BusWrite(m, d, layer, "_BacklightApplyGlobalMaskIndex" + s, "_BacklightApplyGlobalMaskBlendType" + s);
         }
 
         // pow(saturate(V · −(L + N × distortion)), spread) × strength × saturate(1 − thickness − mod)

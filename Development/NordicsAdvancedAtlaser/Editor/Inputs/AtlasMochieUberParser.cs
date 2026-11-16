@@ -379,14 +379,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Placement = Int(m, "_UnlitRefraction", 0) == 1 ? AtlasPlacement.Overlay : AtlasPlacement.Lit,
                 IOR = Float(m, "_RefractionIOR", 1.3f),
                 Tint = AtlasMaterialReader.ColorLinear(m, "_RefractionTint", Color.white),
-                Opacity = Float(m, "_RefractionOpac", 0f),
+                // lerp(refraction, surface, opacity).
+                Amount = 1f - Float(m, "_RefractionOpac", 0f),
                 ChromaticAberration = Keyword(m, "_CHROMATIC_ABBERATION_ON"),
                 ChromaticAberrationStrength = Float(m, "_RefractionCAStr", 0.1f),
-                Blur = Int(m, "_RefractionBlur", 0) == 1,
-                BlurStrength = Float(m, "_RefractionBlurStrength", 0f),
-                BlurByRoughness = Int(m, "_RefractionBlurRough", 0) == 1,
                 CutThreshold = Float(m, "_RefractionDissolveMaskStr", 1f)
             };
+            if (Int(m, "_RefractionBlur", 0) == 1)
+                layer.Blur = new AtlasScreenBlur
+                {
+                    Strength = Float(m, "_RefractionBlurStrength", 0f), ByRoughness = Int(m, "_RefractionBlurRough", 0) == 1 ? 1f : 0f
+                };
             layer.CutMask = AtlasSourceMapping.Texture(m, "_RefractionDissolveMask", AtlasTextureInterpretation.Data);
             if (layer.CutMask != null) layer.CutMask.Scroll = Vector2Of(m, "_RefractionDissolveMaskScroll");
             d.Layers.Add(layer);

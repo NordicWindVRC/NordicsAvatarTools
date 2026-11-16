@@ -2,7 +2,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 {
     public enum AtlasMaskBusStepKind
     {
-        // value = the map's channel
+        // value = the mask's value (1.4: a map's channel with its levels and vertex colour)
         Texture,
         // value = saturate(blend(value, a vertex colour channel)), sRGB decoded when VertexLinear
         VertexColor,
@@ -28,7 +28,31 @@ namespace NordicWind.AdvancedAtlaser.Editor
         LayerCoverage,
         // value = saturate(blend(value, smoothstep(Max, Min, distance to a blacklight))): a
         // VRChat blacklight is a black vertex light whose alpha is the key (Amount)
-        Blacklight
+        Blacklight,
+        // value = saturate(blend(value, the touch of VRChat contacts, see AtlasContact))
+        Contact,
+        // value = blend(value, 1 in the second pass (AtlasSecondPass) when Inside, in the first
+        // when not; else 0)
+        SecondPass
+    }
+
+    public enum AtlasContactPeople { Everyone, Others, Me }
+
+    // A touch from VRChat's contacts sent to shaders (Poiyomi 11's global mask contacts): each
+    // matching contact touches with 1 − smoothstep(InnerRadius, OuterRadius, distance), the
+    // distance from the pixel (AroundTouch) or from the object's origin, the radii in metres at
+    // the avatar's uploaded size (× the toucher's size with ScaleWithToucher); the touches add up,
+    // faded in and out as contacts come and go; 1 − it when inverted.
+    public sealed class AtlasContact
+    {
+        // Which contact tags (VRChat's 64, four groups of 16 bits).
+        public readonly int[] Tags = new int[4];
+        public AtlasContactPeople People = AtlasContactPeople.Everyone;
+        public float InnerRadius = 0.05f;
+        public float OuterRadius = 0.15f;
+        public bool ScaleWithToucher;
+        public bool AroundTouch = true;
+        public bool Invert;
     }
 
     // One step of a channel's computation.
@@ -37,8 +61,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public int Channel;
         public AtlasMaskBusStepKind Kind;
         public AtlasMaskBlend Blend = AtlasMaskBlend.Multiply;
-        public AtlasTextureReference Map;
-        public AtlasChannel MapChannel = AtlasChannel.Red;
+        // Texture.
+        public AtlasMask Mask;
+        // Contact.
+        public AtlasContact Contact;
         public AtlasChannel VertexChannel = AtlasChannel.Red;
         public bool VertexLinear = true;
         public AtlasFaces Faces = AtlasFaces.Both;

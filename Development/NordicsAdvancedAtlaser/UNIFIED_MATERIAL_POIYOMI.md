@@ -642,18 +642,154 @@ properties and removes 25. Pro 11 adds another 159 on top of Toon 11, and remove
 | World, World Fur | World variants | Out of scope |
 
 ### Parser
-- The version detector recognises 11 and Pro. `AtlasPoiyomi11Parser` handles Toon 11;
-  `AtlasPoiyomiPro11Parser`, `AtlasPoiyomiPro10Parser` and a generic Pro parser handle Pro. All
-  share the Poiyomi base, since Pro is Toon plus extras.
-- **Mapped:** the PBR lighting type's surface (metallic, smoothness, occlusion, reflectance; clear
-  coat, anisotropy, sheen and glints as raw values), Pro Fur into the fur definition, and fur
-  contacts for both fur kinds.
-- **Reported once each when used:** mask levels and vertex-colour mask channels; SSAO, contact
-  shadows, TPS deformation, squish, constellation, GT7 tone mapping, neutral emission, outline
-  bake; and the variant shaders listed above.
-- **Not yet read:** the other 11 additions (Black & White, decal sprite sheets, outline masks,
-  backlight 2, contacts and so on) fall under the existing *advanced effects not fully
-  normalised* report, like the rest of Poiyomi's unmapped features.
+`AtlasPoiyomiToon11Parser`, `AtlasPoiyomiPro10Parser` and `AtlasPoiyomiPro11Parser` share the
+Poiyomi base with Toon 10's parser, since Toon 11 keeps 10's names and Pro is Toon plus extras.
+11's additions read as their defaults (no effect) on 10's materials, so the shared code reads
+them without a version check. Rebuilt in refactor step 9, part by part.
+
+**Part 9a:** detection (from the version and Pro markers, or the master label), and on every
+mask the shared mask helper builds (and the vertex basics and LookAt masks): **mask levels**
+(`<mask>MLInputMin`, `…InputMax`, `…Midpoint`, `…OutputMin`, `…OutputMax`, with
+`…Normalize` and its bounds resolved into the input range) and the **vertex colour source**
+(`<mask>VertexMask`, 1–4 multiplying by R–A; per channel for the RGBA masks, x for the others).
+The levels' invert (`<mask>MLInvert`) is part of the levels, or comes after the vertex colour
+when there is one; masks with an invert toggle of their own invert after everything. The global
+mask textures' levels come with the contacts (9d). The rest of 11 and Pro reports one line
+each until its part.
+
+**Part 9b:** the **PBR lighting type** as the physically based family's *calibrated* model:
+the packed map (metallic, occlusion and smoothness by channel, white for none) with its
+constants, reflectance, occlusion strength and multi-bounce occlusion, the three global masks,
+specular anti-aliasing, and its own clear coat, anisotropy (strength × channel, rotation),
+sheen (strength × channel, colour, smoothness) and glints. Reflections & Specular and Clear
+Coat don't apply with it. Light Data: the limit modes (keep hue) for the main and additional
+lights, the SDF's blue and alpha channels, the light volumes' specular light count. Shading:
+force shadow on back faces. Anisotropics: even band width. Depth rim: its global mask.
+Environmental rim: exposure occlusion. The packed maps' mask levels (BRDF, clear coat, PBR,
+cloth) are reported; Light Data's AO, shadow and detail shadow maps take them.
+
+**Part 9c:** **Black & White** as a colour operation, first in Color Adjust, with its mask
+channel, texture range or picked colours, and select by colour. RGBA colour masking: *affect
+alpha* as a second layer on the alpha (its alpha add reported), the regions' **AO** (strength,
+own or custom sampling, mask channel and global mask) as occlusion layers taking the darker,
+the regions' PBR mask channel and global mask (each *same as colour* by default) for metallic
+and smoothness, and the smoothness blend (min and max swap on roughness; add, subtract and
+multiply reported); smoothness on the second specular lobe is reported. Decals: MSDF textures,
+smooth border, flip in mirror and sprite sheets (columns, rows, frames, FPS, start frame, area,
+inset). Vertex colour hue shift. Alpha: the dither mode (transparency as screen-door) and
+dithered shadows. The packed RGBA and colour adjust maps' mask levels are reported.
+
+**Part 9d:** the lilToon rim's **application stage** (after lighting, on the base colour lit
+with the surface, or after lighting by the direct light), anti-aliasing, *apply transparency*
+(fade and transparent modes) and *use main texture UV* (the main texture's UV, tiling and
+panning before the rim texture's own); the rim colour texture's mask levels are reported. The
+**second backlight** (`…__1`) and *apply to outlines*. **Contacts:** up to 8 VRChat contacts
+as mask bus steps (tags, people, radii, toucher scale, around the touch or the whole mesh,
+invert, target and blend); a contact tinting a theme colour by who touches is reported. The
+**global mask textures** take their mask levels and vertex colour sources.
+
+**Part 9e:** outlines: the mask texture's **channel per property** (size, colour, alpha,
+texture blend, emission, highlight, colour adjust, fixed size, lighting, vertex colour
+strength; *off* for none), the global mask (alpha, nothing where 0), edge fade, smooth thin
+outlines, the light facing falloff, size follows light and side widths, the independent
+emission colour and map, Z clip and offsets, writing camera depth, and AudioLink texture offset
+and chrono pan. **Color Adjust** (reported in 10, mapped now for both): hue with its speed,
+saturation and value (old) or saturation and brightness, gamma. The AudioLink mask channel is
+reported.
+
+**Part 9f-1:** normal correct's vertex colour mask; the cubemap's *use material smoothness*
+(with Reflections & Specular); dissolve's gamma, saturation and brightness (with its hue
+shift); flipbook depth, flip in mirror and video effects; emission's *apply transparency*
+(with premultiplied alpha); glitter's angle offset; screen-space UV's object relative scale and
+world size; the height map channel; post processing on the emission and its global mask. The
+fit bounds buttons are editor tools; the matcap normal maps' stochastic sampling is read with
+the textures. The distortion noise UV and dot noise space belong to features still reported.
+
+**Part 9f-2:** Pathing's direction channels, motion (repeat or ping-pong), easing, separate
+head and tail softness, the packed mask map with a channel per line (levels and vertex colour
+sources too), overlap mode, edge anti-aliasing and *use alpha as shared mask*. Voronoi's cell
+motion and speed, hue shift, and AudioLink per cell (band or random, history spread, inner
+emission, dim quiet cells). Internal parallax's mip maps, smooth layers and their steps,
+emission strength, add to alpha, refraction (IOR, normal influence) and depth fog (colour,
+density).
+
+**Part 9f-3:** the reworked AL spectrum: flip, the radial arc (inner and outer radius, start
+angle, arc degrees), display style (fast line, filled, nice line with its pixel thickness), lit
+height steps, frequency mapping (minimum and maximum Hz; the band range otherwise, as 10),
+bar sampling, audio response, soft compression, the gradient ramp colour mode with its emission,
+mask coordinates, master opacity, emission multiplier and tint emission. The preview modes and
+bounds display are noted and read as live; the colour mask's levels are reported.
+
+**Part 9g-1 (Pro):** Screen Space Ambient Occlusion and Contact Shadows as pattern layers after
+the surface layers (every setting, the masks, the global mask in and out; an animation toggle
+left off is off; contact shadows' debug view is noted). GT7 Tone Mapping (colour accuracy,
+chroma fade) and Neutral Surface Emission (HDR retention, hue correction) as colour
+operations.
+
+**Part 9g-2 (Pro):** TPS Penetrator (the tool-configured measurements and baked mesh, channel,
+Bézier, squeeze, bulge, pumping, idle shrink) and Squish (collider, strength, spread, max,
+falloff, clip offset, mask) as deformations after the vertex options; Squish's colour gradient
+(min, max, intensity, replace, multiply, unlit add) as a pattern layer sharing its settings,
+with its global mask output. The outline's baked curvature data (hard edges, tips, smoothing,
+crevices, UVs). The animation toggles left off are off.
+
+**Part 9g-3 (Pro):** Constellation as a pattern layer after the truchet: placement (UV, centre,
+density, pan, offset and layer phase, layer fade, depth), stars, lines, random colours, the
+colour and emission, the blend (normal, multiply, add), the mask and the global mask in and
+out. AudioLink: emission, star brightness and size, line thickness and brightness as audio
+ranges; twinkle, movement and hue (random colours) as chronotensity offsets; the AL theme
+colour for random colours; the colour override.
+
+**Part 9g-4a (variants):** Two Pass (Toon and Pro): the second pass's preset or blend factors,
+cull, depth, offsets, colour mask, stencil, alpha to coverage, force opaque, alpha cutoff,
+invert and power, and the colour override (colour and alpha, or alpha only); the first and
+second pass masks as mask bus steps. Pro Fur: shells (layer count, length, gravity, tip taper,
+contact, colour and texture, skin tint, mask, height map and its range, AO and its range, hue
+shift, vertex colour normals, distance LOD). Lil Fur 11: the fur mask's options, the contact
+and push, the vertex colour modes (Poiyomi, LilToon), and Lil Fur Two Pass's cutout length.
+
+**Part 9g-4b (variants):** Grab Pass (Toon and Pro) and Self Grab as a refraction layer placed
+*overlay* (the grab isn't lit): refraction (index, chromatic aberration, fresnel power, ignore
+foreground), blur (pattern, distance, quality, distance scaling, smoothness, centre importance,
+depth ramp), pixelation (size, distance scaling, gap), colour (tint, multiplicative and additive
+brightness, hue shift, vibrance, saturation), the colour ramp (presets, custom texture,
+contrast, offset, posterise, levels, dither, blend), the alpha blend and blend factors. Each
+effect's mask is a blend map channel (with the map's options) and its invert, then its global
+mask; an inverted channel without a map turns the effect off. Self Grab blends with what its
+first pass drew, in its second pass. Pro's lava lamp is reported.
+
+**Part 9g-4c (variants):** Triple Outline: layers 2 and 3 read as further outlines, each with
+every layer 1 setting under its own names (`_Outline2Width`, `_Outline2…`, `_AudioLinkOutline2…`,
+`_Offset_Z2`); the mask texture, blend factors, depth clip and offsets, thin fade, camera depth
+and curvature bake are shared; each layer's toggle is honoured, layer 1's too. Triplanar
+Projection: the projection mode (depth or mesh), blend method and sharpness, scale with object,
+the mask (channel, levels, invert before the vertex colour, strength), max size, edge and camera
+fades and depth blur; the constellation is left out, as the variant does.
+
+**Part 9g-4d (variants):** the Tessellated variants' tessellation (type, uniform factor, edge
+length, distance range, Phong, cull margin). Geometric Dissolve, ShatterWave and the Particle
+variants are reported, one line each (ShatterWave only while on); Geom adds no settings.
+
+**Part 9g-4e (variants):** Pro Grab Pass's lava lamp as a pattern layer placed *overlay* after
+the grab effects (its own toggle; the alpha and mask): the raymarching data (SDF volume, pixel
+size, lower corner, size, minimum thickness, bind data mode, world rescale), refraction, the
+blobs (scale, padding, steps, shape, smoothing, spacing, skip chance, sizes, speeds, flow
+direction), the material (reflectiveness, roughness, translucency, matcap), the region (heights,
+colours with theme colours, haze, tint, top and bottom light, colour range) and AudioLink (band,
+blob pulse, flow speed, emission).
+
+**Part 9g-4f (audit leftovers):** the Skin section as a skin tone pattern layer after the detail
+texture (LUT, melanin, redness, hemoglobin, freckles and tan with their detail map channels,
+UVs and tiling, brightness, tint, blend mode and amount; the preset only sets these values).
+PP Animations: the lighting multiplier and addition on the light colours, the emission and
+final colour multipliers as colour operations. Force ramped light map (Flat). The add pass's
+blend operation: Max, Poiyomi's default (10's too), makes additional lights combine by the
+brighter, with the forward-add transparency boost; Add with factors other than the preset's,
+or another operation, is reported. The time source (VRChat network time). Early Z as a depth
+prepass. The Deliot-Heitz density on stochastic textures. Shading turned off reads as unlit,
+with a note. Parallax curvature and the world AO blocker (a world feature) are reported. The
+two catch-all reports for 11 and Pro are gone: every section is mapped or reported on its
+own.
 
 ## Rebuilt parser
 
