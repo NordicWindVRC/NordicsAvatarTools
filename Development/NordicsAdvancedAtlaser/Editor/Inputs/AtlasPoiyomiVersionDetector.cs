@@ -1,6 +1,5 @@
 using System;
 using System.Text.RegularExpressions;
-using UnityEditor;
 using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
@@ -28,27 +27,28 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var saved = AtlasMaterialReader.Saved(material);
             if (saved != null) return IsPoiyomiFromProperties(saved.Has);
-            if (material == null || material.shader == null) return false;
-            return IsPoiyomiFromMetadata(material.shader.name, AssetDatabase.GetAssetPath(material.shader));
+            string name = AtlasMaterialReader.ShaderName(material);
+            if (name.Length == 0) return false;
+            return IsPoiyomiFromMetadata(name, AtlasMaterialReader.ShaderPath(material));
         }
 
         public static AtlasPoiyomiVariant DetectVariant(Material material)
         {
             var saved = AtlasMaterialReader.Saved(material);
             if (saved != null) return DetectVariantFromProperties(saved.Has);
-            if (material == null || material.shader == null) return AtlasPoiyomiVariant.None;
-            return DetectVariantFromMetadata(material.shader.name, AssetDatabase.GetAssetPath(material.shader));
+            string name = AtlasMaterialReader.ShaderName(material);
+            if (name.Length == 0) return AtlasPoiyomiVariant.None;
+            return DetectVariantFromMetadata(name, AtlasMaterialReader.ShaderPath(material));
         }
 
         public static int Detect(Material material)
         {
             var saved = AtlasMaterialReader.Saved(material);
             if (saved != null) return DetectFromProperties(saved.Has);
-            if (material == null || material.shader == null) return 0;
-            return DetectFromMetadata(
-                material.shader.name,
-                AssetDatabase.GetAssetPath(material.shader),
-                GetShaderMasterLabel(material.shader));
+            string name = AtlasMaterialReader.ShaderName(material);
+            if (name.Length == 0) return 0;
+            return DetectFromMetadata(name, AtlasMaterialReader.ShaderPath(material),
+                AtlasMaterialReader.PropertyLabel(material, "shader_master_label"));
         }
 
         // ---- Without the shader: from the properties a material saved -------------------------
@@ -132,20 +132,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return DetectFromMetadata(name, path, null);
         }
 
-        public static string GetShaderMasterLabel(Shader shader)
-        {
-            if (shader == null) return null;
-            try
-            {
-                int index = shader.FindPropertyIndex("shader_master_label");
-                if (index < 0) return null;
-                return shader.GetPropertyDescription(index);
-            }
-            catch
-            {
-                return null;
-            }
-        }
+        // For output shaders found by name.
+        public static string GetShaderMasterLabel(Shader shader) => AtlasMaterialReader.PropertyLabel(shader, "shader_master_label");
 
         private static int ExtractMajorVersion(string text)
         {

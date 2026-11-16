@@ -176,7 +176,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 return adjustment;
             }
             var hue = Add(AtlasColorOperation.Hue, Float(m, N("_OutlineHue"), 0f));
-            hue.HueMethod = Int(m, N("_OutlineHueShiftColorSpace"), 0) == 1 ? AtlasHueMethod.HSV : AtlasHueMethod.Oklab;
+            hue.HueMethod = HueMethodOf(m, N("_OutlineHueShiftColorSpace"));
             float rate = Float(m, N("_OutlineHueOffsetSpeed"), 0f) * 0.05f;
             if (rate != 0f)
             {

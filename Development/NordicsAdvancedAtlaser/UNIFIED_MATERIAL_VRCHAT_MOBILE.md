@@ -1,24 +1,22 @@
 # Unified material — VRChat Mobile shaders
 
-**Status:** first draft, merged into the [feature catalogue](UNIFIED_MATERIAL_FEATURES.md); the
-catalogue's names take precedence. Part of the per-shader inventory that
-[`UNIFIED_MATERIAL.md`](UNIFIED_MATERIAL.md) builds on. It lists what each shader lets the user
-change, what that does to the look, and how the unified material should represent it. Names in
-the *Unified* lines are proposals in neutral wording; the cross-shader refinement pass settles
-them.
+Part of the per-shader inventories that [`UNIFIED_MATERIAL.md`](UNIFIED_MATERIAL.md) builds
+on, merged into the [feature catalogue](UNIFIED_MATERIAL_FEATURES.md), whose names take
+precedence. It also describes the parser. It lists what each shader lets the user change, what that does to
+the look, and how the unified material represents it.
 
 **Source:** VRChat SDK 3.10.6 (`com.vrchat.base`), folder
 `Runtime/VRCSDK/Sample Assets/Shaders/Mobile/`: the shader files, `VRChat.cginc`, the
 `ToonStandard/CG/` includes, and the inspectors in `GUI/`. Only what the inspector shows is
-inventoried; properties the user can't reach are listed under *Not visual* when they exist.
+inventoried; properties the inspector doesn't show are listed under *Not visual* when they exist.
 
 **Each feature lists:**
 - **Controls:** what the user sets, grouped as in the inspector.
 - **Live or baked:** *live* means the effect depends on view, light, time or audio and must
   stay a unified feature with parameters; *baked* means a static result that can go into
   textures, unless something animates it.
-- **Unified:** the proposed representation.
-- **Parser today:** what `AtlasVRChatMobileParsers.cs` does now, and what's wrong or missing.
+- **Unified:** its representation in the unified material.
+- **Parser:** what the parser reads.
 
 | Shader | Inspector | Size |
 |---|---|---|
@@ -42,7 +40,7 @@ Texture times vertex colour.
   [Cross-shader notes](#cross-shader-notes)).
 - **Unified:** base colour texture; vertex colour *multiply colour* on, used as stored (not
   sRGB data). Alpha source *none*: the output is always opaque.
-- **Parser today:** rebuilt (refactor step 2); mapped as above.
+- **Parser:** mapped as above.
 
 ### Lighting
 Uniform light per object, no direction; receives shadows. When the world has no directional
@@ -53,7 +51,7 @@ light, the direct light becomes 20% of the ambient colour.
   direct colour × shadow + ambient. This is the same look as a toon ramp that's flat
   everywhere, apart from receiving shadows, so it might merge into the ramp family as a
   preset.
-- **Parser today:** rebuilt (refactor step 2): family *flat*, ambient model *average*, received
+- **Parser:** family *flat*, ambient model *average*, received
   shadows on, additional and vertex light contributions 0 (the shader has no add pass and
   doesn't read vertex lights).
 - **Not represented:** the shader's own fallback when the world has no directional light (20%
@@ -67,7 +65,7 @@ blocked.
 ### Not visual
 Nothing; the shader has one property.
 
-**Coverage (step 2):** the one property is mapped; nothing is reported.
+**Coverage:** the one property is mapped; nothing is reported.
 
 ---
 
@@ -87,7 +85,7 @@ Albedo texture × colour × vertex colour.
 - **Live or baked:** baked.
 - **Unified:** base colour layer. Vertex colour multiply is **always on**: the switch for it
   exists only as a shader keyword with no inspector control.
-- **Parser today:** rebuilt (step 4): texture and colour (linear), albedo tiling; vertex colour
+- **Parser:** texture and colour (linear), albedo tiling; vertex colour
   *multiply colour* on unless `DISABLE_VERTEX_COLORING` is set; alpha source *none*.
 
 ### Metallic and smoothness
@@ -96,14 +94,14 @@ How metallic and how glossy the surface is.
   a Smoothness slider. The sliders **multiply** the texture; they don't replace it.
 - **Live or baked:** baked (scalar maps).
 - **Unified:** surface response: metallic and roughness, each a constant times a channel.
-- **Parser today:** rebuilt (step 4): metallic = map red × the slider converted from gamma to
+- **Parser:** metallic = map red × the slider converted from gamma to
   linear; roughness = 1 − map alpha × the Smoothness slider; albedo tiling.
 
 ### Normal map
 - **Controls:** texture and scale.
 - **Live or baked:** baked; part of normal compositing.
 - **Unified:** primary normal layer.
-- **Parser today:** rebuilt (step 4): always applied (no keyword), albedo tiling, scale as
+- **Parser:** always applied (no keyword), albedo tiling, scale as
   strength.
 
 ### Occlusion
@@ -112,14 +110,14 @@ Darkens ambient light in creases. Read from green.
 - **Live or baked:** baked as a map. Its effect is live: it scales ambient light only, not
   direct light.
 - **Unified:** occlusion: channel, strength around one.
-- **Parser today:** rebuilt (step 4): green channel, strength around one, albedo tiling.
+- **Parser:** green channel, strength around one, albedo tiling.
 
 ### Emission
 Glow on top of lighting.
 - **Controls:** an Emission checkbox; when on, texture and HDR colour.
 - **Live or baked:** baked (texture × colour), with the HDR intensity kept as a scale.
 - **Unified:** emission layer.
-- **Parser today:** rebuilt (step 4): an emission surface layer when the keyword is on.
+- **Parser:** an emission surface layer when the keyword is on.
 
 ### Detail
 A second, usually tiled, albedo and normal map, faded in by a mask.
@@ -132,7 +130,7 @@ A second, usually tiled, albedo and normal map, faded in by a mask.
 - **Live or baked:** baked; it's static colour and normal maths.
 - **Unified:** detail layer: albedo with *multiply ×2* blend; detail normal with whiteout
   blend; shared mask; UV set and tiling.
-- **Parser today:** rebuilt (step 4): with the `_DETAIL` keyword, Unity's detail as in Standard
+- **Parser:** with the `_DETAIL` keyword, Unity's detail as in Standard
   (shared code): a *multiply ×2* colour layer and a normal layer, sharing the mask.
 
 ### Specular highlights
@@ -144,7 +142,7 @@ from the light probes' dominant direction. **Default off.**
 - **Unified:** surface response: direct highlights on or off. The probe-direction highlight is
   the shader's way of producing highlights without a light, so it belongs to the lighting
   family rather than being a separate feature.
-- **Parser today:** rebuilt (step 4): on unless `_SPECULARHIGHLIGHTS_OFF` is set.
+- **Parser:** on unless `_SPECULARHIGHLIGHTS_OFF` is set.
 - **Not represented:** the highlight from the light probes' dominant direction when there's
   no directional light or reflection probe. It's the shader's own behaviour, not a material
   setting.
@@ -154,7 +152,7 @@ Reflection probe reflections. **Default off.**
 - **Controls:** toggle.
 - **Live or baked:** live.
 - **Unified:** surface response: environment reflections on or off.
-- **Parser today:** rebuilt (step 4): on unless `_GLOSSYREFLECTIONS_OFF` is set.
+- **Parser:** on unless `_GLOSSYREFLECTIONS_OFF` is set.
 
 ### Specular anti-aliasing
 Reduces sparkling highlights on small or curved detail by roughening where the surface normal
@@ -163,21 +161,21 @@ changes quickly on screen.
 - **Live or baked:** live, but minor.
 - **Unified:** a surface response parameter. Toon Standard always applies its own version, so
   this fits as a shared parameter.
-- **Parser today:** rebuilt (step 4): the keyword, variance and threshold.
+- **Parser:** the keyword, variance and threshold.
 
 ### Not visual for avatars
 - **Lightmap Type** (Default or MonoSH) and **bicubic sampling**: they only affect lightmaps,
-  which skinned avatars don't use. Ignored since step 4.
+  which skinned avatars don't use. Ignored.
 - **GPU instancing**, **double-sided global illumination**: performance and baking options.
 
 ### Lighting
 Physically based, ambient along the normal (L1 light probes), one per-pixel directional light
 (no add pass: other lights through vertex lights and probes), no received shadows (`noshadow`).
 The BRDF is VRChat's mobile one on Quest (Lambert diffuse) and Unity's on PC (Disney diffuse).
-- **Parser today:** rebuilt (step 4): *physically based*, diffuse *Lambert* (the shader's
+- **Parser:** *physically based*, diffuse *Lambert* (the shader's
   mobile target), ambient *directional*, received shadows off, additional lights 0.
 
-**Coverage (step 4):** every section is mapped; lightmap, bicubic, instancing and GI options
+**Coverage:** every section is mapped; lightmap, bicubic, instancing and GI options
 are ignored without a report line.
 
 ---
@@ -197,13 +195,11 @@ are the matcap, which uses no tiling, and the detail mask, which always uses UV0
 ### Main
 - **Base colour:** Main Texture × Main Color, optionally × vertex colour (Apply Vertex Color
   toggle, default off). Baked. **Unified:** base colour layer; vertex colour multiply as
-  read. **Parser before step 6:** correct.
+  read.
 - **Culling:** Off, Front or Back. On back faces the normal is flipped, so two-sided surfaces
-  light correctly. **Unified:** render: cull mode and double-sided lighting. **Parser before step 6:**
-  reads the cull mode and sets double-sided when culling is off.
+  light correctly. **Unified:** render: cull mode and double-sided lighting.
 - **Normal map:** texture and scale, behind a "Use Normal Map" toggle that also gates the
-  detail normal. Baked. **Unified:** primary normal layer. **Parser before step 6:** reads the map
-  but **ignores the toggle**, so a disabled normal map is applied anyway.
+  detail normal. Baked. **Unified:** primary normal layer.
 
 ### Lighting
 Toon shading from a ramp, with controls for how dark and how coloured the shadows get.
@@ -225,8 +221,6 @@ attenuation feeds into the ramp, so received shadows follow the ramp's shape.
     can pick its own equivalent;
   - shadow lift, shadow colour from albedo, minimum brightness, light clamp;
   - ambient model *flat* (average colour, no direction).
-- **Parser before step 6:** reads all of these. It doesn't recognise the presets, and it
-  doesn't record the flat ambient model.
 
 ### Specular
 GGX highlights and reflection probe reflections, with a toon option.
@@ -242,12 +236,6 @@ GGX highlights and reflection probe reflections, with a toon option.
 - **Unified:** surface response: metallic, roughness, reflectance (F0 for non-metals), and a
   highlight style parameter running from smooth to stylised step. Reflectance is
   a map-driven scalar here, not a constant.
-- **Parser before step 6:**
-  - **Ignores the section toggle:** a disabled section still gets metallic and gloss.
-  - **Reflectance:** the default is 0.04 where the shader's is 0.5, and the value goes in
-    unconverted. Either the unified field is F0, and the parser converts it, or it's this
-    0–1 control, which then needs a documented convention. Its gloss-map dependency is
-    lost.
 
 ### Matcap
 A view-dependent texture lookup, VR-stable: projected with world up, so it doesn't roll
@@ -261,9 +249,6 @@ with the head.
 - **Unified:** matcap layer with projection *view, world-up stabilised*, blend add or
   multiply, strength and mask, plus **where it applies: before lighting (on albedo) or after
   (on the final colour)**. Other shaders use both, so this parameter is needed anyway.
-- **Parser before step 6:** reads texture, strength, mask with channel and blend. It ignores the
-  section toggle and doesn't record the before-lighting placement. It reads the matcap's
-  tiling, which the shader ignores.
 
 ### Emission
 - **Controls:** no section toggle, so emission is always active. Emission Map, Emission Color,
@@ -271,7 +256,6 @@ with the head.
 - **Behaviour:** map × colour × strength. Hue shift can apply (see *Hue Shift*).
 - **Live or baked:** baked.
 - **Unified:** emission layer with UV set.
-- **Parser before step 6:** correct; enabled when a map or a non-black colour is set.
 
 ### Detail
 - **Controls:** section toggle.
@@ -283,15 +267,12 @@ with the head.
   strength is scaled by the mask.
 - **Live or baked:** baked.
 - **Unified:** detail layer with blend mode, mask and UV set; detail normal with mask.
-- **Parser before step 6:** correct modes and mask. It ignores the section toggle, and it doesn't
-  model the mask scaling the detail normal's strength.
 
 ### Occlusion
 - **Controls:** section toggle; map with channel (default green); strength.
 - **Behaviour:** darkens the ramp result and the ambient light; specular isn't affected.
 - **Live or baked:** baked map, live effect.
 - **Unified:** occlusion.
-- **Parser before step 6:** correct, but ignores the section toggle.
 
 ### Rim Lighting
 A glowing edge where the surface turns away from the viewer.
@@ -306,9 +287,6 @@ A glowing edge where the surface turns away from the viewer.
 - **Live or baked:** live.
 - **Unified:** rim layer: colour, intensity, width, softness, albedo tint, light-scaled on or
   off.
-- **Parser before step 6:** reads every value, but **adds the rim whenever the property exists, so
-  every Toon Standard material gets a rim,** even with the section off. The Range value goes
-  in unconverted, though the shader uses 1 − Range; a convention is needed.
 
 ### Hue Shift
 Rotates hues, for recolouring a texture without editing it.
@@ -321,8 +299,6 @@ Rotates hues, for recolouring a texture without editing it.
   in turns, a mask, and a method (this axis rotation versus HSV and others). Separate
   targets fit better than the current fixed `HueShift`, `DetailHueShift` and
   `EmissionHueShift` fields, which wouldn't scale to other shaders.
-- **Parser before step 6:** reads all three amounts and the mask into those fixed fields. It ignores
-  the section toggle and doesn't record the method.
 
 ### Color Mask
 Recolours up to four regions, chosen by the red, green, blue and alpha channels of one mask,
@@ -337,8 +313,6 @@ the way paint-by-mask customisation works.
 - **Unified:** a recolour layer: mask channel, colour, opacity, blend (tint the greyscale, or
   add to it), emission amount. Other shaders have similar "recolour by mask" features, so
   this should be one general layer, not four fixed slots.
-- **Parser before step 6:** reads all four regions. It ignores the section toggle: regions are
-  enabled whenever a mask texture is assigned.
 
 ### Outline (Outline variant only)
 An inverted-hull outline, PC only; on mobile it doesn't render.
@@ -354,7 +328,6 @@ An inverted-hull outline, PC only; on mobile it doesn't render.
 - **Live or baked:** live, as geometry and a pass; the mask is baked.
 - **Unified:** an outline feature: width (world units) with mask, colour, colour from base
   colour, lit or unlit, screen-space width cap.
-- **Parser before step 6:** reports it as missing.
 
 ### AudioLink
 Audio-reactive emission, driven by the world's AudioLink.
@@ -371,16 +344,11 @@ Audio-reactive emission, driven by the world's AudioLink.
 - **Unified:** audio-reactive layer: mode, band, smoothing, tint, intensity, blend into emission,
   mask source, view-angle mask, fallback. In the catalogue: an emission surface layer with an
   audio modulator; Pulse, Scroll and Bar are its spread *none*, *history* and *fill*.
-- **Parser before step 6:**
-  - Reads all of it, but **enables it whenever the property exists, so every SDK 3.10.6
-    material counts as audio-reactive.**
-  - **The mask channel is off by one:** the shader's 0 means RGB, but the parser reads it as
-    red, and so on.
 - **Atlasing conflict:** the *UV Based* effect and band, and scroll and bar along UVs, read
   the effect UV channel, and its **integer UV tile carries meaning**. Remapping or clamping
   that channel breaks the effect. See the open questions.
 
-### Rebuilt parser (step 6)
+### Parser
 `AtlasVRChatToonStandardParser`, for both variants. Every section follows its keyword; a section
 that's off maps to nothing.
 - **Main:** base colour (linear) × optional vertex colour; alpha *none*; cull from *Culling*;
@@ -388,7 +356,7 @@ that's off maps to nothing.
 - **Lighting:** *ramp toon*, half-Lambert term, the ramp texture with its preset recognised by
   the SDK's texture names, shadow lift, shadow colour from base, minimum brightness, limit
   brightness; ambient *average*; **no received shadows** (the shader skips the shadow
-  variants; the draft above said otherwise).
+  variants).
 - **Specular:** metallic and gloss maps with their channels × strengths; reflectance × the gloss
   map (`F0 = 0.16 × r²`, as the unified reflectance); highlight sharpness; specular
   anti-aliasing on (the shader's own geometric roughening, mapped to the unified filtering).
@@ -416,26 +384,23 @@ that's off maps to nothing.
   emission (map and colour) or the AudioLink mask, all of RGB or one channel (the channel is no
   longer off by one). Pulse, Scroll and Bar are the spreads *none*, *history* (UV u, a mask
   channel, or the view angle for centre-out) and *fill* (along v).
-- **Reported, not mapped:** AudioLink's rim mask (a view-angle mask, not typed yet), its UV-based
+- **Reported, not mapped:** AudioLink's rim mask (a view-angle mask, not typed), its UV-based
   mode and band (meaning in the UV tile; atlasing pass), and an emission mask that hue shift or
   colour masks also change.
-- **Not represented:** fog (not specified yet); the light from the probes when the world has no
+- **Not represented:** fog (not specified); the light from the probes when the world has no
   directional light (the shader's own behaviour); the additive matcap's absence from the
   add pass.
 
-**Coverage (step 6):** every section is mapped, apart from the reported AudioLink details.
+**Coverage:** every section is mapped, apart from the reported AudioLink details.
 
 ### Not visual
 - The atlased variant: a `VRCHAT_ATLASING_ENABLED` keyword driven by VRChat's
-  `VRCAvatarAtlasProperties` component. It's unfinished in the SDK, so we can ignore it for
-  now.
+  `VRCAvatarAtlasProperties` component. It's unfinished in the SDK and ignored.
 - Blend modes and alpha cutoff: present in the code, but disabled, with no inspector control.
 
 ---
 
 ## Cross-shader notes
-
-Points for the refinement pass:
 
 - **Section toggles decide everything.** Toon Standard's sections (all except Main, Lighting,
   Emission and Outline have one), Standard Lite's emission,
@@ -446,7 +411,8 @@ Points for the refinement pass:
   directional), and whether it receives shadows.
 - **Surface response** covers metallic, roughness, reflectance, highlight style, specular
   anti-aliasing, and on/off for direct highlights and environment reflections.
-- **Before or after lighting** is a parameter matcaps need, and probably other overlays too.
+- **Before or after lighting** is a parameter of matcaps and other overlays (the layer's
+  placement).
 - **Colour adjustment and recolour layers** are targeted, masked and baked when static.
 - **Vertex colour:** one shader always multiplies by it, one never, one optionally. A merged
   material can only do one. Options: bake white vertex colours into meshes whose material
@@ -456,36 +422,4 @@ Points for the refinement pass:
   to choose. That's an output concern, but the unified material must keep the per-source
   values so the writer can decide.
 - **Shared tiling:** Standard Lite's main maps use the albedo's tiling. Unity Standard does
-  the same; see [its draft](UNIFIED_MATERIAL_UNITY_STANDARD.md).
-
-## Parser fixes found
-
-In order of visual impact:
-
-1. *Fixed in step 6.* **Toon Standard ignores the section toggles** (`USE_SPECULAR`, `USE_MATCAP`, `USE_RIMLIGHT`,
-   `USE_DETAIL_MAPS`, `USE_NORMAL_MAPS`, `USE_OCCLUSION_MAP`, `USE_HUE_SHIFT`, `USE_COLOR_MASK`,
-   `USE_AUDIOLINK`). Every material gets a rim and AudioLink; disabled normal maps, specular,
-   detail and colour masks are applied.
-2. **Standard Lite tiling:** main maps should use the albedo's tiling. *Fixed in step 4.*
-3. **Standard Lite smoothness** with a texture uses a property it doesn't have; it should
-   use Smoothness × map alpha. *Fixed in step 4.*
-4. **Toon Standard AudioLink mask channel** is off by one. *Fixed in step 6.*
-5. **Standard Lite vertex colour** multiply isn't recorded. *Fixed in step 4.*
-6. **Toon Standard reflectance:** wrong default, and no defined convention. *Fixed in step 6.*
-7. **Standard Lite metallic** is gamma-encoded. *Fixed in step 4.*
-8. Smaller items: ramp presets, flat ambient, matcap placement and tiling, rim range
-   convention, hue method, the detail normal's mask scaling, and dropping lightmap and
-   bicubic.
-
-These belong in the refactoring. Nothing has been changed yet.
-
-## Open questions
-
-1. **AudioLink UV-based effects versus atlasing.** The effect UV channel's integer tile
-   carries meaning. If that channel is UV0, any remapping breaks the effect. Proposal: never
-   remap or clamp a UV channel that a live effect reads by tile. If that channel is the one
-   being atlased, report the effect as unsupported for that material.
-2. **Vertex colour when merging** materials that differ: bake white into meshes, bake into
-   texture, or keep it per material and report it?
-3. **Format:** is this the level of detail you want for the remaining shaders? Poiyomi will be
-   several times longer at this depth.
+  the same; see [its inventory](UNIFIED_MATERIAL_UNITY_STANDARD.md).

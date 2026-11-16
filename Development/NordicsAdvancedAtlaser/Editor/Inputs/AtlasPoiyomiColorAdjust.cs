@@ -56,7 +56,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // (R), tint, brightness (G), clamp.
         private static void MainColorAdjust(Material m, AtlasUnifiedMaterial d)
         {
-            if (!On(m, "_MainColorAdjustToggle")) return;
+            // 7.3's hue shift toggle switches the whole section (8 split it off).
+            if (!On(m, major <= 7 ? "_MainHueShiftToggle" : "_MainColorAdjustToggle")) return;
             var maps = Texture(m, d, "_MainColorAdjustTexture", AtlasTextureInterpretation.Data);
             ReportPackedOptions(m, d, "_MainColorAdjustTexture");
             // The mask texture's channels, each also reading its global mask: R hue, G brightness, B saturation, A gamma.
@@ -93,7 +94,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 });
             }
 
-            if (On(m, "_MainHueShiftToggle"))
+            if (major <= 7 || On(m, "_MainHueShiftToggle"))
             {
                 if (On(m, "_MainHueShiftReplace", 1f))
                 {
@@ -131,7 +132,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     Color = new Color(tint.r, tint.g, tint.b, 1f), Map = Texture(m, d, "_MainTintTexture")
                 });
             float brightness = Float(m, "_MainBrightness", 0f);
-            if (brightness != 0f) Add(AtlasColorOperation.Brightness, 1f + brightness, MaskOf(1));
+            // 7.3 and 8.x add the brightness; 9 and later multiply by 1 + it.
+            if (brightness != 0f)
+                Add(major <= 8 ? AtlasColorOperation.Lightness : AtlasColorOperation.Brightness, major <= 8 ? brightness : 1f + brightness, MaskOf(1));
             if (On(m, "_MainColorAdjustClamp", 1f)) Add(AtlasColorOperation.Clamp, 1f, null);
         }
 
@@ -189,7 +192,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Layer = layer,
                 Operation = AtlasColorOperation.Hue,
                 Amount = Float(m, shift, 0f),
-                HueMethod = Int(m, space, 0) == 1 ? AtlasHueMethod.HSV : AtlasHueMethod.Oklab,
+                HueMethod = HueMethodOf(m, space),
                 HueSet = Int(m, selectOrShift, 1) == 0,
                 Mask = mask
             };
@@ -208,6 +211,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             return adjustment;
         }
+
+        // The hue colour space (0 Oklab, 1 HSV); 7.3 and 8.x always shift in HSV.
+        private static AtlasHueMethod HueMethodOf(Material m, string property) =>
+            major <= 8 || Int(m, property, 0) == 1 ? AtlasHueMethod.HSV : AtlasHueMethod.Oklab;
 
         // A layer's hue shift, on every layer added since `from` (a section can add several).
         private static void LayerHue(Material m, AtlasUnifiedMaterial d, int from, string prefix, string space = null, string select = null)

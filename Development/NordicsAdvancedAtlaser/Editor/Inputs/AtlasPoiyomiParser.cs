@@ -5,7 +5,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     /// <summary>
     /// Poiyomi Toon. Split over files by inspector section (AtlasPoiyomi*.cs). Section toggles are
     /// read from their properties: Thry's locking keeps them, and keywords can differ when locked.
-    /// See UNIFIED_MATERIAL_POIYOMI.md. Rebuilt in refactor step 8.
+    /// See UNIFIED_MATERIAL_POIYOMI.md.
     /// </summary>
     public abstract partial class AtlasPoiyomiParser : AtlasParserBase
     {
@@ -234,7 +234,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             AtlasMaterialReader.Vector(m, property, new Vector4(fallback.x, fallback.y, fallback.z, 0f));
     }
 
-    // Toon 7.3 read on 10's parser (step 10c), as 8 with 7.3's names, lighting types and UVs.
+    // Toon 7.3 read on 10's parser, as 8 with 7.3's names, lighting types and UVs.
     public sealed class AtlasPoiyomiToon7Parser : AtlasPoiyomiParser
     {
         public override string ParserId => "poiyomi-toon-7";
@@ -244,7 +244,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             AtlasPoiyomiVersionDetector.DetectVariant(m) == AtlasPoiyomiVariant.Toon && AtlasPoiyomiVersionDetector.Detect(m) == 7;
     }
 
-    // Toon 8.0–8.1 read on 10's parser (step 10b), as 9 with 8's own differences.
+    // Toon 8.0–8.1 read on 10's parser, as 9 with 8's own differences.
     public sealed class AtlasPoiyomiToon8Parser : AtlasPoiyomiParser
     {
         public override string ParserId => "poiyomi-toon-8";
@@ -254,7 +254,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             AtlasPoiyomiVersionDetector.DetectVariant(m) == AtlasPoiyomiVariant.Toon && AtlasPoiyomiVersionDetector.Detect(m) == 8;
     }
 
-    // Toon 9.0–9.3 read on 10's parser (step 10a): a few meanings differ by version, and the features
+    // Toon 9.0–9.3 read on 10's parser: a few meanings differ by version, and the features
     // Poiyomi 10 rewrote are read with 10's meaning and noted (AtlasPoiyomiLegacy.cs).
     public sealed class AtlasPoiyomiToon9Parser : AtlasPoiyomiParser
     {

@@ -1956,7 +1956,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 var detected = AtlasShaderRegistry.Detect(material);
                 Assert.IsInstanceOf(parser, detected);
                 var features = detected.Parse(material).Issues.Select(i => i.Feature).ToArray();
-                // Every section is mapped or reported on its own now (step 9g-4f).
+                // Every section is mapped or reported on its own; no catch-all reports.
                 Assert.IsFalse(features.Contains("poiyomi.v11-sections"));
                 Assert.IsFalse(features.Contains("poiyomi.pro-sections"));
             }
@@ -3173,6 +3173,34 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(AtlasChannel.Green, parallax.Height.Channel);
             Assert.AreEqual(0.3f, parallax.Depth, 1e-6f);
             Assert.AreEqual(1, d.Issues.Count(i => i.Feature == "poiyomi7.specular"));
+        }
+
+        [Test]
+        public void MainBrightnessAddsBeforeNine()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_MainColorAdjustToggle", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_MainBrightness", 0.2f);
+            var eight = ParseSaved8().ColorAdjustments.Single(a => a.Target == AtlasAdjustmentTarget.BaseColor && a.Operation != AtlasColorOperation.Clamp);
+            Assert.AreEqual(AtlasColorOperation.Lightness, eight.Operation);
+            Assert.AreEqual(0.2f, eight.Amount, 1e-6f);
+            var nine = ParseSaved9().ColorAdjustments.Single(a => a.Target == AtlasAdjustmentTarget.BaseColor && a.Operation != AtlasColorOperation.Clamp);
+            Assert.AreEqual(AtlasColorOperation.Brightness, nine.Operation);
+            Assert.AreEqual(1.2f, nine.Amount, 1e-6f);
+        }
+
+        [Test]
+        public void ToonSevenColorAdjustIsUnderTheHueToggleInHsv()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_MainHueShiftToggle", 1f);
+            AtlasTestMaterials.AddSavedFloat(material, "_MainHueShift", 0.25f);
+            AtlasTestMaterials.AddSavedFloat(material, "_Saturation", 0.5f);
+            var adjustments = ParseSaved7().ColorAdjustments.Where(a => a.Target == AtlasAdjustmentTarget.BaseColor).ToArray();
+            var hue = adjustments.Single(a => a.Operation == AtlasColorOperation.Hue);
+            Assert.AreEqual(0.25f, hue.Amount, 1e-6f);
+            Assert.AreEqual(AtlasHueMethod.HSV, hue.HueMethod);
+            Assert.IsTrue(adjustments.Any(a => a.Operation == AtlasColorOperation.Saturation));
+            Assert.IsEmpty(ParseSaved().ColorAdjustments.Where(a => a.Target == AtlasAdjustmentTarget.BaseColor),
+                "In 10 the hue toggle alone doesn't switch the section on.");
         }
     }
 }

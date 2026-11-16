@@ -1,23 +1,22 @@
 # Unified material — Mochie Uber
 
-**Status:** first draft, merged into the [feature catalogue](UNIFIED_MATERIAL_FEATURES.md); the
-catalogue's names take precedence. Part of the per-shader inventory that
-[`UNIFIED_MATERIAL.md`](UNIFIED_MATERIAL.md) builds on; same format as
-[the VRChat Mobile draft](UNIFIED_MATERIAL_VRCHAT_MOBILE.md).
+Part of the per-shader inventories that [`UNIFIED_MATERIAL.md`](UNIFIED_MATERIAL.md) builds
+on, merged into the [feature catalogue](UNIFIED_MATERIAL_FEATURES.md), whose names take
+precedence. It also describes the parser; same format as
+[the VRChat Mobile inventory](UNIFIED_MATERIAL_VRCHAT_MOBILE.md).
 
-**Source:** Mochie Uber v1.35.2 (free version), in the dev project under
-`Assets/Mochie/Uber Shader/`, with the inspector in `Assets/Mochie/Unity/Editor/UberEditor.cs`.
+**Source:** Mochie Uber v1.35.2 (free version), as imported under `Assets/Mochie/Uber Shader/`,
+with the inspector in `Assets/Mochie/Unity/Editor/UberEditor.cs`.
 Variants: `Mochie/Uber` and `Mochie/Uber (Outline)`.
 
 **Character:** Mochie's avatar shader: physically based or toon shading, with many stylised and
 animated effects. About 590 properties.
 
-**Parser:** `AtlasMochieUberParser`, rebuilt in refactor step 7a; see
-[*Rebuilt parser (step 7a)*](#rebuilt-parser-step-7a). The feature entries below don't have
-*Parser today* lines.
+**Parser:** `AtlasMochieUberParser`; see [*Parser*](#parser). The feature entries below don't
+have *Parser* lines.
 
 **Uber X:** the paid version adds the inspector's *Special Features* and some AudioLink targets.
-Its code isn't installed here; see [*Uber X features*](#uber-x-features).
+Its source isn't available, so it isn't covered; see [*Uber X features*](#uber-x-features).
 
 **Inspector sections:** Base; Textures (primary and detail maps, masks, map filters, base colour
 dissolve); Shading (lighting, shadows, reflections, specular highlights, matcap, subsurface,
@@ -58,9 +57,8 @@ Settings.
   direction, so it stays live; auto-rotation is animated.
 - **Unified:**
   - Base colour layer.
-  - A **cubemap colour layer** blended onto the base colour, with rotation and spin.
-    Poiyomi has similar panosphere projections; the refinement pass will tell whether this
-    is a texture projection or a layer of its own.
+  - A **lookup layer** with projection *view direction* on the base colour, with rotation and
+    spin (catalogue 4.3).
   - Colour preservation is the light clamp from Toon Standard's *Limit Brightness*.
 
 ### Mirror Behavior
@@ -288,7 +286,7 @@ Settings.
   - Texture and colour, with texture alpha in cutout modes.
   - Thickness and multiplier; **range** (outlines only within a distance of the camera).
   - A thickness mask (under Masks).
-- **Unified:** the outline feature from the VRChat Mobile draft, extended with lit or unlit,
+- **Unified:** the outline feature (catalogue 5.1), extended with lit or unlit,
   emission, colour texture, and a maximum distance.
 
 ## UV Distortion
@@ -355,7 +353,7 @@ as Poiyomi Pro.
 
 ## Cross-shader notes
 
-- **Modulators** now have four sources: time (pulse, auto hue, scroll), audio, light level and
+- **Modulators** have four sources: time (pulse, auto hue, scroll), audio, light level and
   noise (UV distortion). Uber applies audio to five different targets. That settles it:
   modulators are a general mechanism that drives any numeric parameter, not something
   built into emission.
@@ -372,7 +370,7 @@ as Poiyomi Pro.
   culling, mirror behaviour, outline on or off, stencil, fallback shader. Sources that
   disagree on these can't share an output. See the open questions.
 
-## Rebuilt parser (step 7a)
+## Parser
 
 Every section follows its keyword, as the shader does (the inspector sets them).
 - **Render:** blending modes opaque, cutout (with Uber's sharpened alpha edge), **dithered**
@@ -409,7 +407,7 @@ Every section follows its keyword, as the shader does (the inspector sets them).
   tint, saturation, contrast, brightness) on the *surface colour* (after detail), or the final
   colour with Post Filtering; the filter mask.
 
-**Step 7b-1** adds:
+**Cube mode, mirror behaviour, vertex manipulation and outline:**
 - **Cube mode:** a lookup layer with projection *view direction* on the base colour (replace,
   or the cube blend with its amount or mask); rotation and auto-rotation as rotation and spin.
   Uber's rotation turns each plane by the angle + 90° once any angle is set; the parser adds it.
@@ -425,7 +423,7 @@ Every section follows its keyword, as the shader does (the inspector sets them).
 - **Hard edges** as flat shading; **clear coat** as specular from the mesh normal; the
   **static light direction**.
 
-**Step 7b-2** adds:
+**Dissolve, flipbooks, refraction, iridescence and UV distortion:**
 - **Base colour dissolve:** a transition layer (noise threshold, amount, the second base
   colour, an edge band `rim width × 0.035` glowing in the rim colour × its alpha).
 - **Flipbooks:** surface layers whose texture is a placed decal (centre `position + 0.5`,
@@ -444,7 +442,7 @@ Every section follows its keyword, as the shader does (the inspector sets them).
 - **Map filters:** scalar remaps on metallic, roughness or smoothness, occlusion and height,
   and the occlusion tint.
 
-**Step 7b-3** adds:
+**AudioLink, the oscilloscope, filters and extras:**
 - **AudioLink:** audio modulators. Each target is scaled by `lerp(1, remapped band,
   multiplier × strength)`, with the band remapped from the global range to the target's; that
   is linear in the band, so it becomes a modulator's min and max. Targets: emission (each
@@ -462,41 +460,12 @@ Every section follows its keyword, as the shader does (the inspector sets them).
 - **Stencil** (base and outline pass); the colour alpha on the alpha mask; partial Disney
   diffuse and light-probe strength as amounts.
 
-**Still reported** (each needs something the model doesn't have yet): a flipbook replacing the
+**Reported** (each needs something the model doesn't have): a flipbook replacing the
 alpha, AudioLink's rim pulse (a history band along the view angle), AudioLink on the vertex
 rotation (Uber adds 90° per plane, so it isn't a factor) and on the shared UV distortion.
 **Unsupported:** Uber X.
 
-**Coverage (step 7):** every section of this draft is mapped, apart from the four details above.
+**Coverage:** every section is mapped, apart from the four details above.
 
 **Not represented:** the light with no real-time light (Uber's baked contributions), the
 non-linear probe evaluation, additive-light clamping, the diffuse mask.
-
-## Parser work
-
-`AtlasMochieUberParser` handles these points:
-- **Section toggles** gate everything; values behind a disabled section don't count.
-- **Masks:** resolve separate or packed masks to the feature that uses them.
-- **Metallic workflow:** a texture replaces its slider.
-- **Map filters** are reported, not applied yet. They become remaps on the scalar inputs once
-  the scalar input has a remap.
-- **Manual Blend shadows** become a ramp.
-- **Uber X** materials: enabled X features are reported once.
-
-**Reported, not mapped yet:** outline, refraction, iridescence, cubemap base colour, mirror
-behaviour, base colour dissolve, flipbooks, UV distortion, vertex manipulation, AudioLink,
-hard edges, map filters, dithered blending (approximated as cutout), and post filtering
-(approximated as a base colour adjustment).
-
-## Open questions
-
-1. **Uber X:** treat like Poiyomi Pro: unsupported unless you can provide the source?
-2. **Static vertex manipulation** (expansion, rounding, rotation, position): bake into the mesh
-   at build time, so it works with any output shader, or carry it as a geometry feature?
-   On avatars these are deliberate looks, not world props.
-3. **Settings that can't be merged** (blend mode, culling, mirror behaviour, outline, stencil,
-   fallback shader): should the Atlaser report sources that disagree within one output, or
-   should the user's output configuration simply define them, so sources are rendered with
-   the output's settings?
-4. **Mochie versions:** Nordics Nardo has Uber v1.34.2, one minor version behind. Same
-   question as for Poiyomi: support older material versions, or expect an upgrade first?

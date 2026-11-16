@@ -37,6 +37,29 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static string ShaderName(Material material) =>
             material == null || Saved(material) != null || material.shader == null ? "" : material.shader.name;
 
+        // The installed shader's asset path, or empty when it's missing.
+        public static string ShaderPath(Material material) =>
+            ShaderName(material).Length == 0 ? "" : UnityEditor.AssetDatabase.GetAssetPath(material.shader);
+
+        // A shader property's display name, or null (Poiyomi's master label carries its version).
+        public static string PropertyLabel(Shader shader, string property)
+        {
+            if (shader == null) return null;
+            try
+            {
+                int index = shader.FindPropertyIndex(property);
+                return index < 0 ? null : shader.GetPropertyDescription(index);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        // The installed shader's label of a property, or null.
+        public static string PropertyLabel(Material material, string property) =>
+            ShaderName(material).Length == 0 ? null : PropertyLabel(material.shader, property);
+
         public static bool Has(Material material, string property)
         {
             if (material == null || string.IsNullOrEmpty(property)) return false;

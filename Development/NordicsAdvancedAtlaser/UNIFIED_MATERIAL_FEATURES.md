@@ -1,25 +1,9 @@
 # Unified material — feature catalogue
 
-**Status:** specification of the unified material, after two refinement passes; the code is
-being rebuilt to match it. It merges the per-shader inventories into one feature set. Each
-feature's full parameter specification is added when the first parser types it. Atlasing
-concerns are left out on purpose; they get their own pass later.
-
-**What changed since the first pass:**
-- **Poiyomi 11 and Pro are included:** PBR lighting with sheen and glints, mask levels,
-  contacts, screen-space lighting effects, shell fur, Pro deformations and geometry effects.
-- **An evaluation order:** where every feature acts, from surface inputs to the final pixel.
-  It replaces the loose "before or after lighting" note, and settles ordering questions such
-  as Poiyomi's rim *application stage* and Toon Standard's lit matcap.
-- **Layers merged from 13 to 7:**
-  - detail, decal, recolour, back face and emission become one **surface layer** with targets;
-  - matcap and cubemap become one **lookup layer**;
-  - rim and iridescence become one **angle layer**.
-- **Building blocks are specified:** parameters, units, defaults and formulas, as the first
-  part of the parameter-level specification.
-- **About 25 features** instead of about 35, plus 10 building blocks.
-
-**Refactor plan:** [UNIFIED_MATERIAL_REFACTOR.md](UNIFIED_MATERIAL_REFACTOR.md).
+**Status:** the specification of the unified material; the model in `Editor/Unified/` matches
+it. It merges the per-shader inventories into one feature set, with parameters, units, defaults
+and formulas for every feature a parser maps. Atlasing concerns are left out on purpose; they
+get their own pass later.
 
 **Inputs:**
 - [VRChat Mobile](UNIFIED_MATERIAL_VRCHAT_MOBILE.md): Toon Lit, Standard Lite, Toon Standard.
@@ -31,7 +15,7 @@ Mochie Standard was inventoried as a cross-check and then dropped in favour of U
 features are covered by the shaders above, apart from the world-only ones in section 7.
 
 **How to read it:**
-- Names are proposals in neutral wording, not code names.
+- Names are neutral descriptions, not code names.
 - *Live* features need runtime support in the output shader. *Bakeable* ones can be resolved
   into textures when nothing animates them.
 - The design rules are in [`UNIFIED_MATERIAL.md`](UNIFIED_MATERIAL.md#guidelines).
@@ -65,7 +49,7 @@ placements.
 ## 1. Building blocks
 
 Shared types that features are made of. Most source-specific detail lives here, which keeps the
-feature count low. This pass gives each one its parameters; see 1.0 for units.
+feature count low. Each has its parameters below; see 1.0 for units.
 
 ### 1.0 Conventions
 | Quantity | Convention |
@@ -84,25 +68,25 @@ feature count low. This pass gives each one its parameters; see 1.0 for units.
 | Parameter | Values | Default | Notes |
 |---|---|---|---|
 | texture | 2D, cube or array texture | — | |
-| interpretation | colour, data, tangent normal, direction, MSDF | colour | *direction* is a tangent-space direction map (fur), composited like a normal map; *MSDF* (step 9c) a multi-channel signed distance field: white, alpha `saturate((median(r, g, b) − 0.5) / its change across a pixel)`, sharp at any size |
+| interpretation | colour, data, tangent normal, direction, MSDF | colour | *direction* is a tangent-space direction map (fur), composited like a normal map; *MSDF* a multi-channel signed distance field: white, alpha `saturate((median(r, g, b) − 0.5) / its change across a pixel)`, sharp at any size |
 | space | UV0–UV3, object position, world position, panosphere, polar, view (matcap), screen, triplanar | UV0 | triplanar has a base space: object or world |
 | tiling, offset | 2 × float | (1,1), (0,0) | |
 | rotation | degrees | 0 | the UV turned around (0.5, 0.5) before the tiling and offset |
 | scroll | UV units per second | (0,0) | live |
 | spin | degrees per second | 0 | live |
-| sampling | default, stochastic, supersampled, pixel | default | stochastic hides tiling (with a density of its tile grid, 1; step 9g-4f); *pixel*: sharp texels with anti-aliased edges, for pixel art |
+| sampling | default, stochastic, supersampled, pixel | default | stochastic hides tiling (with a density of its tile grid, 1); *pixel*: sharp texels with anti-aliased edges, for pixel art |
 | placement | none, or placed: position, scale, rotation, side offsets, aspect, symmetry, tiled | none | decal placement; outside the placed area nothing is sampled |
 | frames | none, or a sheet (columns, rows, count) or array; rate (frames per second) or fixed frame; range; crossfade | none | flipbooks and sprite-sheet decals; live unless fixed |
 
 Shared mappings and per-UV-channel settings (Poiyomi's UV Settings) are folded into each texture
 reference by the parser.
 
-**Screen space layout** (refactor step 9f-1): the screen space is square, centred on each
+**Screen space layout**: the screen space is square, centred on each
 eye's optical centre so it fuses in stereo; with *object relative* it is sized to a world size
 (1) at the object's distance and anchored to its origin, so it keeps its size on the object.
 One setting for the material.
 
-**Triplanar projection** (refactor step 9g-4c, Poiyomi Pro's Triplanar Projection): one setting
+**Triplanar projection** (Poiyomi Pro's Triplanar Projection): one setting
 for the material that replaces UV0 everywhere with three planar projections of a position `p`
 divided by `lerp(1, object scale, scale with object)`: `(p.z × sign n.x, p.y)`,
 `(p.x × sign n.y, p.z)` and `(−p.x × sign n.z, p.y)`, each + 0.5. The source is the *mesh*
@@ -117,28 +101,28 @@ base colour becomes `lerp(the first projection's, the blend, mask)` and the alph
 `blend alpha × mask × fades`, emission and lighting × that alpha; the mask (1.4, sampled per
 projection and blended) is × a strength. Constellation patterns (4.6) don't draw with it.
 
-**Facing gradient** spaces (refactor step 8c-4): `u = v = 0.5 + 0.5 × abs(N·V)` (the view
+**Facing gradient** spaces: `u = v = 0.5 + 0.5 × abs(N·V)` (the view
 from between the eyes), rings from the centre of the view outward; *linear* uses the angle,
 `0.5 + 0.5 × (1 − angle / 90°)`. Tiling scales both; the offset is unused.
 
-**Specified** (refactor step 7b):
+**Specified**:
 - **Placement (decal):** centre (UV), scale, rotation (degrees) and spin (degrees per second);
   the UV wraps (0–1) before placing; the texture's tiling and offset apply to the placed UV;
   *clip outside*: nothing is sampled outside the placed area. *Symmetry* (before placing):
   *copy* `u = abs(u − 0.5) + 0.5`, *flip* `u + 0.5` where `u < 0.5`. *Mirror* (the mesh's
   mirrored side): *flip* `u = 1 − u` there, *left only*, *right only*, *flip right only*.
-  *Depth*: parallax, the decal appearing that far behind the surface. *Smooth border* (step 9c):
-  the clipped edge is anti-aliased over a pixel. *Flip in mirror* (step 9c): `u = 1 − u` in
+  *Depth*: parallax, the decal appearing that far behind the surface. *Smooth border*:
+  the clipped edge is anti-aliased over a pixel. *Flip in mirror*: `u = 1 − u` in
   mirrors, so text reads the right way round.
 - **Frames:** a sprite sheet (columns, rows, the area of the texture the grid covers, an inset
-  pulling samples toward each frame's centre (step 9c); frames read left to right, top to bottom) or a
+  pulling samples toward each frame's centre; frames read left to right, top to bottom) or a
   texture array (one frame per slice); a rate in frames per second, or a fixed frame. With
-  Poiyomi (step 8d-4): frame `f = first + (t × rate + offset) mod count` (count 0: to the last
+  Poiyomi: frame `f = first + (t × rate + offset) mod count` (count 0: to the last
   frame); a fixed frame is a frame index; *crossfade* blends frame `floor(f)` toward the next
   one of the range by `smoothstep(range.x, range.y, frac(f))`.
 - **Distortion:** a UV offset shared by several references: simplex noise (scale, speed,
   octaves) or a normal map's xy (a texture reference), times strength, plus a second map's
-  xy × its own strength and a constant offset (refactor step 8d-2), times a mask. Offsets are
+  xy × its own strength and a constant offset, times a mask. Offsets are
   in UV units. One distortion object can be shared by every reference it shifts.
 
 ### 1.2 Scalar input
@@ -149,7 +133,7 @@ from between the eyes), rings from the centre of the view outward; *linear* uses
 | constant | float | per use | set to 1 when a source's texture replaces its slider |
 | texture, channel | texture reference, R/G/B/A/luminance | none, R | |
 | invert sample | bool | off | applied to the channel before the constant |
-| remap | output range, contrast, intensity, lightness | identity | `v = lerp(min, max, v)`; `v = saturate(lerp(0.5, v, contrast))`; `v += saturate(v × intensity)`; `v = saturate(v + lightness)`; applied to the sampled value (constant × channel; for strength around one the channel, before the strength), before *invert result*. Uber's map filters (specified, refactor step 7b). Input range and midpoint: not specified yet (Poiyomi 11 mask levels) |
+| remap | output range, contrast, intensity, lightness | identity | `v = lerp(min, max, v)`; `v = saturate(lerp(0.5, v, contrast))`; `v += saturate(v × intensity)`; `v = saturate(v + lightness)`; applied to the sampled value (constant × channel; for strength around one the channel, before the strength), before *invert result*. Uber's map filters (specified). Input range and midpoint: not specified yet (Poiyomi 11 mask levels) |
 | combine | multiply, strength around one | multiply | around one: `1 − (1 − channel) × constant` (occlusion) |
 | invert result | bool | off | only for parser convenience (smoothness → roughness) |
 
@@ -159,7 +143,7 @@ Reflectance conventions resolve into the scalar: unified reflectance is the 0–
 ### 1.3 Colour input
 `colour × texture`, or a **palette** reference (1.6) times the texture. Linear, HDR.
 
-*Specified* (refactor step 8c-3): an **AudioLink theme** (ColorChord colours 0–3, or the
+*Specified*: an **AudioLink theme** (ColorChord colours 0–3, or the
 world's AudioLink theme colours 4–7) replaces the colour where the world has AudioLink.
 
 ### 1.4 Mask
@@ -168,8 +152,8 @@ mask bus channel.
 
 | Parameter | Values | Default | Notes |
 |---|---|---|---|
-| source | texture channel, vertex colour channel, constant | constant 1 | a texture channel, or a vertex colour channel instead (refactor step 8b-3) |
-| levels | input min/max, midpoint, output min/max, invert | identity | on the texture channel: `t = saturate((v − in min) / (in max − in min))` (`step(in max, v)` for an empty range), `t = pow(t, log 0.5 / log midpoint)` (midpoint clamped to 0.01–0.99; none at 0.5), `1 − t` when inverted, then `lerp(out min, out max, t)` (refactor step 9a) |
+| source | texture channel, vertex colour channel, constant | constant 1 | a texture channel, or a vertex colour channel instead |
+| levels | input min/max, midpoint, output min/max, invert | identity | on the texture channel: `t = saturate((v − in min) / (in max − in min))` (`step(in max, v)` for an empty range), `t = pow(t, log 0.5 / log midpoint)` (midpoint clamped to 0.01–0.99; none at 0.5), `1 − t` when inverted, then `lerp(out min, out max, t)` |
 | times vertex colour | a vertex colour channel, or none | none | multiplies after the levels (Poiyomi 11's vertex colour mask source) |
 | invert | bool | off | after the vertex colour |
 | strength | 0–1 | 1 | `lerp(1, value, strength)` |
@@ -187,12 +171,12 @@ Numbered channels shared by the whole material (Poiyomi: 16).
   subtract, divide.
 - **Consumers:** any mask (1.4).
 
-**Specified** (refactor step 8c-1): 16 channels, each starting at 1 and running its **steps**
+**Specified**: 16 channels, each starting at 1 and running its **steps**
 in order:
 
 | Step | Parameters | Effect |
 |---|---|---|
-| texture | a mask (1.4) | `value = the mask's value`, a map's channel with its levels and vertex colour (step 9d) |
+| texture | a mask (1.4) | `value = the mask's value`, a map's channel with its levels and vertex colour |
 | vertex colour | channel, sRGB decode, blend | `value = saturate(blend(value, vertex colour channel))` |
 | faces | front or back | `value × (1 on that side, 0 on the other)` |
 | mirror, camera | inside or outside | `value × (1 when in a mirror / VRChat camera matches, else 0)` |
@@ -202,8 +186,8 @@ in order:
 | force on, force off | — | `value = 1`, `value = 0` |
 | layer coverage | a layer, blend, invert | `value = saturate(blend(value, the layer's coverage))`, or of `1 − it` when inverted (Poiyomi's *apply to global mask*, *output undissolved*) |
 | blacklight | key, near, far, blend | `value = saturate(blend(value, smoothstep(far, near, distance to a blacklight)))`; a VRChat blacklight is a black vertex light whose alpha is the key |
-| contact | contact tags (64), people (everyone, others, me), inner and outer radius, scale with the toucher, around the touch or the whole mesh, invert, blend | `value = saturate(blend(value, touch))`: VRChat's contacts sent to shaders, each matching contact touching with `1 − smoothstep(inner, outer, distance)` from the pixel (or the object's origin), radii in metres at the uploaded size (× the toucher's size when scaled), added up and faded as contacts come and go; `1 − touch` inverted (Poiyomi 11, step 9d) |
-| second pass | inside or outside, blend | `value = blend(value, 1 in the second pass (6) when inside, in the first when outside; else 0)` (Poiyomi's Two Pass masks, step 9g-4a) |
+| contact | contact tags (64), people (everyone, others, me), inner and outer radius, scale with the toucher, around the touch or the whole mesh, invert, blend | `value = saturate(blend(value, touch))`: VRChat's contacts sent to shaders, each matching contact touching with `1 − smoothstep(inner, outer, distance)` from the pixel (or the object's origin), radii in metres at the uploaded size (× the toucher's size when scaled), added up and faded as contacts come and go; `1 − touch` inverted (Poiyomi 11) |
+| second pass | inside or outside, blend | `value = blend(value, 1 in the second pass (6) when inside, in the first when outside; else 0)` (Poiyomi's Two Pass masks) |
 
 **Blends** (Poiyomi's order): replace, subtract, multiply, divide, min, max, average, add.
 
@@ -215,7 +199,7 @@ scalar's value (before its result inversion). They read the finished bus.
 Up to a few shared colours, each with hue, saturation and brightness adjustments, referenced
 by colour inputs. Recolouring a palette entry recolours every feature that uses it.
 
-*Not typed yet:* Poiyomi's theme colours are resolved by the parser to the colours they produce
+*Not typed:* Poiyomi's theme colours are resolved by the parser to the colours they produce
 (the look); a shared palette for editing comes later.
 
 ### 1.7 Blend
@@ -276,7 +260,7 @@ an animated value and a modulated value look the same. Paths in use: `layers[i].
   target with mode *multiply* and plain min and max scales the colour.
 - A modulator whose target is a mapping (noise into UVs) is UV distortion.
 
-**Specified so far** (refactor step 6): the modulator and the audio source.
+**Specified**: the modulator and the audio source.
 
 | Parameter | Values | Default | Notes |
 |---|---|---|---|
@@ -285,10 +269,10 @@ an animated value and a modulated value look the same. Paths in use: `layers[i].
 | curve | 4 floats | (0, 1, 0, 1) | shapes the value first: `lerp(x, y, smoothstep(z, w, value))` |
 | colour | linear colour | white | for *blend to colour* |
 | min, max | float | 0, 1 | |
-| source | audio, time, light level, sweep, camera distance | — | the other sources aren't specified yet |
+| source | audio, time, light level, sweep, camera distance | — | the other sources aren't specified |
 | mask | 1.4, or none | none | where the modulation applies: `lerp(target, modulated, mask)` |
 
-**Time source** (refactor steps 7 and 8c-2): `t′ = t + offset` (seconds); *sine*
+**Time source**: `t′ = t + offset` (seconds); *sine*
 `0.5 + 0.5 sin(2π f t′)`, *square* its rounding, *triangle*, *saw* rising, *reverse saw*
 falling, *pulse* 1 while `frac(f t′) ≤ duty`; frequency `f` in cycles per second. A hue that
 turns at a speed is a saw added to the hue's amount.
@@ -321,14 +305,14 @@ between), stepped at 0.5 when *step*.
 | history offset, history length | samples | 0, 128 | *history*: the sample `offset + coordinate × length` ago |
 | fill softness | 0–1 | 0.1 | *fill*: the fade below the level |
 
-**Time source** (refactor step 7): a waveform of time.
+**Time source**: a waveform of time.
 
 | Parameter | Values | Default | Notes |
 |---|---|---|---|
 | waveform | sine, square, triangle, saw, reverse saw | sine | 0–1: sine `0.5 + 0.5 sin(2π f t)`, square its rounding, triangle up and down, saw rising, reverse saw falling |
 | frequency | cycles per second | 1 | parsers convert their speed units |
 
-**Light level source** (refactor step 7): how bright the surroundings are.
+**Light level source**: how bright the surroundings are.
 
 | Parameter | Values | Default | Notes |
 |---|---|---|---|
@@ -364,7 +348,7 @@ An ordered list of operations on a **target**, with a mask.
 - **Targets:** base colour, any single layer, emission, final colour (S6).
 - Static adjustments on anything but the final colour are bakeable.
 
-**Specified so far** (refactor step 6; the operations after channel tint with Poiyomi, step
+**Specified** (the operations after channel tint with Poiyomi, step
 8b-8): one adjustment is one operation; the material keeps an ordered list.
 
 | Parameter | Values | Default | Notes |
@@ -385,11 +369,11 @@ An ordered list of operations on a **target**, with a mask.
 | posterize | steps | — | HSV each quantised to `floor(x × steps) / steps` |
 | lightness | amount | — | `c + amount` |
 | fluorescence | amount | — | `c × lerp(1, saturate((1 − l) × sqrt(l)), amount)`, `l` the direct light colour per channel: brightest in dim light |
-| *include emission* | bool | off | final colour operations: the emission goes through them too, on its own (step 9f-1) |
-| GT7 tone map | colour accuracy, chroma fade start and end | — | Polyphony Digital's GT7 tone mapping (their 2025 reference), on the final colour before emission (step 9g-1) |
-| neutral emission | HDR retention, hue correction | — | bright emission eased toward white as it grows, colours in the normal range unchanged (Poiyomi Pro, step 9g-1) |
-| HSV offset | hue, saturation, value offsets | — | HSV: hue + h (wrapped), saturation + s and value + v (saturated) (step 9e) |
-| black and white | amount; lightness, contrast, tint, the texture's typical tone and highlight (or picked colours and a highlight strength), select by colour (colour, range) | — | Poiyomi 11's photographic black and white (step 9c): luminance through a tone curve anchored at the typical tone, its highlight stretched toward about 2.1× (or the picked highlight strength), the base level set by the lightness, contrast in log space, × tint; *select* keeps it to colours near the selected one (Oklab chroma over lightness and lightness × 0.3, within the range, softened over half of it). The exact curve is in `AtlasBlackWhite` |
+| *include emission* | bool | off | final colour operations: the emission goes through them too, on its own |
+| GT7 tone map | colour accuracy, chroma fade start and end | — | Polyphony Digital's GT7 tone mapping (their 2025 reference), on the final colour before emission |
+| neutral emission | HDR retention, hue correction | — | bright emission eased toward white as it grows, colours in the normal range unchanged (Poiyomi Pro) |
+| HSV offset | hue, saturation, value offsets | — | HSV: hue + h (wrapped), saturation + s and value + v (saturated) |
+| black and white | amount; lightness, contrast, tint, the texture's typical tone and highlight (or picked colours and a highlight strength), select by colour (colour, range) | — | Poiyomi 11's photographic black and white: luminance through a tone curve anchored at the typical tone, its highlight stretched toward about 2.1× (or the picked highlight strength), the base level set by the lightness, contrast in log space, × tint; *select* keeps it to colours near the selected one (Oklab chroma over lightness and lightness × 0.3, within the range, softened over half of it). The exact curve is in `AtlasBlackWhite` |
 | luminance | 3 weights | 0.3, 0.59, 0.11 | saturation's luminance weights |
 | channel tint | 4 linear colours, a mask texture | — | weights `m` from the mask's RGBA, divided by their sum when above 1; `t = Σ colourᵢ mᵢ + max(0, 1 − Σ mᵢ)`; `c × (2t − 1)` (Alloy team colours) |
 | hue method | grey-axis rotation, HSV, Oklab | grey-axis rotation | grey-axis: rotation of the linear colour around `(1,1,1)/√3`; HSV: the hue of the HSV colour; Oklab: the Oklab hue angle |
@@ -409,9 +393,9 @@ An ordered list of operations on a **target**, with a mask.
 | vertex colour: amount | 0–1 | 1 | `base × lerp(1, vertex, amount)` |
 | vertex colour: alpha amount | 0–1 | 1 | for *multiply alpha*: `alpha × lerp(1, vertex alpha, amount)` |
 | vertex colour: sRGB data | bool | off | off: vertex colours are used as stored (as linear values); on: converted from sRGB to linear first |
-| vertex colour: hue | off, or shift, speed (turns per second), method, set | off | the vertex colour's hue shifted (or set) before it multiplies (step 9c) |
+| vertex colour: hue | off, or shift, speed (turns per second), method, set | off | the vertex colour's hue shifted (or set) before it multiplies |
 
-**Sources:** all. *Specified with Toon Lit (refactor step 2).*
+**Sources:** all. *Specified with Toon Lit.*
 
 ### 2.2 Alpha
 | Parameter | Values | Default | Notes |
@@ -424,11 +408,10 @@ An ordered list of operations on a **target**, with a mask.
 | modifiers | list | none | in order, each multiplies alpha: *distance fade* (object or pixel position; distances, alphas: `lerp(min alpha, max alpha, smoothstep(min, max, distance))`); *view-angle fade* (intensity, sharpness, width, invert: `saturate(1 − smoothstep(min(sharpness, width), width, N·V))`); *angle fade* (camera faces model, model faces camera, or both; camera and model angle ranges in degrees, the model's forward direction, minimum alpha); *add* (an amount added, saturated; for audio modulators) |
 | sharpened coverage | bool, mip scale | off, 0.25 | alpha-to-coverage edges sharpened and kept across mip levels |
 | dithering | off, or gradient and bias | off | an 8×8 ordered dither lowers alpha where it's partial |
-| dither cutout | bool | off | screen-door transparency instead: a pixel is kept where alpha exceeds the dither (1/64 to 1, less half a step), then alpha is 1 (step 9c) |
+| dither cutout | bool | off | screen-door transparency instead: a pixel is kept where alpha exceeds the dither (1/64 to 1, less half a step), then alpha is 1 |
 | strength | 0–1 | 1 | `lerp(1, alpha, strength)` |
 
-What alpha does is the render surface mode's job (6). *Specified with Unity Standard (refactor
-step 3).* Not specified yet:
+What alpha does is the render surface mode's job (6). *Specified with Unity Standard.* Not specified:
 - **Source** vertex alpha. Modifier masks (global masks).
 - **Modifiers** (live, S7): distance fade, view-angle fade, camera- or model-angle fade, audio.
 - **Cutout handling:** threshold, sharpened coverage, mip preservation, dithering (soften edges
@@ -438,11 +421,11 @@ step 3).* Not specified yet:
 ### 2.3 Normals
 - **Layers:** the primary normal, then surface layers targeting the normal (4.1), composited
   by whiteout with strength and mask.
-- **Flat shading** (specified, refactor step 7b): the surface normal is the triangle's face
+- **Flat shading** (specified): the surface normal is the triangle's face
   normal, for a hard-edged, faceted look; normal maps apply on top.
-- **Bent normal** (specified, refactor step 8): a tangent-space map of the unoccluded
+- **Bent normal** (specified): a tangent-space map of the unoccluded
   direction, for specular occlusion (strength 0–1) and, optionally, indirect diffuse.
-- **Normal correct** (specified, refactor step 8): the mesh normal bent toward the horizontal
+- **Normal correct** (specified): the mesh normal bent toward the horizontal
   direction from a vertical axis through an object-space origin, by an amount (0–1), before
   normal maps; softer face shading.
 - **Bent normal:** an input for specular occlusion and indirect light.
@@ -471,15 +454,14 @@ How the surface reflects light (S2).
 | specular anti-aliasing | bool | off | roughens where the normal changes quickly on screen, so small or curved detail doesn't sparkle (projected-space normal filtering, Tokuyoshi 2021) |
 | anti-aliasing variance | 0–1 | 0.1 | screen-space variance scale |
 | anti-aliasing threshold | 0–1 | 0.2 | the most it may add to roughness |
-| anisotropy | group | off | GGX anisotropy: `a = clamp(amount + (sample × 2 − 1), −1, 1)`, or `clamp(amount × sample, −1, 1)` with *map multiplies* (refactor step 9b), the sample from a map's channel or a vertex colour channel; highlights stretch along the tangent (`a > 0`) or bitangent, the tangent turned by a rotation (degrees); a reflection stretch (1–5); a roughness anisotropy (0–1, 1: how much roughness stays along the stretch); an optional tangent-space direction map (RG) |
+| anisotropy | group | off | GGX anisotropy: `a = clamp(amount + (sample × 2 − 1), −1, 1)`, or `clamp(amount × sample, −1, 1)` with *map multiplies*, the sample from a map's channel or a vertex colour channel; highlights stretch along the tangent (`a > 0`) or bitangent, the tangent turned by a rotation (degrees); a reflection stretch (1–5); a roughness anisotropy (0–1, 1: how much roughness stays along the stretch); an optional tangent-space direction map (RG) |
 | clear coat | group, or none | none | a dielectric coat (F0 4%) over the surface: strength (scalar, 1), roughness (scalar, 0), its own highlights and reflections groups, normal-map amount (0: the mesh normal), its own specular anti-aliasing |
-| multi-bounce occlusion | bool | off | occlusion brightened by interreflection on light surfaces (Jimenez's fit by albedo) (step 9b) |
-| sheen | group, or none | none | Charlie sheen: `D = (2 + 1/α) sin(θh)^(1/α) / 2π`, `α = roughness²` (roughness at least 0.07), visibility `1 / (4(N·L + N·V − N·L N·V))`, × colour × strength (scalar); the base layers give up the sheen's energy (step 9b) |
-| glints | group, or none | none | sparkling flakes: a multi-scale grid of flakes on a UV (density per UV unit), each with a hashed position and normal, sparkling where its normal meets the half vector (flake roughness, size), filtered by the pixel's footprint so distant flakes average into a smooth lobe (roughness); flake colour `lerp(colour, base F0, base reflectance mix)`, varied toward rainbow hues; a mask keeps that fraction of the flakes; VR eye blend, ambient sparkle, vertex-light sparkles (step 9b) |
+| multi-bounce occlusion | bool | off | occlusion brightened by interreflection on light surfaces (Jimenez's fit by albedo) |
+| sheen | group, or none | none | Charlie sheen: `D = (2 + 1/α) sin(θh)^(1/α) / 2π`, `α = roughness²` (roughness at least 0.07), visibility `1 / (4(N·L + N·V − N·L N·V))`, × colour × strength (scalar); the base layers give up the sheen's energy |
+| glints | group, or none | none | sparkling flakes: a multi-scale grid of flakes on a UV (density per UV unit), each with a hashed position and normal, sparkling where its normal meets the half vector (flake roughness, size), filtered by the pixel's footprint so distant flakes average into a smooth lobe (roughness); flake colour `lerp(colour, base F0, base reflectance mix)`, varied toward rainbow hues; a mask keeps that fraction of the flakes; VR eye blend, ambient sparkle, vertex-light sparkles |
 
-*Specified with Unity Standard (refactor step 3); specular anti-aliasing with Standard Lite
-(step 4); highlight sharpness and occlusion amounts with Toon Standard (step 6).* Not specified
-yet:
+*Specified with Unity Standard; specular anti-aliasing with Standard Lite
+; highlight sharpness and occlusion amounts with Toon Standard.* Not specified:
 - **Occlusion:** multi-bounce occlusion.
 - **Highlights:** light-type limits. (Stand-alone strand and toon highlights are highlight
   layers, 4.8.)
@@ -503,8 +485,8 @@ is. Live.
 | steps | 1–50 | 25 | multi-step |
 | height offset | −1–1 | 0 | multi-step: added to the height (clamped below 1) |
 
-**Sources:** Unity Standard, Uber, Poiyomi. *Specified with Unity Standard (refactor step 3).*
-Not specified yet: mask.
+**Sources:** Unity Standard, Uber, Poiyomi. *Specified with Unity Standard.*
+Not specified: mask.
 
 ---
 
@@ -519,7 +501,7 @@ Not specified yet: mask.
 | **physically based** | energy-conserving diffuse with a diffuse model, plus surface response | Standard Lite, Unity Standard, Uber, Poiyomi Realistic, Skin, Cloth, PBR |
 
 ### 3.2 Ramp toon
-One formula for every source (decided in refactor step 8). The lit colour is `base × L`:
+One formula for every source. The lit colour is `base × L`:
 
 ```
 b = lerp(1, min(1, ramp(term) × occlusion(direct) + shadow lift), strength × strength mask)
@@ -572,9 +554,9 @@ plus the ambient wrapped alike, with `wrap(x) = (x + w) / ((1 + w)(1 + w × n))`
 `a = 1 − (horizontal L·forward × 0.5 + 0.5)`, the texture mirrored when the light comes from the
 left. *Blended* style: `saturate(L·forward × 0.5 + sdf × 0.5 + 0.25)`, with L and forward's
 height scaled by a vertical blend, sdf from the red channel or, with the light on the other
-side, the green; a softness (0–1) samples a blurrier mip. With *mask channels* (step 9b) the
+side, the green; a softness (0–1) samples a blurrier mip. With *mask channels* the
 map's blue blends the term toward half-Lambert and its alpha scales the shadow strength.
-**Back face shadow** (0–1, step 9b): back faces' term × `1 − it`.
+**Back face shadow** (0–1): back faces' term × `1 − it`.
 
 **Bands** (Poiyomi Multilayer Math): `b` comes from the first band; the second and third change
 `C` inside the shadow: `C = lerp(lerp(C₁, C₂, (1 − e₂) × a₂), C₃, (1 − e₃) × a₃)`. Each band:
@@ -588,8 +570,8 @@ lifts `C` toward the lit side by the ambient light. A band's colour can be *from
 the base colour), and *bands replace base* makes the shadow colour `C` instead of `base × C`.
 With bands, each band's term uses its own normal strength and received shadow.
 
-*Specified with Toon Standard (refactor step 6); the one formula, offset and bands with Poiyomi
-(step 8).* Not specified yet:
+*Specified with Toon Standard; the one formula, offset and bands with Poiyomi
+.* Not specified:
 - **Bands:** a blur map, a border AO map, shadow strength mask types, a shade map's alpha as a
   shadow mask.
 
@@ -603,7 +585,7 @@ GGX highlights and reflection probes, with the surface response (2.4).
 | shadow strength | 0–1 | 0 | the light × `lerp(1, term, s)`, the term as 3.2's |
 | shadow tint | colour | white | the light × `lerp(1, tint, (1 − term) × s)` |
 | cloth | mask (1.4) or none, blend | none | sheen highlights (Charlie distribution, Neubelt visibility) where the mask is set, GGX elsewhere; *blend* mixes the two by the mask instead of switching at 0.5 |
-| physical model | standard, calibrated | standard | *standard*: Unity Standard's; *calibrated* (Poiyomi 11's PBR type, step 9b): Filament-style GGX with height-correlated Smith visibility, multi-scattering energy compensation from a DFG lookup, diffuse × `(1 − metallic)(1 − reflected energy)`, specular occlusion from N·V and occlusion, anisotropy as `α(1 ± a)`, and Charlie sheen |
+| physical model | standard, calibrated | standard | *standard*: Unity Standard's; *calibrated* (Poiyomi 11's PBR type): Filament-style GGX with height-correlated Smith visibility, multi-scattering energy compensation from a DFG lookup, diffuse × `(1 − metallic)(1 − reflected energy)`, specular occlusion from N·V and occlusion, anisotropy as `α(1 ± a)`, and Charlie sheen |
 
 **Pre-integrated skin:** a colour lookup texture sampled at (half-Lambert, scattering × lerp(
 luminance(light), 1, stability)) replaces N·L. Scattering = `saturate((1 − thickness)^power ×
@@ -612,8 +594,8 @@ scale × 2)`, thickness from a mask's red channel (power 1, scale 1). Absorption
 blends the diffuse normal toward the mesh normal. Its shadow side `S = lerp(A × tint, tint,
 constant shadow) × occlusion` and the light `lerp(D, min(S + lookup × D × shadow, D), strength)`.
 
-*Specified with Unity Standard (refactor step 3); shadow strength, tint, skin and cloth with
-Poiyomi (step 8).*
+*Specified with Unity Standard; shadow strength, tint, skin and cloth with
+Poiyomi.*
 
 ### 3.4 Shared lighting parameters
 | Parameter | Values | Default | Notes |
@@ -633,11 +615,11 @@ Poiyomi (step 8).*
 | contribution: ambient | 0–1 | 1 | ambient and light probes, including lights Unity folds into them |
 | limit brightness | bool, ceiling | off, 1 | clamps the light (direct + ambient) per channel to the ceiling, so bright worlds don't blow out colours |
 | limit by luminance | 0–1 | 0 | the direct light's limit blends from per channel to scaling by luminance, keeping the hue |
-| limit keeps hue | bool | off | the limit scales the colour so its brightest channel is at the ceiling (step 9b) |
+| limit keeps hue | bool | off | the limit scales the colour so its brightest channel is at the ceiling |
 | minimum light | 0–1 | 0 | raises the light's luminance (direct and ambient) to at least this, keeping the hue |
 | minimum brightness | 0–1 | 0 | `base × value` is added after lighting, like emission, so the surface never goes fully dark |
-| light multiplier, light addition | floats | 1, 0 | every light colour (direct, ambient, additional) × multiplier + addition, at least 0 (step 9g-4f) |
-| flat light map | bool | off | *flat* family: features reading the shading's light map see `smoothstep(0.4, 0.6, half-Lambert)` (the vertex normal's for additional lights) instead of 1 (step 9g-4f) |
+| light multiplier, light addition | floats | 1, 0 | every light colour (direct, ambient, additional) × multiplier + addition, at least 0 |
+| flat light map | bool | off | *flat* family: features reading the shading's light map see `smoothstep(0.4, 0.6, half-Lambert)` (the vertex normal's for additional lights) instead of 1 |
 
 **Additional lights** (point, spot, and directional lights beyond the main one):
 
@@ -651,18 +633,18 @@ Poiyomi (step 8).*
 | falloff | four-key curve | linear | remaps the distance falloff (values at 0, ⅓, ⅔, 1) |
 | directional | bool | on | directional lights beyond the main one |
 | vertex lights in mirrors | bool | on | |
-| combine | add, max | add | how each light joins the surface: added, or per channel the brighter of the two (Poiyomi's default); with *max* the alpha in that pass × a boost (10), saturated (step 9g-4f) |
+| combine | add, max | add | how each light joins the surface: added, or per channel the brighter of the two (Poiyomi's default); with *max* the alpha in that pass × a boost (10), saturated |
 
-*Specified with Toon Lit (refactor step 2); brightness limit and minimum with Toon Standard
-(step 6); a fixed world direction with Uber (step 7); the colour and direction models, received
-shadow strength, softness, monochrome, the limits and additional lights with Poiyomi (step 8).*
+*Specified with Toon Lit; brightness limit and minimum with Toon Standard
+; a fixed world direction with Uber; the colour and direction models, received
+shadow strength, softness, monochrome, the limits and additional lights with Poiyomi.*
 Nothing left unspecified here.
 
 ### 3.5 External lighting
 VRChat light volumes (strength, specular, bias) and LTCGI (diffuse and specular tint,
 strength). **Sources:** Uber, Poiyomi.
 
-**Light volumes, specified** (refactor step 7):
+**Light volumes, specified**:
 
 | Parameter | Values | Default | Notes |
 |---|---|---|---|
@@ -670,9 +652,9 @@ strength). **Sources:** Uber, Poiyomi.
 | strength | 0–1 | 1 | blends from the probes to the volumes |
 | specular | bool, strength | off, 1 | highlights from the volumes |
 | bias | float | 0 | offsets the sample point along the normal |
-| specular lights | count | 0 | only the first this many volume lights add highlights; 0: all (step 9b) |
+| specular lights | count | 0 | only the first this many volume lights add highlights; 0: all |
 
-**LTCGI, specified** (refactor step 8b-1):
+**LTCGI, specified**:
 
 | Parameter | Values | Default | Notes |
 |---|---|---|---|
@@ -687,7 +669,7 @@ Darkening from the depth texture, which avatars only have with a depth-providing
 ambient occlusion (radius, intensity, colour, mask) and contact shadows (light source,
 distance, thickness, colour, mask). **Sources:** Poiyomi Pro.
 
-**Specified** (refactor step 9g-1) as two pattern kinds (4.6), since each blends a colour into
+**Specified** as two pattern kinds (4.6), since each blends a colour into
 the base colour with a mask and can write the mask bus:
 - **Ambient occlusion:** darkening where the depth texture shows nearby geometry around the
   pixel: samples within a radius (a quality's worth, jittered, biased by depth and cone,
@@ -730,7 +712,7 @@ detail, decal, flipbook, recolour or colour mask, back face, and emission.
   "override base colour" is *overrides base colour*;
   blinking, scrolling, centre-out and light-based glow are modulators.
 
-**Parameters specified so far** (refactor step 3):
+**Parameters**:
 
 | Parameter | Values | Default | Notes |
 |---|---|---|---|
@@ -738,7 +720,7 @@ detail, decal, flipbook, recolour or colour mask, back face, and emission.
 | mask | 1.4, or none | none | none: everywhere |
 | placement | 1.8 | surface | a layer targeting only emission uses *emission* |
 | faces | both, front, back | both | which side of the triangles it shows on (back face) |
-| mirror | both, mirror only, not in mirror | both | where it shows (Poiyomi's mirror texture; step 8d-4) |
+| mirror | both, mirror only, not in mirror | both | where it shows (Poiyomi's mirror texture) |
 | on outlines | bool | off | it also shows on the outline |
 | emission amount | ≥ 0 | 0 | |
 | hide in shadow | 0–1 | 0 | the mask × `lerp(1, shading brightness, amount)`, the brightness being the ramp × light map |
@@ -749,10 +731,10 @@ detail, decal, flipbook, recolour or colour mask, back face, and emission.
 | targets | list of: target, blend (1.7), opacity, channel, invert channel, replace normal | — | opacity 0–1, or any amount ≥ 0 for blend *add*; *normal* targets composite by whiteout, opacity being the strength, or with *replace normal* lerp toward the layer's normal by the mask; one-value targets read the source's *channel* (`1 − channel` when inverted) |
 | source alpha is opacity | bool | off | the source's alpha multiplies every target's opacity (alpha-blended details and decals), clamped to 0–1 |
 | source alpha offset | −1–1 | 0 | added to the source alpha first, saturated |
-| screen | a video screen (4.6), or none | none | the source goes through it first (step 9f-1) |
-| emission times alpha | bool | off | the emission it adds × the surface's alpha (premultiplied transparency) (step 9f-1) |
-| source intensity is alpha | bool | off | the map's alpha becomes `max(r, g, b)` (step 8d-4) |
-| source map is mask | bool | off | only the map's alpha is used: the colour shows where it covers (step 8d-4) |
+| screen | a video screen (4.6), or none | none | the source goes through it first |
+| emission times alpha | bool | off | the emission it adds × the surface's alpha (premultiplied transparency) |
+| source intensity is alpha | bool | off | the map's alpha becomes `max(r, g, b)` |
+| source map is mask | bool | off | only the map's alpha is used: the colour shows where it covers |
 
 A source with different textures per target (a detail colour map and a detail normal map) is
 two layers with the same mask. *Luminance* in the blends is `0.3 r + 0.59 g + 0.11 b`.
@@ -769,7 +751,7 @@ A second appearance revealed by a threshold.
 Structurally a surface layer whose mask is a threshold with an edge band. Kept separate
 (decided) because its *amount* is the thing that gets animated.
 
-**Specified so far** (refactor step 7b), besides the shared layer parts:
+**Specified**, besides the shared layer parts:
 
 | Parameter | Values | Default | Notes |
 |---|---|---|---|
@@ -788,8 +770,8 @@ Structurally a surface layer whose mask is a threshold with an edge band. Kept s
 | edge width | 0–1 | 0 | a band just above the amount, `0 < threshold − amount ≤ width`; on the dissolved side when *edge flip* |
 | edge colour | linear colour | white | added after lighting, like emission; with *edge replaces colour* the surface colour becomes it, plus *edge emission* × it |
 
-*Specified with Uber (refactor step 7b); the sources, softness, padding, detail, wave, alpha only
-and the edge options with Poiyomi (step 8d-3).* The mask scales the amount. **Sources:** Uber
+*Specified with Uber; the sources, softness, padding, detail, wave, alpha only
+and the edge options with Poiyomi.* The mask scales the amount. **Sources:** Uber
 base colour dissolve, Poiyomi dissolve.
 
 ### 4.3 Lookup layer
@@ -801,7 +783,7 @@ A texture looked up by direction instead of by UV.
 - **Options:** blur or roughness, own normal map, base and light colour mix, hide in shadow,
   probe fallback.
 
-**Specified so far** (refactor step 6), besides the shared layer parts:
+**Specified**, besides the shared layer parts:
 
 | Parameter | Values | Default | Notes |
 |---|---|---|---|
@@ -826,8 +808,8 @@ A texture looked up by direction instead of by UV.
 Several blends at once (Poiyomi's weights) are several layers with the same source and mask,
 in the source's order.
 
-*Specified with Toon Standard (refactor step 6); the other projections and options with Poiyomi
-(step 8b-4).* **Sources:** Toon Standard, Uber, Poiyomi (matcaps, cubemap).
+*Specified with Toon Standard; the other projections and options with Poiyomi
+.* **Sources:** Toon Standard, Uber, Poiyomi (matcaps, cubemap).
 
 ### 4.4 Angle layer
 Colour driven by how the surface faces the viewer or the light.
@@ -839,7 +821,7 @@ Colour driven by how the surface faces the viewer or the light.
 - **Light response:** ignore light, scale by light, lit side only, a second colour on the dark
   side, back light (shines where the light is behind).
 
-**Specified so far** (refactor step 6), besides the shared layer parts (placement *overlay*):
+**Specified**, besides the shared layer parts (placement *overlay*):
 
 | Parameter | Values | Default | Notes |
 |---|---|---|---|
@@ -858,16 +840,16 @@ Colour driven by how the surface faces the viewer or the light.
 | colour source | colour, environment, environment along normal | colour | *environment*: the reflection probe along the reflection, times the colour, with an optional roughness override; *environment along normal*: the probe along the normal, less a threshold (not below 0), times the colour |
 | base colour mix | 0–1 | 0 | multiplies by `lerp(1, base, mix)` |
 | light colour mix | 0–1 | 0 | multiplies by `lerp(1, direct light colour, mix)` |
-| light response | ignore light, scale by light, scale by direct light | ignore light | *scale by light*: times (main light colour + ambient); *scale by direct light*: times the main light's colour (step 9d) |
+| light response | ignore light, scale by light, scale by direct light | ignore light | *scale by light*: times (main light colour + ambient); *scale by direct light*: times the main light's colour |
 | source alpha is opacity | bool | off | the colour's alpha multiplies the opacity |
-| anti-aliasing | 0–1 | 1 | the step's range widens by this × the value's change across a pixel (step 9d) |
-| times alpha | bool | off | × the surface's alpha (fade and transparent surfaces) (step 9d) |
+| anti-aliasing | 0–1 | 1 | the step's range widens by this × the value's change across a pixel |
+| times alpha | bool | off | × the surface's alpha (fade and transparent surfaces) |
 | surface normal amount | 0–1 | 1 | how much of the surface's normal map the angle follows (0: the mesh normal) |
 | per eye | bool | off | each eye uses its own view instead of the view from between them |
 | blend, opacity | 1.7, 0–1 | add, 1 | |
 
-*Specified with Toon Standard (refactor step 6); the step profile and the options after band with
-Poiyomi (steps 8b-5 and 8b-6).* Not specified yet: a bias map; a light-direction factor from
+*Specified with Toon Standard; the step profile and the options after band with
+Poiyomi.* Not specified: a bias map; a light-direction factor from
 screen-space directions.
 
 **Sources:** Toon Standard rim, Uber basic and environment rim and iridescence, Poiyomi rims,
@@ -877,7 +859,7 @@ depth rim, environmental rim, Depth FX, backlights.
 Light through thin parts: thickness texture, colour, base colour tint, direct and indirect
 strength, falloff, distortion, wrap, shadow strength. S3. **Sources:** Uber, Poiyomi.
 
-**Specified so far** (refactor step 7), besides the shared layer parts (placement *lit*):
+**Specified**, besides the shared layer parts (placement *lit*):
 `light = (pow(saturate(view · −(L + N × distortion)), power) × intensity / π + ambient) ×
 pow(saturate(1 − thickness − offset), thickness power) × the light × colour`. The light is
 *direct and ambient*: `(direct + ambient light)`, times the received shadow when there's a
@@ -897,12 +879,12 @@ A generated pattern with a **kind** and its parameters: glitter, voronoi, truche
 internal parallax, video screen, audio spectrum, audio volume colour, oscilloscope,
 constellation, lava lamp. **Sources:** Poiyomi, Poiyomi Pro, Uber oscilloscope.
 
-**Oscilloscope, specified** (refactor step 7b): AudioLink's waveform drawn as a line,
+**Oscilloscope, specified**: AudioLink's waveform drawn as a line,
 `saturate(1 − 50 × abs(wave(u′) − (2v′ − 1)))`, with `u′, v′` the UV scaled, offset and
 rotated (degrees), inside margins (a u range and a v range), × colour × opacity. Placement
 *overlay*, blend *add*.
 
-**Glitter, specified** (refactor step 8d-5, Poiyomi's Glitter / Sparkle): the UV (+ scroll × t)
+**Glitter, specified** (Poiyomi's Glitter / Sparkle): the UV (+ scroll × t)
 × density makes cells; each holds a particle at a random point (× *random position*) with a
 random seed; only the nearest particle draws, or with *overlap* every one that reaches; *layers*
 (1–4) repeats the grid with other seeds. A particle's coverage `a` is its shape (circle or
@@ -930,7 +912,7 @@ s × texture alpha × mask)` and adds `s × colour × max(0, (b − 1) × textur
 emission. *Distance LOD* merges distant cells; *jaggy fix* widens a square's anti-aliasing by
 distance² × amount.
 
-**Voronoi, specified** (refactor step 8d-6): `p = (position + offset) × scale + scroll × t`
+**Voronoi, specified**: `p = (position + offset) × scale + scroll × t`
 (cell units; the position in object space, world space or a UV), `v = pow(distance, power)`
 with the distance by type: *2D cells* the distance to the cell's edge on a 2D grid × 1.55,
 *3D difference* `sqrt(F2) − sqrt(F1)` of 3D cellular noise at `p × 0.7`, *3D cells* the
@@ -939,14 +921,13 @@ distance to the edge on a 3D grid × 1.8. `ramp = smoothstep(gradient.x + n, gra
 the inner colour is a random HSV colour per cell, saturation and value in ranges, with *random
 cell colour*). Unless *emission only*: base colour `lerp(base, c.rgb, mask × c.a)`; with *affects
 alpha*, `alpha = lerp(alpha, c.a, mask)`. Emission adds `c.rgb × lerp(outer emission, inner
-emission, ramp) × mask × c.a`. With Poiyomi 11 (step
-9f-2): *cell motion* moves each cell's point, `o = lerp(o, 0.5 + 0.5 sin(speed × t × (0.6 +
+emission, ramp) × mask × c.a`. With Poiyomi 11: *cell motion* moves each cell's point, `o = lerp(o, 0.5 + 0.5 sin(speed × t × (0.6 +
 0.8 o.yx) + 2π o), amount)`; *AudioLink cells*: each cell listens to a band (or a random one)
 at a random moment of its recent history, the inner colour × `lerp(1 − dim, 1, level)` and
 the inner emission + emission × level; a hue adjustment on the layer shifts the resolved
 colour.
 
-**Truchet, specified** (refactor step 8d-6): `q = UV × density + scroll × t + offset`; each
+**Truchet, specified**: `q = UV × density + scroll × t + offset`; each
 cell, flipped in u at random, holds two quarter-circle arcs of radius 0.5 around opposite
 corners. With `e = thickness − abs(distance to the corner − 0.5)`, the coverage is
 `saturate(e / fwidth) × smoothstep(0, 1 − edge sharpness, e)` × the mask. A texture (null:
@@ -956,7 +937,7 @@ across the line, + a texture offset. With `k = min(coverage, texture alpha) × o
 amount`; *override alpha* multiplies the alpha by `k`. *Hide without AudioLink* draws nothing
 while AudioLink is missing.
 
-**Constellation, specified** (refactor step 9g-3, Poiyomi Pro): a star field on a grid,
+**Constellation, specified** (Poiyomi Pro): a star field on a grid,
 `q = (UV − centre) × density + scroll / density × t + offset`, drawn four times at depths
 `z = frac(i / 4 + phase)` (back 0, front 1), each scaled by `lerp(10, 0.5, z)` and weighted by
 `lerp(layer fade min, max, z)`; a *depth* above 0 sinks the copies below the surface along the
@@ -972,7 +953,7 @@ per star), blended along the lines. With `c = colour × coverage`, the layer's b
 multiply or add) puts `c` on the base colour with weight coverage, and emission adds
 `c × coverage × emission amount`.
 
-**Skin tone, specified** (refactor step 9g-4f, Poiyomi 11's Skin section): a skin colour from
+**Skin tone, specified** (Poiyomi 11's Skin section): a skin colour from
 pigments: melanin, its redness and hemoglobin pick a colour from a three-panel lookup strip
 (redness chooses between the panels, blended; melanin runs along a panel, kept off its edges;
 v is `1 − hemoglobin`), white without one. *Freckles* add `strength × mask^sharpness` to the
@@ -982,7 +963,7 @@ its own UV and tiling). The layer's colour (tint × brightness) multiplies it; t
 *replace* or *multiply*, by an amount, and the mask (the detail map's red channel) says where it
 doesn't apply.
 
-**Lava lamp, specified** (refactor step 9g-4e, Poiyomi Pro Grab Pass): blobs rising and sinking
+**Lava lamp, specified** (Poiyomi Pro Grab Pass): blobs rising and sinking
 in a liquid inside the mesh, drawn unlit where the surface is see-through (opacity × mask ×
 `1 − alpha`, placement *overlay*), its glow added as emission.
 - **Container:** the view ray, bent where it enters front faces (a refractive index, around a
@@ -1008,7 +989,7 @@ in a liquid inside the mesh, drawn unlit where the surface is see-through (opaci
 - **AudioLink:** a band's level scales the blobs and the glow between two values each (the first
   without AudioLink), and its chronotensity speeds the flow between two speeds.
 
-**Path, specified** (refactor step 8d-6): four lines (R, G, B, A), each along a gradient `g`
+**Path, specified**: four lines (R, G, B, A), each along a gradient `g`
 (the map's channel, or the average of all four when *merged*; or a UV axis per line, the map's
 channels then masking the lines; `g = 0` is never drawn). Per line, time
 `τ = frac((manual ? time : t × speed) + offset)`, stepped to `(ceil(τ n) − 0.5) / n` with `n`
@@ -1030,7 +1011,7 @@ other in order R, G, B, A (each alpha the line × its colour's alpha), times the
 Emission adds each line × its colour × its emission × the colour map × its alpha. *Override
 alpha* sets the alpha to `a`.
 
-With Poiyomi 11 (step 9f-2): a line can read another channel of the map as its gradient; its
+With Poiyomi 11: a line can read another channel of the map as its gradient; its
 time can *ping-pong* (`τ` runs 0 → 1 → 0, the travel direction flipping at the turn) and be
 eased (`τ²`, `1 − (1 − τ)²`, smoothstep); path, loop and dashed lines can soften their leading
 and trailing edges apart (head and tail softness); each line can be masked by a channel of a
@@ -1038,7 +1019,7 @@ packed mask map; *overlap* combines the lines over each other (layered), adding 
 (additive) or keeping only the brightest; *anti-aliasing* softens edges by the gradient's
 change across a pixel; the colour map's alpha masking every line can be turned off.
 
-**Internal parallax, specified** (refactor step 8d-7): levels of a placed texture seen below
+**Internal parallax, specified**: levels of a placed texture seen below
 the surface. For levels `j = n − 1` down to 0, `r = j / (n − 1)`: the placed UV is offset by
 `(depth × o + scroll × t + r × per-level offset) / the map's tiling`, `depth = lerp(min depth,
 max depth, r)`, `o = −V.xy × 1.3 / (V.z ± 0.3)` from the tangent-space view; clamped to 0–1
@@ -1048,13 +1029,13 @@ r), 2.2)`; its height is the map's alpha (*height from alpha*) or red. *Basic*: 
 tint × height (or the brightest wins, *level max*); *heightmap*: a level shows where its height
 ≥ `1 − r`, nearer levels in front. `n = round(lerp(iterations, min iterations, saturate((object
 distance − near) / (far − near))))`. The result goes on the base colour by the layer's blend ×
-mask, and adds result × emission amount × mask as emission. With Poiyomi 11 (step 9f-2): mip
+mask, and adds result × emission amount × mask as emission. With Poiyomi 11: mip
 maps; *smooth layers* (about one sample per pixel the layers shift, up to a step count);
 *add to alpha* (`alpha + saturate(max(r, g, b)) × amount × mask`); *refraction* (the view bent
 by Snell's law, IOR and normal-map influence, before it offsets the levels); *depth fog* (each
 level toward the fog colour by `1 − exp(−density × sqrt(1 + |o|²) × depth / max depth)`).
 
-**Depth, specified** (refactor step 8d-7): `d` is the distance from the surface to the scene
+**Depth, specified**: `d` is the distance from the surface to the scene
 point behind it, from the camera's depth texture. With colour on, `k = lerp(values.x, values.y,
 saturate((d − range.x) / (range.y − range.x))) × mask` and `c` = the layer's colour × a texture
 (sampled at the depth remap with *along depth*): *replace* `lerp(base, c, k)`, *multiply*
@@ -1062,12 +1043,12 @@ saturate((d − range.x) / (range.y − range.x))) × mask` and `c` = the layer'
 With alpha on, `alpha ×= lerp(alpha, a, mask)`, `a` the same remap over the alpha range and
 values.
 
-**Audio volume colour, specified** (refactor step 8d-7): `v` = AudioLink's filtered spectrum
+**Audio volume colour, specified**: `v` = AudioLink's filtered spectrum
 at a UV's u (or v) across its bins; `c = lerp(lerp(low, mid, saturate(2v)), high,
 saturate(2v − 1))`, the emission the same with each colour × its emission; `c` goes on the
 base colour by the layer's blend and opacity. Nothing without AudioLink.
 
-**Video screen, specified** (refactor step 8d-8): the base colour `c` shown as a screen. Grade:
+**Video screen, specified**: the base colour `c` shown as a screen. Grade:
 `c = lerp(c, luminance(c), −saturation)`, then `saturate(lerp(0.5, c, contrast + 1))` in gamma.
 `p` is a pixel texture repeated once per screen pixel (the resolution). By type: *LCD*
 `max(c, backlight / 100)`, graded, × `p` × backlight; *TN* as LCD, the view angle shifting the
@@ -1080,7 +1061,7 @@ through a ramp (when its larger side exceeds 16 pixels) or from dark to light gr
 `lerp(base, screen, mask)`; with *emission*, emission adds `screen × mask`. *Pixelate* samples
 the base colour texture once per screen pixel.
 
-**Audio spectrum, specified** (refactor step 8d-8): AudioLink's spectrum drawn in a placed
+**Audio spectrum, specified**: AudioLink's spectrum drawn in a placed
 area (1.1 placement, without a texture). In the area, u is the band and v the volume, or with
 *circle* the angle and the radius, remapped by the circle dimensions. The volume and the band
 are stepped (0: smooth) and clipped to ranges; *mirror bands* folds the bands
@@ -1095,7 +1076,7 @@ video screen when one is set, whose emission then replaces the emission by the c
 colour goes on the base colour by the layer's blend × opacity × coverage; `alpha =
 lerp(alpha, alpha × coverage, override alpha)`. Nothing without AudioLink.
 
-With Poiyomi 11 (step 9f-3): the level is `lerp(saturate(x), tanh(x), compression)` (1: as
+With Poiyomi 11: the level is `lerp(saturate(x), tanh(x), compression)` (1: as
 before); the spectrum row is the filtered one, the raw one (responsive) or the world's EQ; the
 bars span the DFT's first band range or, with *frequency mapping*, logarithmically from a
 minimum to a maximum frequency (Hz), sampled at a point, averaged or peaked over four; the area
@@ -1114,7 +1095,7 @@ Bends what's behind a transparent surface: strength (IOR), tint, colour split, b
 with screen-grab extras (pixelation, colour ramp). **Sources:** Uber, Poiyomi Pro Grab Pass and
 Self Grab.
 
-**Specified** (refactor step 7b with Uber; rewritten in step 9g-4b with Poiyomi's Grab Pass),
+**Specified** with Uber and Poiyomi's Grab Pass,
 besides the shared layer parts (placement *lit* or *overlay*). The steps, in order:
 
 1. **Refraction** (when on): the screen read offset by `(IOR − 1) × the view-space normal ×
@@ -1164,7 +1145,7 @@ besides the shared layer parts (placement *lit* or *overlay*). The steps, in ord
 
 ### 4.8 Highlight layer
 A highlight drawn on its own, besides the surface response's (2.4), with a formula of its kind
-(decided in refactor step 8b-7). Usually placement *overlay* (added after lighting); a highlight
+(a design decision, 9). Usually placement *overlay* (added after lighting); a highlight
 that replaces or multiplies the base colour is placement *surface*. **Sources:** Poiyomi
 Anisotropics and Stylized Reflections.
 
@@ -1191,7 +1172,7 @@ Anisotropics and Stylized Reflections.
   summed and saturated. Then `min(that × mask × lerp(ramp, 1, ignore shadows), occlusion,
   lerp(saturate(N·L), 1, show on back), lerp(light map, 1, ignore shadows)) × strength`.
 
-Not specified yet: lilToon-style stylized reflections (their own smoothness, metallic,
+Not specified: lilToon-style stylized reflections (their own smoothness, metallic,
 reflectance, toon or realistic specular and environment reflections), possibly a reflection
 kind.
 
@@ -1209,18 +1190,18 @@ A **list** of outline layers (Poiyomi Pro has three), each with:
 - **Masks per property** (size, colour, alpha, emission and so on).
 - Its own render settings (6).
 
-**Specified so far** (refactor step 6):
+**Specified**:
 
 | Parameter | Values | Default | Notes |
 |---|---|---|---|
 | enabled | bool | on | |
-| shape | normal expansion, light facing, view directional, drop shadow | normal expansion | *normal expansion*: an inverted hull pushed out along the normal; *light facing*: `width × lerp(1, lit, follows) + light width × lit + dark width × dark`, `lit = saturate((L·N − f.x) / (f.y − f.x))`, `dark` the same of `−L·N`, with a falloff `f` (0, 1), size follows light (1) and side widths (0, metres) (step 9e), which by default is `width × saturate(L · N)`, L the main light plus the probes' dominant direction; *view directional*: × `saturate(view-space normal xy · direction xy)`; *drop shadow*: the hull offset by the direction in view space |
+| shape | normal expansion, light facing, view directional, drop shadow | normal expansion | *normal expansion*: an inverted hull pushed out along the normal; *light facing*: `width × lerp(1, lit, follows) + light width × lit + dark width × dark`, `lit = saturate((L·N − f.x) / (f.y − f.x))`, `dark` the same of `−L·N`, with a falloff `f` (0, 1), size follows light (1) and side widths (0, metres), which by default is `width × saturate(L · N)`, L the main light plus the probes' dominant direction; *view directional*: × `saturate(view-space normal xy · direction xy)`; *drop shadow*: the hull offset by the direction in view space |
 | direction | vector | (1, 0, 0) | view directional and drop shadow |
 | width | metres, object space or world | 0.0005, world | *object space*: scaled with the object |
 | normals from vertex colour | bool | off | the expansion follows a tangent-space direction in the vertex colour (`RGB × 2 − 1`) |
 | width vertex mask | a vertex colour channel, strength, strength mask | none | width × `lerp(1, channel, strength × mask)` |
 | fixed size | 0–1, max distance, mask | 0, 1, none | width × `lerp(1, clamp(distance to the camera, 0, max), amount × mask)`: keeps its on-screen size up to that distance |
-| smooth thin | bool | off | outlines thinner than a pixel are widened to one, their width kept as coverage (step 9e) |
+| smooth thin | bool | off | outlines thinner than a pixel are widened to one, their width kept as coverage |
 | clip at zero width | bool | on | width 0 draws nothing |
 | width mask | 1.4, or none | none | |
 | screen width limit | float, or 0 | 0 | the largest on-screen offset in normalised device coordinates; 0 = none |
@@ -1233,13 +1214,13 @@ A **list** of outline layers (Poiyomi Pro has three), each with:
 | light colour mix | 0–1 | 0 | toward the direct light's colour |
 | shadow strength | 0–1 | 1 | lit: how much the shading's shadow shows |
 | emission amount | float, mask | 0, none | the outline's colour (or the emission colour) × amount × mask, added as emission |
-| emission colour | colour input, or none | none | instead of the outline's colour (step 9e) |
-| per-property masks | colour, alpha, texture blend, colour adjust, lighting, highlight | none | (step 9e) colour applies by `lerp(1, colour, mask)`; alpha × mask; the base colour multiply × mask; the colour adjustments by the mask; the lighting `lerp(1, lighting, mask)`; the highlight × mask |
-| colour adjustments | 1.10 operations | none | on the outline's colour and its highlight's, in order (step 9e) |
-| mask | 1.4 (a bus mask) | none | alpha × it; nothing where it is 0 (step 9e) |
-| edge fade | 0–1 | 0 | alpha × `smoothstep(0, edge fade, abs(N·V))` (step 9e) |
-| writes camera depth | bool | on | the outline also draws into the camera's depth texture (step 9e) |
-| curvature | baked data, or none | none | Poiyomi Pro's outline bake: a texture indexed by vertex with expansion directions (hard edges kept above an angle limit, sharp tips mitred or tapered past an angle, optional smoothing and crevice shrinking) and outline texture UVs (step 9g-2) |
+| emission colour | colour input, or none | none | instead of the outline's colour |
+| per-property masks | colour, alpha, texture blend, colour adjust, lighting, highlight | none | colour applies by `lerp(1, colour, mask)`; alpha × mask; the base colour multiply × mask; the colour adjustments by the mask; the lighting `lerp(1, lighting, mask)`; the highlight × mask |
+| colour adjustments | 1.10 operations | none | on the outline's colour and its highlight's, in order |
+| mask | 1.4 (a bus mask) | none | alpha × it; nothing where it is 0 |
+| edge fade | 0–1 | 0 | alpha × `smoothstep(0, edge fade, abs(N·V))` |
+| writes camera depth | bool | on | the outline also draws into the camera's depth texture |
+| curvature | baked data, or none | none | Poiyomi Pro's outline bake: a texture indexed by vertex with expansion directions (hard edges kept above an angle limit, sharp tips mitred or tapered past an angle, optional smoothing and crevice shrinking) and outline texture UVs |
 | highlight | group | off | an inner line toward the light: `edge(view-space N · L × 0.5 + 0.5, border, blur)` × the colour's alpha; colour, emission, tint from texture, border (0.85), blur (0.1), received shadows |
 | override alpha | bool | off | the outline's alpha is its colour's alpha instead of the base alpha × it |
 | alpha modifiers | 2.2's modifiers | none | distance fade and the others |
@@ -1248,13 +1229,13 @@ A **list** of outline layers (Poiyomi Pro has three), each with:
 | emission | bool | off | the material's emission also shows on the outline |
 | pass | 6 | cull front, depth write on | |
 
-Poiyomi Pro's Triple Outline (step 9g-4c) gives the list three entries, each with its own
+Poiyomi Pro's Triple Outline gives the list three entries, each with its own
 settings, pass and stencil; they share the mask texture, blend factors, depth clip and offsets,
 smooth thin, camera depth and the curvature bake.
 
-*Specified with Toon Standard (refactor step 6); the shapes and options after emission with
-Poiyomi (step 8d-1); the masks per property, colour adjustments and the light facing widths
-with Poiyomi 11 (step 9e).* **Sources:** Toon Standard (Outline), Uber (Outline), Poiyomi, Poiyomi
+*Specified with Toon Standard; the shapes and options after emission with
+Poiyomi; the masks per property, colour adjustments and the light facing widths
+with Poiyomi 11.* **Sources:** Toon Standard (Outline), Uber (Outline), Poiyomi, Poiyomi
 Pro.
 
 ### 5.2 Fur
@@ -1270,7 +1251,7 @@ Pro.
 
 **Sources:** Poiyomi Lil Fur (strands), Poiyomi Pro Fur (shells).
 
-**Specified with Poiyomi Lil Fur** (refactor step 8d-11): method (strands, shells); *transparent*
+**Specified with Poiyomi Lil Fur**: method (strands, shells); *transparent*
 (alpha blended without depth writes; otherwise cutout) and alpha to coverage; length (metres)
 × a length mask (a mask channel, `lerp(1, channel, strength)`); direction (a constant in tangent
 space, a direction map × its strength, or vertex colours); gravity; randomness; the strand
@@ -1279,13 +1260,13 @@ noise; an alpha mask; root occlusion (the colour × `1 − amount × alpha mask`
 fresnel power, lit-side suppression); and its own pass settings (cull, depth test and write,
 depth clip, offsets, colour mask, stencil).
 
-With Poiyomi 11 (step 9g-4a): the mask channels take 11's mask options; vertex colours as the
+With Poiyomi 11: the mask channels take 11's mask options; vertex colours as the
 direction are signed (`RGB × 2 − 1`) or unsigned (as they are), their xy added to the
 direction's and their z multiplying it; the fur bends away from a mask bus contact by a push;
 *cutout length* (Lil Fur Two Pass) draws the strands twice, first cut out at that share of the
 length, then in the fur's own mode.
 
-**Shells, specified with Poiyomi Pro Fur** (step 9g-4a): the mesh is drawn again as *layer
+**Shells, specified with Poiyomi Pro Fur**: the mesh is drawn again as *layer
 count* shells (1–31) in the surface's own passes. Shell `i` sits at height `h = i / count`,
 pushed out by `h × length` (× the object scale) along the normal (or the signed vertex colour
 as a tangent-space direction) and down by `h × length × gravity`, faded by how much the normal
@@ -1308,7 +1289,7 @@ A list of vertex operations, each with a mask and modulators:
 
 **Sources:** Uber, Poiyomi, Poiyomi Pro, and Lil Fur for wind.
 
-**Specified so far** (refactor step 7b; Poiyomi's operations in step 8d-9): a list of
+**Specified** (with Poiyomi's operations): a list of
 operations, applied in order, each with a mask (sampled per vertex: a map on its UV, or a
 vertex colour channel) and a strength.
 
@@ -1331,8 +1312,8 @@ vertex colour channel) and a strength.
 | depth bulge | height (x); fade length | where the scene behind (the depth texture) is within the fade length (metres), along the normal by `height × (1 − smoothstep(0, fade length, separation))`; not in mirrors |
 | camera push | amount (x, metres); bias; object scale | view clip prevention: parts closer than the near plane (+ bias) and facing the camera (`N·forward < −0.2`) move along the view direction, at most amount × the object's scale × object scale |
 
-| TPS | the TPS settings | Thry's Penetration System (Poiyomi Pro, step 9g-2): the mesh, measured by the setup tool (length, scale, axes, a baked mesh or vertex colours), bends along a Bézier curve toward a matching orifice light on its channel, squeezed and bulged around the orifice (hole and ring multipliers), with pumping and an idle shrink |
-| squish | collider (a contact 1–8, or an orifice plane of a size), strength, spread, max, falloff, clip offset; a colour gradient | flattened against the collider (Poiyomi Pro, step 9g-2); the squish also colours the surface through a gradient (between a min and max, × intensity, by replace, multiply and unlit add weights) as a pattern layer of kind *squish* sharing the settings, which can write the mask bus |
+| TPS | the TPS settings | Thry's Penetration System (Poiyomi Pro): the mesh, measured by the setup tool (length, scale, axes, a baked mesh or vertex colours), bends along a Bézier curve toward a matching orifice light on its channel, squeezed and bulged around the orifice (hole and ring multipliers), with pumping and an idle shrink |
+| squish | collider (a contact 1–8, or an orifice plane of a size), strength, spread, max, falloff, clip offset; a colour gradient | flattened against the collider (Poiyomi Pro); the squish also colours the surface through a gradient (between a min and max, × intensity, by replace, multiply and unlit add weights) as a pattern layer of kind *squish* sharing the settings, which can write the mask bus |
 
 **Look-at rig:** a mask, a strength, the target's up (the world up kept square to the view,
 the world up, the camera's up, the object's up), forward and up directions, a pivot and an
@@ -1350,13 +1331,13 @@ decided later, with the writers.
 Effects that add or remove geometry: tessellation, dissolving into pieces, shattering,
 particles from triangles. **Sources:** Poiyomi Pro variants.
 
-**Tessellation, specified** (refactor step 9g-4d): triangles are subdivided before the
+**Tessellation, specified**: triangles are subdivided before the
 deformations (5.3). *Uniform* splits each edge a factor of times; *edge length* into pieces
 about that many screen pixels long; *distance* uses the factor near the camera, falling to 1
 between two distances (metres). *Phong* (0–1) bends the new vertices toward the curved surface
 the vertex normals describe; triangles outside the view (with a margin) aren't subdivided.
 
-*Not typed yet* (reported, one line each): dissolving into pieces (Poiyomi Pro's Geometric
+*Not typed* (reported, one line each): dissolving into pieces (Poiyomi Pro's Geometric
 Dissolve), ShatterWave, particles spawned from triangles.
 
 ---
@@ -1380,29 +1361,28 @@ Also: per pass, cull (off, front, back), depth write, depth clip, depth offset, 
 operations; Unity's meanings); **cutoff in transparent modes** (fade and transparent also
 discard below the cutoff); **fog** (on by default); **reduced near clipping** (geometry very
 close to the camera isn't cut by the near plane); **two-sided lighting** (back faces
-flip their normal, so they light like front faces). *Specified with Unity Standard (refactor
-step 3); two-sided lighting with Toon Standard (step 6).* Not specified yet:
+flip their normal, so they light like front faces). *Specified with Unity Standard; two-sided lighting with Toon Standard.* Not specified:
 - Raw blend factors are kept only when they match none of these (surface mode *custom*).
 - **Per pass:** base, each outline layer and fur have cull, depth test and write, depth
   offset, stencil and colour mask.
 - **Fog**.
 - **Visibility:** in mirrors, cameras, normal view; an alternate mirror appearance; near-camera
-  clipping with a mask; hide by UV tile; invisible. *Specified* (refactor step 7b):
-  - **visibility** (step 8d-4, replacing mirror visibility): drawn or not in the normal view,
+  clipping with a mask; hide by UV tile; invisible. *Specified*:
+  - **visibility** (replacing mirror visibility): drawn or not in the normal view,
     mirrors in VR and on desktop, VRChat cameras in VR and on desktop, and screenshots; *mirror
     only* hides the normal view and the cameras, *not in mirror* hides both mirrors;
-  - **hidden UV tiles** (step 8d-4): a list of a UV channel, tiles of the 4 × 4 grid from
+  - **hidden UV tiles**: a list of a UV channel, tiles of the 4 × 4 grid from
     (0, 0) to (4, 4), and a side (both, front, back); triangles there aren't drawn;
   - **mirror base colour:** a texture replacing the base colour texture in mirrors, or none;
   - **near clip:** on, distance in metres, mask (UV0, hidden where above 0.5); not in mirrors;
   - **invisible:** bool;
-  - **dithered shadows** (step 9c): the shadow is as see-through as the surface, by a dither of
+  - **dithered shadows**: the shadow is as see-through as the surface, by a dither of
     its alpha.
-- **Depth prepass** (refactor step 9g-4f): a depth-only pass first, so a see-through surface
+- **Depth prepass**: a depth-only pass first, so a see-through surface
   shows only its nearest layer.
-- **Clock** (refactor step 9g-4f): time for animation and modulators is the local clock or
+- **Clock**: time for animation and modulators is the local clock or
   VRChat's network time, the same for every viewer (Poiyomi 11's default).
-- **Second pass** (refactor step 9g-4a, Poiyomi's Two Pass): the whole surface drawn again
+- **Second pass** (Poiyomi's Two Pass): the whole surface drawn again
   after the first, with its own surface mode (or blend factors), cull, depth, offsets, colour
   mask and stencil, and alpha to coverage. Its colour is the base colour's, its own colour and
   alpha, or its own alpha; its alpha is `pow(alpha, power)` (1 when opaque or forced opaque),
@@ -1433,15 +1413,15 @@ step 3); two-sided lighting with Toon Standard (step 6).* Not specified yet:
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 | 1.1 Mapping beyond UV0/1, placement, frames | | | | | ~ | ✓ | |
 | 1.5 Mask bus | | | | | | ✓ | |
-| 1.6 Palette | | | | | | ✓ | |
+| 1.6 Palette | | | | | | ~ | |
 | 1.9 Modulators | | | ~ | | ✓ | ✓ | |
-| 1.10 Colour adjustment | | | ✓ | | ✓ | ✓ | GT7 |
+| 1.10 Colour adjustment | | | ✓ | | ✓ | ✓ | GT7, neutral emission |
 | 2.1 Base colour | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | 2.2 Alpha | | | | ✓ | ✓ | ✓ | |
 | 2.3 Normals | | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | 2.4 Surface response | | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | 2.5 Parallax | | | | ✓ | ✓ | ✓ | |
-| 3 Lighting: unlit | | | | | ✓ | ~ | |
+| 3 Lighting: unlit | | | | | ✓ | ✓ | |
 | 3 Lighting: flat | ✓ | | | | | ✓ | |
 | 3 Lighting: ramp toon | | | ✓ | | ✓ | ✓ | |
 | 3 Lighting: physically based | | ✓ | | ✓ | ✓ | ✓ | |
@@ -1452,93 +1432,37 @@ step 3); two-sided lighting with Toon Standard (step 6).* Not specified yet:
 | 4.3 Lookup layer | | | ✓ | | ✓ | ✓ | |
 | 4.4 Angle layer | | | ✓ | | ✓ | ✓ | |
 | 4.5 Subsurface | | | | | ✓ | ✓ | |
-| 4.6 Procedural pattern | | | | | ~ | ✓ | constellation |
-| 4.7 Refraction | | | | | ✓ | | ✓ |
+| 4.6 Procedural pattern | | | | | ~ | ✓ | constellation, lava lamp |
+| 4.7 Refraction | | | | | ✓ | ✓ | self grab, lava lamp |
 | 5.1 Outline | | | ~ | | ✓ | ✓ | layers, curvature |
 | 5.2 Fur | | | | | | ✓ | shells |
 | 5.3 Deformation | | | | | ✓ | ✓ | squish, TPS |
-| 5.4 Geometry effects | | | | | | | ✓ |
+| 5.4 Geometry effects | | | | | | | tessellation (dissolve, shatter, particles reported) |
 | 6 Visibility | | | | | ✓ | ✓ | |
+| 6 Second pass, depth prepass | | | | | | ✓ | |
 
 Single-source features, described generically so other shaders can map into them later: mask
 bus, palette and the back-face condition (Poiyomi); screen-space lighting and geometry effects
-(Poiyomi Pro).
+(Poiyomi Pro). The Poiyomi column is Poiyomi 10 and 11 (Grab Pass and Two Pass
+included); 7.3 to 9.3 are read on the same parser with version tables. *Palette* is ~ because
+theme colours are resolved to the colours they produce (1.6).
 
 ---
 
-## 9. What changes in the current code
-
-| Today | Catalogue |
-|---|---|
-| 15 `AtlasLightingMode` values | 4 families with parameters (3) |
-| 27 free-form semantic features | Typed features, building blocks and modulators |
-| Fixed hue fields (`HueShift`, `DetailHueShift`, `EmissionHueShift`) | Colour adjustments with targets (1.10) |
-| Separate detail, decal, colour mask and emission structures, each with its own blend fields | One surface layer type with targets (4.1) and one blend list (1.7) |
-| Separate matcap and rim structures | Lookup layer (4.3) and angle layer (4.4) |
-| AudioLink and emission pulse as dedicated structures | Modulators on any parameter (1.9) |
-| `AtlasColorMaskLayer` with four fixed slots | Recolour regions as surface layers |
-| Global masks as Poiyomi-shaped bindings | Mask bus (1.5) |
-| Colours stored as sRGB | Linear (1.0) |
-| `AtlasSurfaceMode` (Opaque, Cutout, Transparent, Premultiplied, Additive) | Surface modes named by look (6) |
-| No outline, deformation or geometry effects; fur typed | 5.1, 5.3, 5.4; fur matches 5.2 |
-| No defined order between features | Evaluation stages S1–S7 |
-
-### 9.1 Typing the free-form semantic features
-
-The parsers create 27 distinct free-form feature IDs (`AtlasSemanticFeature`); other IDs only
-label missing-feature issues. Every one has a home here.
-
-**What typing one involves:**
-1. **A typed home:** a field in a feature or building block.
-2. **Units and conventions** (1.0): the free-form values are raw source values, often source
-   enum numbers. Converting them is the real work.
-3. **Parser and test:** the parser writes the typed field, and a test checks the converted
-   value.
-
-| Free-form ID | Becomes |
-|---|---|
-| `surface.normal.secondary`, `surface.bent-normal` | Normals (2.3) |
-| `surface.alpha-map`, `render.alpha` | Alpha (2.2) |
-| `surface.specular`, `surface.reflections`, `surface.clearcoat` | Surface response (2.4), including sheen and glints |
-| `surface.detail` | Surface layer targets (4.1) |
-| `decal.options.*` | Surface layer with placement (1.1, 4.1) |
-| `lighting.rim`, `lighting.rim.options.*`, `lighting.environmental-rim`, `lighting.backlight` | Angle layer (4.4) |
-| `lighting.subsurface`, `lighting.skin-scattering` | Subsurface (4.5); skin diffuse model (3.3) |
-| `lighting.external`, `lighting.light-volumes`, `lighting.ltcgi` | External lighting (3.5) |
-| `render.options` | Render (6) |
-| `lighting.light-data`, `lighting.additional-lights`, `lighting.shadows` | Lighting families and shared parameters (3); needs the families first |
-| `emission.modulation`, `audio.reactive.modulation`, `audio.global`, `surface.proximity-color` | Modulators (1.9) |
-| `color.adjustment` | Colour adjustment (1.10) |
-| `surface.glitter` | Procedural pattern (4.6); typed in refactor step 8d-5 |
-| `geometry.fur` (Pro Fur extras) | Fur (5.2): strand height range, occlusion range, hue |
-
-**Order,** following the dependencies:
-1. Building blocks (1.1–1.10).
-2. Surface layer, lookup layer and angle layer, replacing today's per-kind structures.
-3. The parser-only moves.
-4. Lighting families.
-5. Modulators in the parsers.
-6. Outline, deformation and procedural patterns.
-
-**Afterwards:** `AtlasSemanticFeature` stays only for reporting. A source value with no typed
-home becomes an *unmapped* report line, not stored data, so every report is a coverage gap.
-
----
-
-## 10. Decisions so far
+## 9. Design decisions
 
 - Avatar shaders and features only; world-only features are ignored, not counted as unmapped.
-- Mochie Standard is dropped in favour of Mochie Uber (done).
-- Poiyomi 11 and Poiyomi Pro are supported (done).
+- Mochie Standard is not supported; Mochie Uber is its avatar counterpart.
+- Poiyomi 11 and Poiyomi Pro are supported.
 - Parsing never requires the source shader to be installed; output shaders must be installed
-  (done; see [*Shader availability*](UNIFIED_MATERIAL.md#shader-availability)).
-- The layer merges of the second pass are accepted for now, to be refined once output writers
-  exist and are tested.
+  (see [*Shader availability*](UNIFIED_MATERIAL.md#shader-availability)).
+- The layer merges (one surface layer type, one lookup layer, one angle layer) stand until
+  output writers show a need to split them.
 - Coverage means the look; misunderstandings of a source are fixed in its parser, not in the
   unified material.
 - **Specular colour** is its own surface response input next to metallic (2.4); parsers don't
   convert it.
-- **Uber X** stays unsupported for now (7).
+- **Uber X** is unsupported (7).
 - **Static deformation** stays a deformation feature (5.3); applying it to the mesh is a later
   writer decision.
 - **Light volumes and LTCGI** stay in scope as external lighting (3.5): they're common on
@@ -1546,17 +1470,16 @@ home becomes an *unmapped* report line, not stored data, so every report is a co
 - **Transition** stays its own layer type (4.2).
 - **Procedural patterns** are one layer type with a pattern kind (4.6).
 - **Stats overlay** is out of scope (7).
-- **Ramp toon is one formula** with each source as a special case (3.2, refactor step 8).
-- **Stand-alone highlights are a layer type** (4.8, refactor step 8b-7): strand and toon
+- **Ramp toon is one formula** with each source as a special case (3.2).
+- **Stand-alone highlights are a layer type** (4.8): strand and toon
   highlights keep their own formulas instead of folding into the surface response's highlights,
   so a same-shader round trip is lossless.
-- **Older versions are supported where their source is available.** That is every Poiyomi
-  version from 7.3 to 11: the Toon packages ship the older versions under
-  `_PoiyomiShaders/Shaders/<version>`. 8.1 to 9.3 share 96–99% of their property names with
-  10.0; 7.3 shares about two thirds and needs the most parser work. Only the current Mochie
-  Uber is on hand; older Uber sources can be obtained if a difference needs checking.
+- **Older Poiyomi versions are supported pragmatically:** 7.3 to 9.3 are read on the Poiyomi 10
+  parser with version tables for renamed and re-meaning settings; features Poiyomi 10 rewrote
+  are read with 10's meaning and noted once each.
+- **Mochie Uber is read as of its current release;** older Uber versions aren't distinguished.
 
-## 11. Open questions
+## 10. Open questions
 
 None outside the atlasing pass.
 

@@ -5,7 +5,6 @@ namespace NordicWind.AdvancedAtlaser.Editor
     /// <summary>
     /// Mochie Uber and Uber (Outline), Mochie's avatar shader (v1.35.2). Sections follow their
     /// keywords, as the shader does. See UNIFIED_MATERIAL_MOCHIE_UBER.md.
-    /// Refactor step 7a maps the core sections; the rest is reported until step 7b.
     /// </summary>
     public sealed class AtlasMochieUberParser : AtlasParserBase
     {
@@ -239,7 +238,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             d.Layers.Add(layer);
         }
 
-        // Primary maps: the workflow, normal map, occlusion. Map filters are reported (step 7b).
+        // Primary maps: the workflow, normal map, occlusion, and the map filters.
         private static void Surface(Material m, AtlasUnifiedMaterial d)
         {
             var response = d.Surface.Response;

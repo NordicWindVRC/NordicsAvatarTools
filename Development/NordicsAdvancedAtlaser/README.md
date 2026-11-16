@@ -22,7 +22,7 @@ unified model and never see the source shader. See `UNIFIED_MATERIAL.md` for the
 |---|---|
 | Package | `app.nordicwind.advanced-atlaser` |
 | Components | **Nordic's Advanced Atlaser** (`NordicsAdvancedAtlaser`) and **Nordic's Atlas Output** (`NordicsAtlasOutput`) |
-| Requirements | Unity 2022.3, NDMF 1.7.0 or later, Nordic's Texture Wrapper 0.9.0 or later |
+| Requirements | Unity 2022.3, NDMF 1.7.0 or later, Nordic's Texture Wrapper 0.10.0 or later |
 | Works with | Avatar Optimizer (Merge Skinned Mesh sources are discovered, including nested merges, and the components register with AAO when it is installed), Modular Avatar, VRCFury. None of them are required. |
 
 ## Install
@@ -118,23 +118,20 @@ submesh. If it appears on more, the build stops, because the bake would be ambig
 The Atlaser reads these shaders. Each source material is converted into one shader-independent
 description before an output shader uses it.
 
-> **Being rebuilt.** The shader-independent description and its input parsers are being rebuilt,
-> one parser at a time (see `UNIFIED_MATERIAL_REFACTOR.md`). Until a shader's parser is rebuilt,
-> its materials are read by the fallback parser. Parsers marked *rebuilt* are done; the others
-> show what they read before the rebuild.
 
-| Shader | Recognised by | What is read | Not yet covered |
+| Shader | Recognised by | What is read | Reported or not covered |
 |---|---|---|---|
-| Unity **Standard** (rebuilt) | Shader name | Rendering modes, base color, metallic/smoothness, normal, parallax, occlusion, emission, detail maps, highlights and reflections | — |
-| Unity **Standard (Specular setup)** (rebuilt) | Shader name | Same as Standard, with the specular colour | — |
-| **VRChat/Mobile/Standard Lite** (rebuilt) | Shader name | Base color and vertex color, metallic workflow, normal, occlusion, emission, detail, highlights and reflections, specular anti-aliasing | — |
-| **VRChat/Mobile/Toon Lit** (rebuilt) | Shader name | Base texture, vertex color, flat lighting | — |
-| **VRChat/Mobile/Toon Standard** (and Outline) (rebuilt) | Shader name | Every section by its toggle: toon ramp, specular, matcap, rim, emission, detail, occlusion, color masks, hue shift, outline, AudioLink | AudioLink's rim mask and UV-based mode (reported) |
-| **Mochie/Uber** (and Outline) (rebuilt) | Shader name, or its saved properties | Every section of the free version: render, base colour and cube mode, workflows and map filters, detail, masks, lighting and shadows, reflections, highlights, matcaps, rims, subsurface, refraction, iridescence, emission, filtering, dissolve, flipbooks, UV distortion, vertex manipulation, outline, AudioLink, light volumes, mirror and near clip | Flipbook alpha, AudioLink rim pulse, AudioLink on vertex rotation and UV distortion (reported). Uber X is unsupported |
-| **Poiyomi Toon 7.x, 8.x, 9.x, 10.x, 11.x** | Version label in the shader, then name/path | Lighting modes, shadow bands, matcaps, normals, emission layers, masks, global masks, clearcoat, color adjustments, rim, subsurface, decals, fur (Lil Fur variants) | Many advanced, procedural and animated features |
-| **Poiyomi Pro 10.x, 11.x** (and its variants) | Shader name, then the version label | Everything Poiyomi Toon reads, plus Pro Fur (shell fur) and 11.x PBR lighting | SSAO, contact shadows, TPS deformation, squish, constellation, tone mapping, outline bake, and the geometry, grab-pass, tessellation and triplanar variants (reported) |
+| Unity **Standard** | Shader name | Rendering modes, base color, metallic/smoothness, normal, parallax, occlusion, emission, detail maps, highlights and reflections | — |
+| Unity **Standard (Specular setup)** | Shader name | Same as Standard, with the specular colour | — |
+| **VRChat/Mobile/Standard Lite** | Shader name | Base color and vertex color, metallic workflow, normal, occlusion, emission, detail, highlights and reflections, specular anti-aliasing | — |
+| **VRChat/Mobile/Toon Lit** | Shader name | Base texture, vertex color, flat lighting | — |
+| **VRChat/Mobile/Toon Standard** (and Outline) | Shader name | Every section by its toggle: toon ramp, specular, matcap, rim, emission, detail, occlusion, color masks, hue shift, outline, AudioLink | AudioLink's rim mask and UV-based mode (reported) |
+| **Mochie/Uber** (and Outline) | Shader name, or its saved properties | Every section of the free version: render, base colour and cube mode, workflows and map filters, detail, masks, lighting and shadows, reflections, highlights, matcaps, rims, subsurface, refraction, iridescence, emission, filtering, dissolve, flipbooks, UV distortion, vertex manipulation, outline, AudioLink, light volumes, mirror and near clip | Flipbook alpha, AudioLink rim pulse, AudioLink on vertex rotation and UV distortion (reported). Uber X is unsupported |
+| **Poiyomi Toon 10.x, 11.x** (and its avatar variants: Two Pass, Early Outline, Grab Pass, Lil Fur) | Version label in the shader, then name/path, or its saved properties | Every section: UV options and global masks, main colour and alpha, normals, all lighting types, reflections, clear coat, decals, emissions, matcaps and cubemaps, rims and depth rims, dissolve, flipbooks, glitter, voronoi, truchet, pathing and the other patterns, outlines, vertex options, fur, AudioLink, Two Pass's second pass and Grab Pass's screen effects | A few details, each reported (for example hextile sampling and the newer UV distortion modes); the stats overlay is out of scope |
+| **Poiyomi Pro 10.x, 11.x** (and its variants) | Shader name, then the version label, or its saved properties | Everything Poiyomi Toon reads, plus SSAO, contact shadows, TPS, squish, constellation, the lava lamp, GT7 tone mapping and neutral emission, the outline bake, shell fur, Triple Outline, Self Grab, Triplanar Projection and tessellation | Geometric Dissolve, ShatterWave and the particle variants (reported) |
+| **Poiyomi Toon 7.3, 8.x, 9.x** | As above | Read on the Poiyomi 10 parser with version tables for renamed and re-meaning settings | Features Poiyomi 10 rewrote are read with 10's meaning and noted; 7.3's own specular, metallics, BRDF, clear coat, SSS and panosphere sections are reported |
 | Poiyomi Toon (unversioned) | Poiyomi Toon without a version | As above, best effort | As above |
-| **Any other shader** (rebuilt) | Fallback | Common property names with Unity's conventions: base color, alpha mask, normal, metallic or specular, roughness or smoothness, occlusion, emission, culling and blending | Anything shader-specific; matcaps (reported) |
+| **Any other shader** | Fallback | Common property names with Unity's conventions: base color, alpha mask, normal, metallic or specular, roughness or smoothness, occlusion, emission, culling and blending | Anything shader-specific; matcaps (reported) |
 
 Features that can't be read exactly are reported as warnings during the build, never
 silently assumed. See `UNIFIED_MATERIAL.md` for the details of each parser.
@@ -180,9 +177,9 @@ resolutions, turning off features, and controlling how features are emulated.
 
 ## Verification status
 
-Version 0.40.0 compiles outside Unity against Unity 2022.3.22, NDMF 1.14.8 and AAO 1.9.19.
-It has not yet been run in Unity. Run the EditMode tests in `NordicWind.AdvancedAtlaser.Tests`
-with the relevant shaders imported. Version history is in `CHANGELOG.md`.
+Version 0.40.0 builds against Unity 2022.3.22, NDMF 1.14.8 and AAO 1.9.19. Its EditMode tests
+(`NordicWind.AdvancedAtlaser.Tests`) pass in Unity 2022.3.22; tests that need a source shader
+run when that shader is imported. Version history is in `CHANGELOG.md`.
 
 ## AI transparency
 

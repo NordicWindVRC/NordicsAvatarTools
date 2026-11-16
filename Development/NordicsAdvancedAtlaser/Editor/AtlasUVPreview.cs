@@ -43,15 +43,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
             Handles.DrawSolidRectangleWithOutline(preview, Color.clear, Handles.color);
             Handles.EndGUI();
         }
+        // Through the reader, so materials whose shader is missing show their texture too.
         private static Texture GetMainTexture(Material material)
         {
             foreach (var name in new[] { "_MainTex", "_BaseMap", "_BaseColorMap" })
-                if (material.HasProperty(name))
-                {
-                    var tex = material.GetTexture(name);
-                    if (tex != null) return tex;
-                }
-            return material.mainTexture;
+            {
+                var tex = AtlasMaterialReader.Texture(material, name);
+                if (tex != null) return tex;
+            }
+            return null;
         }
     }
 }

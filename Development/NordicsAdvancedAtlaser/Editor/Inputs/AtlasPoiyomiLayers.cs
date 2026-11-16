@@ -161,7 +161,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             BusWrite(m, d, layer, "_Decal" + n + "ApplyGlobalMaskIndex", "_Decal" + n + "ApplyGlobalMaskBlendType");
         }
 
-        // Emission: colour × map (× base colour) × strength × alpha, masked; modulation comes in 8c.
+        // Emission: colour × map (× base colour) × strength × alpha, masked; modulators from EmissionModulators.
         private static void Emission(Material m, AtlasUnifiedMaterial d, int index)
         {
             string s = index == 0 ? "" : index.ToString(), n = index.ToString();

@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
 {
-    // Poiyomi 9 and older (step 10): read on 10's parser. The features Poiyomi 10 rewrote are read
+    // Poiyomi 9 and older: read on 10's parser. The features Poiyomi 10 rewrote are read
     // with 10's meaning and noted once each while in use; their settings 10 dropped are part of
     // that note. Settings whose meaning changed are handled where they are read (major < 10).
     public abstract partial class AtlasPoiyomiParser

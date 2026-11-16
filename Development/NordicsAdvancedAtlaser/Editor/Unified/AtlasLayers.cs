@@ -1176,7 +1176,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float Size = 0.2f, Feather;
     }
 
-    // 4.8: a highlight drawn on its own, besides the surface response's (decided in refactor step 8b-7).
+    // 4.8: a highlight drawn on its own, besides the surface response's.
     public sealed class AtlasHighlightLayer : AtlasLayer
     {
         public AtlasHighlightKind Kind = AtlasHighlightKind.Strand;
