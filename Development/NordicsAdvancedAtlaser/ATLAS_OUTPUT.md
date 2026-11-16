@@ -418,31 +418,65 @@ correction is flat, and everything else works.
 
 ### Virtual light rigs
 
-Light-dependent bakes use a fixed three-light rig in avatar-root space (the avatar faces
-+Z), plus an ambient term. There are two rigs, chosen per output:
+Light-dependent bakes use a fixed rig of three lights in avatar-root space (the avatar faces
++Z), plus an ambient term. Each light has a role, and its own colour, softness and weights:
 
-**Classic** (key, fill and back from different sides):
+| Light | Temperature | Softness | Diffuse | Specular | Role |
+|---|---|---|---|---|---|
+| Key | slightly warm, about 5000 K | medium: an area light about 10–15° across | 1.0 | 1.0 | the main form and the main highlight |
+| Fill | cool like sky light, about 7500 K | very soft: a wide area | 0.35 | 0.1 | lifts the shadow side without a second highlight |
+| Back (hair) | neutral to cool, about 6500 K | fairly sharp | 0.6 | 0.6 | a crisp edge on the silhouette, highlights on hair tops |
+| Ambient | sky above (cool), ground below (warmer) | a hemisphere | 0.25 above, 0.1 below | — | the floor of the shading; what occlusion darkens |
 
-| Light | Direction | Intensity | Purpose |
-|---|---|---|---|
-| Key | front, above, to one side | 1.0 | main form and shadow side |
-| Fill | front, low, the other side | 0.35 | lifts the shadow side |
-| Back (hair) | behind, above | 0.6 | separates the silhouette, lights hair tops |
-| Ambient | all directions | 0.25 | the floor of the shading |
+- **Softness** widens the highlight and softens the edge between the lit and the shadow side.
+  It is approximated by widening the roughness each light sees by its angular size, and by a
+  little diffuse wrap, rather than by integrating an area light.
+- **Diffuse and specular weights** let a light shape the form without adding a highlight (the
+  fill), or add a highlight without flattening the shading.
+- **The ambient term** is a sky and ground gradient, not a flat colour, so occlusion darkens
+  light that comes from somewhere.
 
-**Symmetric** (the same seen from the left and the right):
+There are two rigs, chosen per output. They share the lights' settings; only the directions
+differ:
 
-| Light | Direction | Intensity | Purpose |
-|---|---|---|---|
-| Key | front, centred, above | 1.0 | main form, shading downward and outward |
-| Fill | front, centred, low | 0.3 | lifts the underside |
-| Back (hair) | behind, centred, above | 0.6 | separates the silhouette, lights hair tops |
-| Ambient | all directions | 0.25 | the floor of the shading |
+| Light | Classic | Symmetric |
+|---|---|---|
+| Key | front, above, to one side | front, centred, above |
+| Fill | front, low, the other side | front, centred, low |
+| Back (hair) | behind, above | behind, centred, above |
+| Ambient | sky above, ground below | sky above, ground below |
 
 The classic rig needs unique UVs. A source whose UVs overlap (mirrored halves) is baked with
 the symmetric rig, even when the output chooses the classic one; the *Baking* section lists
-those sources. Directions and intensities are starting values, to tune with real avatars.
-More rigs can be added as presets.
+those sources. Because the lights' settings are shared, those sources still match the rest of
+the atlas. All values are starting values, to tune with real avatars. More rigs can be added
+as presets.
+
+**Light colour in baked textures.** A baked light colour stays in every world, on top of the
+world's own light. So the light's colour is baked only by a **colour influence** (0: the
+light's brightness alone; 1: its full colour), low by default (about 0.25). Form shading
+divides by the average light, so the overall colour stays neutral and only the shift between
+the warm lit side and the cool shadow side remains.
+
+**Light terms per bake.** Every bake uses the same rig, but only the terms its purpose
+needs:
+
+| Bake | Uses |
+|---|---|
+| Full light, form shading | every light, diffuse and specular |
+| Normal-map shading | key and fill, diffuse: detail reads evenly over the surface |
+| Highlights, glitter emulation | the specular terms |
+| Backlight, rim bakes | the back light |
+| Occlusion into colour | the ambient term and reflections; direct light by the source's *occlusion: direct* |
+| Subsurface | not baked (native or off) |
+
+**Influence sliders.** The *Baking* section shows, folded by default:
+- the rig (classic or symmetric) and an overall strength;
+- the colour influence;
+- one strength per bake in use: form shading or full light, normal-map shading, highlights,
+  backlight and rims, occlusion;
+- a *Lights* foldout with each light's intensity, temperature and softness. The directions
+  stay fixed by the rig, so the symmetric rig stays symmetric.
 
 The rig is evaluated with each source's own lighting family (3.2, 3.3) and surface response
 (2.4): world normal, base colour, roughness, metallic, specular colour, occlusion.
@@ -615,7 +649,8 @@ every choice the new shader supports:
 - **Feature settings:** feature ID, mode, the mode's values, per-source overrides (turned off,
   reference source), stored by source material.
 - **Texture settings:** texture ID, enabled, size, size mode.
-- **Output settings:** crunch, bake view and light rig preset.
+- **Output settings:** crunch, bake view, light rig, colour influence, the bake strengths,
+  and each light's intensity, temperature and softness.
 
 A mode the new shader doesn't support falls back to its default mode; the stored choice is
 kept, so switching back restores it.
@@ -634,7 +669,7 @@ Output name, output shader, sources and UV regions      (as today)
 ▸ Effects          Proximity colour · AudioLink
 ▸ Render           Surface mode and queue · Fallback
 ▸ Masks            where each mask went (read only)
-▸ Baking           light rig, virtual view                (only when a mode bakes)
+▸ Baking           light rig, strengths, lights, view     (only when a mode bakes)
 ▸ UV layout preview                                      (as today)
 [Bake to Assets…]
 ```
@@ -711,6 +746,9 @@ Each phase ends with tests passing in Unity, as for the unified material.
   without crunch.
 - **Light rigs:** two rigs, classic and symmetric. Sources with overlapping UVs are always
   baked with the symmetric rig.
+- **Light roles:** each light has its own temperature, softness, and diffuse and specular
+  weights. Each bake uses only the light terms its purpose needs. Baked light colour is
+  limited by a colour influence, and every bake has its own strength slider.
 - **First writers:** Poiyomi Toon 10 and VRChat Mobile Toon Standard, both in the first phase.
 - **Compound textures:** an output shader's texture can provide several virtual maps in its
   channels. Using any of them activates the texture; it is required when any of them is
