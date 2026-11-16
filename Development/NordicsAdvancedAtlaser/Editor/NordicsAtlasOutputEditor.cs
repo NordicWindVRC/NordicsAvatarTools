@@ -202,17 +202,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     EditorGUILayout.HelpBox(warning, MessageType.Warning);
             }
         }
-        // Asks for the material's folder and name (the output name by default), and before
-        // replacing a material that's there. Textures of the same names are overwritten.
+        // Asks for the material's folder and name (the output name by default); the save dialog
+        // itself asks before replacing a material that's there. Textures of the same names are
+        // overwritten.
         private static void BakeToAssets(NordicsAtlasOutput output)
         {
             string name = string.IsNullOrWhiteSpace(output.configuration.outputName) ? "Atlas" : output.configuration.outputName;
             string path = EditorUtility.SaveFilePanelInProject("Bake to Assets", name, "mat",
                 "Choose the folder and name of the material. Its textures are saved next to it, named after it.");
             if (string.IsNullOrEmpty(path)) return;
-            if (AssetDatabase.LoadAssetAtPath<Material>(path) != null &&
-                !EditorUtility.DisplayDialog("Bake to Assets", $"{path} exists. Replace it?", "Replace", "Cancel"))
-                return;
             try
             {
                 var material = AtlasManualBake.Bake(output, path);

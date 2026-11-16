@@ -33,8 +33,8 @@ EditMode tests pass in Unity 2022.3.22.
   region's colour. A source without a texture is white. Maps are baked one at a time, and
   sources one after another, to bound memory.
 - **Bake to Assets** on each output: its textures (`<material>_<texture>.png`) and material,
-  written where you choose; a material already there is replaced only after asking, and
-  textures of the same names are overwritten. Writers for Poiyomi Toon 10 and VRChat Mobile
+  written where you choose; the save dialog asks before replacing a material already there,
+  and textures of the same names are overwritten. Writers for Poiyomi Toon 10 and VRChat Mobile
   Toon Standard set the base colour texture. Textures get the output's formats for PC and
   Android, no alpha channel unless it's used, and crunch (on by default) only where it makes a
   BC1 or BC3 texture at least 10% smaller.
