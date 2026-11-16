@@ -71,7 +71,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             d.Lighting.Family = AtlasLightingFamily.PhysicallyBased;
             d.Lighting.Diffuse = AtlasDiffuseModel.Lambert;
             d.Lighting.Ambient = AtlasAmbientModel.Directional;
-            d.Lighting.ReceiveShadows = false;
+            d.Lighting.ReceiveShadows = 0f;
             d.Lighting.Contributions.AdditionalLights = 0f;
 
             // Lightmap Type and bicubic sampling only affect lightmaps, which skinned avatars don't

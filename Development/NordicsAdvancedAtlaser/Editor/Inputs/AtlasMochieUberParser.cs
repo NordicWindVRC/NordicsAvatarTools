@@ -153,9 +153,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             render.Invisible = Int(m, "_Hide", 0) == 1;
             switch (Int(m, "_MirrorBehavior", 0))
             {
-                case 1: render.MirrorVisibility = AtlasMirrorVisibility.MirrorOnly; break;
+                case 1: render.Visibility.MirrorOnly(); break;
                 case 2: render.MirrorBaseColor = Main(m, "_MirrorTex"); break;
-                case 3: render.MirrorVisibility = AtlasMirrorVisibility.NotInMirror; break;
+                case 3: render.Visibility.NotInMirror(); break;
             }
             if (Int(m, "_NearClipToggle", 0) == 1)
             {
@@ -487,7 +487,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             lighting.Contributions.VertexLights = Float(m, "_VLightCont", 1f);
             lighting.Contributions.AdditionalLights = Float(m, "_AddCont", 1f);
             lighting.LimitBrightness = Int(m, "_ColorPreservation", 1) == 1;
-            lighting.FixedLightDirection = Int(m, "_StaticLightDirToggle", 0) == 1;
+            if (Int(m, "_StaticLightDirToggle", 0) == 1) lighting.Direction = AtlasLightDirectionModel.Fixed;
             lighting.LightDirection = (Vector3)AtlasMaterialReader.Vector(m, "_StaticLightDir", new Vector4(0f, 0.75f, 1f, 0f));
             if (shadows == 0) return;
 
@@ -517,7 +517,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             ramp.RampStrengthMask = Mask(m, UberMask.Shadow);
             var painted = AtlasSourceMapping.Texture(m, "_DetailShadowMap", AtlasTextureInterpretation.Data);
             if (painted != null) { painted.Tiling = Vector2.one; painted.Offset = Vector2.zero; ramp.TermMask = new AtlasMask { Map = painted }; }
-            lighting.ReceiveShadows = Int(m, "_RTSelfShadow", 1) == 1;
+            lighting.ReceiveShadows = Int(m, "_RTSelfShadow", 1) == 1 ? 1f : 0f;
             ramp.Conditions = (AtlasRampConditions)Mathf.Clamp(Int(m, "_ShadowConditions", 0), 0, 2);
             ramp.Dithered = Int(m, "_DitheredShadows", 0) == 1;
         }

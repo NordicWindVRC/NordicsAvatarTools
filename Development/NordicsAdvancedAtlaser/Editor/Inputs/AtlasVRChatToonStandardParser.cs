@@ -82,11 +82,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var lighting = d.Lighting;
             lighting.Family = AtlasLightingFamily.RampToon;
             lighting.Ambient = AtlasAmbientModel.Average;
-            lighting.ReceiveShadows = false;
+            lighting.ReceiveShadows = 0f;
             lighting.Ramp.Ramp = AtlasSourceMapping.Texture(m, "_Ramp");
             lighting.Ramp.Preset = Preset(lighting.Ramp.Ramp);
             lighting.Ramp.ShadowLift = Float(m, "_ShadowBoost", 0f);
-            lighting.Ramp.ShadowColorFromBase = Float(m, "_ShadowAlbedo", 0.5f);
+            // Shadows: base × Shadow Tint × direct light, plus the ambient light.
+            float shadowTint = Float(m, "_ShadowAlbedo", 0.5f);
+            lighting.Ramp.ShadowTint.Color = new Color(shadowTint, shadowTint, shadowTint, 1f);
+            lighting.Ramp.ShadowColorFromBase = 1f;
+            lighting.Ramp.ShadowDirect = 1f;
+            lighting.Ramp.ShadowAmbient = 0f;
+            lighting.Ramp.UntintedAmbient = 1f;
+            lighting.Ramp.LitAmbient = 1f;
             lighting.MinimumBrightness = Float(m, "_MinBrightness", 0f);
             lighting.LimitBrightness = Float(m, "_LimitBrightness", 1f) > 0.5f;
         }

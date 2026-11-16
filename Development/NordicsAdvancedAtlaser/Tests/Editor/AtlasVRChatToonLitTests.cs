@@ -26,7 +26,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 Assert.AreEqual(AtlasAlphaSource.None, unified.Surface.Alpha.Source);
                 Assert.AreEqual(AtlasLightingFamily.Flat, unified.Lighting.Family);
                 Assert.AreEqual(AtlasAmbientModel.Average, unified.Lighting.Ambient);
-                Assert.IsTrue(unified.Lighting.ReceiveShadows);
+                Assert.AreEqual(1f, unified.Lighting.ReceiveShadows);
                 Assert.AreEqual(1f, unified.Lighting.Contributions.MainLight);
                 Assert.AreEqual(0f, unified.Lighting.Contributions.AdditionalLights);
                 Assert.AreEqual(0f, unified.Lighting.Contributions.VertexLights);

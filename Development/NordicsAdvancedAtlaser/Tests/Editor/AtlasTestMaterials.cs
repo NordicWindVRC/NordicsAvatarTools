@@ -33,8 +33,13 @@ namespace NordicWind.AdvancedAtlaser.Tests
         // shader are written into the material's saved data directly, as an asset would have them.
         // Call it after the material's own Set* calls: the entry is appended, which breaks the
         // name order Unity looks saved properties up in, so a later Set* can miss its entry.
+        // Only for names the host shader doesn't declare: for those it does, Unity keeps the
+        // existing entry and drops the added one, so use Set* instead.
         public static void AddSaved(Material material, string list, string name, Action<SerializedProperty> set)
         {
+            // Unity would keep the existing entry and silently drop this one.
+            if (material.shader != null && material.shader.FindPropertyIndex(name) >= 0)
+                throw new ArgumentException(name + " is declared by " + material.shader.name + ": set it with Set*, not AddSaved.", nameof(name));
             using (var serialized = new SerializedObject(material))
             {
                 var entries = serialized.FindProperty("m_SavedProperties").FindPropertyRelative(list);

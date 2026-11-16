@@ -1,6 +1,6 @@
 # Unified material — refactor plan
 
-**Status:** steps 1 to 7 done (2026-11-15); step 7b-3 waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
+**Status:** steps 1 to 8 done (2026-11-16); step 8d-11 waiting for the test run. Phase 4 of the first release: rebuilding the unified material from
 the [feature catalogue](UNIFIED_MATERIAL_FEATURES.md), then rebuilding every input parser on it.
 
 **Goal:** the code matches the catalogue. Every supported input shader maps into typed
@@ -227,19 +227,57 @@ Planned for step 7 as a whole:
 
 ### 8. Poiyomi 10
 The largest step, in four parts. Each part ends with tests and your test run.
+- **8a-1 (done):** textures (Poiyomi's UV choice, panning, stochastic, UV channel settings),
+  main colour, alpha options (alpha map blend, offset, fade modifiers, sharpened coverage,
+  dithering), normals (second, detail, bent, normal correct), rendering (presets including
+  additive, soft additive, multiplicative and ×2; depth clip; stencil masks; fog; reduced near
+  clipping). `AtlasPoiyomiParser` is the new parser, split by inspector section.
+- **8a-2 (done):** the lighting types TextureRamp, Multilayer Math (bands), Flat and Realistic,
+  on one ramp toon formula that every source is a special case of (decided in this step).
+  Toon Standard moved to the formula's parameters.
+- **8a-3 (done):** Light Data: the light colour and direction models, the light map as the
+  shading term, AO, detail shadow and shadow mask maps, received shadows, brightness limits,
+  forced colour, additional lights, light volumes.
+- **8a-4 (done):** the lighting types Wrapped, ShadeMap, SDF (and the SDF light map), Skin and
+  Cloth; Realistic's shadow strength and tint. Every Poiyomi lighting type now maps.
 - **8a. Core:** base colour and alpha, normals, the four lighting families with every Poiyomi
   lighting type mapped to one of them, shadows and shared lighting parameters, render.
-- **8b. Layers:** decals, details, emissions, matcaps, cubemap, rims, back face, colour
-  masking; placement and emission amounts; colour adjustment.
-- **8c. Masks and live values:** the mask bus (global masks), palette (global themes),
-  modulators (time, audio, light level, camera distance, contact, blacklight, sweep, noise),
-  AudioLink sections, proximity colour.
-- **8d. Patterns and geometry:**
-  - glitter, voronoi, pathing, AL spectrum and AL volume colour as typed pattern kinds; the
-    rarer kinds are reported;
-  - transition (dissolve);
-  - outline, Lil Fur, vertex options as deformation;
-  - visibility.
+- **8b. Layers,** in eight parts:
+  - **8b-1 (done):** Reflections & Specular (packed map, masks, tints, fresnel, exposure
+    occlusion, fallback cubemap, GGX anisotropy, 2nd specular, GSAA), Clear Coat, LTCGI.
+  - **8b-2 (done):** surface layers: detail texture, back face, decals, emissions.
+  - **8b-3 (done):** RGBA colour masking.
+  - **8b-4 (done):** matcaps and cubemap (lookup layers).
+  - **8b-5 (done):** the two rims in their three styles (angle layers, step profile).
+  - **8b-6 (done):** depth rim, environmental rim, backlight, subsurface; the rims'
+    light-direction options.
+  - **8b-7 (done):** the anisotropics and stylized reflections highlight styles, as a new
+    highlight layer type (decided in this step); lilToon-mode stylized reflections reported.
+  - **8b-8 (done):** colour adjust and post processing, and the layers' own hue shifts and
+    colour adjusts.
+- **8c. Masks and live values,** in four parts:
+  - **8c-1 (done):** the mask bus (global mask textures, vertex colours, modifiers, options;
+    every feature's global mask and *apply to global mask*), theme colours resolved to colours.
+  - **8c-2 (done):** time and light: hue speeds, emission blinking, scrolling and light-based
+    glow; blacklight masking.
+  - **8c-3 (done):** AudioLink: the section's smoothing, emission, decal, matcap, rim, alpha and
+    hue modulation, ColorChord and AudioLink themes on colour inputs.
+  - **8c-4 (done):** proximity colour, fluorescence, centre-out emission.
+- **8d. Patterns and geometry,** in eleven parts:
+  - **8d-1 (done):** outlines (shapes, width options, colour, highlight, distance fade, render
+    settings, blending, stencil, AudioLink).
+  - **8d-2 (done):** the UV options: distortion, UV channel rotation, stochastic modes,
+    parallax heightmapping; projection settings reported.
+  - **8d-3 (done):** dissolve (transition).
+  - **8d-4 (done):** flipbooks (frames), visibility (mirror and camera, UV tile and face discard).
+  - **8d-5 (done):** glitter as a pattern kind.
+  - **8d-6 (done):** voronoi, truchet and pathing as pattern kinds.
+  - **8d-7 (done):** internal parallax, depth FX and AL volume colour; the stats overlay
+    reported.
+  - **8d-8 (done):** video effects and the AL spectrum.
+  - **8d-9 (done):** vertex options' Basics & Fun as deformations.
+  - **8d-10 (done):** look-at, glitching, depth bulge, view clip prevention.
+  - **8d-11 (done):** Lil Fur; the section report is removed.
 
 ### 9. Poiyomi 11 and Pro
 11's PBR, sheen, glints and clear coat; mask levels and vertex-colour mask sources; black and

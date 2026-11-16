@@ -20,7 +20,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         UV0, UV1, UV2, UV3, ObjectPosition, WorldPosition, Panosphere, Polar,
         // View-space normal, as matcaps use.
         View,
-        Screen, Triplanar
+        Screen, Triplanar,
+        // u = v = 0.5 + 0.5 × abs(N·V) (the view from between the eyes): rings from the centre
+        // of the view outward; Linear: the angle instead, 0.5 + 0.5 × (1 − angle / 90°).
+        FacingGradient, FacingGradientLinear
     }
 
     public enum AtlasTextureSampling
@@ -28,7 +31,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         Default,
         // Hides visible tiling.
         Stochastic,
-        Supersampled
+        Supersampled,
+        // Sharp texels with anti-aliased edges, for pixel art.
+        Pixel
     }
 
     public enum AtlasChannel { Red, Green, Blue, Alpha, Luminance }
@@ -57,15 +62,40 @@ namespace NordicWind.AdvancedAtlaser.Editor
     }
 
     // 1.1: placement of a decal on the UV, which wraps (0–1) first.
+    public enum AtlasDecalSymmetry
+    {
+        None,
+        // u > 0.5 mirrors onto the left: u = abs(u − 0.5) + 0.5.
+        Copy,
+        // The left half shifts onto the right: u + 0.5 where u < 0.5.
+        Flip
+    }
+
+    public enum AtlasDecalMirror
+    {
+        None,
+        // On the mesh's mirrored (right-hand) side, u = 1 − u.
+        Flip,
+        LeftOnly,
+        RightOnly,
+        // Right side only, flipped.
+        FlipRightOnly
+    }
+
     public sealed class AtlasDecal
     {
         // The decal's centre, in UV.
         public Vector2 Centre = new Vector2(0.5f, 0.5f);
         public Vector2 Scale = Vector2.one;
-        // Degrees.
+        // Degrees, and degrees per second.
         public float Rotation;
+        public float Spin;
         // Nothing is sampled outside the placed area.
         public bool ClipOutside = true;
+        public AtlasDecalSymmetry Symmetry = AtlasDecalSymmetry.None;
+        public AtlasDecalMirror Mirror = AtlasDecalMirror.None;
+        // Parallax depth: the decal appears this far behind (positive) the surface.
+        public float Depth;
     }
 
     public enum AtlasFrameSource
@@ -76,7 +106,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         TextureArray
     }
 
-    // 1.1: an animation in a texture.
+    // 1.1: an animation in a texture. Frame f = First + (t × Rate + Offset) mod Count, or
+    // FixedFrame when Fixed; with Crossfade, frame floor(f) blends toward the next one of the range
+    // by smoothstep(CrossfadeRange.x, CrossfadeRange.y, frac(f)).
     public sealed class AtlasFrames
     {
         public AtlasFrameSource Source = AtlasFrameSource.SpriteSheet;
@@ -84,8 +116,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public int Rows = 1;
         // Frames per second, unless a fixed frame is shown.
         public float Rate = 30f;
+        // Frames added before wrapping.
+        public float Offset;
+        // The range played; Count 0: from First to the last frame.
+        public int First;
+        public int Count;
         public bool Fixed;
-        public int FixedFrame;
+        // A frame index (fractional with Crossfade).
+        public float FixedFrame;
+        public bool Crossfade;
+        public Vector2 CrossfadeRange = new Vector2(0.75f, 1f);
     }
 
     public enum AtlasDistortionSource { Noise, NormalMap }
@@ -98,9 +138,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public Vector2 NoiseScale = Vector2.one;
         public float NoiseSpeed = 0.5f;
         public int NoiseOctaves = 1;
-        // NormalMap: its xy is the offset.
+        // NormalMap: its xy is the offset; a second map adds its own (× Strength2).
         public AtlasTextureReference NormalMap;
         public float Strength = 1f;
+        public AtlasTextureReference NormalMap2;
+        public float Strength2;
+        // Added to the offset (before the mask).
+        public Vector2 ConstantOffset;
         // Null: everywhere.
         public AtlasMask Mask;
     }
@@ -146,6 +190,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Applied to the sampled value (constant × channel; for StrengthAroundOne the channel
         // before the strength), before InvertResult; null: none.
         public AtlasScalarRemap Remap;
+        // A mask bus channel (0–15) combined with the value by BusBlend; −1: none.
+        public int Bus = -1;
+        public AtlasMaskBlend BusBlend = AtlasMaskBlend.Multiply;
 
         public AtlasScalarInput() { }
         public AtlasScalarInput(float constant) { Constant = constant; }
@@ -167,12 +214,24 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public Color Color = Color.white;
         public AtlasTextureReference Map;
+        // The colour comes from AudioLink: ColorChord colours 0–3, or the world's theme colours 4–7;
+        // without AudioLink, Color. −1: none.
+        public int AudioTheme = -1;
     }
 
     // 1.4: where something applies, 0–1. Without a map it applies everywhere.
+    // How a value combines with a mask bus channel (1.5), in Poiyomi's order.
+    public enum AtlasMaskBlend { Replace, Subtract, Multiply, Divide, Min, Max, Average, Add }
+
     public sealed class AtlasMask
     {
         public AtlasTextureReference Map;
+        // A mask bus channel (0–15) combined with the mask's own value (after its invert and
+        // strength; 1 without a map) by BusBlend; −1: none.
+        public int Bus = -1;
+        public AtlasMaskBlend BusBlend = AtlasMaskBlend.Multiply;
+        // The channel is read from the vertex colour instead of a map.
+        public bool VertexColor;
         public AtlasChannel Channel = AtlasChannel.Red;
         public bool Invert;
         // lerp(1, value, strength)

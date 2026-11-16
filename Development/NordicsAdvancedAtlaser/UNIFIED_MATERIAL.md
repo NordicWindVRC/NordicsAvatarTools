@@ -130,12 +130,13 @@ The model is in `Editor/Unified/`, one file per part of the
 
 | File | Catalogue | Contents |
 |---|---|---|
-| `AtlasUnifiedMaterial.cs` | — | The root: surface, lighting, layers, colour adjustments, modulators, outlines, fur, render, and the report lines (`Issues`) |
-| `AtlasBuildingBlocks.cs` | 1 | Texture reference, scalar input, colour input, mask, blend, placement |
-| `AtlasSurface.cs` | 2 | Base colour and vertex colour, alpha, primary normal, surface response, parallax |
-| `AtlasLighting.cs` | 3 | Lighting family, ramp toon, diffuse model, ambient model, received shadows, light contributions, brightness limit and minimum |
-| `AtlasLayers.cs` | 4 | The parts every layer shares; the surface layer and its targets; the lookup layer (matcap); the angle layer (rim) |
-| `AtlasColorAdjustment.cs` | 1.10 | Colour adjustments (hue so far) |
+| `AtlasUnifiedMaterial.cs` | — | The root: surface, lighting, layers, colour adjustments, the mask bus, modulators, outlines, fur, render, and the report lines (`Issues`) |
+| `AtlasBuildingBlocks.cs` | 1 | Texture reference (with decal placement), scalar input, colour input, mask (with mask bus reading), blend, placement |
+| `AtlasMaskBus.cs` | 1.5 | The mask bus and its producer steps |
+| `AtlasSurface.cs` | 2 | Base colour and vertex colour, alpha, primary normal, surface response (highlights, reflections, anisotropy, clear coat), parallax |
+| `AtlasLighting.cs` | 3 | Lighting family, ramp toon (with bands, SDF face, wrapped), diffuse models (with skin and cloth), light colour and direction models, received shadows, light contributions, additional lights, brightness limits, light volumes, LTCGI |
+| `AtlasLayers.cs` | 4 | The parts every layer shares; the surface layer and its targets; the lookup layer (matcap, cubemap); the angle layer (rim, depth rim, backlight); subsurface, pattern, transition, refraction and highlight layers |
+| `AtlasColorAdjustment.cs` | 1.10 | Colour adjustments: one operation each, on a target |
 | `AtlasModulators.cs` | 1.9 | Modulators and the audio source with spread |
 | `AtlasOutline.cs` | 5.1 | Outlines |
 | `AtlasDeformation.cs` | 5.3 | Deformations (inflate, rotate, translate, snap) |
@@ -171,7 +172,7 @@ shader's materials go to the fallback parser.
 | Fallback | **Rebuilt** (step 5): common property names with Unity's conventions: base colour, alpha mask, normal, metallic or specular colour, roughness or smoothness, occlusion, emission, culling, depth write and surface mode from blend factors. One warning per material says the result is a guess; a matcap is reported |
 | VRChat Mobile Toon Standard (and Outline) | **Rebuilt** (step 6): every section by its keyword: ramp toon lighting, specular, matcap, emission, detail, occlusion, rim, hue shift, colour mask, outline, AudioLink. AudioLink's rim mask and UV-based mode are reported |
 | Mochie Uber (and Outline) | **Rebuilt** (step 7, in parts 7a, 7b-1, 7b-2, 7b-3; 7b-3: AudioLink as modulators, the oscilloscope, the remaining filters, highlight, reflection and shadow extras, stencil) (7b-2: dissolve, flipbooks, refraction, iridescence, UV distortion, matcap normals, multi-step parallax, map filters): render and alpha, base colour and cube mode, shading off as flat, workflows, detail, masks, ramp or physically based lighting, reflections, highlights, matcaps, rims, subsurface, emission with pulse and light reactivity, filtering, light volumes, mirror and near clip, vertex manipulation, outline, hard edges, clear coat, static light direction. Four details stay reported (flipbook alpha, AudioLink rim pulse, AudioLink on vertex rotation and UV distortion); Uber X is unsupported |
-| Poiyomi Toon 10 | Being rebuilt (step 8) |
+| Poiyomi Toon 10 | **Rebuilt** (step 8): textures and UV options, main colour, alpha options, normals, rendering, all lighting types, Light Data, reflections and specular, clear coat, LTCGI, detail texture, back face, colour masking, decals, emissions, matcaps, cubemap, rims, depth rim, environmental rim, backlight, subsurface, anisotropics, stylized reflections, colour adjust, post processing, the mask bus, theme colours, time and light modulators, AudioLink, proximity colour, outlines, UV options, dissolve, flipbooks, mirror and camera visibility, UV tile discard, glitter, pathing, voronoi, truchet, internal parallax, depth FX, AL volume colour, video effects, AL spectrum, vertex options, depth bulge, view clip prevention, Lil Fur |
 | Poiyomi Toon 11, Poiyomi Pro 10 and 11 | Being rebuilt (step 9) |
 | Poiyomi Toon 7.3 to 9.3 | Being rebuilt (step 10) |
 

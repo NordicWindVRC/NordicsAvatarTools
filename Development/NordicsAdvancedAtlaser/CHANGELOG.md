@@ -107,6 +107,113 @@ under *Added* describe the parsers before the rebuild.
   their options; stepped and light-based reflections; shadow conditions and dithering;
   stencil; the colour alpha on the alpha mask; partial Disney diffuse and light-probe strength.
   Four details stay reported; Uber X is unsupported.
+- **Poiyomi Toon 10 rebuild started** (refactor step 8a-1): a new `AtlasPoiyomiParser`, split by
+  inspector section, reads textures with Poiyomi's UV choice, panning, stochastic sampling and UV
+  channel settings; the main colour and vertex colouring; the alpha options; the normal
+  sections; and rendering. The rest reports one line until its part. The unified material
+  gains alpha mask blends, offset and fade modifiers, sharpened coverage and dithering, the bent
+  normal and normal correction, pixel sampling, the surface modes additive, soft additive,
+  multiplicative and ×2, depth clip, stencil masks, fog and reduced near clipping.
+- **Poiyomi lighting types** (refactor step 8a-2): TextureRamp, Multilayer Math, Flat and
+  Realistic. Ramp toon is now one formula with each source as a special case: the unified
+  material gains the ramp offset, shadow tint, the shadow side's direct and ambient shares, the
+  lit side's ambient, bands (colour, alpha, border, blur, normal strength, received shadow) with
+  smooth edges, a border colour and environment strength, the physically based shading
+  strength, and a brightness ceiling. Toon Standard uses the new parameters.
+- **Poiyomi Light Data** (refactor step 8a-3): the light colour and direction modes, the light
+  map as the shading term, AO, shadow and shadow mask maps, received shadows, brightness limits,
+  forced light colour, additional lights and light volumes. The unified material gains light
+  colour and direction models (the fixed direction now one of them, in world or object space),
+  the shading terms Lambert, shadows only and relative brightness, received shadows as a
+  strength with softness and cleaning, monochrome light, a luminance limit, minimum light, and
+  additional light settings.
+- **Poiyomi's other lighting types** (refactor step 8a-4): SDF, Wrapped, ShadeMap, Skin and
+  Cloth, and the SDF light map; Realistic gains its shadow strength and tint. The unified
+  material gains the wrapped and SDF face shading terms, a lit tint, bands from base and
+  replacing the base, the pre-integrated skin diffuse, cloth sheen, and the physically based
+  shadow strength and tint (replacing 8a-2's shading strength).
+- **Poiyomi reflections and specular** (refactor step 8b-1): Reflections & Specular (off now
+  means no highlights or reflections), Clear Coat and LTCGI. The unified material gains GGX
+  anisotropy, a clear coat with its own highlights and reflections, a second highlight lobe,
+  highlights ignoring shadows, reflection exposure occlusion, and LTCGI settings.
+- **Poiyomi surface layers** (refactor step 8b-2): detail texture, back face, four decals and
+  four emissions. Layers gain a faces choice (both, front, back) and showing on outlines;
+  surface layers gain replacing the emission below and an emission overriding the base colour,
+  and "source is base colour" became "source times base colour". Decal placement gains spin,
+  symmetry, mirroring and depth.
+- **Poiyomi RGBA colour masking** (refactor step 8b-3): per channel a colour layer, a normal
+  layer, and metallic and smoothness layers. Masks can read a vertex colour channel; surface
+  layers gain a source alpha offset; targets gain an inverted channel and a replacing normal.
+- **Poiyomi matcaps and cubemap** (refactor step 8b-4): four matcaps (a layer per blend weight)
+  and the cubemap as lookup layers. Lookup layers gain the view corrected, reflection planar,
+  gradient, light half vector, reflection, world normal and object normal projections, a 2D
+  rotation, UV blend, mirror flip, surface normal amount, base and light colour mix, a
+  reflection-probe fallback and a circle mask; every layer gains hide in shadow.
+- **Poiyomi rims** (refactor step 8b-5): both rims in the Poiyomi, UTS2 and lilToon styles, as
+  angle layers. Angle layers gain the step profile (facing or edge, linear angle, power, low and
+  high, falling), light colour mix, source alpha as opacity, surface normal amount and per eye.
+- **Poiyomi depth rim, environmental rim, backlight, subsurface, rim light direction**
+  (refactor step 8b-6). Angle layers gain the depth and backlight edge sources, a light-side
+  response (mask, scale or subtract by half-Lambert, before or after the step, shrink in
+  shadow), smooth steps and the environment along the normal; a rim's dark-side colour is a
+  second layer. Subsurface layers gain a thickness channel and offset, and a direct-light mode
+  with light colour mix and shadow strength.
+- **Highlight layers** (refactor step 8b-7): a new layer type for stand-alone highlights, kinds
+  strand (Kajiya-Kay hair) and toon (UnityChan style). Poiyomi's Anisotropics and Stylized
+  Reflections map to it; lilToon-mode stylized reflections are reported.
+- **Poiyomi colour adjustment** (refactor step 8b-8): Color Adjust, Post Processing and every
+  layer's hue shift and colour adjust. Colour adjustments gain chromatize, power, clamp,
+  gradient map, hue tint, posterize and lightness, a texture input and saturation weights.
+- **Mask bus** (refactor step 8c-1): the unified material gains a 16-channel mask bus with
+  ordered producer steps (texture, vertex colour, faces, mirror, camera, distance, offset,
+  remap, force, layer coverage); masks and scalar inputs can read a channel with a blend; alpha
+  modifiers gain a mask. Poiyomi's global masks map to it, and its theme colours are resolved
+  to colours.
+- **Poiyomi time and light modulators** (refactor step 8c-2): hue speeds, emission blinking,
+  scrolling and light-based glow, and blacklight masking. Modulators gain the sweep source, a
+  pulse waveform with duty, a time offset, and a linear and direct-only light level; the mask
+  bus gains blacklight steps.
+- **Poiyomi AudioLink** (refactor step 8c-3): emissions, decals, matcaps, rims, alpha and the
+  colour adjust hue, with the section's smoothing; ColorChord and AudioLink theme colours.
+  Modulators gain *blend to colour* with a colour and a curve; the audio source gains idle
+  without AudioLink, a threshold and the chrono spread; colour inputs gain an AudioLink theme.
+- **Poiyomi proximity colour, fluorescence, centre-out emission** (refactor step 8c-4).
+  Modulators gain the camera distance source; colour adjustments gain the emission target and
+  fluorescence; texture references gain the facing gradient spaces.
+- **Poiyomi outlines** (refactor step 8d-1). Outlines gain the light facing, view directional
+  and drop shadow shapes, object-space width, vertex colour normals and width mask, fixed size
+  over distance, a base colour multiply, light colour mix, shadow strength, emission, an inner
+  highlight, alpha override and modifiers, and blend factors.
+- **Poiyomi UV options** (refactor step 8d-2): distorted UVs, UV channel rotation, the
+  stochastic modes and parallax heightmapping. UV distortion gains a second map and a constant
+  offset; a texture's rotation is specified as turning before its tiling.
+- **Poiyomi dissolve** (refactor step 8d-3) as a transition layer. Transitions gain point to
+  point, sphere and centre-out sources, softness and padding, detail noise, wave mode, alpha
+  only with a curve, revealed emission, and the edge's flip, colour replacement and emission;
+  the mask bus's layer coverage can be inverted.
+- **Poiyomi flipbooks, mirror/camera visibility and UV tile discard** (refactor step 8d-4).
+  Frames gain an offset, a range and crossfade; surface layers gain mirror visibility,
+  intensity as alpha and the map as a colour mask; the render's mirror visibility becomes
+  per-view visibility (normal, mirrors and cameras in VR and desktop, screenshots), and hidden
+  UV tiles are added.
+- **Poiyomi glitter** (refactor step 8d-5) as a pattern layer of the new glitter kind, with its
+  three sparkle modes, shapes, shape texture and sprite sheet, colours, rotations, masking and
+  AudioLink.
+- **Poiyomi pathing, voronoi and truchet** (refactor step 8d-6) as pattern layers of three new
+  kinds: four-channel paths (fill, path, loop, dashed), voronoi cells (2D, 3D, 3D difference)
+  and truchet arcs, with their masks and AudioLink.
+- **Poiyomi internal parallax, depth FX and AL volume colour** (refactor step 8d-7) as pattern
+  layers of three new kinds; the stats overlay is reported.
+- **Poiyomi video effects and AL spectrum** (refactor step 8d-8) as pattern layers of two new
+  kinds: a video screen (six screen types) and an audio spectrum that can draw through it.
+- **Poiyomi vertex options** (refactor step 8d-9): Basics & Fun as deformations. Deformations
+  gain scale, axis rotation with spin, world translation, displacement, barrel, sphere, tornado
+  and wind, and local, centred snapping; fur's wind becomes the shared wind with turbulence.
+- **Poiyomi Lil Fur** (refactor step 8d-11) into the material's fur, with a fur mode and alpha to
+  coverage; the Poiyomi 10 parser is complete and no longer reports unmapped sections.
+- **Poiyomi look-at, glitching, depth bulge and view clip prevention** (refactor step 8d-10) as
+  deformations: a look-at chain of rigs with its own visibility, glitch, depth bulge and camera
+  push.
 
 ### Changed
 - Package and NDMF name `app.nordicwind.advanced-atlaser`. Requires Texture Wrapper 0.10.0 or

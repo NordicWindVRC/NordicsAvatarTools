@@ -31,6 +31,34 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     public enum AtlasMirrorVisibility { Both, MirrorOnly, NotInMirror }
 
+    // Where the material is drawn, by view. A camera is a VRChat photo or stream camera; generic
+    // mirror detection (outside VRChat) treats cameras as normal views.
+    public sealed class AtlasVisibility
+    {
+        // Outside mirrors and cameras.
+        public bool Normal = true;
+        public bool MirrorVR = true;
+        public bool MirrorDesktop = true;
+        public bool CameraVR = true;
+        public bool CameraDesktop = true;
+        public bool Screenshot = true;
+
+        // Drawn only in mirrors.
+        public void MirrorOnly() { Normal = CameraVR = CameraDesktop = Screenshot = false; }
+        public void NotInMirror() { MirrorVR = MirrorDesktop = false; }
+    }
+
+    // Hides the triangles whose UV lies in chosen tiles of the 4 × 4 grid from (0, 0) to (4, 4)
+    // (UV tile discard, for toggling parts by moving their UVs to a tile).
+    public sealed class AtlasTileDiscard
+    {
+        public AtlasTextureSpace Space = AtlasTextureSpace.UV0;
+        // Bit row × 4 + column: tile u in [column, column + 1), v in [row, row + 1).
+        public int Tiles;
+        // Only on this side; Both: everywhere.
+        public AtlasFaces Faces = AtlasFaces.Both;
+    }
+
     // Hides parts close to the camera (not in mirrors), so views from inside the head stay clear.
     public sealed class AtlasNearClip
     {
@@ -47,6 +75,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasCull Cull = AtlasCull.Back;
         public AtlasDepthTest DepthTest = AtlasDepthTest.LessOrEqual;
         public bool DepthWrite = true;
+        // Clip past the near and far planes.
+        public bool DepthClip = true;
         public float DepthOffsetFactor;
         public float DepthOffsetUnits;
         // Bits: red 8, green 4, blue 2, alpha 1.
@@ -62,6 +92,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public bool Enabled;
         public int Reference;
+        public int ReadMask = 255;
+        public int WriteMask = 255;
         public AtlasDepthTest Compare = AtlasDepthTest.Always;
         public AtlasStencilOperation Pass = AtlasStencilOperation.Keep;
         public AtlasStencilOperation Fail = AtlasStencilOperation.Keep;
@@ -80,11 +112,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public int Queue = -1;
         // Back faces flip their normal, so they light like front faces.
         public bool TwoSidedLighting;
-        public AtlasMirrorVisibility MirrorVisibility = AtlasMirrorVisibility.Both;
+        public readonly AtlasVisibility Visibility = new AtlasVisibility();
+        public readonly System.Collections.Generic.List<AtlasTileDiscard> HiddenTiles = new System.Collections.Generic.List<AtlasTileDiscard>();
         // Replaces the base colour texture in mirrors; null: none.
         public AtlasTextureReference MirrorBaseColor;
         public readonly AtlasNearClip NearClip = new AtlasNearClip();
         public bool Invisible;
+        // Fade and transparent also discard below the cutoff.
+        public bool CutoffInTransparent;
+        public bool Fog = true;
+        // Geometry very close to the camera isn't cut by the near plane.
+        public bool ReduceNearClipping;
         public readonly AtlasPassSettings Pass = new AtlasPassSettings();
     }
 }

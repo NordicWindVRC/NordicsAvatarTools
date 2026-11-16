@@ -87,7 +87,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(AtlasLightingFamily.PhysicallyBased, lighting.Family);
             Assert.AreEqual(AtlasDiffuseModel.Lambert, lighting.Diffuse);
             Assert.AreEqual(AtlasAmbientModel.Directional, lighting.Ambient);
-            Assert.IsFalse(lighting.ReceiveShadows);
+            Assert.AreEqual(0f, lighting.ReceiveShadows);
             Assert.AreEqual(0f, lighting.Contributions.AdditionalLights);
             Assert.AreEqual(1f, lighting.Contributions.VertexLights);
         }

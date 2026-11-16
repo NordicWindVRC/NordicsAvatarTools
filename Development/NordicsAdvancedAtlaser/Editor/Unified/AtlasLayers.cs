@@ -2,14 +2,24 @@ using System.Collections.Generic;
 
 namespace NordicWind.AdvancedAtlaser.Editor
 {
+    public enum AtlasFaces { Both, Front, Back }
+
     // 4: the parts every layer type shares.
     public abstract class AtlasLayer
     {
         public bool Enabled = true;
         // Null: everywhere.
         public AtlasMask Mask;
+        // Which side of the triangles it shows on.
+        public AtlasFaces Faces = AtlasFaces.Both;
+        // In mirrors, outside them, or both.
+        public AtlasMirrorVisibility Mirror = AtlasMirrorVisibility.Both;
+        // It also shows on the outline.
+        public bool OnOutlines;
+        // 0–1: the mask × lerp(1, the shading's brightness (ramp × light map), amount).
+        public float HideInShadow;
         public AtlasPlacement Placement = AtlasPlacement.Surface;
-        // 0–1: how much of the layer's result is also added as emission (S5).
+        // ≥ 0: how much of the layer's result is also added as emission (S5).
         public float EmissionAmount;
     }
 
@@ -22,8 +32,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Normal targets are composited by whiteout; their opacity is the normal strength.
         public AtlasBlend Blend = AtlasBlend.Replace;
         public float Opacity = 1f;
-        // For the one-value targets (alpha, metallic, roughness, occlusion): which channel of the source.
+        // For the one-value targets (alpha, metallic, roughness, occlusion): which channel of the
+        // source, read as 1 − channel when inverted.
         public AtlasChannel Channel = AtlasChannel.Red;
+        public bool InvertChannel;
+        // Normal targets: lerp toward the layer's normal instead of whiteout.
+        public bool ReplaceNormal;
 
         public AtlasLayerTarget() { }
         public AtlasLayerTarget(AtlasSurfaceTarget target, AtlasBlend blend, float opacity = 1f)
@@ -38,10 +52,21 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public sealed class AtlasSurfaceLayer : AtlasLayer
     {
         public readonly AtlasColorInput Source = new AtlasColorInput();
-        // The material's base colour is the source instead ("use base colour" emission).
-        public bool SourceIsBaseColor;
-        // The source's alpha multiplies every target's opacity (alpha-blended details and decals).
+        // The source times the base colour ("use base colour" emission).
+        public bool SourceTimesBaseColor;
+        // The source's alpha multiplies every target's opacity (alpha-blended details and decals);
+        // the product is clamped to 0–1.
         public bool SourceAlphaIsOpacity;
+        // Added to the source alpha before it's used as opacity (saturated).
+        public float SourceAlphaOffset;
+        // The map's alpha is replaced by its brightest channel, max(r, g, b).
+        public bool SourceIntensityIsAlpha;
+        // Only the map's alpha is used: the colour shows where it covers (a colour mask).
+        public bool SourceMapIsMask;
+        // The emission below is replaced where the layer covers: e × (1 − coverage) + its own.
+        public bool ReplacesEmission;
+        // An emission layer whose emission e also replaces the base colour: lerp(b, saturate(e), max(e)).
+        public bool OverridesBaseColor;
         public readonly List<AtlasLayerTarget> Targets = new List<AtlasLayerTarget>();
     }
 
@@ -57,7 +82,21 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The normal in view space with world up kept up, so the lookup doesn't roll with the head.
         ViewStabilised,
         // A cubemap sampled along the direction from the camera to the surface.
-        ViewDirection
+        ViewDirection,
+        // The view-space normal corrected for the view direction, so it doesn't skew at the edges.
+        ViewCorrected,
+        // The view reflected about the normal, its world x and y: the same on both sides.
+        ReflectionPlanar,
+        // u = v = 1 − abs(N·V): a gradient from the centre to the edge.
+        Gradient,
+        // The half vector of light and view, in a tangent frame around the normal.
+        LightHalfVector,
+        // A cubemap sampled along the view reflected about the normal.
+        Reflection,
+        // A cubemap sampled along the world normal.
+        WorldNormal,
+        // A cubemap sampled along the object-space normal.
+        ObjectNormal
     }
 
     // 4.3: a texture looked up by direction instead of by UV (matcap). Placement Surface blends
@@ -72,8 +111,26 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // (degrees per second).
         public UnityEngine.Vector3 Rotation;
         public UnityEngine.Vector3 Spin;
-        // Scales the lookup coordinate.
+        // Scales the lookup coordinate: uv = projection × 0.5 × tiling + 0.5.
         public UnityEngine.Vector2 Tiling = UnityEngine.Vector2.one;
+        // Turns the 2D lookup around its centre (degrees).
+        public float LookupRotation;
+        // Blends the lookup coordinate toward a mesh UV channel, per axis.
+        public UnityEngine.Vector2 UVBlend;
+        public AtlasTextureSpace UVBlendSpace = AtlasTextureSpace.UV1;
+        // u flips in mirrors.
+        public bool MirrorFlip;
+        // 0–1: how much of the surface's normal map the lookup follows (0: the mesh normal).
+        public float SurfaceNormalAmount = 1f;
+        // 0–1: the colour times lerp(1, base, mix) and lerp(1, direct light colour, mix).
+        public float BaseColorMix;
+        public float LightColorMix;
+        // Hidden where the scene has reflection probes (a matcap as their fallback).
+        public bool HideWithReflectionProbes;
+        // Fades outside a circle of the lookup: 1 − edge(distance to the centre, radius, blur).
+        public bool CircleMask;
+        public float CircleRadius = 0.45f;
+        public float CircleBlur = 0.1f;
         // Mip blur as roughness, 0–1; or the surface's roughness.
         public float Blur;
         public bool BlurFromRoughness;
@@ -92,7 +149,56 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public enum AtlasAngleSource
     {
         // e = 1 − abs(view · normal), the view from between the eyes.
-        ViewAngle
+        ViewAngle,
+        // Silhouettes from the screen's depth: Depth.
+        Depth,
+        // Light from behind: e = (normalize(L − V × ViewStrength) · N) × 0.5 + 0.5, times the
+        // received shadow when ReceiveShadows; the result × saturate(0.5 − (V·L) × 0.5)^Directivity.
+        Backlight
+    }
+
+    // 4.4: a silhouette from the screen's depth. Samples around the pixel (2 along the normal,
+    // or 4 or 8 around it) at Width × 0.1 world units, scaled up within FixedSizeDistance; the
+    // rim where a sample lies Threshold farther (a smoothstep from Threshold × Sharpness, or a
+    // step when Binary), times how sideways the normal faces unless Binary; faded between
+    // FadeFar and FadeNear (FadeFar 0: no fade).
+    public sealed class AtlasDepthEdge
+    {
+        public int Samples = 8;
+        public float Width = 0.08f;
+        public float Sharpness = 0.5f;
+        public float Threshold = 0.25f;
+        // A hard edge; the mask and fade also step at 0.5.
+        public bool Binary = true;
+        public float FixedSizeDistance = 0.5f;
+        public float FadeNear, FadeFar;
+    }
+
+    public enum AtlasLightSideMode
+    {
+        None,
+        // value × lerp(1, w, Strength)
+        Mask,
+        // value × w × Strength
+        Scale,
+        // saturate(value − (1 − h) − Level)
+        Subtract
+    }
+
+    // 4.4: how the light's direction shapes an angle layer. h = half-Lambert (1 − it when
+    // Invert); w = linstep(Low, High, h), or smoothstep when Smooth. Applied to the angle term
+    // before the step when BeforeStep, else to the result. ShrinkInShadow adds (1 − h) × 3 ×
+    // amount to the term before the step.
+    public sealed class AtlasAngleLightSide
+    {
+        public AtlasLightSideMode Mode = AtlasLightSideMode.None;
+        public float Low, High = 1f;
+        public bool Smooth;
+        public bool Invert;
+        public float Strength = 1f;
+        public float Level;
+        public bool BeforeStep;
+        public float ShrinkInShadow;
     }
 
     public enum AtlasAngleProfile
@@ -104,14 +210,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The colour below rotated (HSV) by frac(power band) turns.
         HueRotation,
         // The colour below × the ramp texture at e.
-        Ramp
+        Ramp,
+        // x = base^power, the base facing abs(N·V) or edge 1 − abs(N·V) (as angles, linearly, when
+        // LinearAngle); a linear step from Low to High (a hard step when equal), or its complement
+        // when Falling.
+        Step
     }
+
+    public enum AtlasAngleBase { Facing, Edge }
 
     public enum AtlasAngleColorSource
     {
         Color,
         // The reflection probe along the reflection, times the colour.
-        Environment
+        Environment,
+        // The reflection probe along the normal, less EnvironmentThreshold (not below 0), times the colour.
+        EnvironmentAlongNormal
     }
 
     // 4.4: colour driven by how the surface faces the viewer (rim). Usually placement Overlay.
@@ -127,6 +241,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float Edge;
         // Ramp profile.
         public AtlasTextureReference Ramp;
+        // Step profile; smoothstep instead of linear when Smooth.
+        public AtlasAngleBase StepBase = AtlasAngleBase.Edge;
+        public bool LinearAngle;
+        public float Low, High = 1f;
+        public bool Falling;
+        public bool Smooth;
+        // Depth source.
+        public readonly AtlasDepthEdge DepthEdge = new AtlasDepthEdge();
+        // Backlight source.
+        public float Directivity = 5f;
+        public float ViewStrength = 1f;
+        public bool ReceiveShadows = true;
+        public readonly AtlasAngleLightSide LightSide = new AtlasAngleLightSide();
         // Acts on highlights and reflections only (iridescence).
         public bool SpecularOnly;
         // The opacity times the metallic value.
@@ -136,18 +263,34 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // For ColorSource Environment.
         public bool EnvironmentRoughnessOverride;
         public float EnvironmentRoughness = 0.5f;
-        // 0–1: multiplies by lerp(1, base, mix).
+        public float EnvironmentThreshold;
+        // 0–1: multiplies by lerp(1, base, mix), and by lerp(1, direct light colour, mix).
         public float BaseColorMix;
+        public float LightColorMix;
         public AtlasLightResponse LightResponse = AtlasLightResponse.IgnoreLight;
+        // The colour's alpha multiplies the opacity.
+        public bool SourceAlphaIsOpacity;
+        // 0–1: how much of the surface's normal map the angle follows (0: the mesh normal).
+        public float SurfaceNormalAmount = 1f;
+        // Each eye uses its own view instead of the view from between them.
+        public bool PerEye;
         public AtlasBlend Blend = AtlasBlend.Add;
         public float Opacity = 1f;
 
         public AtlasAngleLayer() { Placement = AtlasPlacement.Overlay; }
     }
 
+    public enum AtlasSubsurfaceLight
+    {
+        // × (direct + ambient light), times the received shadow when there's a real-time light.
+        DirectAndAmbient,
+        // × lerp(1, direct light colour, LightColorMix) × lerp(1, the light map, ShadowStrength).
+        Direct
+    }
+
     // 4.5: light through thin parts. light = (pow(saturate(view · −(L + N × distortion)), power)
-    // × intensity / π + ambient) × pow(1 − thickness, thicknessPower) × (direct + ambient light)
-    // × colour, times the received shadow when there's a real-time light.
+    // × intensity / π + ambient) × pow(saturate(1 − thickness − ThicknessOffset), thicknessPower)
+    // × the light (Light) × colour.
     public sealed class AtlasSubsurfaceLayer : AtlasLayer
     {
         public readonly AtlasColorInput Color = new AtlasColorInput();
@@ -155,7 +298,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float BaseColorMix;
         // Data; null: thickness 0 (fully translucent).
         public AtlasTextureReference Thickness;
+        public AtlasChannel ThicknessChannel = AtlasChannel.Red;
+        public float ThicknessOffset;
         public float ThicknessPower = 1f;
+        public AtlasSubsurfaceLight Light = AtlasSubsurfaceLight.DirectAndAmbient;
+        public float LightColorMix;
+        public float ShadowStrength = 1f;
         public float Intensity = 1f;
         public float Power = 1f;
         public float Distortion = 1f;
@@ -167,7 +315,407 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public enum AtlasPatternKind
     {
         // AudioLink's waveform drawn as a line.
-        Oscilloscope
+        Oscilloscope,
+        // Sparkling particles, one per cell of a UV grid; see AtlasGlitter.
+        Glitter,
+        // Cells coloured from their edges to their centres; see AtlasVoronoi.
+        Voronoi,
+        // Random quarter-circle arcs on a grid, joined into paths; see AtlasTruchet.
+        Truchet,
+        // Up to four lines running along gradients; see AtlasPath.
+        Path,
+        // Layers of a texture seen below the surface; see AtlasInternalParallax.
+        InternalParallax,
+        // Colour and alpha by the distance to the scene behind the surface; see AtlasDepthEffect.
+        Depth,
+        // A low, mid and high colour by AudioLink's spectrum along a UV axis; see AtlasAudioVolumeColor.
+        AudioVolumeColor,
+        // The surface shown as a screen of pixels; see AtlasVideoScreen.
+        VideoScreen,
+        // AudioLink's spectrum drawn as bars or lines in a placed area; see AtlasAudioSpectrum.
+        AudioSpectrum
+    }
+
+    public enum AtlasScreenType { LCD, TN, CRT, OLED, Gameboy, Projector }
+
+    // 4.6: Poiyomi's video effects, on the base colour c. Grade: c = lerp(c, luminance(c),
+    // −Saturation), then the contrast saturate(lerp(0.5, c, Contrast + 1)) in gamma. p = the pixel
+    // texture tiled Resolution times. LCD: max(c, Backlight / 100), graded, × p × Backlight; TN: as
+    // LCD with the view angle shifting contrast (along the bitangent) and hue (gbr, along the
+    // tangent) before the grade; CRT: graded × p × Backlight × the beam's afterglow (a beam sweeping
+    // the Resolution's pixels RefreshRate times a second; saturate(FadeTime − the time since it
+    // passed, as a fraction of a sweep)); OLED: graded × p × Backlight; Gameboy: the graded
+    // brightness (gamma luminance) through the ramp (when its larger side exceeds 16) or from dark
+    // to light green; Projector: graded, each channel at least × Backlight. The base colour becomes
+    // lerp(base, screen, mask); with Emission, emission += screen × mask. With Pixelate, the base
+    // colour texture is sampled once per screen pixel (cells of Resolution on the pixel texture's UV).
+    public sealed class AtlasVideoScreen
+    {
+        public AtlasScreenType Type = AtlasScreenType.OLED;
+        public float Backlight = 1f;
+        public bool Emission = true;
+        // Tiling and offset are already × Resolution; null: white.
+        public AtlasTextureReference PixelTexture;
+        public UnityEngine.Vector2 Resolution = new UnityEngine.Vector2(1280f, 720f);
+        public bool Pixelate;
+        public float Saturation;
+        public float Contrast;
+        public float RefreshRate = 24f;
+        public float FadeTime = 1.9f;
+        public AtlasTextureReference GameboyRamp;
+    }
+
+    public enum AtlasSpectrumMirror { Off, Mirror, MirrorFlipped }
+    public enum AtlasSpectrumColorSource { Band, Volume, Level }
+
+    // 4.6: Poiyomi's AL spectrum, in a placed area (u band, v volume; or with Circle, the angle and
+    // the radius remapped by CircleDimensions (radius x–y, angle z–w)). Volume and band are stepped
+    // to VolumeSteps and BandSteps (0: smooth) and clipped to their ranges; MirrorBands folds the
+    // bands (1 − abs(2b − 1), or abs(2b − 1)); ShapeClip leaves gaps of 1 − the widths between
+    // steps; Bilateral measures the volume from the middle (abs(v − 0.5) × 2). The level is
+    // tanh(AudioLink's spectrum (filtered) over the first BandRange of its four bands × Volume ×
+    // lerp(BassBoost, TrebleBoost, band)). Covered where the level is above the volume, or, with
+    // LineWidth below 1, within the line width of it; × the colour mask's alpha. The colour is the
+    // ColorChord colour at the band, or lerp(lerp(Low, Mid, saturate(2s)), High, saturate(2s − 1))
+    // with s the band, volume or level, × the colour mask; emission the same with each colour × its
+    // emission (ColorChordEmission). With Screen, the colour goes through that video screen, and the
+    // emission becomes lerp(emission, the screen's, coverage). The colour blends into the base by the
+    // layer's blend × opacity × coverage; alpha = lerp(alpha, alpha × coverage, OverrideAlpha).
+    // Nothing without AudioLink.
+    public sealed class AtlasAudioSpectrum
+    {
+        public AtlasTextureSpace Space = AtlasTextureSpace.UV0;
+        // Placement on the UV; clipped outside unless tiled.
+        public AtlasDecal Placement = new AtlasDecal();
+        public bool Circle;
+        public UnityEngine.Vector4 CircleDimensions = new UnityEngine.Vector4(0f, 1f, 0f, 1f);
+        public float LineWidth = 1f;
+        public bool Bilateral;
+        public AtlasSpectrumMirror MirrorBands = AtlasSpectrumMirror.Off;
+        public float BandRange = 0.5f;
+        public float Volume = 1f;
+        public float BassBoost = 1f;
+        public float TrebleBoost = 1f;
+        public float VolumeSteps;
+        public UnityEngine.Vector2 VolumeClip = new UnityEngine.Vector2(0f, 1f);
+        public float BandSteps;
+        public UnityEngine.Vector2 BandClip = new UnityEngine.Vector2(0f, 1f);
+        public bool ShapeClip;
+        public float ShapeClipVolumeWidth = 0.5f;
+        public float ShapeClipBandWidth = 0.5f;
+        public bool ColorChord;
+        public float ColorChordEmission;
+        public AtlasSpectrumColorSource ColorSource = AtlasSpectrumColorSource.Volume;
+        // Linear.
+        public UnityEngine.Color Low = UnityEngine.Color.blue;
+        public UnityEngine.Color Mid = UnityEngine.Color.green;
+        public UnityEngine.Color High = UnityEngine.Color.red;
+        public float LowEmission, MidEmission, HighEmission;
+        // Colour × rgb, coverage × alpha; null: white.
+        public AtlasTextureReference ColorMask;
+        public float OverrideAlpha;
+        // The video screen the colour goes through; null: none.
+        public AtlasVideoScreen Screen;
+    }
+
+    public enum AtlasInternalParallaxMode
+    {
+        // Each level adds its colour × its height (or the brightest wins, with LevelMax).
+        Basic,
+        // A level shows where its height reaches 1 − its ratio, nearer levels in front.
+        Heightmap
+    }
+
+    // 4.6: Poiyomi's internal parallax. For levels j = n − 1 down to 0, r = j / (n − 1): uv = the
+    // placed UV + (depth × o + Scroll × t + r × PerLevelOffset) / the map's tiling, depth =
+    // lerp(MinDepth, MaxDepth, r), o = −V.xy × 1.3 / (V.z ± 0.3) with V the tangent-space view
+    // (clamped to 0–1 unless Tiled). The tint lerp(MinColor, MaxColor, r) (× the map's colour with
+    // HeightFromAlpha) is hue shifted by frac(r × HuePerLevel) when HuePerLevel isn't 0; the height
+    // is the map's alpha (HeightFromAlpha) or red; the level's colour is tint × pow(lerp(MinFade,
+    // MaxFade, r), 2.2). n = round(lerp(Iterations, MinIterations, saturate((the object's distance
+    // − near) / (far − near)))). The result blends into the base colour by the layer's blend × mask;
+    // emission adds result × the emission amount × mask.
+    public sealed class AtlasInternalParallax
+    {
+        public AtlasInternalParallaxMode Mode = AtlasInternalParallaxMode.Basic;
+        public bool LevelMax;
+        // Colour and height; tiling and offset apply after the placement.
+        public AtlasTextureReference Map;
+        public bool Tiled = true;
+        public bool HeightFromAlpha;
+        // Placed UV per second, and per level from the front to the back.
+        public UnityEngine.Vector2 Scroll;
+        public UnityEngine.Vector2 PerLevelOffset;
+        // Added to the scroll offset (modulated by AudioLink chronotensity).
+        public UnityEngine.Vector2 PanOffset;
+        public int Iterations = 4;
+        public int MinIterations = 1;
+        // Near and far object distance (metres) for the falloff to MinIterations.
+        public UnityEngine.Vector2 IterationDistance = new UnityEngine.Vector2(5f, 15f);
+        public float MinDepth;
+        public float MaxDepth = 0.1f;
+        public float MinFade = 1f;
+        public float MaxFade = 0.1f;
+        // Linear.
+        public UnityEngine.Color MinColor = UnityEngine.Color.white;
+        public UnityEngine.Color MaxColor = UnityEngine.Color.white;
+        public float HuePerLevel;
+    }
+
+    public enum AtlasDepthBlend { Replace, Multiply, Add }
+
+    // 4.6: Poiyomi's depth FX. d = the distance from the surface to the scene point behind it (from
+    // the camera's depth texture). With ColorEnabled, k = lerp(ColorValues.x, ColorValues.y,
+    // saturate((d − ColorRange.x) / (ColorRange.y − ColorRange.x))) × mask and c = the layer's colour
+    // × the texture: replace lerp(base, c, k), multiply base × lerp(1, c, k), add saturate(base + c ×
+    // k); emission += c × k × the emission amount. With AlphaEnabled, alpha ×= lerp(alpha, a, mask),
+    // a = lerp(AlphaValues.x, AlphaValues.y, the same remap over AlphaRange).
+    public sealed class AtlasDepthEffect
+    {
+        public bool ColorEnabled;
+        public AtlasDepthBlend Blend = AtlasDepthBlend.Replace;
+        // Null: white. Sampled at u = v = the depth remap when AlongDepth.
+        public AtlasTextureReference Texture;
+        public bool AlongDepth;
+        public UnityEngine.Vector2 ColorRange = new UnityEngine.Vector2(0f, 1f);
+        public UnityEngine.Vector2 ColorValues = new UnityEngine.Vector2(1f, 0f);
+        public bool AlphaEnabled;
+        public UnityEngine.Vector2 AlphaRange = new UnityEngine.Vector2(0f, 1f);
+        public UnityEngine.Vector2 AlphaValues = new UnityEngine.Vector2(1f, 0f);
+    }
+
+    // 4.6: Poiyomi's AL volume colour. v = AudioLink's spectrum (filtered) at the UV's u or v across
+    // its bins; c = lerp(lerp(Low, Mid, saturate(2v)), High, saturate(2v − 1)), and the emission the
+    // same with each colour × its emission. The colour blends into the base colour by the layer's
+    // blend and opacity; nothing without AudioLink.
+    public sealed class AtlasAudioVolumeColor
+    {
+        public AtlasTextureSpace Space = AtlasTextureSpace.UV0;
+        public bool AlongV;
+        // Linear.
+        public UnityEngine.Color Low = UnityEngine.Color.blue;
+        public UnityEngine.Color Mid = UnityEngine.Color.green;
+        public UnityEngine.Color High = UnityEngine.Color.red;
+        public float LowEmission, MidEmission, HighEmission;
+    }
+
+    public enum AtlasVoronoiType
+    {
+        // The distance to the cell's edge on a 2D grid × 1.55.
+        Cells2D,
+        // sqrt(F2) − sqrt(F1) of 3D cellular noise (the position × 0.7): bright between cells.
+        Difference3D,
+        // The distance to the cell's edge on a 3D grid × 1.8.
+        Cells3D
+    }
+
+    public enum AtlasVoronoiSpace { Object, World, UV }
+
+    // 4.6: Poiyomi's voronoi. p = (the position + Offset) × Scale + Scroll × t (cell units); v =
+    // pow(the type's distance, Power); ramp = smoothstep(Gradient.x + n, Gradient.y + n, v), n the
+    // noise texture's channel × NoiseIntensity. c = lerp(OuterColor, InnerColor, ramp) (the inner
+    // colour a random HSV per cell with RandomCellColor). Base colour = lerp(base, c.rgb, mask ×
+    // c.a) unless EmissionOnly; alpha = lerp(alpha, c.a, mask) with AffectsAlpha; emission +=
+    // c.rgb × lerp(OuterEmission, InnerEmission, ramp) × mask × c.a.
+    public sealed class AtlasVoronoi
+    {
+        public AtlasVoronoiType Type = AtlasVoronoiType.Difference3D;
+        public AtlasVoronoiSpace Space = AtlasVoronoiSpace.Object;
+        public AtlasTextureSpace UV = AtlasTextureSpace.UV0;
+        public float Scale = 5f;
+        public UnityEngine.Vector3 Scroll = new UnityEngine.Vector3(0.5f, 0.5f, 0.5f);
+        // Added to the position (modulated by AudioLink chronotensity).
+        public UnityEngine.Vector3 Offset;
+        public float Power = 0.45454545f;
+        public UnityEngine.Vector2 Gradient = new UnityEngine.Vector2(0f, 0.5f);
+        public AtlasTextureReference Noise;
+        public AtlasChannel NoiseChannel = AtlasChannel.Red;
+        public float NoiseIntensity = 0.1f;
+        // Linear, with alpha.
+        public UnityEngine.Color OuterColor = UnityEngine.Color.black;
+        public UnityEngine.Color InnerColor = UnityEngine.Color.white;
+        public float OuterEmission;
+        public float InnerEmission;
+        public bool RandomCellColor;
+        public UnityEngine.Vector2 SaturationRange = new UnityEngine.Vector2(0.8f, 1f);
+        public UnityEngine.Vector2 BrightnessRange = new UnityEngine.Vector2(0.8f, 1f);
+        public bool EmissionOnly;
+        public bool AffectsAlpha;
+    }
+
+    // 4.6: Poiyomi's truchet. q = the UV × Density + Scroll × t + Offset; each cell (random per
+    // cell) is flipped in u, and holds two quarter-circle arcs of radius 0.5 around opposite corners.
+    // With e = Thickness − abs(distance to the corner − 0.5): coverage = saturate(e / fwidth) ×
+    // smoothstep(0, 1 − EdgeSharpness, e) × the mask. The texture is sampled along the path (u the
+    // angle, alternating per checker cell, v across the line) + TextureOffset. With k = min(coverage,
+    // texture alpha) × opacity: base = lerp(base, blend(base, texture × colour), k); emission +=
+    // texture × colour × k × the emission amount; with OverrideAlpha, alpha × k.
+    public sealed class AtlasTruchet
+    {
+        public AtlasTextureSpace Space = AtlasTextureSpace.UV0;
+        public float Density = 10f;
+        // Grid cells per second.
+        public UnityEngine.Vector2 Scroll;
+        public UnityEngine.Vector2 Offset;
+        public float Thickness = 0.1f;
+        public float EdgeSharpness = 1f;
+        // Null: white.
+        public AtlasTextureReference Texture;
+        public UnityEngine.Vector2 TextureOffset;
+        public bool OverrideAlpha;
+        // Nothing is drawn while AudioLink is missing.
+        public bool HideWithoutAudioLink;
+    }
+
+    public enum AtlasPathSource
+    {
+        // The map's channels are the gradients (merged: their average for all four).
+        Texture,
+        // A UV axis per channel; the map's channels mask them.
+        UV
+    }
+
+    public enum AtlasPathType { Fill, Path, Loop, Dashed, Off }
+
+    // One of a path's four lines, along the gradient g (0 is never drawn).
+    public sealed class AtlasPathChannel
+    {
+        public AtlasPathType Type = AtlasPathType.Loop;
+        // Linear, with alpha.
+        public UnityEngine.Color Color = UnityEngine.Color.white;
+        // UV source: the gradient is v instead of u.
+        public bool AlongV;
+        public float Emission;
+        public float Softness = 1f;
+        // τ = frac((ManualTime ? Time : t × Speed) + Offset), stepped to Segments when above 0.
+        public float Speed = 0.1f;
+        public bool ManualTime;
+        public float Time;
+        public float Offset;
+        public float Segments;
+        // The line's length (the dash's, Dashed), and the gap between dashes.
+        public float Length = 0.03f;
+        public float Gap = 0.1f;
+        // With remapping, g outside the range isn't drawn and g = saturate((g − x) / (y − x)).
+        public UnityEngine.Vector2 Remap = new UnityEngine.Vector2(0f, 1f);
+        // A mask bus channel the line's alpha blends with; null: none.
+        public AtlasMask Mask;
+    }
+
+    // 4.6: Poiyomi's pathing. For each channel, with w = Length / 2 and s = Softness: Fill =
+    // smoothstep(τ(1 + s), τ(1 + s) − s, g) (step(g, τ) when s is 0); Path = saturate(1 − abs(lerp(−w,
+    // 1 + w, τ) − g) / w); Loop = saturate(1 − min(abs(τ − g), 1 − abs(τ − g)) / w); Dashed = dashes of
+    // Length and Gap along g moving with τ, edges softened by s; Path and Loop then smoothstep(0, s).
+    // The channels' colours are composited over each other in order R, G, B, A (alpha = line ×
+    // colour alpha), times the colour map (its alpha too); the layer's blend (replace, add,
+    // multiply) puts the result on the base colour; emission adds each line × colour × Emission ×
+    // the colour map.
+    public sealed class AtlasPath
+    {
+        public AtlasPathSource Source = AtlasPathSource.Texture;
+        public AtlasTextureReference Map;
+        public bool Merged;
+        // Nearest-texel sampling of the map.
+        public bool PointSampling = true;
+        public AtlasTextureSpace Space = AtlasTextureSpace.UV0;
+        public AtlasTextureReference ColorMap;
+        public bool Remapping;
+        public bool OverrideAlpha;
+        public readonly AtlasPathChannel[] Channels = { new AtlasPathChannel(), new AtlasPathChannel(), new AtlasPathChannel(), new AtlasPathChannel() };
+    }
+
+    public enum AtlasGlitterMode
+    {
+        // Each particle's normal turned randomly (wiggling with time) and seen from the view:
+        // min × a + pow(saturate(dot(lerp(n′, V, bias), V)), contrast).
+        Angle,
+        // A random normal per particle swept through time, compared with the camera direction
+        // (the Linear* parameters).
+        Linear,
+        // As Angle, against the light's half vector, × N·L and the light colour.
+        Light
+    }
+
+    public enum AtlasGlitterShape { Circle, Square }
+
+    // 4.6: Poiyomi's glitter. The UV (+ Scroll × t) × Density makes cells; each holds a particle at
+    // a random point (× RandomPosition) with a random seed. Only the nearest particle is drawn,
+    // or, with Overlap, every one that reaches; Layers repeats the grid with other seeds (up to 4).
+    // A particle's coverage a is its shape at Size (radius, or half width), anti-aliased; its
+    // sparkle s comes from the mode; its colour is Color × lerp(1, base, BaseColorMix) × the colour
+    // map × the shape texture (× a random HSV colour) (hue shifted); its brightness is
+    // MaxBrightness. Blend add: emission += colour × brightness × s × texture alpha × mask. Blend
+    // replace: base = lerp(base, s × colour × brightness, s × texture alpha × mask), emission +=
+    // s × colour × max(0, (brightness − 1) × texture alpha) × mask. The mask is the layer's mask ×
+    // the colour alpha (Opacity) × lerp(1, the hide in shadow term) × lerp(1, direct light
+    // luminance, LightScale). Time τ = t / 20 + SparkleOffset.
+    public sealed class AtlasGlitter
+    {
+        public AtlasGlitterMode Mode = AtlasGlitterMode.Angle;
+        public AtlasGlitterShape Shape = AtlasGlitterShape.Circle;
+        public AtlasTextureSpace Space = AtlasTextureSpace.UV0;
+        // UV per second, before the density.
+        public UnityEngine.Vector2 Scroll;
+        // Cells per UV unit.
+        public float Density = 300f;
+        public int Layers = 1;
+        // 0–1: how far a particle sits from its cell's corner toward a random point.
+        public float RandomPosition = 1f;
+        public bool Overlap;
+        // Cell units; with RandomSize a random size in SizeRange.
+        public float Size = 0.3f;
+        public bool RandomSize;
+        public UnityEngine.Vector2 SizeRange = new UnityEngine.Vector2(0.1f, 0.5f);
+        // 0–1: the particle normal follows the normal map (0: the mesh normal).
+        public float NormalAmount;
+        public float MinBrightness;
+        public float MaxBrightness = 3f;
+        // Angle and Light: the turn is sin((τ + r π) × (1 + Speed)) × AngleRange degrees per axis
+        // (fixed random angles when Speed + SparkleOffset is 0).
+        public float Speed = 10f;
+        public float AngleRange = 90f;
+        public float Bias = 0.8f;
+        public float Contrast = 300f;
+        // Square: widens the anti-aliasing by distance² × amount.
+        public float JaggyFix;
+        // Distant cells merge so the pattern doesn't shimmer.
+        public bool DistanceLOD = true;
+        // Linear: n = normalize(abs(frac(r × 14.274 + τ × Speed) × 2 − 1) × 2 − 1); d = n · camera
+        // (camera forward lerped to the view by LinearVRParallax); g = saturate(1 − ((abs(frac(d × k + k)
+        // − 0.5) × 4 − 1) × c + c)), k = LinearSensitivity, c = LinearContrast; g = pow(g,
+        // LinearPostContrast) × saturate(N·H × LinearAngleLimit + 1 − LinearAngleLimit), H the half
+        // vector of the camera and the light × LinearLightDirection; s = max(MinBrightness, g) × a.
+        public float LinearSensitivity = 0.25f;
+        public float LinearContrast = 50f;
+        public float LinearPostContrast = 1f;
+        public float LinearAngleLimit;
+        public float LinearLightDirection;
+        public float LinearVRParallax;
+        // Added to τ by modulators (AudioLink chronotensity), for the sparkle and the rotation.
+        public float SparkleOffset;
+        public float RotationOffset;
+        // The particle's shape (sampled over its square, clamped); null: white. Frames are a sprite
+        // sheet whose frame is random per particle, or by time (with a random start).
+        public AtlasTextureReference Texture;
+        public bool RandomFrame = true;
+        public bool RandomStartFrame;
+        public AtlasTextureReference ColorMap;
+        public float BaseColorMix;
+        // × an HSV colour of random hue, saturation in SaturationRange, value in BrightnessRange.
+        public bool RandomColors;
+        public UnityEngine.Vector2 SaturationRange = new UnityEngine.Vector2(0.8f, 1f);
+        public UnityEngine.Vector2 BrightnessRange = new UnityEngine.Vector2(0.8f, 1f);
+        // A hue adjustment on the layer adds the particle's random hue.
+        public bool HueRandomOffset;
+        // The particle (its shape texture) turns by (τ′ × speed) turns, τ′ = t / 20 + RotationOffset,
+        // speed = RotationSpeed + a random speed in RandomRotationSpeed (turns per 20 seconds),
+        // plus a random turn with RandomRotation, the direction random with RandomDirection.
+        public bool RandomRotation;
+        public bool RandomDirection;
+        public float RotationSpeed;
+        public UnityEngine.Vector2 RandomRotationSpeed;
+        // 0–1: the mask × lerp(1, the direct light's luminance, amount).
+        public float LightScale;
     }
 
     // 4.6: a generated pattern. Usually placement Overlay, added.
@@ -178,6 +726,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public UnityEngine.Color Color = UnityEngine.Color.white;
         public float Opacity = 1f;
         public AtlasBlend Blend = AtlasBlend.Add;
+        // The kind's parameters; null for other kinds.
+        public AtlasGlitter Glitter;
+        public AtlasVoronoi Voronoi;
+        public AtlasTruchet Truchet;
+        public AtlasPath Path;
+        public AtlasInternalParallax InternalParallax;
+        public AtlasDepthEffect Depth;
+        public AtlasAudioVolumeColor AudioVolumeColor;
+        public AtlasVideoScreen VideoScreen;
+        public AtlasAudioSpectrum AudioSpectrum;
         // Oscilloscope: saturate(1 − 50 × abs(wave(u′) − (2v′ − 1))), u′ v′ the UV scaled, offset and
         // rotated (degrees), inside the u and v ranges.
         public UnityEngine.Vector2 Scale = UnityEngine.Vector2.one;
@@ -189,19 +747,127 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasPatternLayer() { Placement = AtlasPlacement.Overlay; }
     }
 
-    // 4.2: a second appearance revealed where a threshold is below the amount, with a glowing
-    // edge band just above it.
+    public enum AtlasTransitionSource
+    {
+        // The threshold texture's channel.
+        Texture,
+        // Along a line from Start to End: saturate(dot(p − start, direction) / length), p the
+        // object or world position, the vertex colour, or a UV (z 0).
+        PointToPoint,
+        // saturate(distance(object position, Centre) / Radius).
+        Sphere,
+        // From the facing, the direction or the light: abs(N·V), N·dir × 0.5 + 0.5, or N·L × 0.5 + 0.5,
+        // the normal map by PixelNormalAmount; as an angle when Linear; 1 − it unless inverted.
+        CentreOut
+    }
+
+    public enum AtlasTransitionSpace { Object, World, VertexColor, UV }
+    public enum AtlasCentreOutMode { View, Direction, Light }
+    public enum AtlasWaveBounds { Edge, Centre, Loop }
+
+    // 4.2: a second appearance revealed where the threshold g is below the amount a. Dissolved
+    // d = 1 − smoothstep(a′ − s, a′ + s, g), s = Softness / 2, a′ = lerp(−pad, 1 + pad, a) when
+    // Padded (pad = 2s + edge width + detail strength / 2, so 0 and 1 are fully in and out).
+    // An edge band of EdgeWidth past the boundary on the undissolved side (the dissolved side
+    // when EdgeFlip) shows the edge colour. The mask scales the amount.
     public sealed class AtlasTransitionLayer : AtlasLayer
     {
+        public AtlasTransitionSource Source = AtlasTransitionSource.Texture;
         // Null: 1 everywhere.
         public AtlasTextureReference Threshold;
         public AtlasChannel ThresholdChannel = AtlasChannel.Red;
+        public bool InvertThreshold;
+        // Point to point.
+        public AtlasTransitionSpace Space = AtlasTransitionSpace.Object;
+        public AtlasTextureSpace SpaceUV = AtlasTextureSpace.UV0;
+        public UnityEngine.Vector3 Start = new UnityEngine.Vector3(0f, -1f, 0f), End = new UnityEngine.Vector3(0f, 1f, 0f);
+        // Sphere.
+        public UnityEngine.Vector3 Centre;
+        public float Radius = 1.5f;
+        // Centre out.
+        public AtlasCentreOutMode CentreOutMode = AtlasCentreOutMode.View;
+        public UnityEngine.Vector3 Direction = UnityEngine.Vector3.forward;
+        public float PixelNormalAmount;
+        public bool Linear = true;
         public float Amount;
+        public float Softness;
+        public bool Padded;
+        // Shifts the boundary by (noise − 0.5) × strength (only near the edge by EdgeOnly).
+        public AtlasTextureReference DetailNoise;
+        public bool InvertDetailNoise;
+        public float DetailStrength;
+        public float DetailEdgeOnly;
+        // A band of WaveWidth around the amount instead of everything below it.
+        public bool Wave;
+        public float WaveWidth = 0.1f;
+        public AtlasWaveBounds WaveBounds = AtlasWaveBounds.Edge;
+        // The revealed colour replaces the surface (and its alpha) by d, plus emission; or, with
+        // AlphaOnly, the alpha × lerp(x, y, smoothstep(z, w, d)).
         public readonly AtlasColorInput Revealed = new AtlasColorInput();
-        // 0 < threshold − amount ≤ width glows with the edge colour, added after lighting.
+        public float RevealedEmission;
+        public bool AlphaOnly;
+        public UnityEngine.Vector4 AlphaCurve = new UnityEngine.Vector4(1f, 0f, 0f, 1f);
+        // 0 < threshold − amount ≤ width glows with the edge colour, added after lighting; or with
+        // EdgeReplacesColor, the colour becomes it, with EdgeEmission × it added as emission.
         public float EdgeWidth;
         // Linear.
         public UnityEngine.Color EdgeColor = UnityEngine.Color.white;
+        public bool EdgeFlip;
+        public bool EdgeReplacesColor;
+        public float EdgeEmission;
+    }
+
+    public enum AtlasHighlightKind
+    {
+        // Hair strands (Kajiya-Kay), per lobe: smoothstep(−1, 0, T′·H) × sin(T′, H)^Exponent ×
+        // Strength, T′ = normalize(T + (Offset + OffsetMapStrength × map alpha) × N), T the tangent
+        // or bitangent; stylised: linstep(Edge − Blur/2, Edge + Blur/2) of that. Lobes add. Colour
+        // × lerp(luminance(light), light, LightColorMix); replace blends by saturate(max(colour)).
+        Strand,
+        // A toon highlight on a = N·H × 0.5 + 0.5, per lobe: realistic a^(2^(11 − 10 × size)), or
+        // smooth-edged at 1 − size^5 with the feather; × strength, summed and saturated. Then
+        // min(it × mask × lerp(ramp, 1, IgnoreShadows), occlusion, lerp(saturate(N·L), 1,
+        // ShowOnBack), lerp(light map, 1, IgnoreShadows)) × Strength; colour × lerp(1, light, LightColorMix).
+        Toon
+    }
+
+    public sealed class AtlasHighlightLobe
+    {
+        public float Strength = 1f;
+        // Strand.
+        public float Exponent = 100f;
+        public float Offset, OffsetMapStrength;
+        public bool Bitangent;
+        public bool Stylised;
+        public float Edge = 0.5f, Blur;
+        // Linear.
+        public UnityEngine.Color Tint = UnityEngine.Color.white;
+        // Toon.
+        public float Size = 0.2f, Feather;
+    }
+
+    // 4.8: a highlight drawn on its own, besides the surface response's (decided in refactor step 8b-7).
+    public sealed class AtlasHighlightLayer : AtlasLayer
+    {
+        public AtlasHighlightKind Kind = AtlasHighlightKind.Strand;
+        // Strand: the map's RGB colours it and its alpha offsets the strands.
+        public readonly AtlasColorInput Color = new AtlasColorInput();
+        public readonly System.Collections.Generic.List<AtlasHighlightLobe> Lobes = new System.Collections.Generic.List<AtlasHighlightLobe>();
+        // Toon: realistic lobes instead of toon ones.
+        public bool Realistic;
+        public float Strength = 1f;
+        public float LightColorMix = 1f;
+        // 0–1: multiplies by lerp(1, base, mix).
+        public float BaseColorMix;
+        public float SurfaceNormalAmount = 1f;
+        // Strand: × lerp(1, N·L, amount).
+        public float FadeByLightDirection;
+        // Toon.
+        public bool IgnoreShadows, IgnoreReceivedShadows, ShowOnBack;
+        public AtlasBlend Blend = AtlasBlend.Add;
+        public float Opacity = 1f;
+
+        public AtlasHighlightLayer() { Placement = AtlasPlacement.Overlay; }
     }
 
     // 4.7: the screen behind, offset by (IOR − 1) × the view-space normal / (depth + 1) ×

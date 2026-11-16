@@ -12,6 +12,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public bool Enabled;
         public AtlasFurMethod Method = AtlasFurMethod.Strands;
+        // Cutout (the default) or alpha blended without depth writes.
+        public bool Transparent;
+        public bool AlphaToCoverage = true;
         // Colour of the fur itself; white when the fur simply shows the surface colour.
         public readonly AtlasColorInput Color = new AtlasColorInput();
         // Whether the fur colour texture also tints the skin underneath.
@@ -25,7 +28,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // camera); both 0 = always full.
         public float LevelOfDetailStart;
         public float LevelOfDetailEnd;
-        // Strand length in metres, scaled by LengthMask where present.
+        // Strand length in metres, scaled by LengthMask where present (its strength lerps from 1).
         public float Length = 0.02f;
         public AtlasMask LengthMask;
         // Default strand direction in tangent space (z = along the normal).
@@ -50,7 +53,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float RootWidth;
         // 0–1: strand thickness relative to the pattern.
         public float Width = 0.15f;
-        public readonly AtlasFurWind Wind = new AtlasFurWind();
+        public readonly AtlasWind Wind = new AtlasWind();
         // Rim on the strands only, times the direct light colour. Linear.
         public Color RimColor = UnityEngine.Color.black;
         public float RimPower = 3f;
@@ -60,16 +63,4 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly AtlasPassSettings Pass = new AtlasPassSettings { Cull = AtlasCull.Off };
     }
 
-    public sealed class AtlasFurWind
-    {
-        public bool Enabled;
-        public Vector3 PrimaryDirection = new Vector3(1f, 0f, 0f);
-        public float PrimaryAmplitude = 0.2f;
-        public float PrimarySpeed = 1f;
-        public float PrimaryFrequency = 1f;
-        public Vector3 DetailDirection = new Vector3(0f, 0f, 1f);
-        public float DetailAmplitude = 0.1f;
-        public float DetailSpeed = 2.5f;
-        public float DetailFrequency = 5f;
-    }
 }

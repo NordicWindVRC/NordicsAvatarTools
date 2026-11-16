@@ -516,7 +516,9 @@ namespace NordicWind.AdvancedAtlaser.Tests
             material.SetTexture("_NearClipMask", textureA);
             material.SetInt("_Hide", 1);
             var render = Parse().Render;
-            Assert.AreEqual(AtlasMirrorVisibility.NotInMirror, render.MirrorVisibility);
+            Assert.IsFalse(render.Visibility.MirrorVR);
+            Assert.IsFalse(render.Visibility.MirrorDesktop);
+            Assert.IsTrue(render.Visibility.Normal);
             Assert.IsTrue(render.NearClip.Enabled);
             Assert.AreEqual(0.2f, render.NearClip.Distance, 1e-5f);
             Assert.AreSame(textureA, render.NearClip.Mask.Map.Texture);
@@ -578,7 +580,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var d = Parse();
             Assert.IsTrue(d.Surface.Normal.FlatShading);
             Assert.IsTrue(d.Surface.Response.SpecularFromMeshNormal);
-            Assert.IsTrue(d.Lighting.FixedLightDirection);
+            Assert.AreEqual(AtlasLightDirectionModel.Fixed, d.Lighting.Direction);
             Assert.AreEqual(Vector3.right, d.Lighting.LightDirection);
             Assert.IsFalse(d.Issues.Exists(i => i.IsWarning));
         }

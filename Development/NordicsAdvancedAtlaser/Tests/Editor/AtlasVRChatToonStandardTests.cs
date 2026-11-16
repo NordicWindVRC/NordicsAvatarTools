@@ -43,9 +43,11 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var d = Parse();
             Assert.AreEqual(AtlasLightingFamily.RampToon, d.Lighting.Family);
             Assert.AreEqual(AtlasAmbientModel.Average, d.Lighting.Ambient);
-            Assert.IsFalse(d.Lighting.ReceiveShadows);
+            Assert.AreEqual(0f, d.Lighting.ReceiveShadows);
             Assert.IsTrue(d.Lighting.LimitBrightness);
-            Assert.AreEqual(0.5f, d.Lighting.Ramp.ShadowColorFromBase, 1e-5f);
+            Assert.AreEqual(0.5f, d.Lighting.Ramp.ShadowTint.Color.r, 1e-5f);
+            Assert.AreEqual(1f, d.Lighting.Ramp.ShadowColorFromBase);
+            Assert.AreEqual(1f, d.Lighting.Ramp.UntintedAmbient);
             Assert.AreEqual(AtlasAlphaSource.None, d.Surface.Alpha.Source);
             Assert.AreEqual(AtlasCull.Back, d.Render.Pass.Cull);
             Assert.IsTrue(d.Render.TwoSidedLighting);

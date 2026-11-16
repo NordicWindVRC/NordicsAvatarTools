@@ -655,6 +655,358 @@ properties and removes 25. Pro 11 adds another 159 on top of Toon 11, and remove
   backlight 2, contacts and so on) fall under the existing *advanced effects not fully
   normalised* report, like the rest of Poiyomi's unmapped features.
 
+## Rebuilt parser
+
+`AtlasPoiyomiParser` (split over `AtlasPoiyomi*.cs` by inspector section), `AtlasPoiyomiToon10Parser`
+for Toon 10. Section toggles are read from their properties, which Thry's locking keeps.
+
+**Part 8a-1** (refactor step 8):
+- **Textures:** the UV choice (UV0–3, panosphere, world and local position, polar, matcap,
+  screen; *distorted* is reported until 8c), tiling and offset, panning (UV per 20 seconds, so ×
+  0.05 per second), stochastic sampling, and the UV channel's *UV Settings* (tiling, offset, pan)
+  folded in; a channel's rotation is reported.
+- **Main:** colour (linear) × texture, pixel mode as *pixel* sampling, *ignore alpha* as the
+  colour's constant alpha, vertex colouring (colour and alpha amounts, *Linear Colors* as sRGB
+  data). Theme colours are reported until 8c.
+- **Alpha:** the alpha map (replace, multiply, add, subtract; one channel; its mix and levels
+  reported), alpha mod as the offset, distance, fresnel and angular fades as modifiers, AudioLink
+  alpha as an *add* modifier driven by an audio modulator, sharpened alpha-to-coverage, dithering,
+  force opaque. Global masks are reported until 8c.
+- **Normals:** the main map; the second map and the detail normal as normal layers (the detail
+  mask's green); the bent normal; normal correction.
+- **Rendering:** the preset, by its blend factors (soft additive `OneMinusDstColor One`,
+  multiplicative `DstColor Zero`, ×2 `DstColor SrcColor`); changed factors become *custom*;
+  TransClipping is fade with *cutoff in transparent*; culling, depth test, write, clip and
+  offset, colour mask, stencil (front and back stencils reported), fog, flip back-face normals
+  as two-sided lighting, reduced clip distance.
+
+**Part 8a-2:** the lighting type, on the one ramp toon formula (catalogue 3.2):
+- **TextureRamp:** the ramp texture, ramp offset, shadow strength as the ramp strength, shadow
+  tint; *ignore indirect shadow colour* splits the shadow side between ramp-scaled, occluded
+  direct light and the ambient light. Several ramp rows picked by UV are reported.
+- **Multilayer Math:** up to three bands (colour, colour texture with its intensity, alpha,
+  border, blur, normal blend, receive shadow; a band without alpha is left out), *non linear
+  lightmap* as smooth edges, the border colour (times its alpha) and range, base colour blend,
+  environment strength, shadow strength and its mask (*strength* type; the *flat* type, the blur
+  map and the border AO map are reported).
+- **Flat** as the flat family; **Realistic** as Lambert with shadow strength and tint (8a-4).
+
+**Part 8a-4:** the other lighting types:
+- **SDF:** the SDF face term (threshold style) with its texture, forward and left directions and
+  blur; the shadow side as Multilayer Math's.
+- **Wrapped:** the wrapped term (wrap, normalization), the gradient start and end as ramp keys,
+  shadow tint, lit side colour as the lit tint.
+- **ShadeMap:** two bands (1st and 2nd shade colours and maps, *base as 1st* as colour from
+  base, *1st as 2nd*), the steps and feathers as borders and blurs, *replace* as bands replacing
+  the base. A shade map's alpha as a shadow mask is reported.
+- **Skin:** physically based with pre-integrated skin diffuse (LUT, scale, thickness map with
+  invert and power, absorption, scattering stability, diffuse normal softness, shadow tint,
+  *ignore indirect* as the constant shadow, shadow strength).
+- **Cloth:** physically based with Disney diffuse; the cloth map feeds metallic (R, squared:
+  read linearly with a map, noted), reflectance (B) and smoothness (A, with invert); its green
+  is the sheen mask; *clothmask lerp* as blend.
+- **Light Data's SDF light map** as the SDF face term (blended style, vertical blend, LOD as
+  softness).
+
+**Part 8a-3:** Light Data (catalogue 3.4):
+- **Light colour mode:** Poi Custom as *merged probes* (with *Indirect Uses Normals* as the
+  directional amount), Standard as *separate*, UTS2 as *floored* (with its unlit intensity),
+  OpenLit as *split probes*.
+- **Light direction mode:** Poi Custom as *probe-blended*, forced local and world as *fixed*,
+  UTS2 as *view fallback*, OpenLit as *split probes*, view direction with its yaw and pitch.
+- **Light map mode** as the shading term: Poi Custom as *relative brightness* (half-Lambert under
+  a forced direction, as the shader does), normalized and saturated N·L, casted shadows only.
+  Multilayer Math keeps its own per-band terms. The SDF light map maps in 8a-4.
+- **AO maps** as occlusion, **shadow maps** as the term mask, **shadow masks** as the ramp
+  strength mask: the channel in use with its strength; several channels in use, global masks and
+  different additive detail strengths are reported.
+- Received casted shadows, softness, clean shadows, grayscale lighting, limit brightness (with
+  its ceiling and luminance limit), min brightness as *minimum light*, forced light colour.
+- **Additional lights:** pixel and vertex lights on or off, their lighting type and gradient,
+  limit, received shadows, grayscale, passthrough, attenuation curve, ignored directional
+  lights, mirror vertex lights.
+- **Light volumes:** on, specular strength, normal bias.
+
+**Part 8b-1:** the surface response:
+- **Reflections & Specular** off means no highlights or reflections (Cloth keeps its own; both
+  on is reported). On: metallic and smoothness from the packed map's chosen channels (or white)
+  times their sliders, with their inverts; the reflection and specular masks with their
+  visibilities (an inverted mask below full strength is noted); tints; fresnel strength;
+  exposure occlusion; the fallback cubemap (forced as the source, lit or not); ignore casted
+  shadows; 2nd specular as the second lobe; pixel normal mix (0 the mesh normal, between is
+  reported); GSAA; GGX anisotropics (amount, map channel or vertex colour, reflection stretch,
+  roughness anisotropy, direction map). Split mask sampling and global masks are reported; TPS
+  is unsupported.
+- **Clear Coat:** the coat with its packed map (mask, smoothness, reflection and specular masks),
+  tints, fresnel, exposure occlusion, fallback, ignore casted shadows, pixel normal mix, GSAA.
+- **LTCGI:** tints, multipliers, its own metallic and smoothness (or the surface's), exposure
+  occlusion.
+
+**Part 8b-2:** surface layers (layers' hue shifts and colour adjusts are reported until 8b-5):
+- **Detail texture:** a base colour layer, multiply ×2, opacity = intensity, tint × brightness,
+  the detail mask's red; without a texture its grey (neutral).
+- **Back face:** a layer on back faces: colour × texture, replacing the base colour by mask ×
+  alpha, or replacing the alpha; emission strength. Its detail intensity and emission
+  multiplier are reported.
+- **Decals (4):** placed layers: position and side offsets folded into the centre and scale,
+  the aspect ratio fitted from the texture, rotation and speed (× 2 per second), tiled, symmetry,
+  mirrored UV mode, depth; colour × texture by alpha, blend type, alpha × alpha intensity as the
+  opacity, the shared RGBA mask's channel, face mask, emission strength replacing the emission
+  under it, show on outlines. A decal without a texture, the alpha blend mode, video, chromatic
+  aberration and global masks are reported.
+- **Emissions (4):** emission layers: colour × map by alpha, strength, mask with channel and
+  invert, *use base colors* (source times base colour), *override base color*. Fluorescence,
+  centre out, light based, blinking, scrolling and AudioLink are reported until 8c.
+
+**Part 8b-3:** RGBA Color Masking. Each enabled channel, masked by its chosen channel of the
+mask texture or of the vertex colour:
+- a colour layer: colour × texture (with the channel's scale and offset merged in), the blend
+  type, by alpha plus *alpha add*, and its emission strength;
+- a normal layer when it has a normal map and intensity: whiteout over the base normal, or
+  replacing it when no blend source is chosen; blending with other channels' normals is
+  reported;
+- metallic and smoothness layers (with Reflections & Specular on, where the shared maps are
+  set): the channel's value replaces the surface's, with its inverts; custom sampling is
+  reported.
+
+Global masks are reported.
+
+**Part 8b-4:** lookup layers (hue shifts reported until 8b-7):
+- **Matcaps (4):** one layer per blend weight in use, in Poiyomi's order (replace, multiply,
+  add, screen, unlit add after lighting, mixed), sharing the source and mask; a matcap that only
+  glows keeps one layer for its emission. The UV modes as projections (UTS style as view
+  corrected, top pinch as view stabilised, double sided as reflection planar, gradient, light
+  direction as light half vector); border × 2 as the tiling, rotation, panning, UV blend, mirror
+  flip, VR parallax (centre eye when below half; between is reported), normal strength, base and
+  light colour mix, colour × intensity by alpha, reflection fallback, show on outlines, the mask
+  with channel and invert, hide in shadow, circle mask, smoothness as blur, the custom normal
+  map. The smoothness mask, alpha options and global masks are reported; TPS is unsupported.
+- **CubeMap:** a lookup layer: skybox, reflection, world and local normal; replace, multiply or
+  add by alpha × blend amount; colour × brightness; emission; smoothness as blur; normal to use;
+  mask; hide in shadow; rotation and its panning (one axis exact, more than one reported for
+  the order). Without a cubemap, grey at half alpha.
+
+**Part 8b-5:** Rim Lighting 0 and 1 as angle layers with the step profile:
+- **Poiyomi style:** `1 − linstep(saturate(w − blur), w, facing^power)`, `w = lerp(−0.05, 1,
+  width)` (none at `w ≤ 0`); invert as the edge base, linear; colour × brightness × texture by
+  alpha, base colour mix, the five blend modes with blend alpha, emission, normal strength, the
+  mask with channel and invert; the shadow-map light direction mask as hide in shadow.
+- **UTS2 style:** `linstep(inside, 1, edge^(2^(3 − 3 × power)))`, a hard step with feather off;
+  added; light colour mix; its own mask and channel.
+- **lilToon style:** `edge(edge^fresnel power, border, blur)` after lighting; replace, add,
+  screen, multiply; main colour blend; lighting as scale by light; shadow mask as hide in
+  shadow; backface mask as front faces only; VR parallax as per eye; *mask only* makes the
+  texture a mask.
+- Reported: the bias map, the UTS2 mask level, partial lighting or parallax, apply to alpha,
+  global masks; hue shifts until 8b-8. (The light-direction options map in 8b-6.)
+
+**Part 8b-6:**
+- **Rims' light direction:** Poiyomi's custom falloff as a smooth light-side mask (inverted,
+  strength), shrink in shadow; UTS2's direction mask as a subtracting light side, its
+  antipodean rim as a second layer on the dark side (own power, feather, colour, light colour
+  mix); lilToon's direction split as a light-side mask before the step and a second layer for
+  the indirect rim (its colour, border, blur, range). An inverted shadow-map falloff is reported.
+- **Depth Rim Lighting:** angle layers with the depth source, one per blend weight (unlit add
+  after lighting, replace, add, screen, multiply): samples, width, sharpness, threshold, binary,
+  fixed size threshold, distance fade, normal to use, the mask, colour × brightness, base and
+  light colour mix, emission, *ignore lighting* as after lighting, the N·L light direction as a
+  light-side mask, the ramped light map as hide in shadow. The screen-space light direction and
+  the attenuation mix are reported.
+- **Environmental Rim:** a falling smooth step on facing, the probe along the normal (blur as
+  roughness, the brightness threshold) × base, × intensity, after lighting.
+- **Backlight:** the backlight source (directivity, view strength, received shadow), border and
+  blur as the step, colour × texture × the light's colour, main colour power, normal strength,
+  the backface mask; global masks reported.
+- **Subsurface Scattering:** the subsurface layer with the direct light: colour × the map's RGB,
+  the map's chosen thickness channel with its mod as the offset, strength (× π, as the layer
+  divides by π), spread as the power, distortion, light colour mix, shadow strength, base colour
+  mix.
+
+**Part 8b-7:** highlight layers (catalogue 4.8):
+- **Anisotropics:** strand highlights, one layer for *add* (after lighting) and one for
+  *replace*: the colour and offset map, two lobes (power × 1000 as the exponent, strength,
+  offset, map offset strength, direction, tint, stylised edge and blur), hide in shadow, fade by
+  light direction, light and base colour mix, normal blend.
+- **Stylized Reflections, UnityChan mode:** a toon highlight: the specular map × tint, the mask
+  with channel and invert, toon or realistic, the blend mode (add after lighting), strength,
+  light colour, normal strength, two layers (size, feather, strength), show on back, ignore
+  shadow, ignore cast shadows. The mask level is reported.
+- **lilToon mode** is reported.
+
+**Part 8b-8:** colour adjustments (catalogue 1.10):
+- **Color Adjust** on the base colour, in the shader's order: hue (select or shift, Oklab or
+  HSV, the mask's red), the gradation map (its mask channel, strength), gamma as power (alpha),
+  saturation (blue), chromatize (red), tint as a hue tint (colour, texture, its alpha), brightness
+  (green), clamp. Hue offset by the mask (*Hue Replace* off) and global masks are reported.
+- **Post Processing** on the final colour, by its mask: hue, tint, RGB, saturation, HDR boost as
+  sRGB decode, contrast, brightness, lightness, posterization. The mask applies per operation
+  (noted); the hue offset by mask is reported.
+- **Layers' own:** hue shifts on back face, decals, emissions, matcaps (every weight's layer),
+  cubemap and rims (both layers of a dark-side rim); a decal's colour adjust (gamma, saturation,
+  chromatize, brightness, clamped); an emission's saturation; the cubemap's brightness (added),
+  contrast and saturation (its own luminance weights). A decal's hue by view angle is reported.
+- Hue speeds and AudioLink hue motion are reported until 8c.
+
+**Part 8c-1:** Global Mask and Global Themes (catalogue 1.5, 1.6):
+- **Mask bus:** the four textures (one channel each, 1R … 4A), vertex colours (with their
+  blends and linear colours), back face, mirror, camera and distance modifiers, and the options
+  (sliders as offsets, min max sliders as remaps, force on and off). Split sampling, generic
+  mirror detection (noted) and writing the shading into a mask are reported.
+- **Consumers:** every global mask selector so far reads its channel with its blend: alpha and
+  its fades, the second and detail normals, detail texture, RGBA channels and their normals,
+  decals, emissions, matcaps, cubemap, rims, backlight, subsurface, anisotropics, colour adjust,
+  light data's AO, detail shadow and shadow masks, cloth, reflections and specular, clear coat.
+- **Producers:** decals, rims and the backlight write their coverage (*apply to global mask*).
+- **Theme colours 0–3** are resolved to colours as the shader computes them (HDR split, hue
+  shift, the old or new saturation, brightness as exposure); ColorChord and AudioLink themes and
+  theme hue speeds are reported until 8c-2.
+
+**Part 8c-2:** time and light modulators (catalogue 1.9):
+- **Hue speeds** (colour adjust, post processing, every layer's hue shift) as a saw added to the
+  hue amount, at the speed ÷ 20 turns per second (reverse saw when negative).
+- **Emissions:** light based as a light level modulator on the emission strength (min and max
+  light as a linear range, world as the direct light, mesh with the shading); scrolling as a
+  sweep (direction, width, velocity, interval, offset, vertex colour as position); blinking as
+  a sine (smooth) or pulse (flashing, with its duty) at velocity ÷ 2π, with its offset. The
+  scrolling curve, fluorescence and centre out are reported.
+- **BlackLight Masking:** blacklight steps on the mask bus (key, range, blend).
+- Theme hue speeds are reported (the theme's colour at time 0 is used).
+
+**Part 8c-3:** AudioLink as audio modulators, each idle without AudioLink in the world and only
+with the section (and its animation toggle) on; the section's per-band smoothing:
+- **Emissions:** strength add, then multipliers, the centre-out add as the band's history along
+  the view angle (duration × 128 samples, size as the threshold; reversed is reported), the
+  colour override (blend to colour, the ramp as the curve).
+- **Decals:** scale x and y, rotation, alpha (added to the opacity), emission, the chrono
+  rotation (speed × 360°), the colour override. Side offsets by AudioLink and the ColorChord
+  strip are reported.
+- **Matcaps:** alpha add, emission add, intensity add (as × (1 + add ÷ intensity)), the colour
+  override, on every weight's layer; the chrono pan is reported.
+- **Rims (Poiyomi style):** width add (both step thresholds), emission add, brightness add (as ×
+  (1 + add ÷ brightness)), the colour override.
+- **Alpha** and the **colour adjust hue** (chronotensity × motion speed).
+- **ColorChord and AudioLink theme colours** go on the colour input (base colour, decals,
+  emissions, back face, RGBA channels, rims, the toon highlight); elsewhere they're reported.
+- Band overrides are reported.
+
+**Part 8c-4:**
+- **Proximity Color:** a tint of the final colour (override colour) and of the emission
+  (override emission) by the min colour, blended to the max colour by a camera distance
+  modulator (pixel or object position, min and max distance, the transition curve, solid as a
+  step). The edge colour and the forced back face colour are reported.
+- **Emission fluorescence** as a fluorescence adjustment on the emission layer.
+- **Centre-out emission:** the emission map in the facing gradient space (linear as its linear
+  form), panning at the flow speed.
+
+**Part 8d-1:** Outlines (catalogue 5.1): the mode (basic, rim light as light facing,
+directional, drop shadow) with its direction; size ÷ 100, local or world; the size mask and
+vertex colour mask; vertex colour normals; fixed size over distance; clip at zero width; colour
+× texture (a theme colour, AudioLink themes), main texture blend (UTS style squared), rim light
+blend as light colour mix; lit with its shadow strength; emission; the highlight; override base
+alpha; distance alpha as a fade; cull, depth write and test, blend factors, stencil; AudioLink
+size, emission, highlight emission and colour overrides. The colour adjust, the depth offset,
+blend operations and face stencils are reported.
+
+**Part 8d-2:** UVs:
+- **Distortion UV** (texture mode) is one shared distortion for every texture choosing
+  *Distorted UV*, on the distorted channel: the two flow textures (× 2 − 1, each × its
+  strength, averaged), a missing one as a constant shift, the mask. The other modes (Gerstner,
+  simplex, voronoi, curl, FBM) and its AudioLink are reported.
+- **UV Settings rotation** (angle and rotate speed) folds into each texture's rotation and spin;
+  with the channel's own tiling or offset it's noted as approximate.
+- **Stochastic Sampling's mode:** None turns it off; Hextile is reported.
+- **Parallax Heightmapping** as multi-step parallax (heightmap, strength, offset, max steps;
+  noted); another UV channel and the mask are reported.
+- Polar, panosphere and local or world UV settings other than the defaults, and shifted back
+  face UVs, are reported.
+
+**Part 8d-3:** Dissolve as a transition layer (catalogue 4.2): the type (basic gradient
+texture, point to point, spherical, centre out) with its settings, the dissolve alpha as the
+amount (padded), softness; the gradient noise (texture mode), wave mode, alpha only with its
+ramp, the dissolved colour and texture with emission; the edge (width, colour, flip, emission);
+the mask (red or a vertex colour channel, invert, global mask) scaling the amount; the dissolved
+and undissolved outputs into the mask bus; hue shift; continuous dissolve as a time modulator
+on the amount; AudioLink alpha, detail, edge width, edge emission and colour override. 3D dot
+noise, the edge gradient and hue, UV tile dissolve, vertex height and the AudioLink chrono are
+reported.
+
+**Part 8d-4:** Flipbooks 0 and 1 as surface layers like decals: the texture array with the
+decal placement (position, scale fitted to the aspect, side offsets, rotation and speed, tiling,
+symmetry, mirrored UVs) and frames (FPS, frame offset, start and end frames, manual frame
+wrapped by the range, crossfade); colour and alpha, colour as mask, intensity as alpha, blend,
+emission, mask with global mask, hue shift; AudioLink scale, alpha, emission, frame, chrono and
+colour override. The colour and alpha override is reported. Mirror/Camera Visibility: the VRChat
+toggles (normal, mirror VR and desktop, camera VR and desktop, screenshot) or the generic mirror
+mode into the render visibility; the mirror texture and colour as two layers shown only in
+mirrors (everywhere when forced). UV Tile Discard and face discard as hidden tiles; the vertex
+and pixel modes read the same.
+
+**Part 8d-5:** Glitter / Sparkle as a glitter pattern layer (catalogue 4.6): the three modes
+with their own brightness, speed and distance LOD (linear's sensitivity, contrasts, angle
+limit, light direction and VR parallax), shape, UV with panning, density, layers, random
+position, size and its range, overlap, normals; the shape texture (pixel mode, sprite sheet),
+colour map, colour with alpha, base colour mix, random colours; rotations; the mask (channel,
+invert, global mask), hide in shadow, scale with lighting; add or replace; hue shift with the
+random offset; AudioLink alpha (read as the opacity), max brightness, size, the two chronos and
+the colour override.
+
+**Part 8d-6:** Pathing, Voronoi and Truchet as pattern layers (catalogue 4.6). Pathing: the
+texture or UV source, merged gradients, point sampling, the colour map, remapping, override
+alpha, the blend mode, and per channel the type, colour, direction, emission, softness, speed,
+length, gap, manual timing, offset, segments, remap range and global mask; AudioLink time,
+width and emission offsets and chronotensity. Voronoi: type, space and UV, scale, power,
+gradient, speed, noise, colours and emissions, random cell colours, blend, alpha, mask and
+global mask; AudioLink emissions, gradient, the chronos and both colour overrides. Truchet: UV,
+pan and offset, density, thickness, edge sharpness, texture with panning, colour, alpha,
+override alpha, blend, emission, mask (channel, invert, global mask); AudioLink emission, alpha,
+chrono pan, colour override and hide without AudioLink. The paths' AudioLink history,
+autocorrelator and ColorChord strip, and the truchet mask's intensity, are reported.
+
+**Part 8d-7:** Internal Parallax, Depth FX and AL Volume Color as pattern layers (catalogue
+4.6). Internal parallax: the mode, level blend, map with its placement, tiling and pan, height
+from alpha, per-level offset, iterations with the distance falloff, depths, fades, colours,
+surface blend, mask (channel, invert, global mask), hue shift and per-level hue; AudioLink
+emission, depths, chrono pan, chrono hue and both colour overrides (the spatial history is
+reported). Depth FX: colour and emission (blend, texture, the depth gradient UV, ranges), alpha
+(ranges), mask and global mask. AL Volume Color: UV and direction, the three colours (squared,
+as Poiyomi multiplies each by its theme colour), emissions, blend and alpha. The stats overlay
+is reported.
+
+**Part 8d-8:** Video Effects and AL Spectrum as pattern layers (catalogue 4.6). Video effects:
+the screen type, brightness, emission, pixel texture with its UV and the resolution, pixelate,
+saturation, contrast, the CRT refresh rate and fade, the Gameboy ramp, mask and global mask.
+AL spectrum: UV and placement (position, rotation and speed, scale, side offsets, mirrored UVs,
+symmetry, tiled), circle mode and dimensions, line width, bilateral, mirrored bands, band
+range, volume, bass and treble boost, the steps and clips, shape clip, the colour mode,
+ColorChord emission, the colour source, the three colours and emissions, the colour and mask
+texture, blend, alpha, alpha override, the video effects and the global mask. The debug preview
+is noted and read as live.
+
+**Part 8d-9:** Vertex Options' Basics & Fun as deformations (catalogue 5.3), in Poiyomi's
+order: scale, rotation with its speed, local translation (each × its w), barrel, sphere,
+tornado, wind (with the effects mask as its noise), world translation, the height map
+displacement, rounding (world or local, to the cell's middle). Each takes its mask channel:
+the effects mask's RGBA or a vertex colour channel. AudioLink: local translation, rotation by
+bands and chronotensity, scale, world translation and height. Rounding by AudioLink and the
+spectrum motion are reported.
+
+**Part 8d-10:** LookAt, Glitching, Depth Bulge and View Clip Prevention (Uzumore) as
+deformations after the basics. LookAt: the mask's four rigs (target up, forward, up, pivot,
+view-from position, distance and field-of-view falloffs, pitch, yaw and roll limits, alpha),
+its own visibility, and the AudioLink alpha. Glitching: strength, interval, threshold, the
+glitch map with density and pan speed, the mirror choice, the mask and the AudioLink band with
+override. Depth bulge: height, touch distance and mask. Uzumore: push amount, bias, object
+scale and mask; its animation toggle off is read as off.
+
+**Part 8d-11:** the Lil Fur variants' fur pass into the material's fur (catalogue 5.2): fur
+mode, the fur mask with its four strengths, the direction map and its scale, the vector and
+length, the length and alpha mask channels, vertex colour direction, gravity, randomize, noise,
+AO, layer count, root width, width, the wind, the rim light, and the LilFur Rendering settings
+(cull, depth test and write, depth clip, offsets, colour mask, alpha to mask, stencil). The
+blend factors follow the fur mode; separate front- and back-face stencils are reported. With
+this part the parser no longer reports unmapped sections: every Poiyomi 10 section is mapped
+or reports its own unmapped details.
+
 ## Out of scope
 
 - **Poiyomi Toon World:** a world variant.

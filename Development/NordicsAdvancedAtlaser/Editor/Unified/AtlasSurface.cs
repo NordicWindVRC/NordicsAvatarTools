@@ -10,6 +10,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly AtlasAlpha Alpha = new AtlasAlpha();
         // 2.3: the primary normal. Surface layers targeting the normal are composited on top.
         public readonly AtlasNormal Normal = new AtlasNormal();
+        public readonly AtlasBentNormal BentNormal = new AtlasBentNormal();
         // 2.4
         public readonly AtlasSurfaceResponse Response = new AtlasSurfaceResponse();
         // 2.5
@@ -23,6 +24,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool MultiplyAlpha;
         // 0–1: base × lerp(1, vertex colour, amount).
         public float Amount = 1f;
+        // 0–1: for MultiplyAlpha, alpha × lerp(1, vertex alpha, amount).
+        public float AlphaAmount = 1f;
         // Off: vertex colours are used as stored, as linear values. On: converted from sRGB first.
         public bool SrgbData;
     }
@@ -46,8 +49,69 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasMask Mask;
         // Source Mask: the mask × this.
         public float MaskMultiplier = 1f;
+        // Source BaseColorAlpha with a mask: how the mask combines with it (saturated).
+        public AtlasAlphaMaskBlend MaskBlend = AtlasAlphaMaskBlend.Replace;
+        // saturate(alpha + offset), before the modifiers.
+        public float Offset;
+        // In order, each multiplies alpha.
+        public readonly System.Collections.Generic.List<AtlasAlphaModifier> Modifiers = new System.Collections.Generic.List<AtlasAlphaModifier>();
+        // Alpha-to-coverage edges sharpened and kept across mip levels.
+        public bool SharpenedCoverage;
+        public float MipScale = 0.25f;
+        // An 8×8 ordered dither lowers alpha where it's partial.
+        public bool Dithering;
+        public float DitherGradient = 0.1f;
+        public float DitherBias;
         // 0–1: lerp(1, alpha, strength).
         public float Strength = 1f;
+    }
+
+    public enum AtlasAlphaMaskBlend { Replace, Multiply, Add, Subtract }
+
+    public enum AtlasAlphaModifierKind
+    {
+        // lerp(MinAlpha, MaxAlpha, smoothstep(MinDistance, MaxDistance, distance to the camera)).
+        DistanceFade,
+        // saturate(1 − smoothstep(min(Sharpness, Width), Width, N·V)), lerp(1, that, Intensity), Invert.
+        ViewAngleFade,
+        // How directly the camera and the model face each other.
+        AngleFade,
+        // Amount added, saturated; for audio modulators.
+        Add
+    }
+
+    public enum AtlasAngleFadeType { CameraFacesModel, ModelFacesCamera, Both }
+
+    // 2.2: a live change to alpha (stage S7).
+    public sealed class AtlasAlphaModifier
+    {
+        // Where it applies; null: everywhere.
+        public AtlasMask Mask;
+        public AtlasAlphaModifierKind Kind;
+        // Distance fade: from the object's position or the pixel's.
+        public bool PixelPosition = true;
+        public float MinDistance, MaxDistance;
+        public float MinAlpha, MaxAlpha = 1f;
+        // View-angle fade.
+        public float Intensity, Sharpness = 0.5f, Width = 0.5f;
+        public bool Invert;
+        // Angle fade: angle ranges in degrees, the model's forward direction (object space), compared
+        // from the object or the vertex position.
+        public AtlasAngleFadeType AngleType;
+        public float CameraAngleMin, CameraAngleMax, ModelAngleMin, ModelAngleMax;
+        public UnityEngine.Vector3 Forward = UnityEngine.Vector3.forward;
+        public bool FromVertex;
+        // Add.
+        public float Amount;
+    }
+
+    // 2.3: the unoccluded direction, for specular occlusion and, optionally, indirect diffuse.
+    public sealed class AtlasBentNormal
+    {
+        // Tangent space; null: none.
+        public AtlasTextureReference Map;
+        public float SpecularOcclusion = 1f;
+        public bool IndirectDiffuse = true;
     }
 
     // 2.3: a tangent-space normal map. Without a map the surface is flat.
@@ -55,6 +119,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public AtlasTextureReference Map;
         public float Strength = 1f;
+        // The mesh normal bent toward the horizontal direction from a vertical axis through
+        // CorrectOrigin (object space), by CorrectAmount, before normal maps.
+        public float CorrectAmount;
+        public UnityEngine.Vector3 CorrectOrigin;
         // The triangle's face normal instead of the smooth normal: a faceted look.
         public bool FlatShading;
     }
@@ -84,6 +152,42 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Highlights, reflections, matcaps and rims use the mesh normal, not the normal map.
         public bool SpecularFromMeshNormal;
         public readonly AtlasSpecularAntiAliasing SpecularAntiAliasing = new AtlasSpecularAntiAliasing();
+        // GGX anisotropy of highlights and reflections.
+        public readonly AtlasAnisotropy Anisotropy = new AtlasAnisotropy();
+        // A clear reflective layer over the surface; null: none.
+        public AtlasClearCoat ClearCoat;
+    }
+
+    // 2.4: anisotropic GGX. a = clamp(Amount + (sample × 2 − 1), −1, 1), the sample from the map's
+    // channel or a vertex colour channel; the highlight stretches along the tangent (a > 0) or the
+    // bitangent, the reflection direction by ReflectionStretch, and RoughnessAnisotropy keeps
+    // that much of the roughness along the stretch.
+    public sealed class AtlasAnisotropy
+    {
+        public bool Enabled;
+        public float Amount;
+        // Data; null: no sample (0).
+        public AtlasTextureReference Map;
+        public AtlasChannel Channel = AtlasChannel.Red;
+        // Instead of the map; null: none.
+        public AtlasChannel? VertexColorChannel;
+        public float ReflectionStretch = 1f;
+        public float RoughnessAnisotropy = 1f;
+        // Tangent-space direction (RG, 0.5 neutral) the stretch follows; null: the tangent.
+        public AtlasTextureReference DirectionMap;
+    }
+
+    // 2.4: a dielectric coat (F0 4%) over the surface, with its own highlights and reflections.
+    public sealed class AtlasClearCoat
+    {
+        // 0–1: where and how much.
+        public readonly AtlasScalarInput Strength = new AtlasScalarInput(1f);
+        public readonly AtlasScalarInput Roughness = new AtlasScalarInput(0f);
+        public readonly AtlasHighlights Highlights = new AtlasHighlights();
+        public readonly AtlasReflections Reflections = new AtlasReflections();
+        // 0–1: how much the coat follows the normal map (0: the mesh normal).
+        public float NormalMapAmount;
+        public readonly AtlasSpecularAntiAliasing SpecularAntiAliasing = new AtlasSpecularAntiAliasing();
     }
 
     // 2.4: direct-light highlights.
@@ -106,6 +210,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float BaseColorMix;
         // Not scaled by the diffuse light.
         public bool IgnoreLightColor;
+        // Not darkened by the received shadow.
+        public bool IgnoreShadows;
+        // A second lobe, the brighter of the two showing: strength (0: none) and its roughness
+        // input's constant (the map and inversion shared).
+        public float SecondLobeStrength;
+        public float SecondLobeRoughnessConstant;
         public AtlasHighlightShape Shape = AtlasHighlightShape.Round;
         public readonly AtlasStretchedHighlight Stretched = new AtlasStretchedHighlight();
         // Shape Both: 1 = round, 0 = stretched; null: round.
@@ -167,6 +277,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float LightBased;
         // Used when the scene has no reflection probes; null: none.
         public AtlasTextureReference FallbackCubemap;
+        // 0–1: fades the reflection where the direct light is dim (exposure-based occlusion).
+        public float ExposureOcclusion;
     }
 
     // Roughens where the normal changes quickly on screen, so small or curved detail doesn't
