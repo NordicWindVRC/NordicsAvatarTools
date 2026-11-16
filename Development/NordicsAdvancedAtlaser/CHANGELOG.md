@@ -22,6 +22,11 @@ EditMode tests pass in Unity 2022.3.22.
   into one merged unified material and the virtual maps it needs. The first feature is
   *Colour*, the base colour map. Output settings are stored by feature ID, so changing the
   output shader keeps every choice the new one supports. Nothing is baked or written yet.
+- **Output inspector:** a *Textures* section with the textures the chosen modes need, their
+  sizes, and GPU memory estimates for PC and Android with totals, following per-platform
+  formats; feature sections that fold to one line each (mode and source count), with
+  per-source switches. Sources are read through a cache, rebuilt only when a material, its
+  shader, or an imported texture or shader changes.
 - **Input parsers** on the unified material (details in the `UNIFIED_MATERIAL_*.md`
   inventories):
   - VRChat Mobile Toon Lit, Standard Lite and Toon Standard (and Outline);

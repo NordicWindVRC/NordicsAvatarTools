@@ -54,8 +54,17 @@ and `ATLAS_OUTPUT.md` for the output design.
 3. Add one **Nordic's Atlas Output** per output material on the same GameObject. Choose the
    output shader and the main texture size (default 4096 × 4096), and assign source materials
    with their UV rectangles. **Region Padding** (default 4 px) separates the sources' regions,
-   so it's only used with two or more source materials. **Auto Setup** picks the largest base texture, then lets the chosen
-   output shader configure itself. Each source material may be assigned to only one output.
+   so it's only used with two or more source materials. **Auto Setup** picks the largest base
+   texture and sets every feature to its default mode. Each source material may be assigned to
+   only one output.
+   - **Textures** lists the textures the chosen feature modes need, with their sizes and an
+     estimate of their GPU memory on PC and Android (compressed, with mipmaps, as VRChat's
+     performance rank counts it), and the totals. *Formats* sets the compression per platform
+     and kind of texture, which the estimates follow.
+   - **Features** are grouped into sections (Surface, Lighting, Layers, Effects, Render). Each
+     feature a source uses and the output shader supports folds to one line with its mode and
+     how many sources use it; open, it has the mode and, with two or more sources, a list to
+     turn it off per source.
    Turn off **Normal Correction** on a source to skip its normal-correction bake, for example
    when that material's mesh isn't reduced.
 
@@ -144,18 +153,19 @@ A few option names that only the shader declares are reported instead of read.
 
 ## Output shaders
 
-| Output shader | ID | Settings it offers | Status |
+| Output shader | ID | Features | Status |
 |---|---|---|---|
-| **Poiyomi Toon 10** | `poiyomi10` | Main texture size | Not generated yet |
-| **VRChat Mobile Toon Standard** | `mobiletoon` | Main texture size | Not generated yet |
+| **Poiyomi Toon 10** | `poiyomi10` | Colour (the base colour texture) | Not generated yet |
+| **VRChat Mobile Toon Standard** | `mobiletoon` | Colour (the base colour texture) | Not generated yet |
 
 **Output shaders must be installed,** since the new materials are made with them. The picker
 only lists installed ones. An output whose shader isn't installed shows a warning, and is
 skipped at build time with one diagnostic. Poiyomi Toon 10 is found under its usual name, or
 under *Old Versions* when Poiyomi Pro or 11 is installed.
 
-Each output shader gets its own settings as its writer is built: overriding texture
-resolutions, turning off features, and controlling how features are emulated.
+The settings belong to shared output features, offered as far as each output shader supports
+them (see `ATLAS_OUTPUT.md`); changing the output shader keeps every choice the new one
+supports.
 
 ## Limitations
 

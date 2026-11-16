@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** phase 1.1 done; 1.2 is next. It implements the design in
+**Status:** phases 1.1 and 1.2 done; 1.3 is next. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -62,7 +62,8 @@ descriptions; builds behave as before.
   sections with foldouts and the source count, the per-source foldout, auto setup choosing
   default modes.
 - **Memory** per texture for PC and Android, and the totals, from the formats in the output
-  settings.
+  settings. The formats are the first output settings: colour, colour with alpha, normal map,
+  and data, per platform.
 - **Tests:** cache invalidation; memory figures for known sizes and formats.
 
 **Workable:** the full inspector layout for colour, fast with many sources.

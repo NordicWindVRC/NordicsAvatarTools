@@ -131,12 +131,13 @@ namespace NordicWind.AdvancedAtlaser
         public AtlasTextureSize mainTexture = new AtlasTextureSize();
         public List<AtlasFeatureSetting> features = new List<AtlasFeatureSetting>();
         public List<AtlasTextureSetting> textures = new List<AtlasTextureSetting>();
-        // The formats the textures get on PC and on Android, which the memory estimates follow.
+        /// <summary>The formats the textures get on PC; the memory estimates follow them.</summary>
         public AtlasPlatformFormats pcFormats = new AtlasPlatformFormats
         {
             color = AtlasTextureFormat.BC1, colorAlpha = AtlasTextureFormat.BC7,
             normal = AtlasTextureFormat.BC5, data = AtlasTextureFormat.BC7
         };
+        /// <summary>The formats the textures get on Android; the memory estimates follow them.</summary>
         public AtlasPlatformFormats androidFormats = new AtlasPlatformFormats
         {
             color = AtlasTextureFormat.ASTC6x6, colorAlpha = AtlasTextureFormat.ASTC6x6,
