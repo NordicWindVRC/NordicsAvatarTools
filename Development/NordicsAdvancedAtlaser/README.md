@@ -43,7 +43,8 @@ and `ATLAS_OUTPUT.md` for the output design.
      being merged into it, including renderers that are themselves merges.
 
    The inspector lists the source materials it found, so you can check before going on.
-2. **Enable Geometry Baking** is on by default. It reduces visual artifacts on decimated
+2. **Geometry Baking**, a folding section above the output components, is on by default
+   (**Enable Geometry Baking**). It reduces visual artifacts on decimated
    meshes by baking a normal map that compensates for the removed detail. Each material is
    baked at 1.5× its area in the atlas, up to 4096 per side; a larger area is baked 1:1.
    - **Exclude Hidden Geometry (Depth Test)** is on by default. Where several surfaces share
@@ -57,18 +58,21 @@ and `ATLAS_OUTPUT.md` for the output design.
      animations are never changed.
 3. Add one **Nordic's Atlas Output** per output material on the same GameObject. Choose the
    output shader and the main texture size (default 4096 × 4096), and assign source materials
-   with their UV rectangles. **Region Padding** (default 4 px) separates the sources' regions,
+   with their UV rectangles; each source is listed with its material's name, such as
+   *Source 1 (Body)*. **Region Padding** (default 4 px) separates the sources' regions,
    so it's only used with two or more source materials. **Auto Setup** picks the largest base
    texture and sets every feature to its default mode. Each source material may be assigned to
    only one output.
-   - **Textures** lists the textures the chosen feature modes need, with their sizes and an
-     estimate of their GPU memory on PC and Android (compressed, with mipmaps, as VRChat's
-     performance rank counts it, which mip streaming doesn't lower), and the totals. *Formats* sets the compression per platform
-     and kind of texture, which the estimates follow.
-   - **Features** are grouped into sections (Surface, Lighting, Layers, Effects, Render). Each
-     feature a source uses and the output shader supports folds to one line with its mode and
-     how many sources use it; open, it has the mode and, with two or more sources, a list to
-     turn it off per source.
+   - **Textures** is a table of the textures the chosen feature modes need: each one's size and
+     an estimate of its GPU memory on PC and Android (compressed, with mipmaps, as VRChat's
+     performance rank counts it, which mip streaming doesn't lower), and the totals. *GPU
+     Compression Formats* sets the compression per platform and kind of texture, which the
+     estimates follow.
+   - **Material Features** has one row per feature a source uses and the output shader
+     supports, with its mode. Where two or more sources have the feature, the row folds open
+     to turn it off for single materials, and its name then says how many still use it. Once
+     there are features from several groups (Surface, Lighting, Layers, Effects, Render), each
+     group gets a small heading.
    Turn off **Normal Correction** on a source to skip its normal-correction bake, for example
    when that material's mesh isn't reduced.
 

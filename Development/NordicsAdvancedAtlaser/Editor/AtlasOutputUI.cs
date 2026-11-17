@@ -15,11 +15,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static GUIStyle boldFoldout;
         private static GUIStyle BoldFoldout => boldFoldout ?? (boldFoldout = new GUIStyle(EditorStyles.foldout) { fontStyle = FontStyle.Bold });
 
-        public static void Section(string title) { EditorGUILayout.Space(); EditorGUILayout.LabelField(title, EditorStyles.boldLabel); }
         public static void Description(string text) { if (!string.IsNullOrEmpty(text)) EditorGUILayout.LabelField(text, EditorStyles.wordWrappedMiniLabel); }
 
         // A foldout whose state is remembered for the editor session.
-        public static bool Fold(string key, string label, bool defaultOpen, bool bold = false)
+        public static bool Fold(string key, string label, bool defaultOpen, bool bold = false) =>
+            Fold(key, new GUIContent(label), defaultOpen, bold);
+
+        public static bool Fold(string key, GUIContent label, bool defaultOpen, bool bold = false)
         {
             bool open = SessionState.GetBool(FoldPrefix + key, defaultOpen);
             bool next = EditorGUILayout.Foldout(open, label, true, bold ? BoldFoldout : EditorStyles.foldout);
@@ -34,18 +36,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var w = main.FindPropertyRelative("width");
             var h = main.FindPropertyRelative("height");
             EditorGUI.BeginChangeCheck();
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                // The main texture is always generated; only its size is chosen.
-                EditorGUILayout.PrefixLabel("Main Texture Size");
-                w.intValue = SizePopup(w.intValue, AtlasTextureSizes.All);
-                h.intValue = SizePopup(h.intValue, AtlasTextureSizes.All);
-            }
+            // The main texture is always generated; only its size is chosen.
+            var size = EditorGUI.PrefixLabel(EditorGUILayout.GetControlRect(), new GUIContent("Main Texture Size"));
+            using (new IndentReset())
+                PairOfSizes(size, w, h);
             return EditorGUI.EndChangeCheck();
         }
 
-        // The Textures section: the main texture size, every texture the chosen modes use with
-        // its size and memory, the totals, and the formats the memory follows.
+        // The Textures section: the main texture size, a table of the textures the chosen modes
+        // use with their size and memory, the totals, and the compression formats.
         public static void Textures(SerializedProperty config, AtlasOutputOverview overview)
         {
             EditorGUILayout.Space();
@@ -58,18 +57,31 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 var textures = config.FindPropertyRelative("textures");
                 if (overview.Textures.Count == 0)
                     Description("No texture: no source uses a feature that needs one.");
-                foreach (var use in overview.Textures)
-                    TextureRow(textures, use, mainWidth, mainHeight);
-                using (new EditorGUILayout.HorizontalScope())
+                else
                 {
-                    EditorGUILayout.PrefixLabel(new GUIContent("Total (estimate)",
-                        "GPU memory of the compressed textures with their full mip chain, as VRChat's performance rank counts it. " +
-                        "The mipmaps stream, so fewer levels may be loaded at a distance, but the rank counts the full texture. " +
-                        "Crunch only changes the download size."));
-                    EditorGUILayout.LabelField(MemoryText(overview.PcBytes, overview.AndroidBytes), EditorStyles.boldLabel);
+                    Columns(out var name, out var size, out var pc, out var android);
+                    using (new IndentReset())
+                    {
+                        EditorGUI.LabelField(name, "Texture", EditorStyles.miniLabel);
+                        EditorGUI.LabelField(size, "Size", EditorStyles.miniLabel);
+                        EditorGUI.LabelField(pc, "PC", RightMini);
+                        EditorGUI.LabelField(android, "Android", RightMini);
+                    }
+                    foreach (var use in overview.Textures)
+                        TextureRow(textures, use, mainWidth, mainHeight);
+                    Columns(out name, out size, out pc, out android);
+                    using (new IndentReset())
+                    {
+                        EditorGUI.LabelField(name, new GUIContent("Total (estimate)",
+                            "GPU memory of the compressed textures with their full mip chain, as VRChat's performance rank counts it. " +
+                            "The mipmaps stream, so fewer levels may be loaded at a distance, but the rank counts the full texture. " +
+                            "Crunch only changes the download size."), EditorStyles.boldLabel);
+                        EditorGUI.LabelField(pc, AtlasTextureMemory.Label(overview.PcBytes), RightBold);
+                        EditorGUI.LabelField(android, AtlasTextureMemory.Label(overview.AndroidBytes), RightBold);
+                    }
                 }
-                Description("Mipmaps are made with the Kaiser filter and streamed.");
-                if (Fold("formats", "Formats", false))
+                if (Fold("formats", new GUIContent("GPU Compression Formats",
+                        "The block compression each kind of texture is stored with, per platform. The memory above follows them."), false))
                     using (new EditorGUI.IndentLevelScope())
                     {
                         Formats(config.FindPropertyRelative("pcFormats"), "PC");
@@ -78,51 +90,84 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
         }
 
+        // The memory columns are fixed and right-aligned, so their figures never clip; the name
+        // column lines up with the inspector's labels and the size takes what's left.
+        private const float MemoryColumn = 62f;
+        private static void Columns(out Rect name, out Rect size, out Rect pc, out Rect android)
+        {
+            var row = EditorGUILayout.GetControlRect();
+            var indented = EditorGUI.IndentedRect(row);
+            name = new Rect(indented.x, row.y, Mathf.Max(40f, row.x + EditorGUIUtility.labelWidth - indented.x - 2f), row.height);
+            android = new Rect(row.xMax - MemoryColumn, row.y, MemoryColumn, row.height);
+            pc = new Rect(android.x - MemoryColumn - 4f, row.y, MemoryColumn, row.height);
+            float sizeX = row.x + EditorGUIUtility.labelWidth;
+            size = new Rect(sizeX, row.y, Mathf.Max(0f, pc.x - sizeX - 6f), row.height);
+        }
+
+        private static GUIStyle rightMini, rightBold;
+        private static GUIStyle RightMini => rightMini ?? (rightMini = new GUIStyle(EditorStyles.miniLabel) { alignment = TextAnchor.MiddleRight });
+        private static GUIStyle RightBold => rightBold ?? (rightBold = new GUIStyle(EditorStyles.boldLabel) { alignment = TextAnchor.MiddleRight });
+
+        // Controls drawn into rects that are already indented. A class: a struct's `new()`
+        // wouldn't run the constructor.
+        private sealed class IndentReset : IDisposable
+        {
+            private readonly int level;
+            public IndentReset() { level = EditorGUI.indentLevel; EditorGUI.indentLevel = 0; }
+            public void Dispose() => EditorGUI.indentLevel = level;
+        }
+
         private static void TextureRow(SerializedProperty textures, AtlasTextureUse use, int mainWidth, int mainHeight)
         {
             var texture = use.Texture;
             string holds = string.Join(", ", use.Maps.Select(m => ObjectNames.NicifyVariableName(m.ToString()).ToLowerInvariant()));
             var label = new GUIContent(texture.Label, "Holds: " + holds + (use.Required ? ". Required by the chosen modes." : ". Optional."));
-            using (new EditorGUILayout.HorizontalScope())
+            Columns(out var name, out var size, out var pc, out var android);
+            using (new IndentReset())
             {
                 if (use.Required)
-                    EditorGUILayout.PrefixLabel(label);
+                    EditorGUI.LabelField(name, label);
                 else
                 {
                     var setting = FindOrAddTexture(textures, use);
                     var enabled = setting.FindPropertyRelative("enabled");
-                    enabled.boolValue = EditorGUILayout.ToggleLeft(label, enabled.boolValue, GUILayout.Width(EditorGUIUtility.labelWidth));
+                    enabled.boolValue = EditorGUI.ToggleLeft(name, label, enabled.boolValue);
                 }
                 using (new EditorGUI.DisabledScope(!use.Enabled))
-                    Size(textures, use, mainWidth, mainHeight);
-                EditorGUILayout.LabelField(MemoryText(use.PcBytes, use.AndroidBytes), EditorStyles.miniLabel);
+                    Size(size, textures, use, mainWidth, mainHeight);
+                EditorGUI.LabelField(pc, use.Enabled ? AtlasTextureMemory.Label(use.PcBytes) : "off", RightMini);
+                EditorGUI.LabelField(android, use.Enabled ? AtlasTextureMemory.Label(use.AndroidBytes) : "off", RightMini);
             }
         }
 
-        private static void Size(SerializedProperty textures, AtlasTextureUse use, int mainWidth, int mainHeight)
+        private static void Size(Rect rect, SerializedProperty textures, AtlasTextureUse use, int mainWidth, int mainHeight)
         {
             var mode = use.Texture.SizeMode;
             if (mode == AtlasTextureSizeMode.Main)
             {
-                EditorGUILayout.LabelField($"{use.Width} × {use.Height} (main)", GUILayout.MinWidth(90));
+                EditorGUI.LabelField(rect, new GUIContent($"{use.Width} × {use.Height}", "Always the main texture's size."));
                 return;
             }
             int width = use.Width, height = use.Height;
             EditorGUI.BeginChangeCheck();
+            SplitPair(rect, out var first, out var times, out var second);
             if (mode == AtlasTextureSizeMode.MainAspect)
             {
-                width = SizePopup(width, AtlasTextureSizes.MainAspectWidths(mainWidth, mainHeight));
-                EditorGUILayout.LabelField("× " + AtlasTextureSizes.HeightAt(width, mainWidth, mainHeight), GUILayout.Width(50));
+                width = SizePopup(first, width, AtlasTextureSizes.MainAspectWidths(mainWidth, mainHeight));
+                EditorGUI.LabelField(times, "×", Centered);
+                EditorGUI.LabelField(second, AtlasTextureSizes.HeightAt(width, mainWidth, mainHeight).ToString());
             }
             else if (mode == AtlasTextureSizeMode.Square)
             {
-                width = SizePopup(width, AtlasTextureSizes.All);
-                EditorGUILayout.LabelField("× " + width, GUILayout.Width(50));
+                width = SizePopup(first, width, AtlasTextureSizes.All);
+                EditorGUI.LabelField(times, "×", Centered);
+                EditorGUI.LabelField(second, width.ToString());
             }
             else
             {
-                width = SizePopup(width, AtlasTextureSizes.All);
-                height = SizePopup(height, AtlasTextureSizes.All);
+                width = SizePopup(first, width, AtlasTextureSizes.All);
+                EditorGUI.LabelField(times, "×", Centered);
+                height = SizePopup(second, height, AtlasTextureSizes.All);
             }
             if (!EditorGUI.EndChangeCheck()) return;
             AtlasTextureSizes.Normalize(mode, mainWidth, mainHeight, ref width, ref height);
@@ -130,6 +175,27 @@ namespace NordicWind.AdvancedAtlaser.Editor
             setting.FindPropertyRelative("width").intValue = width;
             setting.FindPropertyRelative("height").intValue = height;
         }
+
+        // Two sizes side by side with a "×" between them.
+        private static void SplitPair(Rect rect, out Rect first, out Rect times, out Rect second)
+        {
+            const float gap = 16f;
+            float half = Mathf.Max(0f, (rect.width - gap) / 2f);
+            first = new Rect(rect.x, rect.y, half, rect.height);
+            times = new Rect(first.xMax, rect.y, gap, rect.height);
+            second = new Rect(times.xMax, rect.y, half, rect.height);
+        }
+
+        private static void PairOfSizes(Rect rect, SerializedProperty width, SerializedProperty height)
+        {
+            SplitPair(rect, out var first, out var times, out var second);
+            width.intValue = SizePopup(first, width.intValue, AtlasTextureSizes.All);
+            EditorGUI.LabelField(times, "×", Centered);
+            height.intValue = SizePopup(second, height.intValue, AtlasTextureSizes.All);
+        }
+
+        private static GUIStyle centered;
+        private static GUIStyle Centered => centered ?? (centered = new GUIStyle(EditorStyles.label) { alignment = TextAnchor.MiddleCenter });
 
         private static void Formats(SerializedProperty formats, string platform)
         {
@@ -140,48 +206,71 @@ namespace NordicWind.AdvancedAtlaser.Editor
             EditorGUILayout.PropertyField(formats.FindPropertyRelative("data"), new GUIContent("Data and masks"));
         }
 
-        private static string MemoryText(long pc, long android) =>
-            $"PC {AtlasTextureMemory.Label(pc)} · Android {AtlasTextureMemory.Label(android)}";
-
-        // The feature sections: each feature a source uses and the output shader supports, folded
-        // to a summary line, with its mode and the sources it applies to.
+        // Material Features: one row per feature a source uses and the output shader supports,
+        // with its mode. Where several sources have it, the row folds open to turn it off for
+        // single materials. Section headings only appear once there is more than one section.
         public static void Features(SerializedProperty config, AtlasOutputOverview overview, IReadOnlyList<Material> materials)
         {
             var features = config.FindPropertyRelative("features");
-            if (materials.Count == 0)
+            EditorGUILayout.Space();
+            if (!Fold("features", "Material Features", true, true)) return;
+            using (new EditorGUI.IndentLevelScope())
             {
-                Section("Features");
-                Description("Add source materials to see their features.");
-                return;
-            }
-            foreach (AtlasFeatureSection section in Enum.GetValues(typeof(AtlasFeatureSection)))
-            {
-                var states = overview.Features.Where(s => s.Feature.Section == section && s.Present.Count > 0).ToList();
-                if (states.Count == 0) continue;
-                EditorGUILayout.Space();
-                if (!Fold("section." + section, ObjectNames.NicifyVariableName(section.ToString()), true, true)) continue;
-                using (new EditorGUI.IndentLevelScope())
-                    foreach (var state in states)
+                if (materials.Count == 0)
+                {
+                    Description("Add source materials to see their features.");
+                    return;
+                }
+                Description("How the atlas material reproduces what the source materials do.");
+                var states = overview.Features.Where(s => s.Present.Count > 0).ToList();
+                bool headings = states.Select(s => s.Feature.Section).Distinct().Count() > 1;
+                foreach (AtlasFeatureSection section in Enum.GetValues(typeof(AtlasFeatureSection)))
+                {
+                    var inSection = states.Where(s => s.Feature.Section == section).ToList();
+                    if (inSection.Count == 0) continue;
+                    if (headings) EditorGUILayout.LabelField(ObjectNames.NicifyVariableName(section.ToString()), EditorStyles.miniBoldLabel);
+                    foreach (var state in inSection)
                         Feature(features, state, materials);
+                }
             }
         }
 
         private static void Feature(SerializedProperty features, AtlasFeatureState state, IReadOnlyList<Material> materials)
         {
             var feature = state.Feature;
-            string header = $"{feature.DisplayName} — {state.Mode.Label} — {state.Active.Count} of {materials.Count} sources";
-            if (!Fold("feature." + feature.Id, header, false)) return;
-            using (new EditorGUI.IndentLevelScope())
+            var setting = FindOrAddFeature(features, feature.Id);
+            var stored = setting.FindPropertyRelative("mode");
+            bool several = state.Present.Count > 1;
+            // Collapsed, the name says when the feature is off for some of the materials.
+            string name = feature.DisplayName;
+            if (several && state.Active.Count < state.Present.Count)
+                name += $" ({state.Active.Count} of {state.Present.Count} materials)";
+            var label = new GUIContent(name, several
+                ? "Unfold to turn this feature off for single materials."
+                : "The mode decides how the atlas material makes this feature.");
+            var row = EditorGUILayout.GetControlRect();
+            var labelRect = new Rect(row.x, row.y, EditorGUIUtility.labelWidth, row.height);
+            var fieldRect = new Rect(row.x + EditorGUIUtility.labelWidth, row.y, row.width - EditorGUIUtility.labelWidth, row.height);
+            bool open = false;
+            if (several) open = FoldAt(labelRect, "feature." + feature.Id, label);
+            else EditorGUI.LabelField(labelRect, label);
+            int index = Math.Max(0, IndexOf(state.Modes, state.Mode));
+            using (new IndentReset())
             {
-                var setting = FindOrAddFeature(features, feature.Id);
-                var stored = setting.FindPropertyRelative("mode");
-                int index = Math.Max(0, IndexOf(state.Modes, state.Mode));
-                int next = EditorGUILayout.Popup("Mode", index, state.Modes.Select(m => m.Label).ToArray());
+                int next = EditorGUI.Popup(fieldRect, index, state.Modes.Select(m => m.Label).ToArray());
                 if (next != index) stored.stringValue = state.Modes[next].Id;
-                if (state.Present.Count > 1 && Fold("sources." + feature.Id, "Sources", false))
-                    using (new EditorGUI.IndentLevelScope())
-                        Sources(setting, state, materials);
             }
+            if (open)
+                using (new EditorGUI.IndentLevelScope())
+                    Sources(setting, state, materials);
+        }
+
+        private static bool FoldAt(Rect rect, string key, GUIContent label)
+        {
+            bool open = SessionState.GetBool(FoldPrefix + key, false);
+            bool next = EditorGUI.Foldout(rect, open, label, true);
+            if (next != open) SessionState.SetBool(FoldPrefix + key, next);
+            return next;
         }
 
         // Each source that has the feature: on or off, and the reference source where the mode
@@ -267,12 +356,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return added;
         }
 
-        private static int SizePopup(int current, int[] options)
+        private static int SizePopup(Rect rect, int current, int[] options)
         {
             if (options.Length == 0) return current;
             int index = Array.IndexOf(options, current);
             if (index < 0) index = Array.IndexOf(options, AtlasTextureSizes.Closest(current, options));
-            int next = EditorGUILayout.Popup(index, options.Select(v => v.ToString()).ToArray(), GUILayout.MinWidth(60));
+            int next = EditorGUI.Popup(rect, index, options.Select(v => v.ToString()).ToArray());
             return options[Mathf.Clamp(next, 0, options.Length - 1)];
         }
     }

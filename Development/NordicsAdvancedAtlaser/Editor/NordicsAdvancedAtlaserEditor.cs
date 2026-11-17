@@ -13,10 +13,56 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
+            var owner = ((NordicsAdvancedAtlaser)target).gameObject;
+            var discovery = AtlasMaterialDiscovery.Discover(owner);
+            var outputs = owner.GetComponents<NordicsAtlasOutput>();
+            EditorGUILayout.LabelField("Source Mode", discovery.HasAAO ? "AAO Merge Skinned Mesh" : "Local SkinnedMeshRenderer");
+            EditorGUILayout.LabelField("Unique Source Materials", discovery.Materials.Count.ToString());
+            var assignment = new Dictionary<Material, string>();
+            foreach (var output in outputs)
+            {
+                if (output.configuration.sources != null)
+                    foreach (var source in output.configuration.sources)
+                        if (source != null && source.material != null && !assignment.ContainsKey(source.material))
+                            assignment.Add(source.material, output.configuration.outputName);
+            }
+            foreach (var material in discovery.Materials)
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUI.BeginDisabledGroup(true);
+                    EditorGUILayout.ObjectField(material, typeof(Material), false);
+                    EditorGUI.EndDisabledGroup();
+                    string outputName;
+                    EditorGUILayout.LabelField(AtlasShaderRegistry.Detect(material)?.DisplayName ?? "Unknown", GUILayout.Width(190));
+                    EditorGUILayout.LabelField(assignment.TryGetValue(material, out outputName) ? outputName : "Passthrough", GUILayout.Width(110));
+                }
+            }
+            EditorGUILayout.Space();
+            GeometryBaking();
+            serializedObject.ApplyModifiedProperties();
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Output Components", EditorStyles.boldLabel);
+            foreach (var output in outputs)
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField(string.IsNullOrEmpty(output.configuration.outputName) ? "(Unnamed)" : output.configuration.outputName);
+                }
+            }
+            if (GUILayout.Button("Add Atlas Output")) Undo.AddComponent<NordicsAtlasOutput>(owner);
+            foreach (var warning in AtlasConfigurationValidator.Validate(owner, discovery)) EditorGUILayout.HelpBox(warning, MessageType.Warning);
+            if (discovery.Materials.Count == 0 && string.IsNullOrEmpty(discovery.Warning))
+                EditorGUILayout.HelpBox("No source materials detected.", MessageType.Info);
+        }
+
+        private void GeometryBaking()
+        {
             var enabled = serializedObject.FindProperty("enableGeometryBaking");
             var excluded = serializedObject.FindProperty("excludedBlendShapes");
             var hidden = serializedObject.FindProperty("excludeHiddenGeometry");
-            EditorGUILayout.LabelField("Geometry Baking", EditorStyles.boldLabel);
+            if (!AtlasOutputUI.Fold("atlaser.geometry", "Geometry Baking", true, true)) return;
+            EditorGUI.indentLevel++;
             EditorGUILayout.PropertyField(enabled, new GUIContent("Enable Geometry Baking"));
             EditorGUILayout.HelpBox("Geometry baking reduces visual artifacts on decimated meshes by baking a normal map " +
                 "that compensates for the removed detail. Its resolution follows each material's area in the atlas.", MessageType.Info);
@@ -103,48 +149,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
                 EditorGUI.indentLevel--;
             }
-
-            serializedObject.ApplyModifiedProperties();
-            EditorGUILayout.Space();
-            var owner = ((NordicsAdvancedAtlaser)target).gameObject;
-            var discovery = AtlasMaterialDiscovery.Discover(owner);
-            var outputs = owner.GetComponents<NordicsAtlasOutput>();
-            EditorGUILayout.HelpBox("Configuration-only iteration. No textures, materials, meshes or GameObjects are generated.", MessageType.Info);
-            EditorGUILayout.LabelField("Source Mode", discovery.HasAAO ? "AAO Merge Skinned Mesh" : "Local SkinnedMeshRenderer");
-            EditorGUILayout.LabelField("Unique Source Materials", discovery.Materials.Count.ToString());
-            var assignment = new Dictionary<Material, string>();
-            foreach (var output in outputs)
-            {
-                if (output.configuration.sources != null)
-                    foreach (var source in output.configuration.sources)
-                        if (source != null && source.material != null && !assignment.ContainsKey(source.material))
-                            assignment.Add(source.material, output.configuration.outputName);
-            }
-            foreach (var material in discovery.Materials)
-            {
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    EditorGUI.BeginDisabledGroup(true);
-                    EditorGUILayout.ObjectField(material, typeof(Material), false);
-                    EditorGUI.EndDisabledGroup();
-                    string outputName;
-                    EditorGUILayout.LabelField(AtlasShaderRegistry.Detect(material)?.DisplayName ?? "Unknown", GUILayout.Width(190));
-                    EditorGUILayout.LabelField(assignment.TryGetValue(material, out outputName) ? outputName : "Passthrough", GUILayout.Width(110));
-                }
-            }
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Output Components", EditorStyles.boldLabel);
-            foreach (var output in outputs)
-            {
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    EditorGUILayout.LabelField(string.IsNullOrEmpty(output.configuration.outputName) ? "(Unnamed)" : output.configuration.outputName);
-                }
-            }
-            if (GUILayout.Button("Add Atlas Output")) Undo.AddComponent<NordicsAtlasOutput>(owner);
-            foreach (var warning in AtlasConfigurationValidator.Validate(owner, discovery)) EditorGUILayout.HelpBox(warning, MessageType.Warning);
-            if (discovery.Materials.Count == 0 && string.IsNullOrEmpty(discovery.Warning))
-                EditorGUILayout.HelpBox("No source materials detected.", MessageType.Info);
+            EditorGUI.indentLevel--;
         }
     }
 }

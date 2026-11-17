@@ -22,10 +22,11 @@ EditMode tests pass in Unity 2022.3.22.
   into one merged unified material and the virtual maps it needs. The first feature is
   *Color*, the base color map. Output settings are stored by feature ID, so changing the
   output shader keeps every choice the new one supports. Nothing is baked or written yet.
-- **Output inspector:** a *Textures* section with the textures the chosen modes need, their
-  sizes, and GPU memory estimates for PC and Android with totals, following per-platform
-  formats; feature sections that fold to one line each (mode and source count), with
-  per-source switches. Sources are read through a cache, rebuilt only when a material, its
+- **Output inspector:** a *Textures* section with a table of the textures the chosen modes
+  need, their sizes, and GPU memory estimates for PC and Android with totals, following
+  per-platform *GPU Compression Formats*; a *Material Features* section with one row per
+  feature (its name and mode) that folds open to per-material switches. Sources are listed
+  with their material's name. Sources are read through a cache, rebuilt only when a material, its
   shader, or an imported texture or shader changes.
 - **Base color bake:** each source's base color texture, with its tiling, offset and rotation,
   placed in its region of the atlas map. Its UV islands, from the meshes that use it, grow over
@@ -99,6 +100,9 @@ EditMode tests pass in Unity 2022.3.22.
   correction hit the 60° limit, which points to a mismatch between the meshes.
 
 ### Changed
+- **Atlaser inspector:** *Geometry Baking* is a folding section right above the output
+  components; the "configuration-only" note is gone. The output inspector drops its build
+  note and the "all detected materials are assigned" line.
 - Package and NDMF name `app.nordicwind.advanced-atlaser`. Requires Texture Wrapper 0.10.0 or
   later, for the renamed runtime assembly and the normal correction safety rules.
 - The NDMF plugin class is renamed `NordicsAdvancedAtlaserPlugin`. The AAO integration define

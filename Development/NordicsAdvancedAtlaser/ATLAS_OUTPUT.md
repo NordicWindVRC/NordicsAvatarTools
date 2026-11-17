@@ -719,26 +719,32 @@ kept, so switching back restores it.
 ### Layout
 
 ```
-Output name, output shader, sources and UV regions      (as today)
+Output name, output shader, sources ("Source 1 (Body)") and UV regions
 [Auto Setup]
-▸ Textures         main size, crunch, the texture list with sizes and memory
-▸ Surface          Color · Alpha · Normal maps · Color adjustments · Vertex colors ·
-                   Reflection and specular · Clear coat · Ambient occlusion
-▸ Lighting         Shading · Light volumes · LTCGI
-▸ Layers           Matcaps · Rim lighting · Environmental rim · Backlight ·
-                   Emission · Glitter · Subsurface
-▸ Effects          Proximity color · AudioLink
-▸ Render           Surface mode and queue · Fallback
-▸ Masks            where each mask went (read only)
-▸ Baking           light rig, strengths, lights, view     (only when a mode bakes)
-▸ UV layout preview                                      (as today)
+▸ Textures            main size; a table: texture, size, PC and Android memory, totals
+    ▸ GPU Compression Formats
+▸ Material Features   one row per feature: name and mode
+    Surface           Color · Alpha · Normal maps · Color adjustments · Vertex colors ·
+                      Reflection and specular · Clear coat · Ambient occlusion
+    Lighting          Shading · Light volumes · LTCGI
+    Layers            Matcaps · Rim lighting · Environmental rim · Backlight ·
+                      Emission · Glitter · Subsurface
+    Effects           Proximity color · AudioLink
+    Render            Surface mode and queue · Fallback
+▸ Masks               where each mask went (read only)
+▸ Baking              light rig, strengths, lights, view     (only when a mode bakes)
+▸ UV layout preview
 [Bake to Assets…]
 ```
 
-- Every section and feature folds. A feature's header shows its mode and how many sources use
-  it (for example *Matcaps — Merged — 3 of 5 sources*), so the folded view is a summary.
+- Each feature is one row: its name, then its mode. Where two or more sources have it, the
+  row folds open to a list that turns it off for single materials; folded, the name says when
+  it's off for some (*Matcaps (3 of 5 materials)*).
+- The group headings (Surface, Lighting, …) only appear once features from more than one
+  group are shown.
 - Features no source uses, and features without an available mode, aren't shown.
-- The per-source foldout sits at the bottom of each feature.
+- The memory figures sit in fixed, right-aligned columns, so they don't clip in a narrow
+  inspector.
 - Auto setup chooses a default mode per feature: native when supported, the cheapest
   emulation when not, off when neither.
 

@@ -22,7 +22,6 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var owner = output.gameObject;
             var main = owner.GetComponent<NordicsAdvancedAtlaser>();
             if (main == null) EditorGUILayout.HelpBox("Add Nordic's Advanced Atlaser to this GameObject to enable source discovery and coordination.", MessageType.Warning);
-            EditorGUILayout.HelpBox("The build bakes this output and remaps the meshes onto it. Bake to Assets writes its material and textures to a folder without building.", MessageType.Info);
             EditorGUILayout.PropertyField(config.FindPropertyRelative("outputName"));
             DrawShaderSelection(config.FindPropertyRelative("shaderId"));
             // Padding separates source regions, so it only applies with two or more sources.
@@ -59,7 +58,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 bool remove;
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    EditorGUILayout.LabelField("Source " + (i + 1), EditorStyles.boldLabel);
+                    EditorGUILayout.LabelField("Source " + (i + 1) + (current != null ? " (" + current.name + ")" : ""), EditorStyles.boldLabel);
                     remove = GUILayout.Button("Remove", GUILayout.Width(70));
                 }
                 if (remove)
@@ -156,8 +155,6 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
                 EditorGUI.EndDisabledGroup();
             }
-            if (available.Count == 0)
-                EditorGUILayout.LabelField("All detected materials are assigned, or none are available.", EditorStyles.wordWrappedMiniLabel);
             EditorGUILayout.Space();
             using (new EditorGUI.DisabledScope(!HasAssignedMaterials(sources) || AtlasShaderRegistry.Output(config.FindPropertyRelative("shaderId").stringValue) == null))
             {
