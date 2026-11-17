@@ -334,4 +334,15 @@ Not planned in detail yet, in rough order:
 - animation support;
 - half-precision buffers or GPU baking, if the memory budget is too tight;
 - a typed-in value for shared values, next to *Automatic* and the sources in the reference
-  source drop-down.
+  source drop-down;
+- **bake speed**, measured on a 5-material avatar (11 s per output, 2.7 s of it Unity's
+  compression), CPU only, the Texture Wrapper kept generic (no GPU color stack: it would move
+  growing feature logic into the wrapper):
+  - decals worked on within their own rectangle instead of full-size temporaries (about 2 s
+    on a 4096 body);
+  - same-size `Resize` without a transform as a copy, and the same-size `Blit` shortcut for
+    copying a channel into usage (island growing);
+  - redundant passes such as the neutral fill where every channel is overwritten;
+  - a per-source bake cache in `Library`, keyed by the material's values, its textures'
+    content hashes, the coverage, the bake size and the layout: repeat builds evaluate only
+    changed sources; optionally the compressed textures too.

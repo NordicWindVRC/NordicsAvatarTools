@@ -6,42 +6,46 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Step 4 of the pipeline (ATLAS_OUTPUT.md, "Virtual maps and textures"): one output texture
-    // filled from the virtual maps it holds. Each map is baked at the texture's size, copied into
-    // its channels and released before the next, so at most two full-size maps exist at once.
+    // filled from the virtual maps it holds. The baker works source by source: each map of the
+    // texture is evaluated, copied into its channels of the source's content, and released
+    // before the next.
     public static class AtlasTexturePacker
     {
-        // `timings` (optional) gets a "[Time] …" line for each step of the maps' bakes.
+        // `timings` (optional) gets a "[Time] …" line for each step of the bake.
         public static NordicsTextureWrapper Pack(AtlasTextureUse use, AtlasOutputPlan plan, AtlasGeneratorJob job, List<string> timings = null)
         {
             var texture = use.Texture;
-            var packed = new NordicsTextureWrapper(use.Width, use.Height, Settings(use));
-            try
+            var parts = new List<AtlasBakePart>();
+            foreach (var channel in texture.Channels)
             {
-                packed.Fill(Neutral(texture));
-                foreach (var channel in texture.Channels)
+                if (!use.Maps.Contains(channel.Map)) continue;
+                // One request per virtual map; a map no feature requested keeps its neutral value.
+                var request = plan.Maps.FirstOrDefault(r => r.Map == channel.Map);
+                if (request == null) continue;
+                // A normal map is its whole texture: its vectors are used as they are.
+                if (texture.Normal) parts.Add(new AtlasBakePart { Request = request });
+                else
                 {
-                    if (!use.Maps.Contains(channel.Map)) continue;
-                    // One request per virtual map; a map no feature requested keeps its neutral value.
-                    var request = plan.Maps.FirstOrDefault(r => r.Map == channel.Map);
-                    if (request == null) continue;
-                    using (var map = AtlasMapBaker.Bake(request, job, use.Width, use.Height, timings))
+                    var target = channel;
+                    parts.Add(new AtlasBakePart
                     {
-                        // A normal map is its whole texture: its vectors are copied as they are.
-                        if (texture.Normal) packed.Blit(map, padding: 0);
-                        else
+                        Request = request,
+                        Copy = (content, map) =>
                         {
-                            if (channel.Invert) map.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Invert });
-                            Copy(packed, map, channel.Channels);
+                            if (target.Invert) map.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Invert });
+                            Copy(content, map, target.Channels);
                         }
-                    }
+                    });
                 }
-                return packed;
             }
-            catch
+            var neutral = texture.Normal ? new Color(0f, 0f, 1f, 1f) : Neutral(texture);
+            if (parts.Count == 0)
             {
-                packed.Dispose();
-                throw;
+                var empty = new NordicsTextureWrapper(use.Width, use.Height, Settings(use));
+                empty.Fill(neutral);
+                return empty;
             }
+            return AtlasMapBaker.Bake(parts, Settings(use), neutral, texture.Label, job, use.Width, use.Height, timings);
         }
 
         // Color textures sRGB, data linear; alpha only when a virtual map uses it.
@@ -81,23 +85,26 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
         }
 
-        private static readonly TextureChannel[] Rgba = { TextureChannel.R, TextureChannel.G, TextureChannel.B, TextureChannel.A };
-
-        private static void Copy(NordicsTextureWrapper packed, NordicsTextureWrapper map, AtlasTextureChannels channels)
+        // A map into its channels of a source's content, of the same size.
+        private static void Copy(NordicsTextureWrapper content, NordicsTextureWrapper map, AtlasTextureChannels channels)
         {
             switch (channels)
             {
                 case AtlasTextureChannels.RGBA:
-                    packed.Blit(map, padding: 0);
+                    AtlasPixels.Map(content, map, (c, m) => m);
                     return;
                 case AtlasTextureChannels.RGB:
-                    // Channel by channel, so the alpha another map holds is kept.
-                    for (int k = 0; k < 3; k++)
-                        packed.Blit(map, sourceChannel: Rgba[k], destinationChannel: Rgba[k]);
+                    // The alpha another map holds is kept.
+                    AtlasPixels.Map(content, map, (c, m) => new Color(m.r, m.g, m.b, c.a));
                     return;
                 default:
                     // A one-value map: its RGB average into the channel.
-                    packed.Blit(map, destinationChannel: Rgba[(int)channels - (int)AtlasTextureChannels.R]);
+                    int k = (int)channels - (int)AtlasTextureChannels.R;
+                    AtlasPixels.Map(content, map, (c, m) =>
+                    {
+                        c[k] = (m.r + m.g + m.b) / 3f;
+                        return c;
+                    });
                     return;
             }
         }

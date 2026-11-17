@@ -204,6 +204,11 @@ EditMode tests pass in Unity 2022.3.22.
   once (`AtlasEvaluationCache`), instead of once per layer or mask. A channel copied into RGB
   is one pass instead of three blits, and the Texture Wrapper reuses pixel buffers and skips
   the resampled copy in same-size blits. Evaluation steps of 100 ms or more get a timing line.
+- **One coverage, island growth and placement per source and texture:** a texture's virtual
+  maps (base color and alpha, or metallic, smoothness and the masks) are baked source by
+  source into one content, so each source's coverage is painted, its islands grown and its
+  region placed once per texture instead of once per map, and the space between regions is
+  filled once. A map's region a source doesn't fill keeps the channel's neutral value.
 - **Progress bar with Cancel** while an output bakes (build and *Bake to Assets*): the
   texture, map and source being baked. Cancel stops the build and leaves the avatar as it was.
 - **Atlaser inspector:** *Geometry Baking* is a folding section right above the output

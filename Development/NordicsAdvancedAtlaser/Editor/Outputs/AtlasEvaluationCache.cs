@@ -26,6 +26,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return new End();
         }
 
+        /// <summary>Names the evaluation the next steps' timing lines belong to.</summary>
+        public static void Name(string name)
+        {
+            if (depth > 0) label = name;
+        }
+
         /// <summary>Times one step of the evaluation; null outside a scope with timings.</summary>
         public static IDisposable Step(string step)
         {

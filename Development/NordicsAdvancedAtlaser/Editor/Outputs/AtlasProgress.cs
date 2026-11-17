@@ -44,10 +44,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             Show($"{name}: starting", 0f);
         }
 
-        // The source being baked into one of the texture's maps, 0-based.
-        public static void Source(AtlasVirtualMap map, int index, int count)
+        // The source being baked into the texture, 0-based.
+        public static void Source(string name, int index, int count)
         {
-            current = $"{textureName}: {map}, source {index + 1} of {count}";
+            current = $"{name}: source {index + 1} of {count}";
             within = count > 0 ? (float)index / count : 0f;
             Show(current, within);
         }

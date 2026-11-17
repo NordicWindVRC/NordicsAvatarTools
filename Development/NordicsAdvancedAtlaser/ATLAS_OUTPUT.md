@@ -58,9 +58,9 @@ What exists today, which this design builds on:
 | Source analysis cache | `Editor/AtlasSourceAnalysisCache.cs` | Each source's parse, kept until the material, its shader or an imported texture or shader changes |
 | Overview | `Editor/Outputs/AtlasOutputOverview.cs`, `AtlasTextureMemory.cs` | What an output uses: features with their modes and sources, the textures they need with sizes and memory |
 | Evaluator | `Editor/Outputs/AtlasMapEvaluator.cs`, `AtlasColorStack.cs` | The bakeable subset, over a source's UV 0–1: the base color texture with its tiling, offset and rotation, its color, the static color layers (tiled UV0 textures, decals placed by center, scale and rotation, or colors, every blend, masks, source alpha as opacity) and static color adjustments on the base color, the surface color and layer sources; the static emission layers; alpha; the combined normal; scalar inputs and masks on UV0, masks with their levels and vertex colors, both reading the mask bus (`AtlasMaskBusEvaluator.cs`: texture, offset, remap and force steps; live steps at their normal-view value). Live parts, decals with symmetry, mirror sides, depth or spin, final-color adjustments are listed in the diagnostics |
-| Map baker | `Editor/Outputs/AtlasMapBaker.cs` | One virtual map: each source evaluated at its bake size, its UV islands grown over what its meshes don't use, placed in its region, the rest of the atlas filled from the nearest region |
+| Map baker | `Editor/Outputs/AtlasMapBaker.cs` | One texture, source by source: each of its virtual maps evaluated at the source's bake size and copied into its channels of the source's content; the source's coverage painted, its UV islands grown and the content placed in its region once for all of them; the rest of the atlas filled from the nearest region once per texture |
 | Coverage | `Editor/Outputs/AtlasCoverage.cs` | Each source's UV0 triangles (from the output's renderers in the manual bake, the avatar's in the build), painted at bake size; a triangle in another UV tile counts by whole tiles |
-| Packing | `Editor/Outputs/AtlasTexturePacker.cs` | One output texture from its virtual maps, each baked at the texture's size into its channels |
+| Packing | `Editor/Outputs/AtlasTexturePacker.cs` | One output texture from its virtual maps: which channels each map fills (inverted where the texture stores it so), and the neutral value of the rest |
 | Writers | `Editor/Outputs/AtlasOutputShaders.cs` | Poiyomi Toon 10: the base color texture and color, the normal map (`_BumpMap`, `_BumpScale`), Reflections & Specular from the packed map (`_MochieMetallicMaps` behind `MOCHIE_PBR`), the AO maps (`_LightingAOMaps` behind `PROP_LIGHTINGAOMAPS`), emission 0 (`_EmissionMap`, behind `_EnableEmission` and `_EMISSION`), the rendering preset of the surface mode (its queue, render type, blend factors, depth write and cutoff, as its shader's presets set them) and the `VRCFallback` tag. VRChat Mobile Toon Standard: the base color texture and color and the normal map (behind `USE_NORMAL_MAPS`), metallic and gloss (behind `USE_SPECULAR`) and occlusion (behind `USE_OCCLUSION_MAP`) from one texture, emission (`_EmissionMap`), opaque in the Geometry queue |
 | Export | `Editor/Outputs/AtlasTextureExport.cs` | PNG assets with the output's formats per platform, crunch where it saves 10% |
 | Manual bake | `Editor/Outputs/AtlasManualBake.cs` | Bake to Assets: the pipeline in edit mode, the textures and the material written as assets |
@@ -463,7 +463,9 @@ falls back to the source texture as it is (without the unsupported layer or oper
 ### Memory budget
 
 A 4096 × 4096 float RGBA map takes 256 MB, so bakes keep few full-size maps alive at once:
-- virtual maps are baked one at a time, blitted into the atlas, and released;
+- a texture is baked source by source: each of the source's virtual maps is evaluated,
+  copied into the source's content and released before the next, and the content is placed
+  in the atlas and released before the next source;
 - the world normal exists only while a bake-in needs it;
 - temporary layers are mixed in and released before the next one is made;
 - sources are processed one after another, never side by side.
