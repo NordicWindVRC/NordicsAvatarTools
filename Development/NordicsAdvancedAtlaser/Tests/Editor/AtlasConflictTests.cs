@@ -104,7 +104,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsFalse(toon.Notes.Any(n => n.Contains("weaker reflections")), "equal reflections");
             var poiyomi = AtlasOutputPipeline.Resolve(job, Poiyomi);
             Assert.IsFalse(poiyomi.Notes.Any(n => n.Contains("weaker")), "Poiyomi keeps them in masks");
-            Assert.IsTrue(poiyomi.Notes.Any(n => n.StartsWith("Lighting")), "lighting isn't merged yet");
+            Assert.IsFalse(poiyomi.Notes.Any(n => n.Contains("lit differently")), "the sources light alike");
         }
     }
 }

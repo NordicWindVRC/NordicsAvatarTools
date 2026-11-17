@@ -126,6 +126,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool FaceTileDiscard;
         // How many UV channels after UV0 the output's features can read (preserved UVs).
         public int UVChannels;
+        // The writer shades only through a ramp texture: a ramp described otherwise (bands,
+        // keys) is generated as one (AtlasRampTexture).
+        public bool GeneratedRamp;
 
         public AtlasOutputTexture TextureFor(AtlasVirtualMap map) => Textures.Find(t => t.Provides(map));
 

@@ -111,6 +111,12 @@ and `ATLAS_OUTPUT.md` for the output design.
        the material it comes from (*Automatic*: the one with the largest area).
      - **Ambient Occlusion**: each source's occlusion map, at its strength; sources without
        one stay unoccluded.
+     - **Lighting**: one lighting setup for the atlas, taken from one material. Where the
+       materials are lit differently, *Lighting from* picks it (*Automatic*: the one with the
+       largest area). Poiyomi keeps the lighting type and Light Data settings; Toon Standard
+       its ramp, shadow and brightness settings. Lighting drawn on the texture (shadow masks,
+       band textures, SDF faces) follows later; the build lists it, and what the output
+       shader can't set the same way.
      - **Hidden UV Tiles** (Poiyomi's UV tile discard): *Kept live* (the atlas material hides
        the same tiles, read from a spare UV channel the build writes), *Removed from the mesh*
        (any output shader; only tiles hidden on both sides), or *Off*.

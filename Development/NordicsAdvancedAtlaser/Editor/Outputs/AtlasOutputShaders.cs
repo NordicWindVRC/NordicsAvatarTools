@@ -103,6 +103,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetFloat("_MainUseVertexColorAlpha", vertex.MultiplyAlpha ? Mathf.Clamp01(vertex.AlphaAmount) : 0f);
             material.SetFloat("_MainVertexColoringLinearSpace", vertex.SrgbData ? 1 : 0);
             WriteTileDiscard(output.Render.HiddenTiles, material);
+            WriteLighting(output.Lighting, material);
             WriteSurfaceResponse(output.Surface.Response, material);
             WriteEmission(output, material);
             var render = output.Render;
@@ -171,6 +172,221 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // the reflection and specular masks B and A × their strengths; and the AO maps
         // (PROP_LIGHTINGAOMAPS): occlusion = lerp(1, R, strength). Thry sets these keywords from
         // its inspector; a written material sets them itself.
+        // Lighting: Light Data and the lighting type, the Poiyomi parser's reading written back
+        // (AtlasPoiyomiLighting). Parts drawn on the texture are cleared by the Lighting feature.
+        private static readonly string[] LightingKeywords =
+        {
+            "_LIGHTINGMODE_TEXTURERAMP", "_LIGHTINGMODE_MULTILAYER_MATH", "_LIGHTINGMODE_WRAPPED", "_LIGHTINGMODE_SKIN",
+            "_LIGHTINGMODE_SHADEMAP", "_LIGHTINGMODE_FLAT", "_LIGHTINGMODE_REALISTIC", "_LIGHTINGMODE_CLOTH", "_LIGHTINGMODE_SDF"
+        };
+
+        private static void WriteLighting(AtlasLighting l, Material m)
+        {
+            m.SetFloat("_LightingColorMode", l.ColorModel == AtlasLightColorModel.Separate ? 1 : l.ColorModel == AtlasLightColorModel.Floored ? 2
+                : l.ColorModel == AtlasLightColorModel.SplitProbes ? 3 : 0);
+            m.SetFloat("_Unlit_Intensity", l.FloorIntensity);
+            m.SetFloat("_LightingIndirectUsesNormals", l.Ambient == AtlasAmbientModel.Directional ? l.DirectionalAmount : 0f);
+            int direction = 0;
+            switch (l.Direction)
+            {
+                case AtlasLightDirectionModel.Fixed:
+                    direction = l.DirectionLocal ? 1 : 2;
+                    m.SetVector("_LightngForcedDirection", l.LightDirection);
+                    break;
+                case AtlasLightDirectionModel.ViewFallback: direction = 3; break;
+                case AtlasLightDirectionModel.SplitProbes: direction = 4; break;
+                case AtlasLightDirectionModel.View:
+                    direction = 5;
+                    m.SetFloat("_LightingViewDirOffsetYaw", l.ViewYaw);
+                    m.SetFloat("_LightingViewDirOffsetPitch", l.ViewPitch);
+                    break;
+            }
+            m.SetFloat("_LightingDirectionMode", direction);
+            var ramp = l.Ramp;
+            bool multilayer = l.Family == AtlasLightingFamily.RampToon && ramp.Term != AtlasShadingTerm.Wrapped && ramp.Bands.Count > 0 && !IsShadeMap(ramp);
+            // Multilayer Math builds its own half-Lambert terms; Shade Map keeps the light map's.
+            m.SetFloat("_LightingMapMode", multilayer || ramp.Term == AtlasShadingTerm.HalfLambert ? 1 : ramp.Term == AtlasShadingTerm.Lambert ? 2
+                : ramp.Term == AtlasShadingTerm.ShadowsOnly ? 3 : 0);
+            m.SetFloat("_LightingCastedShadows", l.ReceiveShadows);
+            m.SetFloat("_LightingShadowSoftness", l.ShadowSoftness);
+            m.SetFloat("_LightingCleanCastedShadows", l.CleanShadows ? 1 : 0);
+            m.SetFloat("_LightingMonochromatic", l.Monochrome);
+            m.SetFloat("_LightingCapEnabled", l.LimitBrightness ? 1 : 0);
+            m.SetFloat("_LightingCap", l.BrightnessCeiling);
+            m.SetFloat("_LightingCapLuminance", l.LimitByLuminance);
+            m.SetFloat("_LightingCapMode", l.LimitKeepsHue ? 1 : 0);
+            m.SetFloat("_BackfaceForceShadow", ramp.BackFaceShadow);
+            m.SetFloat("_LightingMinLightBrightness", l.MinimumLight);
+            m.SetFloat("_LightingForceColorEnabled", l.FixedLightColor ? 1 : 0);
+            m.SetColor("_LightingForcedColor", l.LightColor.gamma);
+            m.SetFloat("_LightingForcedColorThemeIndex", 0);
+            m.SetFloat("_LightingVertexLightingEnabled", l.Contributions.VertexLights > 0f ? 1 : 0);
+            m.SetFloat("_LightingAdditiveEnable", l.Contributions.AdditionalLights > 0f ? 1 : 0);
+            var additional = l.AdditionalLights;
+            m.SetFloat("_LightingAdditiveType", additional.Shading == AtlasAdditionalLightShading.Lambert ? 0
+                : additional.Shading == AtlasAdditionalLightShading.Toon ? 1 : 3);
+            m.SetFloat("_LightingAdditiveGradientStart", additional.GradientStart);
+            m.SetFloat("_LightingAdditiveGradientEnd", additional.GradientEnd);
+            m.SetFloat("_LightingAdditiveLimited", additional.LimitBrightness ? 1 : 0);
+            m.SetFloat("_LightingAdditiveLimit", additional.BrightnessCeiling);
+            m.SetFloat("_LightingAdditiveLimitMode", additional.LimitKeepsHue ? 1 : 0);
+            m.SetFloat("_LightingAdditiveCastedShadows", additional.ReceiveShadows);
+            m.SetFloat("_LightingAdditiveMonochromatic", additional.Monochrome);
+            m.SetFloat("_LightingAdditivePassthrough", additional.Passthrough);
+            m.SetVector("_LightingAdditiveAttenCurve", additional.Falloff);
+            m.SetFloat("_DisableDirectionalInAdd", additional.Directional ? 0 : 1);
+            m.SetFloat("_LightingMirrorVertexLightingEnabled", additional.VertexLightsInMirrors ? 1 : 0);
+            // The add pass: Max (4) with the alpha boost, or add.
+            m.SetFloat("_AddBlendOp", additional.Combine == AtlasLightCombine.Max ? 4 : 0);
+            m.SetFloat("_AlphaBoostFA", additional.MaxAlphaBoost);
+            m.SetFloat("_PPLightingMultiplier", l.LightMultiplier);
+            m.SetFloat("_PPLightingAddition", l.LightAddition);
+            var volumes = l.LightVolumes;
+            m.SetFloat("_LightingEnableLightVolumes", volumes.Enabled ? 1 : 0);
+            m.SetFloat("_LightingLightVolumesSpecular", volumes.Specular ? volumes.SpecularStrength : 0f);
+            m.SetFloat("_LightingLightVolumesNormalBias", volumes.Bias);
+            m.SetFloat("_LightingLightVolumesSpecularMaxLights", volumes.SpecularMaxLights);
+            // LTCGI (POI_LTCGI), which Poiyomi discourages on avatars now that worlds light them
+            // through light volumes.
+            var ltcgi = l.Ltcgi;
+            m.SetFloat("_LTCGIEnabled", ltcgi.Enabled ? 1 : 0);
+            if (ltcgi.Enabled) m.EnableKeyword("POI_LTCGI");
+            else m.DisableKeyword("POI_LTCGI");
+            m.SetFloat("_LTCGI_AnimToggle", 1);
+            m.SetColor("_LTCGI_DiffuseColor", ltcgi.DiffuseTint.gamma);
+            m.SetFloat("_LTCGI_DiffuseColorThemeIndex", 0);
+            m.SetColor("_LTCGI_SpecularColor", ltcgi.SpecularTint.gamma);
+            m.SetFloat("_LTCGI_SpecularColorThemeIndex", 0);
+            m.SetFloat("_LTCGI_DiffuseMultiplier", ltcgi.DiffuseStrength);
+            m.SetFloat("_LTCGI_SpecularMultiplier", ltcgi.SpecularStrength);
+            m.SetFloat("_LTCGI_UsePBR", ltcgi.UseSurfaceResponse ? 1 : 0);
+            m.SetFloat("_LTCGI_Metallic", ltcgi.Metallic);
+            m.SetFloat("_LTCGI_Smoothness", 1f - ltcgi.Roughness);
+            m.SetFloat("_LTCGI_UseEO", ltcgi.ExposureOcclusion ? 1 : 0);
+
+            bool shading = l.Family != AtlasLightingFamily.Unlit;
+            m.SetFloat("_ShadingEnabled", shading ? 1 : 0);
+            if (shading) m.EnableKeyword("VIGNETTE_MASKED");
+            else m.DisableKeyword("VIGNETTE_MASKED");
+            int type = LightingType(l, m);
+            m.SetFloat("_LightingMode", type);
+            for (int k = 0; k < LightingKeywords.Length; k++)
+                if (k == type) m.EnableKeyword(LightingKeywords[k]);
+                else m.DisableKeyword(LightingKeywords[k]);
+        }
+
+        // Shade Map's reading: two steps, both sides lit by the direct light, the shades occluded.
+        private static bool IsShadeMap(AtlasRampToon ramp) =>
+            ramp.Bands.Count == 2 && ramp.DirectOccluded && Mathf.Approximately(ramp.ShadowDirect, 1f) && ramp.ShadowAmbient <= 0f && !ramp.RampScaledShadowDirect;
+
+        // The lighting type and its settings.
+        private static int LightingType(AtlasLighting l, Material m)
+        {
+            var ramp = l.Ramp;
+            switch (l.Family)
+            {
+                case AtlasLightingFamily.Unlit:
+                    return 5;
+                case AtlasLightingFamily.Flat:
+                    m.SetFloat("_ForceFlatRampedLightmap", l.FlatLightMap ? 1 : 0);
+                    return 5;
+                case AtlasLightingFamily.PhysicallyBased:
+                    if (l.Diffuse == AtlasDiffuseModel.PreintegratedSkin)
+                    {
+                        var skin = l.Skin;
+                        m.SetColor("_LightingShadowColor", l.ShadowTint.gamma);
+                        m.SetTexture("_SkinLUT", skin.Lut?.Texture);
+                        m.SetFloat("_SssScale", skin.Scattering);
+                        m.SetTexture("_SkinThicknessMap", null);
+                        m.SetFloat("_SkinThicknessPower", skin.ThicknessPower);
+                        m.SetVector("_SssTransmissionAbsorption", skin.Absorption);
+                        m.SetFloat("_SkinScatteringStability", skin.Stability);
+                        m.SetFloat("_SkinDiffuseSoftnessEnabled", skin.NormalSoftness > 0f ? 1 : 0);
+                        m.SetFloat("_SssBumpBlur", skin.NormalSoftness > 0f ? skin.NormalSoftness : 0.7f);
+                        m.SetFloat("_LightingIgnoreAmbientColor", skin.ConstantShadow);
+                        m.SetFloat("_ShadowStrength", skin.Strength);
+                        return 3;
+                    }
+                    // Realistic: Lambert, the light × lerp(1, light map, strength), tinted in shadow.
+                    m.SetFloat("_ShadowStrength", l.ShadowStrength);
+                    m.SetColor("_LightingShadowColor", l.ShadowTint.gamma);
+                    return 6;
+            }
+            if (ramp.Term == AtlasShadingTerm.Wrapped)
+            {
+                m.SetFloat("_LightingWrappedWrap", ramp.Wrap);
+                m.SetFloat("_LightingWrappedNormalization", ramp.WrapNormalization);
+                m.SetColor("_LightingShadowColor", ramp.ShadowTint.Color.gamma);
+                m.SetColor("_LightingWrappedColor", ramp.LitTint.gamma);
+                m.SetFloat("_ShadowStrength", ramp.RampStrength);
+                // The keys from black to white: r = saturate((t − (1 − end)) / (end − start + 0.001)).
+                float low = 0f, high = 1f;
+                foreach (var key in ramp.Keys)
+                {
+                    if (key.Color.r <= 0f) low = Mathf.Max(low, key.Position);
+                    if (key.Color.r >= 1f) high = Mathf.Min(high, key.Position);
+                }
+                float end = 1f - low;
+                m.SetFloat("_LightingGradientEnd", end);
+                m.SetFloat("_LightingGradientStart", end - (high - low) + 0.001f);
+                return 2;
+            }
+            float ignore = ramp.ShadowDirect;
+            if (ramp.Bands.Count > 0)
+            {
+                m.SetFloat("_ShadowStrength", ramp.RampStrength);
+                // Shade Map: two steps, both sides lit by the direct light, the shades occluded.
+                if (IsShadeMap(ramp))
+                {
+                    var first = ramp.Bands[0];
+                    var second = ramp.Bands[1];
+                    m.SetColor("_1st_ShadeColor", first.Color.Color.gamma);
+                    m.SetFloat("_BaseShade_Feather", first.Blur);
+                    m.SetFloat("_BaseColor_Step", first.Border + first.Blur * 0.5f);
+                    m.SetFloat("_Use_BaseAs1st", first.ColorFromBase ? 1 : 0);
+                    m.SetTexture("_1st_ShadeMap", null);
+                    m.SetColor("_2nd_ShadeColor", second.Color.Color.gamma);
+                    m.SetFloat("_1st2nd_Shades_Feather", second.Blur);
+                    m.SetFloat("_ShadeColor_Step", second.Border + second.Blur * 0.5f);
+                    m.SetFloat("_Use_1stAs2nd", 0);
+                    m.SetTexture("_2nd_ShadeMap", null);
+                    m.SetFloat("_ShadingShadeMapBlendType", ramp.BandsReplaceBase ? 0 : 1);
+                    return 4;
+                }
+                // Multilayer Math: up to three bands.
+                string[] prefixes = { "_Shadow", "_Shadow2nd", "_Shadow3rd" };
+                for (int k = 0; k < prefixes.Length; k++)
+                {
+                    var band = k < ramp.Bands.Count ? ramp.Bands[k] : null;
+                    var color = band != null ? band.Color.Color : Color.clear;
+                    m.SetColor(prefixes[k] + "Color", new Color(color.r, color.g, color.b, band != null ? band.Alpha : 0f).gamma);
+                    m.SetTexture(prefixes[k] + "ColorTex", null);
+                    if (band == null) continue;
+                    m.SetFloat(prefixes[k] + "ColorTexAddition", band.ColorAddition);
+                    m.SetFloat(prefixes[k] + "Border", band.Border);
+                    m.SetFloat(prefixes[k] + "Blur", band.Blur);
+                    m.SetFloat(prefixes[k] + "NormalStrength", band.NormalStrength);
+                    m.SetFloat(prefixes[k] + "Receive", band.ReceiveShadows);
+                }
+                m.SetFloat("_LightingMulitlayerNonLinear", ramp.SmoothEdges ? 1 : 0);
+                m.SetColor("_ShadowBorderColor", new Color(ramp.BorderColor.r, ramp.BorderColor.g, ramp.BorderColor.b, 1f).gamma);
+                m.SetFloat("_ShadowBorderRange", ramp.BorderRange);
+                m.SetFloat("_ShadowEnvStrength", ramp.EnvironmentStrength);
+                m.SetFloat("_ShadowMainStrength", ramp.ShadowColorFromBase);
+                m.SetFloat("_LightingIgnoreAmbientColor", ignore);
+                m.SetFloat("_ShadowMaskType", 0);
+                m.SetTexture("_ShadowStrengthMask", null);
+                return 1;
+            }
+            // Texture Ramp: the ramp by the light map, Shadow Tint × lerp(ambient, r × direct, ignore).
+            m.SetTexture("_ToonRamp", ramp.Ramp?.Texture);
+            m.SetFloat("_ShadowOffset", ramp.Offset);
+            m.SetFloat("_ShadowStrength", ramp.RampStrength);
+            m.SetColor("_LightingShadowColor", ramp.ShadowTint.Color.gamma);
+            m.SetFloat("_LightingIgnoreAmbientColor", ignore);
+            return 0;
+        }
+
         // UV Tile Discard (vertex mode: a triangle with a vertex in a hidden tile is hidden; never
         // outside the 4 × 4 grid) for both sides, and Face Discard for one side, which needs the
         // first one's keyword.
@@ -280,8 +496,56 @@ namespace NordicWind.AdvancedAtlaser.Editor
             },
             Reflectance = AtlasReflectanceSupport.FollowsSmoothness,
             // _VertexColor: the base color × the vertex RGB as stored.
-            VertexColors = AtlasVertexColorSupport.Color
+            VertexColors = AtlasVertexColorSupport.Color,
+            // _Ramp is its only shading control.
+            GeneratedRamp = true
         };
+
+        // Lighting: Toon Standard's one model, base × (lerp(base × Shadow Tint, 1, min(1, ramp(N·L
+        // × 0.5 + 0.5) + Shadow Boost)) × direct + ambient). The ramp is the source's texture, or
+        // the SDK ramp nearest to its family.
+        private static readonly (AtlasRampPreset Preset, string Texture)[] RampTextures =
+        {
+            (AtlasRampPreset.Flat, "ShadowRampFlat"), (AtlasRampPreset.Realistic, "ShadowRampRealistic"),
+            (AtlasRampPreset.RealisticSoft, "ShadowRampRealisticSoft"), (AtlasRampPreset.RealisticVerySoft, "ShadowRampRealisticVerySoft"),
+            (AtlasRampPreset.TwoBands, "ShadowRampToon2Band"), (AtlasRampPreset.ThreeBands, "ShadowRampToon3Band"),
+            (AtlasRampPreset.FourBands, "ShadowRampToon4Band")
+        };
+
+        private static void WriteLighting(AtlasLighting l, Material m)
+        {
+            var ramp = l.Ramp;
+            var texture = ramp.Ramp?.Texture;
+            if (texture == null)
+            {
+                var preset = ramp.Preset != AtlasRampPreset.None ? ramp.Preset
+                    : l.Family == AtlasLightingFamily.PhysicallyBased ? AtlasRampPreset.Realistic
+                    : l.Family == AtlasLightingFamily.RampToon ? AtlasRampPreset.None : AtlasRampPreset.Flat;
+                texture = PresetTexture(preset);
+            }
+            m.SetTexture("_Ramp", texture);
+            m.SetFloat("_ShadowBoost", Mathf.Clamp01(ramp.ShadowLift));
+            // Banded shading keeps its shadow color in the first band.
+            var tint = ramp.Bands.Count > 0 ? ramp.Bands[0].Color.Color : ramp.ShadowTint.Color;
+            m.SetFloat("_ShadowAlbedo", Mathf.Clamp01(tint.r * 0.2126f + tint.g * 0.7152f + tint.b * 0.0722f));
+            m.SetFloat("_MinBrightness", Mathf.Clamp(l.MinimumBrightness, 0f, 0.1f));
+            m.SetFloat("_LimitBrightness", l.LimitBrightness ? 1 : 0);
+        }
+
+        // The VRChat SDK's ramp texture for a preset; null: none (white, fully lit).
+        private static Texture PresetTexture(AtlasRampPreset preset)
+        {
+            foreach (var (candidate, name) in RampTextures)
+            {
+                if (candidate != preset) continue;
+                foreach (string guid in UnityEditor.AssetDatabase.FindAssets(name + " t:Texture2D"))
+                {
+                    var texture = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(UnityEditor.AssetDatabase.GUIDToAssetPath(guid));
+                    if (texture != null && texture.name == name) return texture;
+                }
+            }
+            return null;
+        }
 
         // Toon Standard: _Color (sRGB-authored) times _MainTex; the normal map, behind its
         // USE_NORMAL_MAPS keyword. It's opaque only, and a VRChat shader, so it needs no fallback.
@@ -293,6 +557,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetTextureScale("_MainTex", Vector2.one);
             material.SetTextureOffset("_MainTex", Vector2.zero);
             material.SetFloat("_VertexColor", output.Surface.VertexColor.MultiplyColor ? 1 : 0);
+            WriteLighting(output.Lighting, material);
             var normal = output.Surface.Normal;
             if (normal.Map?.Texture != null)
             {

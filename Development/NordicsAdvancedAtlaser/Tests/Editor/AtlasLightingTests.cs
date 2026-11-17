@@ -1,0 +1,235 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using NUnit.Framework;
+using NordicWind.AdvancedAtlaser.Editor;
+using UnityEngine;
+using Object = UnityEngine.Object;
+
+namespace NordicWind.AdvancedAtlaser.Tests
+{
+    // Lighting: one setup from the reference source, written by each output shader
+    // (ATLAS_OUTPUT_PLAN.md, 2.6a).
+    public sealed class AtlasLightingTests
+    {
+        private readonly List<Object> created = new List<Object>();
+
+        [TearDown]
+        public void Destroy()
+        {
+            foreach (var o in created) if (o != null) Object.DestroyImmediate(o);
+            created.Clear();
+        }
+
+        private static AtlasGeneratorJob Job(params (AtlasUnifiedMaterial Material, float Width)[] sources)
+        {
+            var job = new AtlasGeneratorJob();
+            float x = 0f;
+            foreach (var (material, width) in sources)
+            {
+                job.Sources.Add(new AtlasGeneratorSource { Material = material, UVRegion = new Rect(x, 0f, width, 1f) });
+                x += width;
+            }
+            return job;
+        }
+
+        private static AtlasOutputCapabilities Poiyomi => AtlasShaderRegistry.Output("poiyomi10").Capabilities;
+
+        private static AtlasUnifiedMaterial Lit(AtlasLightingFamily family)
+        {
+            var material = new AtlasUnifiedMaterial();
+            material.Lighting.Family = family;
+            return material;
+        }
+
+        [Test]
+        public void TheLightingComesFromTheChosenSourceOrTheLargest()
+        {
+            var flat = Lit(AtlasLightingFamily.Flat);
+            var toon = Lit(AtlasLightingFamily.RampToon);
+            Assert.IsTrue(new AtlasLightingFeature().SharedValuesDiffer(new[] { flat, toon }, Poiyomi));
+            Assert.IsFalse(new AtlasLightingFeature().SharedValuesDiffer(new[] { toon, Lit(AtlasLightingFamily.RampToon) }, Poiyomi));
+
+            var job = Job((flat, 0.25f), (toon, 0.75f));
+            var plan = AtlasOutputPipeline.Resolve(job, Poiyomi);
+            Assert.AreEqual(AtlasLightingFamily.RampToon, plan.Output.Lighting.Family, "automatic: the largest region");
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("taken from source 2") && n.Contains("source 1 is lit differently")));
+
+            job.Features.Add(new AtlasFeatureChoice { FeatureId = AtlasLightingFeature.FeatureId, ReferenceSource = 0 });
+            Assert.AreEqual(AtlasLightingFamily.Flat, AtlasOutputPipeline.Resolve(job, Poiyomi).Output.Lighting.Family, "the chosen source");
+        }
+
+        [Test]
+        public void PartsDrawnOnTheTextureAreLeftOut()
+        {
+            var texture = new Texture2D(2, 2);
+            created.Add(texture);
+            var toon = Lit(AtlasLightingFamily.RampToon);
+            toon.Lighting.Ramp.TermMask = new AtlasMask { Map = new AtlasTextureReference { Texture = texture } };
+            var band = new AtlasShadeBand();
+            band.Color.Map = new AtlasTextureReference { Texture = texture };
+            toon.Lighting.Ramp.Bands.Add(band);
+            var plan = AtlasOutputPipeline.Resolve(Job((toon, 1f)), Poiyomi);
+            var ramp = plan.Output.Lighting.Ramp;
+            Assert.IsNull(ramp.TermMask);
+            Assert.IsNull(ramp.Bands.Single().Color.Map);
+            Assert.IsNotNull(band.Color.Map, "the source's own band is untouched");
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("drawn on the texture")));
+        }
+
+        private IAtlasOutputShader Installed(string id)
+        {
+            var shader = AtlasShaderRegistry.InstalledOutputShaders.FirstOrDefault(s => s.ShaderId == id);
+            if (shader == null) Assert.Ignore(id + " isn't installed.");
+            return shader;
+        }
+
+        // A Poiyomi material with the given settings, parsed, written back and read again.
+        private List<string> PoiyomiRoundTrip(Action<Material> set)
+        {
+            var shader = Installed("poiyomi10");
+            var source = new Material(shader.FindShader());
+            created.Add(source);
+            set(source);
+            var parsed = AtlasShaderRegistry.Detect(source).Parse(source);
+            var output = new AtlasUnifiedMaterial();
+            AtlasFieldwise.Copy(parsed.Lighting, output.Lighting);
+            var written = new Material(shader.FindShader());
+            created.Add(written);
+            shader.Write(output, written);
+            return AtlasLightingFeature.Unkept(output, written).ToList();
+        }
+
+        [Test]
+        public void EveryPoiyomiLightingTypeRoundTrips()
+        {
+            var cases = new Dictionary<string, Action<Material>>
+            {
+                ["texture ramp"] = m =>
+                {
+                    m.SetFloat("_LightingMode", 0);
+                    m.SetFloat("_ShadowStrength", 0.7f);
+                    m.SetFloat("_ShadowOffset", 0.1f);
+                    m.SetColor("_LightingShadowColor", new Color(0.5f, 0.4f, 0.6f, 1f));
+                    m.SetFloat("_LightingIgnoreAmbientColor", 0.3f);
+                },
+                ["multilayer math"] = m =>
+                {
+                    m.SetFloat("_LightingMode", 1);
+                    m.SetColor("_ShadowColor", new Color(0.6f, 0.5f, 0.7f, 1f));
+                    m.SetFloat("_ShadowBorder", 0.4f);
+                    m.SetColor("_Shadow2ndColor", new Color(0.3f, 0.2f, 0.4f, 0.5f));
+                    m.SetFloat("_ShadowEnvStrength", 0.2f);
+                },
+                ["wrapped"] = m =>
+                {
+                    m.SetFloat("_LightingMode", 2);
+                    m.SetFloat("_LightingWrappedWrap", 0.6f);
+                    m.SetFloat("_LightingGradientStart", 0.1f);
+                    m.SetFloat("_LightingGradientEnd", 0.6f);
+                },
+                ["skin"] = m =>
+                {
+                    m.SetFloat("_LightingMode", 3);
+                    m.SetFloat("_SssScale", 0.8f);
+                    m.SetFloat("_SkinScatteringStability", 0.3f);
+                },
+                ["shade map"] = m =>
+                {
+                    m.SetFloat("_LightingMode", 4);
+                    m.SetColor("_1st_ShadeColor", new Color(0.7f, 0.6f, 0.6f, 1f));
+                    m.SetFloat("_BaseColor_Step", 0.55f);
+                    m.SetFloat("_BaseShade_Feather", 0.05f);
+                },
+                ["flat"] = m => m.SetFloat("_LightingMode", 5),
+                ["realistic, with Light Data"] = m =>
+                {
+                    m.SetFloat("_LightingMode", 6);
+                    m.SetFloat("_ShadowStrength", 0.8f);
+                    m.SetFloat("_LightingColorMode", 2);
+                    m.SetFloat("_Unlit_Intensity", 0.7f);
+                    m.SetFloat("_LightingDirectionMode", 2);
+                    m.SetVector("_LightngForcedDirection", new Vector4(0.2f, 1f, 0.3f, 0f));
+                    m.SetFloat("_LightingCastedShadows", 0.5f);
+                    m.SetFloat("_LightingMinLightBrightness", 0.1f);
+                    m.SetFloat("_LightingAdditiveType", 1);
+                    m.SetFloat("_LightingEnableLightVolumes", 1);
+                    m.SetFloat("_LightingLightVolumesSpecular", 0.5f);
+                },
+                ["unlit"] = m => m.SetFloat("_ShadingEnabled", 0)
+            };
+            foreach (var entry in cases)
+                CollectionAssert.IsEmpty(PoiyomiRoundTrip(entry.Value), entry.Key);
+        }
+
+        [Test]
+        public void BandsBecomeARampWhereTheOutputOnlyTakesOne()
+        {
+            var toon = Lit(AtlasLightingFamily.RampToon);
+            var band = new AtlasShadeBand { Border = 0.5f, Blur = 0.2f };
+            band.Color.Color = new Color(0.6f, 0.6f, 0.6f, 1f);
+            toon.Lighting.Ramp.Bands.Add(band);
+            var keys = AtlasRampTexture.FromBands(toon.Lighting.Ramp);
+            Assert.AreEqual(0f, AtlasRampTexture.Evaluate(keys, 0.3f).r, 1e-3f, "shadow");
+            Assert.AreEqual(0.5f, AtlasRampTexture.Evaluate(keys, 0.5f).r, 0.02f, "the edge");
+            Assert.AreEqual(1f, AtlasRampTexture.Evaluate(keys, 0.7f).r, 1e-3f, "lit");
+
+            var job = Job((toon, 1f));
+            var mobile = AtlasShaderRegistry.Output("mobiletoon").Capabilities;
+            var plan = AtlasOutputPipeline.Resolve(job, mobile);
+            Assert.IsNotEmpty(plan.Output.Lighting.Ramp.Keys);
+            Assert.IsTrue(AtlasLightingFeature.NeedsGeneratedRamp(plan.Output, mobile));
+            Assert.IsEmpty(AtlasOutputPipeline.Resolve(job, Poiyomi).Output.Lighting.Ramp.Keys, "Poiyomi keeps the bands");
+
+            var texture = AtlasRampTexture.Make(plan.Output.Lighting.Ramp.Keys, "ramp", readable: true);
+            created.Add(texture);
+            Assert.AreEqual(0f, texture.GetPixel(Mathf.RoundToInt(0.2f * AtlasRampTexture.Width), 1).r, 0.02f);
+            Assert.AreEqual(1f, texture.GetPixel(Mathf.RoundToInt(0.9f * AtlasRampTexture.Width), 1).r, 0.02f);
+
+            toon.Lighting.Ramp.RampStrength = 0.5f;
+            Assert.AreEqual(0.5f, AtlasRampTexture.Evaluate(AtlasRampTexture.FromBands(toon.Lighting.Ramp), 0.3f).r, 1e-3f, "half strength");
+
+            var shader = Installed("mobiletoon");
+            var material = new Material(shader.FindShader());
+            created.Add(material);
+            plan.Output.Lighting.Ramp.Ramp = new AtlasTextureReference { Texture = texture };
+            shader.Write(plan.Output, material);
+            Assert.AreSame(texture, material.GetTexture("_Ramp"));
+            Assert.AreEqual(0.6f, material.GetFloat("_ShadowAlbedo"), 1e-3f, "the first band's shadow color");
+        }
+
+        [Test]
+        public void ToonStandardTakesTheRampAndShadowSettingsItHas()
+        {
+            var shader = Installed("mobiletoon");
+            var output = Lit(AtlasLightingFamily.RampToon);
+            var ramp = output.Lighting.Ramp;
+            ramp.ShadowLift = 0.3f;
+            ramp.ShadowTint.Color = new Color(0.4f, 0.4f, 0.4f, 1f);
+            ramp.ShadowColorFromBase = 1f;
+            ramp.ShadowDirect = 1f;
+            ramp.ShadowAmbient = 0f;
+            ramp.UntintedAmbient = 1f;
+            output.Lighting.Ambient = AtlasAmbientModel.Average;
+            output.Lighting.ReceiveShadows = 0f;
+            output.Lighting.MinimumBrightness = 0.05f;
+            output.Lighting.LimitBrightness = false;
+            var material = new Material(shader.FindShader());
+            created.Add(material);
+            shader.Write(output, material);
+            Assert.AreEqual(0.3f, material.GetFloat("_ShadowBoost"), 1e-4f);
+            Assert.AreEqual(0.4f, material.GetFloat("_ShadowAlbedo"), 1e-3f);
+            Assert.AreEqual(0.05f, material.GetFloat("_MinBrightness"), 1e-4f);
+            Assert.AreEqual(0f, material.GetFloat("_LimitBrightness"));
+
+            // A physically based source gets the SDK's realistic ramp, and the rest is listed.
+            var physical = Lit(AtlasLightingFamily.PhysicallyBased);
+            var second = new Material(shader.FindShader());
+            created.Add(second);
+            shader.Write(physical, second);
+            var rampTexture = second.GetTexture("_Ramp");
+            if (rampTexture != null) Assert.AreEqual("ShadowRampRealistic", rampTexture.name);
+            Assert.IsNotEmpty(AtlasLightingFeature.Unkept(physical, second).ToList());
+        }
+    }
+}

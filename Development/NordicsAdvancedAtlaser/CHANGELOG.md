@@ -8,6 +8,16 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Lighting:** a *Lighting* feature: one lighting setup from the reference source, with
+  *Lighting from* when the materials are lit differently. The Poiyomi writer writes its
+  parser's reading back (Light Data, the texture ramp, multilayer math, wrapped, skin, shade
+  map, flat and realistic types, light volumes, LTCGI and the add pass); the Toon Standard
+  writer its ramp (the source's, one generated from banded shading such as Poiyomi's
+  multilayer math and shade map (`AtlasRampTexture`), or the SDK ramp nearest the family),
+  shadow boost, shadow tint (the first band's color for banded shading), minimum brightness
+  and brightness limit. Lighting drawn on the texture is left out and
+  listed. The written material is read back by its parser and the lighting settings it
+  doesn't hold the same way are listed (`AtlasLightingFeature.Unkept`, `AtlasFieldwise`).
 - **Hidden UV tiles:** parts hidden by Poiyomi's UV tile discard stay hidden. *Kept live*: the
   remap writes each source's UVs into a free UV channel (the plan's UV channel allocator,
   `AtlasOutputPlan.AllocateUVChannel`), moved by whole tiles only where the output would hide

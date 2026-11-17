@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is next. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6a is done, 2.6b is next. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -215,9 +215,19 @@ layers. Until then, live mask steps stay baked at their normal-view value and ar
 
 ### 2.6 Lighting
 
-- *Shading, lighting and shadows*: one lighting setup from the reference source, mapped by
-  each writer to its own modes, with shadow color and ramp masks where supported.
-- *Light volumes*, *LTCGI*.
+**2.6a Lighting setup**
+- *Lighting*: one lighting setup from the reference source (*Lighting from*: automatic, the
+  largest region, or a chosen material), mapped by each writer to its own modes. Poiyomi
+  writes its parser's reading back: Light Data, every lighting type but cloth and SDF,
+  light volumes and LTCGI. Toon Standard takes its ramp (the source's, one generated from
+  banded or keyed shading, or the SDK ramp nearest the family), shadow boost, shadow tint and
+  brightness settings.
+- The written material is read back by its parser, and the lighting settings it doesn't hold
+  the same way are listed.
+
+**2.6b Lighting drawn on the texture**
+- Shadow masks, detail shadows, band and shade textures, SDF face maps, skin thickness and
+  cloth maps, baked into atlas maps where the output reads them; the cloth and SDF types.
 - **Workable:** the atlas is shaded like its main source in both shaders.
 
 ### 2.7 Layers

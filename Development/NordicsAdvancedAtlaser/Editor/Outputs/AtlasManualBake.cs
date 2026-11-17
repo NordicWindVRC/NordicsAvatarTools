@@ -70,8 +70,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 AtlasPixels.Release();
             }
 
+            if (AtlasLightingFeature.NeedsGeneratedRamp(plan.Output, shader.Capabilities))
+                plan.Output.Lighting.Ramp.Ramp = new AtlasTextureReference
+                {
+                    Texture = AtlasRampTexture.SavePng(plan.Output.Lighting.Ramp.Keys, folder, name + "_ShadowRamp")
+                };
             var material = new Material(unityShader) { name = name };
             shader.Write(plan.Output, material);
+            plan.Notes.AddRange(AtlasLightingFeature.Unkept(plan.Output, material));
             var saved = Save(material, materialPath);
             total.Dispose();
             Debug.Log($"[Nordic's Advanced Atlaser] Bake to Assets: {materialPath}. " + string.Join("; ", timings).Replace("[Time] ", "") +

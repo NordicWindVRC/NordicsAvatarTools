@@ -14,6 +14,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly List<Texture2D> Textures = new List<Texture2D>();
         // "[Time] …" lines for each stage, for the build's diagnostics.
         public readonly List<string> Timings = new List<string>();
+        // What the written material doesn't hold as the plan has it, for the diagnostics.
+        public readonly List<string> Notes = new List<string>();
     }
 
     // Steps 3 to 5 of the pipeline for the build: each texture packed and compressed for the
@@ -54,8 +56,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             if (use.Maps.Contains(request.Map)) request.Reference.Texture = texture;
                     }
                 }
+                if (AtlasLightingFeature.NeedsGeneratedRamp(plan.Output, shader.Capabilities))
+                {
+                    var ramp = AtlasRampTexture.Make(plan.Output.Lighting.Ramp.Keys, config.outputName + "_ShadowRamp");
+                    result.Textures.Add(ramp);
+                    plan.Output.Lighting.Ramp.Ramp = new AtlasTextureReference { Texture = ramp };
+                }
                 result.Material = new Material(unityShader) { name = config.outputName };
                 shader.Write(plan.Output, result.Material);
+                result.Notes.AddRange(AtlasLightingFeature.Unkept(plan.Output, result.Material));
                 return result;
             }
             catch

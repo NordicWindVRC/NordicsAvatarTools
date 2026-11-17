@@ -28,6 +28,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             output = AtlasOutputGenerator.Generate(job.GeneratorJob, job.Plan, job.Configuration, job.Shader, mobile);
                         outputs.Add(output);
                         context.Diagnostics.AddRange(output.Timings);
+                        foreach (var note in output.Notes) context.Diagnostics.Add(job.Configuration.outputName + ": " + note);
                         // The generator job's sources are these, in this order (AtlasOutputProcessor).
                         int index = 0;
                         foreach (var source in job.Sources)
