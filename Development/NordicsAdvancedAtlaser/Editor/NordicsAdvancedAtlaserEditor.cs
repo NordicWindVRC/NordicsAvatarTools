@@ -15,6 +15,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             serializedObject.Update();
             var enabled = serializedObject.FindProperty("enableGeometryBaking");
             var excluded = serializedObject.FindProperty("excludedBlendShapes");
+            var hidden = serializedObject.FindProperty("excludeHiddenGeometry");
             EditorGUILayout.LabelField("Geometry Baking", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(enabled, new GUIContent("Enable Geometry Baking"));
             EditorGUILayout.HelpBox("Geometry baking reduces visual artifacts on decimated meshes by baking a normal map " +
@@ -22,6 +23,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (enabled.boolValue)
             {
                 EditorGUI.indentLevel++;
+                EditorGUILayout.PropertyField(hidden, new GUIContent("Exclude Hidden Geometry (Depth Test)",
+                    "Where several surfaces share the same UVs, surfaces lying behind another one (for example a body part " +
+                    "hidden inside the mesh) are left out of the bake, so it follows what the avatar shows. Mirrored halves " +
+                    "aren't affected. Your avatar's mesh isn't changed."));
                 EditorGUILayout.LabelField("Excluded Blend Shapes", EditorStyles.boldLabel);
                 EditorGUILayout.LabelField("Mesh parts moved by these blend shapes are left out of the bake, so details " +
                     "from parts you remove on purpose (for example clothing hidden by a blend shape) aren't baked into " +

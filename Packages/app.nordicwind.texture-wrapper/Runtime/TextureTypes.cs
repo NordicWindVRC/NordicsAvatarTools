@@ -104,6 +104,23 @@ namespace NordicWind.TextureWrapper
         public TriangleRasterizationMode Mode = TriangleRasterizationMode.Quality;
         public int SamplesPerAxis = 4;
     }
+    /// <summary>Leaves out surfaces hidden close behind another surface with the same UVs, for
+    /// <see cref="NordicsTextureWrapper.PaintTriangles(IReadOnlyList{Vector2}, IReadOnlyList{Color}, TrianglePaintOptions, HiddenSurfaceOptions)"/>.
+    /// Every corner has a position and a normal, in any one space. At each pixel, the triangles
+    /// of one UV winding are compared along their average normal at the pixel's centre: a
+    /// sample lying more than <see cref="Margin"/> behind the outermost of them there is hidden
+    /// and isn't painted. Triangles of opposite UV winding, such as mirrored halves, never hide
+    /// each other. Only the triangles of the same call are compared.</summary>
+    public sealed class HiddenSurfaceOptions
+    {
+        /// <summary>Per corner, like the colors.</summary>
+        public IReadOnlyList<Vector3> Positions;
+        /// <summary>Per corner, pointing out of the surface; any length above zero.</summary>
+        public IReadOnlyList<Vector3> Normals;
+        /// <summary>How far behind, in the positions' units, a sample must lie to be hidden.
+        /// Above zero, so that a curved surface never hides itself within a pixel.</summary>
+        public float Margin = 0.001f;
+    }
     /// <summary>Safety rules for <c>BakeNormalDifference</c>, so a correction never makes
     /// shading worse than no correction. Where a rule applies, the correction fades to flat
     /// (0, 0, 1), which keeps the target mesh's own shading.</summary>
@@ -153,6 +170,7 @@ namespace NordicWind.TextureWrapper
     {
         internal static bool Finite(float f) => !float.IsNaN(f) && !float.IsInfinity(f);
         internal static bool Finite(Vector2 v) => Finite(v.x) && Finite(v.y);
+        internal static bool Finite(Vector3 v) => Finite(v.x) && Finite(v.y) && Finite(v.z);
         internal static bool Finite(Vector4 v) => Finite(v.x) && Finite(v.y) && Finite(v.z) && Finite(v.w);
         internal static bool Finite(Color c) => Finite(c.r) && Finite(c.g) && Finite(c.b) && Finite(c.a);
         internal static float Saturate(float v) => Mathf.Clamp01(v);

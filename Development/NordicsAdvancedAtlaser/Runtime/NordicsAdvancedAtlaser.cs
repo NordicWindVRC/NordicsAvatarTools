@@ -22,6 +22,9 @@ namespace NordicWind.AdvancedAtlaser
         // Bakes a normal map that compensates for decimated meshes. Its resolution follows each
         // material's area in its atlas.
         public bool enableGeometryBaking = true;
+        // Surfaces hidden close behind another surface with the same UVs (for example a body
+        // part inside another mesh part) are left out of the bake, as if seen from outside.
+        public bool excludeHiddenGeometry = true;
         // Mesh parts moved by these blend shapes are left out of the original geometry used for
         // the bake. Empty means nothing is excluded.
         public List<AtlasExcludedBlendShape> excludedBlendShapes = new List<AtlasExcludedBlendShape>();

@@ -119,6 +119,12 @@ EditMode tests pass in Unity 2022.3.22.
   as an "[NDMF] Error Reported" warning, whatever its severity. The build summary and the
   diagnostics are added with that line filtered out, so the NDMF Console still lists them and
   Unity's console stays clean. Warnings are reported as they are.
+- **Exclude Hidden Geometry (Depth Test)**, a geometry baking option, on by default: where
+  surfaces share UVs, the ones lying more than 2 mm plus one texel's size behind another
+  (along the average normal there) are left out of the bake, so geometry hidden inside the avatar no longer blocks or
+  skews the correction without setting up *Excluded Blend Shapes*. Mirrored halves aren't
+  affected. All original meshes of a material are now painted in one batch, so a part of one
+  can be hidden by another.
 - **Faster painting from meshes:** the geometry bake and the coverage paint each map's triangles
   in one batch (`PaintTriangles`), on every core or the GPU, instead of one triangle at a time.
   Dilation runs on the GPU for large maps.

@@ -28,6 +28,9 @@ Newest first. Versions follow [SemVer](https://semver.org).
   `PaintTriangle` per triangle in order. The CPU version paints tiles of the texture on every
   core instead of one triangle at a time, which mostly ran on one core; large batches on large
   textures run on the GPU, drawing the triangles in UV space.
+- **Hidden surfaces:** a `PaintTriangles` overload with `HiddenSurfaceOptions` (a position and
+  normal per corner) leaves out surfaces lying behind another surface with the same UVs and
+  UV winding, measured along the average normal at each pixel. On the CPU and the GPU.
 - **`Dilate` on the GPU** for whole textures from `MinGpuPixels` up, by jump flooding. Ties and,
   very rarely, the nearest pixel may differ from the CPU's.
 - **GPU groundwork:** `TextureProcessingSettings.UseGpu`, `MinGpuPixels` and `GpuAvailable`,

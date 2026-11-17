@@ -145,7 +145,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             using (context.Time($"geometry bake: {source.Input.SourceMaterial.name} ({size.x}×{size.y})"))
                                 baked=AtlasSubmeshBaker.Bake(source.Input.SourceMaterial,size.x,size.y,
                                     originalSections,renderers,context.AvatarRoot.transform,context.Diagnostics,debugFolder,
-                                    source.NormalCorrection);
+                                    source.NormalCorrection,component.excludeHiddenGeometry);
                             source.Input.Bakes.Add(key,baked);
                         }
                         source.Bakes=baked;

@@ -46,6 +46,10 @@ and `ATLAS_OUTPUT.md` for the output design.
 2. **Enable Geometry Baking** is on by default. It reduces visual artifacts on decimated
    meshes by baking a normal map that compensates for the removed detail. Each material is
    baked at 1.5× its area in the atlas, up to 4096 per side; a larger area is baked 1:1.
+   - **Exclude Hidden Geometry (Depth Test)** is on by default. Where several surfaces share
+     the same UVs, the ones lying behind another (for example a body part hidden inside the
+     mesh) are left out of the bake, so it follows what the avatar shows. Mirrored halves
+     aren't affected. Turn it off if a bake looks wrong where copies of a part share UVs.
    - **Excluded Blend Shapes** (optional): mesh parts moved by these blend shapes are left out
      of the bake, so details from parts you remove on purpose aren't baked into the normal map.
      **Threshold** is the minimum vertex movement that counts, in mesh units (default 0.001).

@@ -17,6 +17,7 @@ namespace NordicWind.TextureWrapper
         private static bool Find() =>
             SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null
             && SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.ARGBFloat)
+            && SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.ARGBHalf)
             && SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RGFloat)
             && SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RFloat)
             && SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.R8)

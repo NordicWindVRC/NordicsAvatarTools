@@ -46,7 +46,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static AtlasBakedInputSet Bake(Material material,int width,int height,
             IReadOnlyList<AtlasMeshSection> originalSections,
             IReadOnlyList<SkinnedMeshRenderer> currentRenderers,
-            Transform avatarRoot, List<string> diagnostics, string debugFolder = null, bool normalCorrection = true)
+            Transform avatarRoot, List<string> diagnostics, string debugFolder = null, bool normalCorrection = true,
+            bool excludeHidden = true)
         {
             if(material==null) throw new ArgumentNullException(nameof(material));
             if(width<1 || height<1) throw new ArgumentOutOfRangeException(nameof(width));
@@ -111,7 +112,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         // Preserve the raw correction for debug inspection before padding.
                         TryExport(() => AtlasDebugExporter.Normal(debugFolder,
                             "TangentNormalCorrection_PreDilation", maps.Correction), diagnostics);
-                    },diagnostics);
+                    },diagnostics,excludeHidden);
+                if(excludeHidden)
+                    diagnostics.Add(material.name+": surfaces hidden behind another surface with the same UVs were left out of the bake (depth test).");
                 ReportCorrection(material.name,statistics,diagnostics);
                 diagnostics.Add(material.name+": full correction dilation completed; original coverage unchanged.");
                 diagnostics.Add(material.name+": combined "+originalSections.Count+
@@ -136,11 +139,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         /// Normal Baker. Only the maps the bake needs exist at the same time; they're released
         /// before it returns. <paramref name="inspect"/> runs after the bake, before dilation and
         /// release, for diagnostics and debug exports. Reading a map normalizes it in place, so
-        /// nothing may read the frame maps before the bake.
+        /// nothing may read the frame maps before the bake. <paramref name="excludeHidden"/>: surfaces
+        /// hidden close behind another surface with the same UVs are left out (the depth test).
         /// </summary>
         internal static NordicsTextureWrapper BakeCorrection(IReadOnlyList<AtlasMeshSection> originals,
             AtlasMeshSection current,int width,int height,float maxAngle,out NormalDifferenceStatistics statistics,
-            Action<CorrectionMaps> inspect=null, List<string> timings=null)
+            Action<CorrectionMaps> inspect=null, List<string> timings=null, bool excludeHidden=true)
         {
             NordicsTextureWrapper correction;
             using(var originalNormals=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
@@ -150,15 +154,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
             using(var coverage=new NordicsTextureWrapper(width,height,Masks()))
             {
                 // Coverage per UV winding finds overlapping UVs (mirrored halves, stacked
-                // copies), which get no correction rather than a wrong one.
+                // copies), which get no correction rather than a wrong one. All original sections
+                // paint in one batch, so a hidden part of one can be hidden by another.
                 using(new AtlasStageTimer($"paint original normals ({width}×{height})",timings))
-                    foreach(var src in originals)
-                        Rasterize(src,originalNormals,null,null,null,null,coverage,false);
+                    Rasterize(originals,originalNormals,null,null,null,null,coverage,false,excludeHidden);
                 // Tangent-space correction must be expressed in the current mesh's frame. The
                 // frame-normal map covers exactly the current triangles, so it also serves as
                 // the bake's coverage area.
                 using(new AtlasStageTimer($"paint current frames ({width}×{height})",timings))
-                    Rasterize(current,null,null,tangent,bitangent,normalBasis,coverage,true);
+                    Rasterize(current,null,null,tangent,bitangent,normalBasis,coverage,true,excludeHidden);
                 using(new AtlasStageTimer($"normal difference ({width}×{height})",timings))
                     correction=originalNormals.BakeNormalDifference(normalBasis,
                         new TangentBasisData { Tangent=tangent,Bitangent=bitangent,Normal=normalBasis },
@@ -297,60 +301,82 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
         private static readonly TrianglePaintOptions Quality = new TrianglePaintOptions { Mode=TriangleRasterizationMode.Quality,SamplesPerAxis=2 };
         private static readonly TrianglePaintOptions Fast = new TrianglePaintOptions { Mode=TriangleRasterizationMode.Fast };
-        // Each map gets its triangles in one batch (PaintTriangles), painted on every core or the
-        // GPU; the values are the same as painting one triangle at a time.
+        // Surfaces more than this far (in avatar-root units: metres on a normally scaled avatar)
+        // behind another surface with the same UVs are hidden.
+        private const float HiddenMargin=0.002f;
         private static void Rasterize(AtlasMeshSection section,NordicsTextureWrapper normals,NordicsTextureWrapper mask,
             NordicsTextureWrapper tangent,NordicsTextureWrapper bitangent,NordicsTextureWrapper basisNormal,
-            NordicsTextureWrapper coverage=null,bool target=false)
+            NordicsTextureWrapper coverage=null,bool target=false,bool hidden=false)
+            => Rasterize(new[]{section},normals,mask,tangent,bitangent,basisNormal,coverage,target,hidden);
+        // Each map gets the sections' triangles in one batch (PaintTriangles), painted on every
+        // core or the GPU; the values are the same as painting one triangle at a time. With
+        // `hidden`, surfaces hidden close behind another surface with the same UVs are left out
+        // of every map but the usage mask.
+        private static void Rasterize(IReadOnlyList<AtlasMeshSection> sections,NordicsTextureWrapper normals,NordicsTextureWrapper mask,
+            NordicsTextureWrapper tangent,NordicsTextureWrapper bitangent,NordicsTextureWrapper basisNormal,
+            NordicsTextureWrapper coverage=null,bool target=false,bool hidden=false)
         {
-            if(section.UV==null || section.Vertices==null || section.Triangles==null) return;
-            int count=section.Vertices.Length;
-            var nMat=section.LocalToWorld.inverse.transpose;
-            float sign=section.LocalToWorld.determinant < 0f ? -1f : 1f;
             bool frames=tangent!=null && bitangent!=null && basisNormal!=null;
             var uvs=new List<Vector2>();
             var normalValues=normals!=null||frames ? new List<Color>() : null;
             var coverValues=coverage!=null ? new List<Color>() : null;
             var tangentValues=frames ? new List<Color>() : null;
             var bitangentValues=frames ? new List<Color>() : null;
-            for(int i=0;i+2<section.Triangles.Length;i+=3)
+            var positions=hidden ? new List<Vector3>() : null;
+            var surfaceNormals=hidden ? new List<Vector3>() : null;
+            foreach(var section in sections)
             {
-                int a=section.Triangles[i], b=section.Triangles[i+1], c=section.Triangles[i+2];
-                if(a<0||b<0||c<0||a>=count||b>=count||c>=count ||
-                    a>=section.UV.Length||b>=section.UV.Length||c>=section.UV.Length) continue;
-                var uv0=section.UV[a];var uv1=section.UV[b];var uv2=section.UV[c];
-                if(!Finite(uv0)||!Finite(uv1)||!Finite(uv2)) continue;
-                Vector3 face=Vector3.Cross(section.Vertices[b]-section.Vertices[a],section.Vertices[c]-section.Vertices[a]);
-                if(face.sqrMagnitude<1e-12f) continue;
-                face.Normalize();
-                uvs.Add(uv0);uvs.Add(uv1);uvs.Add(uv2);
-                Vector3 n0=WorldNormal(section,a,nMat,face),n1=WorldNormal(section,b,nMat,face),n2=WorldNormal(section,c,nMat,face);
-                if(normalValues!=null){normalValues.Add(Pack(n0));normalValues.Add(Pack(n1));normalValues.Add(Pack(n2));}
-                if(coverValues!=null)
+                if(section==null || section.UV==null || section.Vertices==null || section.Triangles==null) continue;
+                int count=section.Vertices.Length;
+                var nMat=section.LocalToWorld.inverse.transpose;
+                float sign=section.LocalToWorld.determinant < 0f ? -1f : 1f;
+                for(int i=0;i+2<section.Triangles.Length;i+=3)
                 {
-                    Color cover=NormalDifferenceOptions.CoverageColor(uv0,uv1,uv2,target);
-                    coverValues.Add(cover);coverValues.Add(cover);coverValues.Add(cover);
+                    int a=section.Triangles[i], b=section.Triangles[i+1], c=section.Triangles[i+2];
+                    if(a<0||b<0||c<0||a>=count||b>=count||c>=count ||
+                        a>=section.UV.Length||b>=section.UV.Length||c>=section.UV.Length) continue;
+                    var uv0=section.UV[a];var uv1=section.UV[b];var uv2=section.UV[c];
+                    if(!Finite(uv0)||!Finite(uv1)||!Finite(uv2)) continue;
+                    Vector3 face=Vector3.Cross(section.Vertices[b]-section.Vertices[a],section.Vertices[c]-section.Vertices[a]);
+                    if(face.sqrMagnitude<1e-12f) continue;
+                    face.Normalize();
+                    uvs.Add(uv0);uvs.Add(uv1);uvs.Add(uv2);
+                    Vector3 n0=WorldNormal(section,a,nMat,face),n1=WorldNormal(section,b,nMat,face),n2=WorldNormal(section,c,nMat,face);
+                    if(normalValues!=null){normalValues.Add(Pack(n0));normalValues.Add(Pack(n1));normalValues.Add(Pack(n2));}
+                    if(hidden)
+                    {
+                        positions.Add(section.LocalToWorld.MultiplyPoint3x4(section.Vertices[a]));
+                        positions.Add(section.LocalToWorld.MultiplyPoint3x4(section.Vertices[b]));
+                        positions.Add(section.LocalToWorld.MultiplyPoint3x4(section.Vertices[c]));
+                        surfaceNormals.Add(n0);surfaceNormals.Add(n1);surfaceNormals.Add(n2);
+                    }
+                    if(coverValues!=null)
+                    {
+                        Color cover=NormalDifferenceOptions.CoverageColor(uv0,uv1,uv2,target);
+                        coverValues.Add(cover);coverValues.Add(cover);coverValues.Add(cover);
+                    }
+                    if(!frames) continue;
+                    Vector3 t0=Tangent(section,a,n0,sign),t1=Tangent(section,b,n1,sign),t2=Tangent(section,c,n2,sign);
+                    tangentValues.Add(Pack(t0));tangentValues.Add(Pack(t1));tangentValues.Add(Pack(t2));
+                    // Reconstruct bitangent using original handedness (includes mirrored transforms).
+                    bitangentValues.Add(Pack(Bitangent(section,a,n0,t0,sign)));
+                    bitangentValues.Add(Pack(Bitangent(section,b,n1,t1,sign)));
+                    bitangentValues.Add(Pack(Bitangent(section,c,n2,t2,sign)));
                 }
-                if(!frames) continue;
-                Vector3 t0=Tangent(section,a,n0,sign),t1=Tangent(section,b,n1,sign),t2=Tangent(section,c,n2,sign);
-                tangentValues.Add(Pack(t0));tangentValues.Add(Pack(t1));tangentValues.Add(Pack(t2));
-                // Reconstruct bitangent using original handedness (includes mirrored transforms).
-                bitangentValues.Add(Pack(Bitangent(section,a,n0,t0,sign)));
-                bitangentValues.Add(Pack(Bitangent(section,b,n1,t1,sign)));
-                bitangentValues.Add(Pack(Bitangent(section,c,n2,t2,sign)));
             }
-            normals?.PaintTriangles(uvs,normalValues,Quality);
+            var depth=hidden ? new HiddenSurfaceOptions { Positions=positions, Normals=surfaceNormals, Margin=HiddenMargin } : null;
+            normals?.PaintTriangles(uvs,normalValues,Quality,depth);
             if(mask!=null)
             {
                 var white=new Color[uvs.Count];
                 for(int i=0;i<white.Length;i++) white[i]=Color.white;
                 mask.PaintTriangles(uvs,white,Fast);
             }
-            coverage?.PaintTriangles(uvs,coverValues,Quality);
+            coverage?.PaintTriangles(uvs,coverValues,Quality,depth);
             if(!frames) return;
-            tangent.PaintTriangles(uvs,tangentValues,Quality);
-            bitangent.PaintTriangles(uvs,bitangentValues,Quality);
-            basisNormal.PaintTriangles(uvs,normalValues,Quality);
+            tangent.PaintTriangles(uvs,tangentValues,Quality,depth);
+            bitangent.PaintTriangles(uvs,bitangentValues,Quality,depth);
+            basisNormal.PaintTriangles(uvs,normalValues,Quality,depth);
         }
         private static bool Finite(Vector2 uv) => !float.IsNaN(uv.x) && !float.IsNaN(uv.y) && !float.IsInfinity(uv.x) && !float.IsInfinity(uv.y);
         private static Color Pack(Vector3 v) => new Color(v.x,v.y,v.z,1);

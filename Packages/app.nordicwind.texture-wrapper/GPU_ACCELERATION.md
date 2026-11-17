@@ -1,7 +1,7 @@
 # Nordic's Texture Wrapper — GPU acceleration
 
-**Status:** G1 done; G2 (dilation) and G3 (batch triangle painting) implemented, without G3's
-depth option yet. The shaders are in `Runtime/Resources/NordicWind.TextureWrapper/`.
+**Status:** G1, G2 (dilation) and G3 (batch triangle painting) done; G3's hidden-surface
+option is implemented. The shaders are in `Runtime/Resources/NordicWind.TextureWrapper/`.
 
 ## Principles
 
@@ -26,7 +26,7 @@ depth option yet. The shaders are in `Runtime/Resources/NordicWind.TextureWrappe
 |---|---|---|
 | **G1** | Settings (`UseGpu`, `MinGpuPixels`, `GpuAvailable`); pixels and usage flags to float render textures and back, unchanged; the CPU-and-GPU test harness. In the Advanced Atlaser: per-stage timings in its diagnostics, to measure the gains | S–M |
 | **G2** | `Dilate` on the GPU by jump flooding (about log₂ of the size in passes, plus one or two for accuracy) | S–M |
-| **G3** | A batch `PaintTriangles` call: the CPU version paints tiles on every core instead of one call per triangle; the GPU version draws the mesh in UV space, with supersampling for the quality mode and additive blending for sums and coverage counts. Then, optionally, a depth per vertex so only the outermost surface paints a texel (hidden geometry), on both | M, plus S–M for the depth option |
+| **G3** | A batch `PaintTriangles` call: the CPU version paints tiles on every core instead of one call per triangle; the GPU version draws the mesh in UV space, with supersampling for the quality mode and additive blending for sums and coverage counts. Then, optionally, hidden surfaces: a position and normal per corner, so surfaces behind another with the same UVs don't paint, on both | M, plus S–M for hidden surfaces |
 
 ### G2 — dilation
 
@@ -53,11 +53,30 @@ disagree on which way clip space's y runs through a render texture, so a small t
 finds it once per session; if that draw doesn't land in the texture, painting stays on the
 CPU.
 
-**Depth (optional, after the painting works).** Each vertex can carry a depth: how far out
-its surface is. Where triangles share a texel, only the fragment that is farthest out
-paints it, like a depth test (on the GPU, the depth buffer; on the CPU, a depth value per
-sample). Two passes tell hidden geometry from visible geometry that shares UVs (mirrored
-halves, stacked copies): the first records the outermost fragment's depth and position per
-texel; in the second, a fragment counts as hidden only when it lies close behind that
-fragment (within a given distance along its normal), and far-away fragments paint as they do
-without depth. The wrapper stays neutral: the caller supplies the depth and the distance.
+**Hidden surfaces (`HiddenSurfaceOptions`).** Each corner carries a position and a normal.
+Where triangles share a pixel, the ones lying behind another surface are left out, like a
+depth test. "Behind" needs a direction that is the same for every surface at the pixel, so
+three steps run per pixel and UV winding:
+
+1. Every triangle covering the pixel's centre adds its interpolated normal there.
+2. Along that average direction, the outermost covering surface's distance is recorded.
+3. While painting, a sample whose distance along the same direction is more than `Margin`
+   plus its triangle's footprint below that record is hidden. The footprint is how far the
+   triangle's surface moves over one pixel: a sample lies up to that far from the surface at
+   the pixel's centre, so on coarse or tilted triangles anything finer would let a surface
+   hide parts of itself.
+
+Because all surfaces at a pixel are measured along the same direction, an error in that
+direction shifts them all alike. Mirrored halves have opposite UV windings and are compared separately, so they
+never hide each other; their overlap is handled by the caller as before. Same-winding copies
+elsewhere in space (stacked copies) do compete, the outermost along the normal winning. An
+earlier idea, a depth per vertex such as the distance to the skinned bone, was dropped: it
+isn't comparable between vertices skinned to different bones, and a bone running to the
+surface (as breast bones often do) gives the visible surface no larger depth than the hidden
+one.
+
+On the CPU, the steps run per 64-pixel tile before the tile paints, so memory stays small.
+On the GPU, two draws at the texture's own size fill the average normals (ARGBHalf per
+winding; the error cancels as above) and the outermost distance (RGFloat, `BlendOp Max`),
+and the painting passes discard hidden samples. Pixels whose centre no triangle covers have
+no record, so their samples paint as without the option; this only happens along edges.

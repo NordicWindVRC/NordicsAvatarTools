@@ -217,13 +217,13 @@ Each phase adds features to both writers, with their modes, maps and fallbacks.
 ## Texture Wrapper GPU work (before 2.1)
 
 The Texture Wrapper's GPU acceleration (its `GPU_ACCELERATION.md`) comes first: G1 is done;
-G2 (dilation) and G3 (batch triangle painting) are implemented, the Atlaser's painting uses the
-batch; the depth option follows. With G3, the geometry bake gets a toggle, **Exclude hidden geometry (depth
-test)**, on by default: where surfaces share UVs, only the outermost one is baked, so geometry
-hidden inside the avatar (such as shape keys' inner copies) doesn't affect the bake without
-setting up *Excluded Blend Shapes*. Each vertex's depth is its distance from the bone it's
-skinned to (the bone's segment to its child); a fragment counts as hidden only when it lies
-close behind the outermost one, so mirrored halves and stacked copies are handled as today.
+G2 (dilation) and G3 (batch triangle painting) are done, and the Atlaser's painting uses the
+batch. The geometry bake has the toggle **Exclude hidden geometry (depth test)**, on by
+default: where surfaces share UVs, the ones more than 2 mm plus one texel's size behind
+another along the average normal there are left out, so geometry hidden inside the avatar doesn't affect the bake
+without setting up *Excluded Blend Shapes*. Mirrored halves (opposite UV winding) never hide
+each other. The wrapper's `GPU_ACCELERATION.md` explains why it compares along the normal
+instead of using a bone distance.
 
 ## Later
 

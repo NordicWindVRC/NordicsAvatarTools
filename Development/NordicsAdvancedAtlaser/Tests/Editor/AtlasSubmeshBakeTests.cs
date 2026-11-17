@@ -124,5 +124,58 @@ namespace NordicWind.AdvancedAtlaser.Tests
             }
             finally { Object.DestroyImmediate(root); Object.DestroyImmediate(mesh); Object.DestroyImmediate(material); }
         }
+
+        // The same original with a flat copy behind it (below its lowest point), over the same UVs, like a body part
+        // hidden inside the mesh. With the depth test, the copy is left out and the bake matches
+        // the one without it; without it, the overlap leaves the texels uncorrected.
+        [TestCase(true)]
+        [TestCase(false)]
+        public void Bake_HiddenGeometryIsLeftOutWithTheDepthTest(bool excludeHidden)
+        {
+            var shader = Shader.Find("Standard");
+            if (shader == null) Assert.Ignore("Standard shader is not available in this project.");
+            var material = new Material(shader);
+            var root = new GameObject("Atlaser hidden geometry test");
+            var mesh = new Mesh();
+            try
+            {
+                GridData(Grid, out var ov, out var on, out var ot, out var ouv, out var otri);
+                var iv = new Vector3[ov.Length];
+                var inn = new Vector3[ov.Length];
+                for (int i = 0; i < ov.Length; i++) { iv[i] = new Vector3(ov[i].x, ov[i].y, -.2f); inn[i] = Vector3.forward; }
+                var originals = new List<AtlasMeshSection> {
+                    new AtlasMeshSection { Material = material, RendererPath = "Original", Vertices = ov, Normals = on, Tangents = ot,
+                        UV = ouv, Triangles = otri, LocalToWorld = Matrix4x4.identity, RendererToAvatarRoot = Matrix4x4.identity },
+                    new AtlasMeshSection { Material = material, RendererPath = "Hidden", Vertices = iv, Normals = inn, Tangents = ot,
+                        UV = ouv, Triangles = otri, LocalToWorld = Matrix4x4.identity, RendererToAvatarRoot = Matrix4x4.identity } };
+
+                GridData(1, out var cv, out var cn, out var ct, out var cuv, out var ctri);
+                mesh.vertices = cv; mesh.normals = cn; mesh.tangents = ct; mesh.uv = cuv; mesh.triangles = ctri;
+                var renderer = root.AddComponent<SkinnedMeshRenderer>();
+                renderer.sharedMesh = mesh; renderer.sharedMaterials = new[] { material };
+
+                var diagnostics = new List<string>();
+                using (var result = AtlasSubmeshBaker.Bake(material, Size, Size, originals,
+                    new List<SkinnedMeshRenderer> { renderer }, root.transform, diagnostics, excludeHidden: excludeHidden))
+                {
+                    var bake = result.Submeshes[0];
+                    string log = string.Join("\n", diagnostics);
+                    int checkedTexels = 0; double sum = 0;
+                    for (int y = 0; y < Size; y++) for (int x = 0; x < Size; x++)
+                    {
+                        float s = ((x + .5f) / Size - U0) / (U1 - U0), t = ((y + .5f) / Size - U0) / (U1 - U0);
+                        if (s <= 0f || s >= 1f || t <= 0f || t >= 1f) continue;
+                        Color ts = bake.TangentNormalCorrection.GetPixel(x, y);
+                        Frame reduced = Interpolated(1, s, t);
+                        sum += Angle(reduced.T * ts.r + reduced.B * ts.g + reduced.N * ts.b, Interpolated(Grid, s, t).N);
+                        checkedTexels++;
+                    }
+                    string stats = $"depth test {excludeHidden}: checked {checkedTexels}, mean {sum / checkedTexels:F4}°\n{log}";
+                    if (excludeHidden) Assert.That(sum / checkedTexels, Is.LessThan(.05), stats);
+                    else Assert.That(sum / checkedTexels, Is.GreaterThan(5.0), stats);
+                }
+            }
+            finally { Object.DestroyImmediate(root); Object.DestroyImmediate(mesh); Object.DestroyImmediate(material); }
+        }
     }
 }

@@ -609,22 +609,39 @@ namespace NordicWind.TextureWrapper
         /// triangles share may go to the other triangle.</summary>
         public void PaintTriangles(IReadOnlyList<Vector2> uv,IReadOnlyList<Color> color,TrianglePaintOptions options=null)
         {
+            PaintTriangles(uv,color,options,null);
+        }
+        /// <summary>Like <see cref="PaintTriangles(IReadOnlyList{Vector2}, IReadOnlyList{Color}, TrianglePaintOptions)"/>,
+        /// leaving out surfaces hidden close behind another surface with the same UVs (see
+        /// <see cref="HiddenSurfaceOptions"/>). Null <paramref name="hidden"/> paints every triangle.</summary>
+        public void PaintTriangles(IReadOnlyList<Vector2> uv,IReadOnlyList<Color> color,TrianglePaintOptions options,HiddenSurfaceOptions hidden)
+        {
             Writable();
             if(uv==null)throw new ArgumentNullException(nameof(uv));
             if(color==null)throw new ArgumentNullException(nameof(color));
             if(uv.Count!=color.Count||uv.Count%3!=0)throw new ArgumentException("Every triangle needs three UVs and three colors.");
             int samples=Samples(options);
             for(int i=0;i<uv.Count;i++){ValidateUV(uv[i]);ValidateColor(color[i]);}
+            if(hidden!=null)
+            {
+                if(hidden.Positions==null||hidden.Normals==null||hidden.Positions.Count!=uv.Count||hidden.Normals.Count!=uv.Count)
+                    throw new ArgumentException("Hidden surfaces need a position and a normal for every corner.",nameof(hidden));
+                if(!(hidden.Margin>0f)||float.IsInfinity(hidden.Margin))
+                    throw new ArgumentOutOfRangeException(nameof(hidden),"The hidden-surface margin must be above zero and finite.");
+                for(int i=0;i<uv.Count;i++)
+                    if(!MathUtil.Finite(hidden.Positions[i])||!MathUtil.Finite(hidden.Normals[i]))
+                        throw new ArgumentException("Hidden-surface positions and normals must be finite.",nameof(hidden));
+            }
             int count=uv.Count/3;
             if(count==0)return;
             if(count>=TextureGpu.MinTriangles&&TextureGpu.ShouldUse((long)Width*Height)
                &&(long)Width*samples<=SystemInfo.maxTextureSize&&(long)Height*samples<=SystemInfo.maxTextureSize
                &&TextureGpu.PaintFlip!=0f)
             {
-                PaintTrianglesGpu(uv,color,samples);
+                PaintTrianglesGpu(uv,color,samples,hidden);
                 return;
             }
-            PaintTrianglesTiled(uv,color,samples);
+            PaintTrianglesTiled(uv,color,samples,hidden);
         }
         private static int Samples(TrianglePaintOptions options)
         {
@@ -640,6 +657,22 @@ namespace NordicWind.TextureWrapper
             public float Cross;
             public FillEdge E0,E1,E2;
             public int X0,X1,Y0,Y1;
+            // +1 for counter-clockwise UVs, -1 for clockwise.
+            public int Winding;
+            // Only for hidden surfaces: positions and normals at the corners, and how far the
+            // surface moves over one pixel.
+            public Vector3 P0,P1,P2,N0,N1,N2;
+            public float Footprint;
+        }
+        /// <summary>How far a triangle's surface moves over one pixel of this texture, both axes
+        /// together (a, b, c in pixel space): a sample in a pixel lies within this of the
+        /// surface at the pixel's centre, so depth can't be told apart more finely.</summary>
+        internal static float Footprint(Vector2 a,Vector2 b,Vector2 c,float cross,Vector3 pa,Vector3 pb,Vector3 pc)
+        {
+            Vector3 e1=pb-pa,e2=pc-pa;
+            Vector3 dx=(e1*(c.y-a.y)-e2*(b.y-a.y))/cross;
+            Vector3 dy=(e2*(b.x-a.x)-e1*(c.x-a.x))/cross;
+            return Mathf.Sqrt(dx.sqrMagnitude+dy.sqrMagnitude);
         }
         private bool Setup(Vector2 uv0,Vector2 uv1,Vector2 uv2,Color color0,Color color1,Color color2,out TriangleSetup t)
         {
@@ -647,6 +680,7 @@ namespace NordicWind.TextureWrapper
             Vector2 a=new Vector2(uv0.x*Width,uv0.y*Height),b=new Vector2(uv1.x*Width,uv1.y*Height),c=new Vector2(uv2.x*Width,uv2.y*Height);
             float cross=(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);if(Mathf.Abs(cross)<1e-10f)return false;
             int orient=cross>0f?1:-1;
+            t.Winding=orient;
             t.A=a;t.B=b;t.C=c;t.Color0=color0;t.Color1=color1;t.Color2=color2;t.Cross=cross;
             // The fill rule's edges are set up once per triangle; each sample then needs only a
             // few multiplications per edge.
@@ -656,22 +690,17 @@ namespace NordicWind.TextureWrapper
             return t.X0<t.X1&&t.Y0<t.Y1;
         }
         /// <summary>Paints pixels x0–x1 of row y with one triangle's samples.</summary>
-        private void PaintRow(in TriangleSetup t,int y,int x0,int x1,int samples)
+        private void PaintRow(in TriangleSetup t,int y,int x0,int x1,int samples,HiddenTile hidden=null)
         {
-            Vector2 a=t.A,b=t.B,c=t.C;
             for(int x=x0;x<x1;x++)
             {
                 Color sum=Color.clear;int hits=0;
                 for(int j=0;j<samples;j++)for(int i=0;i<samples;i++)
                 {
                     Vector2 p=new Vector2(x+(i+.5f)/samples,y+(j+.5f)/samples);
-                    double px=p.x,py=p.y;
-                    double v0=(t.E0.Dx*(py-t.E0.Fy)-t.E0.Dy*(px-t.E0.Fx))*t.E0.Side;if(v0<0||(v0==0&&t.E0.Side<0))continue;
-                    double v1=(t.E1.Dx*(py-t.E1.Fy)-t.E1.Dy*(px-t.E1.Fx))*t.E1.Side;if(v1<0||(v1==0&&t.E1.Side<0))continue;
-                    double v2=(t.E2.Dx*(py-t.E2.Fy)-t.E2.Dy*(px-t.E2.Fx))*t.E2.Side;if(v2<0||(v2==0&&t.E2.Side<0))continue;
-                    float wb=((p.x-a.x)*(c.y-a.y)-(p.y-a.y)*(c.x-a.x))/t.Cross;
-                    float wc=((b.x-a.x)*(p.y-a.y)-(b.y-a.y)*(p.x-a.x))/t.Cross;
-                    float wa=1f-wb-wc;
+                    if(!Inside(t,p))continue;
+                    Weights(t,p,out float wa,out float wb,out float wc);
+                    if(hidden!=null&&hidden.Hides(t,x,y,wa,wb,wc))continue;
                     sum+=t.Color0*wa+t.Color1*wb+t.Color2*wc;hits++;
                 }
                 if(hits==0)continue;
@@ -683,10 +712,87 @@ namespace NordicWind.TextureWrapper
                 _usage[index]=1;
             }
         }
+        // Whether a point in pixel space is inside the triangle, by its fill rule.
+        private static bool Inside(in TriangleSetup t,Vector2 p)
+        {
+            double px=p.x,py=p.y;
+            double v0=(t.E0.Dx*(py-t.E0.Fy)-t.E0.Dy*(px-t.E0.Fx))*t.E0.Side;if(v0<0||(v0==0&&t.E0.Side<0))return false;
+            double v1=(t.E1.Dx*(py-t.E1.Fy)-t.E1.Dy*(px-t.E1.Fx))*t.E1.Side;if(v1<0||(v1==0&&t.E1.Side<0))return false;
+            double v2=(t.E2.Dx*(py-t.E2.Fy)-t.E2.Dy*(px-t.E2.Fx))*t.E2.Side;if(v2<0||(v2==0&&t.E2.Side<0))return false;
+            return true;
+        }
+        // The corners' barycentric weights at a point in pixel space.
+        private static void Weights(in TriangleSetup t,Vector2 p,out float wa,out float wb,out float wc)
+        {
+            Vector2 a=t.A,b=t.B,c=t.C;
+            wb=((p.x-a.x)*(c.y-a.y)-(p.y-a.y)*(c.x-a.x))/t.Cross;
+            wc=((b.x-a.x)*(p.y-a.y)-(b.y-a.y)*(p.x-a.x))/t.Cross;
+            wa=1f-wb-wc;
+        }
+        /// <summary>Hidden surfaces within one tile (<see cref="HiddenSurfaceOptions"/>): per pixel
+        /// and UV winding, the average normal at the pixel's centre, and how far out along it the
+        /// outermost surface lies there.</summary>
+        private sealed class HiddenTile
+        {
+            private readonly int x0,y0,width,height;
+            private readonly float margin;
+            private readonly Vector3[] normals;
+            private readonly float[] outer;
+            public HiddenTile(int x0,int y0,int x1,int y1,float margin)
+            {
+                this.x0=x0;this.y0=y0;width=x1-x0;height=y1-y0;this.margin=margin;
+                normals=new Vector3[2*width*height];
+                outer=new float[2*width*height];
+                for(int i=0;i<outer.Length;i++)outer[i]=float.NegativeInfinity;
+            }
+            private int Index(int winding,int x,int y)=>(winding>0?0:width*height)+(y-y0)*width+(x-x0);
+            // First: every pixel centre a triangle covers adds its normal there.
+            public void AddNormals(in TriangleSetup t,int cx0,int cx1,int cy0,int cy1)
+            {
+                for(int y=cy0;y<cy1;y++)
+                    for(int x=cx0;x<cx1;x++)
+                    {
+                        var p=new Vector2(x+.5f,y+.5f);
+                        if(!Inside(t,p))continue;
+                        Weights(t,p,out float wa,out float wb,out float wc);
+                        normals[Index(t.Winding,x,y)]+=t.N0*wa+t.N1*wb+t.N2*wc;
+                    }
+            }
+            // Then the sums become directions (zero where nothing covered the centre).
+            public void Normalize()
+            {
+                for(int i=0;i<normals.Length;i++)
+                {
+                    var n=normals[i];float length=Mathf.Sqrt(n.sqrMagnitude);
+                    normals[i]=length>1e-10f?n/length:Vector3.zero;
+                }
+            }
+            // Then the outermost surface at each pixel centre, along that direction.
+            public void AddOuter(in TriangleSetup t,int cx0,int cx1,int cy0,int cy1)
+            {
+                for(int y=cy0;y<cy1;y++)
+                    for(int x=cx0;x<cx1;x++)
+                    {
+                        var p=new Vector2(x+.5f,y+.5f);
+                        if(!Inside(t,p))continue;
+                        int i=Index(t.Winding,x,y);var n=normals[i];
+                        if(n.x==0f&&n.y==0f&&n.z==0f)continue;
+                        Weights(t,p,out float wa,out float wb,out float wc);
+                        float d=Vector3.Dot(t.P0*wa+t.P1*wb+t.P2*wc,n);
+                        if(d>outer[i])outer[i]=d;
+                    }
+            }
+            public bool Hides(in TriangleSetup t,int x,int y,float wa,float wb,float wc)
+            {
+                int i=Index(t.Winding,x,y);var n=normals[i];
+                if(n.x==0f&&n.y==0f&&n.z==0f)return false;
+                return outer[i]-Vector3.Dot(t.P0*wa+t.P1*wb+t.P2*wc,n)>margin+t.Footprint;
+            }
+        }
         // Tiles of this many pixels per side are painted in parallel; each tile paints its
         // triangles in their order, so every pixel adds up exactly as with one call per triangle.
         private const int PaintTile=64;
-        private void PaintTrianglesTiled(IReadOnlyList<Vector2> uv,IReadOnlyList<Color> color,int samples)
+        private void PaintTrianglesTiled(IReadOnlyList<Vector2> uv,IReadOnlyList<Color> color,int samples,HiddenSurfaceOptions hidden=null)
         {
             int count=uv.Count/3;
             var setups=new TriangleSetup[count];var valid=new bool[count];
@@ -696,6 +802,12 @@ namespace NordicWind.TextureWrapper
             {
                 if(!Setup(uv[3*k],uv[3*k+1],uv[3*k+2],color[3*k],color[3*k+1],color[3*k+2],out setups[k]))continue;
                 valid[k]=true;
+                if(hidden!=null)
+                {
+                    setups[k].P0=hidden.Positions[3*k];setups[k].P1=hidden.Positions[3*k+1];setups[k].P2=hidden.Positions[3*k+2];
+                    setups[k].N0=hidden.Normals[3*k];setups[k].N1=hidden.Normals[3*k+1];setups[k].N2=hidden.Normals[3*k+2];
+                    setups[k].Footprint=Footprint(setups[k].A,setups[k].B,setups[k].C,setups[k].Cross,setups[k].P0,setups[k].P1,setups[k].P2);
+                }
                 var t=setups[k];
                 for(int ty=t.Y0/PaintTile;ty<=(t.Y1-1)/PaintTile;ty++)
                     for(int tx=t.X0/PaintTile;tx<=(t.X1-1)/PaintTile;tx++)
@@ -706,11 +818,28 @@ namespace NordicWind.TextureWrapper
                 var list=tiles[index];if(list==null)return;
                 int tx=index%tilesX,ty=index/tilesX;
                 int x0=tx*PaintTile,x1=Math.Min(Width,x0+PaintTile),y0=ty*PaintTile,y1=Math.Min(Height,y0+PaintTile);
+                HiddenTile tile=null;
+                if(hidden!=null)
+                {
+                    // Every triangle of the tile counts before any paints.
+                    tile=new HiddenTile(x0,y0,x1,y1,hidden.Margin);
+                    foreach(int k in list)
+                    {
+                        var t=setups[k];
+                        tile.AddNormals(t,Math.Max(x0,t.X0),Math.Min(x1,t.X1),Math.Max(y0,t.Y0),Math.Min(y1,t.Y1));
+                    }
+                    tile.Normalize();
+                    foreach(int k in list)
+                    {
+                        var t=setups[k];
+                        tile.AddOuter(t,Math.Max(x0,t.X0),Math.Min(x1,t.X1),Math.Max(y0,t.Y0),Math.Min(y1,t.Y1));
+                    }
+                }
                 foreach(int k in list)
                 {
                     var t=setups[k];
                     int cx0=Math.Max(x0,t.X0),cx1=Math.Min(x1,t.X1),cy0=Math.Max(y0,t.Y0),cy1=Math.Min(y1,t.Y1);
-                    for(int y=cy0;y<cy1;y++)PaintRow(t,y,cx0,cx1,samples);
+                    for(int y=cy0;y<cy1;y++)PaintRow(t,y,cx0,cx1,samples,tile);
                 }
             }
             if((long)Width*Height<TextureProcessingSettings.MinParallelPixels||TextureProcessingSettings.MaxThreads==1)
