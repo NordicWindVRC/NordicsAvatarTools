@@ -121,6 +121,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public List<string> Notes;
         // How the remap rewrites each source's vertex colors, by index into Job.Sources.
         public Dictionary<int, Func<UnityEngine.Color, UnityEngine.Color>> VertexColors;
+        // The plan being made: what the remap does per source, and the UV channels in use.
+        public AtlasOutputPlan Plan;
 
         public AtlasTextureReference RequestMap(AtlasVirtualMap map, AtlasTextureInterpretation interpretation)
         {

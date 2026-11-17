@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5a is implemented. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is next. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -203,12 +203,15 @@ layers. Until then, live mask steps stay baked at their normal-view value and ar
   one setting; white for sources that don't use them), baked (painted in UV space into the
   base color, alpha, masks and mask bus steps), or off. Hue shifts on vertex colors are listed.
 
-**2.5b UV channels**
-- The **UV channel allocator** and preserved UVs in UV1 to UV3, with per-source tiling for
-  tiled layers. Tiled detail and normal layers can then keep maps of their own.
-- *Vertex colors*: live (white for sources that don't use them), baked, or off.
-- UV-tile features keep their tiles.
-- **Workable:** tiled details stay sharp, and vertex colors behave as the user chose.
+**2.5b Hidden UV tiles**
+- *Hidden UV Tiles* (Poiyomi's UV tile discard): kept live (each source's UVs in a UV channel
+  the allocator gives, tiles mapped to the output's hidden tiles, both sides and one side),
+  removed from the mesh by the remap (tiles hidden on both sides, any output), or off.
+- The **UV channel allocator**'s groundwork: the plan hands out UV1 to UV3, and the remap
+  writes preserved UVs per source.
+- Tiled layers kept live on a preserved channel, with per-source tiling, moved to 2.7 with the
+  other layer writers; until then they are baked into the atlas.
+- **Workable:** parts hidden by UV tiles stay hidden, and vertex colors behave as the user chose.
 
 ### 2.6 Lighting
 
@@ -219,6 +222,9 @@ layers. Until then, live mask steps stay baked at their normal-view value and ar
 
 ### 2.7 Layers
 
+- **Tiled layers kept live** (from 2.5b): tiled detail and normal layers on a preserved UV
+  channel with each source's tiling (Poiyomi's detail texture and detail normal, Toon
+  Standard's detail normal), so they stay sharp instead of being baked at the region's size.
 - The **mask allocator** (from 2.4b): constants, shared masks, inverted masks, packed
   channels, mask bus channels, and dropping or falling back when places run out; the
   reflection and specular masks move onto it.

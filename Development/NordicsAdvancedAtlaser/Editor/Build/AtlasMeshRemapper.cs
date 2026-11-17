@@ -13,6 +13,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public Material Output;
         // How the source's vertex colors are rewritten (Vertex colors, live); null: kept.
         public Func<Color, Color> VertexColor;
+        // UV channels written from the source's own UVs (Hidden UV tiles, live).
+        public readonly List<AtlasPreservedUV> PreservedUVs = new List<AtlasPreservedUV>();
+        // Triangles with a vertex in one of these tiles are left out (Hidden UV tiles, removed).
+        public readonly List<AtlasTileDiscard> RemovedTiles = new List<AtlasTileDiscard>();
     }
 
     public sealed class AtlasRemapResult
@@ -23,6 +27,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly Dictionary<Material, int> Clamped = new Dictionary<Material, int>();
         // Vertices added by splitting.
         public int SplitVertices;
+        // Triangles left out because they lie in hidden UV tiles, per source material.
+        public readonly Dictionary<Material, int> Removed = new Dictionary<Material, int>();
     }
 
     // The mesh remapper (ATLAS_OUTPUT.md, "Mesh remapper"): a new mesh with each source's UV0
@@ -106,6 +112,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 return copy;
             }
 
+            // A source mesh's UV channels, read once when a feature needs them.
+            var channelUVs = new Dictionary<int, List<Vector4>>();
             var indices = new int[subMeshCount][];
             for (int s = 0; s < subMeshCount; s++)
             {
@@ -120,8 +128,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 else
                 {
                     int group = groups[target];
+                    var kept = new List<int>(source.Length);
                     for (int i = 0; i + 2 < source.Length; i += 3)
                     {
+                        if (Hidden(mesh, target, source[i], source[i + 1], source[i + 2], channelUVs))
+                        {
+                            result.Removed.TryGetValue(materials[s], out int removed);
+                            result.Removed[materials[s]] = removed + 1;
+                            continue;
+                        }
                         Vector2 a = uv0[source[i]], b = uv0[source[i + 1]], c = uv0[source[i + 2]];
                         // A triangle within one UV tile moves into 0–1 by whole tiles; one that
                         // straddles a tile edge is clamped.
@@ -136,14 +151,79 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         }
                         var use = new VertexUse { Target = target, Shift = new Vector2(-tileX, -tileY), Clamp = clamp };
                         for (int k = 0; k < 3; k++)
-                            mapped[i + k] = Resolve(new VertexKey { Vertex = source[i + k], Group = group, TileX = tileX, TileY = tileY, Clamp = clamp }, use);
+                            kept.Add(Resolve(new VertexKey { Vertex = source[i + k], Group = group, TileX = tileX, TileY = tileY, Clamp = clamp }, use));
                     }
+                    mapped = kept.ToArray();
                 }
                 indices[s] = mapped;
             }
             result.SplitVertices = origin.Count - vertexCount;
             result.Mesh = Build(mesh, origin, uses, indices, materials, submeshTargets, out result.Materials);
             return result;
+        }
+
+        // Whether a triangle has a vertex in a tile the target removes (Poiyomi's vertex mode).
+        private static bool Hidden(Mesh mesh, AtlasRemapTarget target, int a, int b, int c, Dictionary<int, List<Vector4>> channelUVs)
+        {
+            foreach (var hidden in target.RemovedTiles)
+            {
+                if (hidden.Faces != AtlasFaces.Both || hidden.Tiles == 0) continue;
+                var uv = UVs(mesh, (int)(hidden.Space - AtlasTextureSpace.UV0), channelUVs);
+                if (uv == null) continue;
+                if (InTiles(uv[a], hidden.Tiles) || InTiles(uv[b], hidden.Tiles) || InTiles(uv[c], hidden.Tiles)) return true;
+            }
+            return false;
+        }
+
+        private static bool InTiles(Vector4 uv, int tiles)
+        {
+            int x = Mathf.FloorToInt(uv.x), y = Mathf.FloorToInt(uv.y);
+            return x >= 0 && x < 4 && y >= 0 && y < 4 && ((tiles >> (y * 4 + x)) & 1) != 0;
+        }
+
+        // A channel's UVs, or null when the mesh has none there.
+        private static List<Vector4> UVs(Mesh mesh, int channel, Dictionary<int, List<Vector4>> channelUVs)
+        {
+            if (channel < 0 || channel > 7) return null;
+            if (channelUVs.TryGetValue(channel, out var uv)) return uv;
+            if (mesh.HasVertexAttribute(VertexAttribute.TexCoord0 + channel))
+            {
+                uv = new List<Vector4>();
+                mesh.GetUVs(channel, uv);
+                if (uv.Count != mesh.vertexCount) uv = null;
+            }
+            channelUVs[channel] = uv;
+            return uv;
+        }
+
+        // The UV channels the targets preserve: each vertex of a target that writes the channel
+        // gets its source UV converted; the other vertices keep theirs (zero without the channel).
+        private static void WritePreserved(Mesh mesh, Mesh result, List<int> origin, List<VertexUse> uses, AtlasRemapTarget[] submeshTargets)
+        {
+            var channels = new HashSet<int>();
+            foreach (var target in submeshTargets)
+                if (target != null)
+                    foreach (var preserved in target.PreservedUVs) channels.Add(preserved.Channel);
+            var cache = new Dictionary<int, List<Vector4>>();
+            foreach (int channel in channels)
+            {
+                var existing = UVs(mesh, channel, cache);
+                var values = new List<Vector4>(origin.Count);
+                for (int i = 0; i < origin.Count; i++)
+                {
+                    var value = existing != null ? existing[origin[i]] : Vector4.zero;
+                    var preserved = uses[i].Target?.PreservedUVs.Find(p => p.Channel == channel);
+                    if (preserved != null)
+                    {
+                        var from = UVs(mesh, preserved.SourceChannel, cache);
+                        var uv = from != null ? (Vector2)from[origin[i]] : Vector2.zero;
+                        var converted = preserved.Convert != null ? preserved.Convert(uv) : uv;
+                        value = new Vector4(converted.x, converted.y, value.z, value.w);
+                    }
+                    values.Add(value);
+                }
+                result.SetUVs(channel, values);
+            }
         }
 
         // Every vertex of the triangle within tile (x, y), its far edges included.
@@ -188,6 +268,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             for (int channel = 0; channel < 8; channel++)
                 CopyUVs(mesh, result, channel, origin, channel == 0 ? uses : null);
+            WritePreserved(mesh, result, origin, uses, submeshTargets);
             CopyBoneWeights(mesh, result, origin);
             result.bindposes = mesh.bindposes;
             CopyBlendShapes(mesh, result, origin);

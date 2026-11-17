@@ -16,6 +16,25 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // How the remap rewrites each source's vertex colors, by index into the job's sources;
         // sources without an entry keep theirs.
         public readonly Dictionary<int, System.Func<Color, Color>> VertexColors = new Dictionary<int, System.Func<Color, Color>>();
+        // What else the remap does per source (preserved UVs, removed triangles), by index into
+        // the job's sources.
+        public readonly Dictionary<int, AtlasSourceRemap> SourceRemaps = new Dictionary<int, AtlasSourceRemap>();
+        // The UV channels after UV0 the features have taken (the UV channel allocator).
+        public readonly HashSet<int> UVChannels = new HashSet<int>();
+
+        public AtlasSourceRemap Remap(int source)
+        {
+            if (!SourceRemaps.TryGetValue(source, out var remap)) SourceRemaps[source] = remap = new AtlasSourceRemap();
+            return remap;
+        }
+
+        // The lowest free UV channel of 1 to `available`, taken; −1 when none is free.
+        public int AllocateUVChannel(int available)
+        {
+            for (int channel = 1; channel <= System.Math.Min(available, 3); channel++)
+                if (UVChannels.Add(channel)) return channel;
+            return -1;
+        }
     }
 
     // Steps 1 and 2 of the output pipeline (ATLAS_OUTPUT.md, "Pipeline"): collect each
@@ -98,7 +117,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             feature.Resolve(new AtlasFeatureContext
             {
                 Job = job, Capabilities = capabilities, Mode = mode, Sources = sources,
-                Output = plan.Output, Maps = plan.Maps, Notes = plan.Notes, VertexColors = plan.VertexColors
+                Output = plan.Output, Maps = plan.Maps, Notes = plan.Notes, VertexColors = plan.VertexColors, Plan = plan
             });
         }
     }

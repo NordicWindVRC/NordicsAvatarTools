@@ -50,7 +50,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
             SurfaceModes = { AtlasSurfaceMode.Cutout, AtlasSurfaceMode.Transparent, AtlasSurfaceMode.Fade },
             VRChatFallback = true,
             BlendedDepthWrite = true,
-            VertexColors = AtlasVertexColorSupport.Color | AtlasVertexColorSupport.Alpha | AtlasVertexColorSupport.Amount | AtlasVertexColorSupport.Srgb
+            VertexColors = AtlasVertexColorSupport.Color | AtlasVertexColorSupport.Alpha | AtlasVertexColorSupport.Amount | AtlasVertexColorSupport.Srgb,
+            // UV Tile Discard: on both sides (_UDIMDiscard*) and one side (_UDIMFaceDiscard*),
+            // each reading UV0 to UV3.
+            TileDiscard = true,
+            FaceTileDiscard = true,
+            UVChannels = 3
         };
 
         // Poiyomi 10's rendering presets (_Mode), as its shader's on_value_actions set them, by
@@ -97,6 +102,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetFloat("_MainVertexColoring", vertex.MultiplyColor ? Mathf.Clamp01(vertex.Amount) : 0f);
             material.SetFloat("_MainUseVertexColorAlpha", vertex.MultiplyAlpha ? Mathf.Clamp01(vertex.AlphaAmount) : 0f);
             material.SetFloat("_MainVertexColoringLinearSpace", vertex.SrgbData ? 1 : 0);
+            WriteTileDiscard(output.Render.HiddenTiles, material);
             WriteSurfaceResponse(output.Surface.Response, material);
             WriteEmission(output, material);
             var render = output.Render;
@@ -165,6 +171,36 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // the reflection and specular masks B and A × their strengths; and the AO maps
         // (PROP_LIGHTINGAOMAPS): occlusion = lerp(1, R, strength). Thry sets these keywords from
         // its inspector; a written material sets them itself.
+        // UV Tile Discard (vertex mode: a triangle with a vertex in a hidden tile is hidden; never
+        // outside the 4 × 4 grid) for both sides, and Face Discard for one side, which needs the
+        // first one's keyword.
+        private static void WriteTileDiscard(List<AtlasTileDiscard> hidden, Material material)
+        {
+            var both = hidden.FirstOrDefault(t => t.Faces == AtlasFaces.Both);
+            var face = hidden.FirstOrDefault(t => t.Faces != AtlasFaces.Both);
+            bool on = both != null || face != null;
+            material.SetFloat("_EnableUDIMDiscardOptions", on ? 1 : 0);
+            if (on) material.EnableKeyword("POI_UDIMDISCARD");
+            else material.DisableKeyword("POI_UDIMDISCARD");
+            material.SetFloat("_UDIMDiscardUV", on ? Mathf.Clamp((int)((both ?? face).Space - AtlasTextureSpace.UV0), 0, 3) : 0);
+            material.SetFloat("_UDIMDiscardMode", 0);
+            Rows(material, "_UDIMDiscardRow", both?.Tiles ?? 0);
+            material.SetFloat("_EnableUDIMFaceDiscardOptions", face != null ? 1 : 0);
+            if (face == null) return;
+            material.SetFloat("_UDIMFaceDiscardUV", Mathf.Clamp((int)(face.Space - AtlasTextureSpace.UV0), 0, 3));
+            // 0 discards back faces, 1 front faces.
+            material.SetFloat("_UDIMFaceDiscardFace", face.Faces == AtlasFaces.Front ? 1 : 0);
+            Rows(material, "_UDIMFaceDiscardRow", face.Tiles);
+        }
+
+        // Bit row × 4 + column into _…Row{row}_{column}.
+        private static void Rows(Material material, string prefix, int tiles)
+        {
+            for (int row = 0; row < 4; row++)
+                for (int column = 0; column < 4; column++)
+                    material.SetFloat(prefix + row + "_" + column, ((tiles >> (row * 4 + column)) & 1) != 0 ? 1 : 0);
+        }
+
         private static void WriteSurfaceResponse(AtlasSurfaceResponse response, Material material)
         {
             var packed = response.Metallic.Map?.Texture;

@@ -121,6 +121,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool BlendedDepthWrite;
         public AtlasReflectanceSupport Reflectance;
         public AtlasVertexColorSupport VertexColors;
+        // Hides UV tiles on both sides (Poiyomi's UV tile discard), and on one chosen side.
+        public bool TileDiscard;
+        public bool FaceTileDiscard;
+        // How many UV channels after UV0 the output's features can read (preserved UVs).
+        public int UVChannels;
 
         public AtlasOutputTexture TextureFor(AtlasVirtualMap map) => Textures.Find(t => t.Provides(map));
 

@@ -111,6 +111,9 @@ and `ATLAS_OUTPUT.md` for the output design.
        the material it comes from (*Automatic*: the one with the largest area).
      - **Ambient Occlusion**: each source's occlusion map, at its strength; sources without
        one stay unoccluded.
+     - **Hidden UV Tiles** (Poiyomi's UV tile discard): *Kept live* (the atlas material hides
+       the same tiles, read from a spare UV channel the build writes), *Removed from the mesh*
+       (any output shader; only tiles hidden on both sides), or *Off*.
      - **Vertex Colors**: *Kept on the mesh* (the atlas material multiplies by them as the
        sources did; the build rewrites each material's vertex colors to match, white where a
        material didn't use them), *Baked into the textures*, or *Off*. Masks that read vertex

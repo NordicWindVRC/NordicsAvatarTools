@@ -8,6 +8,13 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Hidden UV tiles:** parts hidden by Poiyomi's UV tile discard stay hidden. *Kept live*: the
+  remap writes each source's UVs into a free UV channel (the plan's UV channel allocator,
+  `AtlasOutputPlan.AllocateUVChannel`), moved by whole tiles only where the output would hide
+  them differently, and the Poiyomi writer sets UV Tile Discard (vertex mode) and Face
+  Discard on it. *Removed from the mesh*: the remap leaves out triangles with a vertex in a
+  tile hidden on both sides (`AtlasRemapTarget.RemovedTiles`), on any output, and logs how
+  many. Before, these parts showed after atlasing.
 - **Vertex colors:** a *Vertex Colors* feature with three modes.
   - *Kept on the mesh*: the output multiplies its base color and alpha by the vertex colors
     with one setting, and the remap rewrites each source's vertex colors (`AtlasRemapTarget.VertexColor`)

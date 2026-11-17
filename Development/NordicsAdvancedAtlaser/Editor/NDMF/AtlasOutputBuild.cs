@@ -33,8 +33,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         foreach (var source in job.Sources)
                             if (source.Input?.Unified != null)
                             {
-                                job.Plan.VertexColors.TryGetValue(index++, out var vertexColor);
-                                targets[source.Input.SourceMaterial] = new AtlasRemapTarget
+                                job.Plan.VertexColors.TryGetValue(index, out var vertexColor);
+                                var remapTarget = new AtlasRemapTarget
                                 {
                                     // Into the part the content fills, inside the padding.
                                     Region = AtlasOutputLayout.ContentRegion(source.UVRegion, job.Configuration.mainTexture,
@@ -42,6 +42,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                                     Output = output.Material,
                                     VertexColor = vertexColor
                                 };
+                                if (job.Plan.SourceRemaps.TryGetValue(index, out var remap))
+                                {
+                                    remapTarget.PreservedUVs.AddRange(remap.PreservedUVs);
+                                    remapTarget.RemovedTiles.AddRange(remap.RemovedTiles);
+                                }
+                                targets[source.Input.SourceMaterial] = remapTarget;
+                                index++;
                             }
                         context.Diagnostics.Add($"{job.Configuration.outputName}: {output.Textures.Count} texture(s) for {job.Shader.DisplayName}, {(mobile ? "mobile" : "PC")} formats.");
                     }
@@ -81,6 +88,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 context.Diagnostics.Add($"{renderer.name}: remapped onto the atlas; {result.SplitVertices} vertices split.");
                 foreach (var clamped in result.Clamped)
                     context.Diagnostics.Add($"{clamped.Key.name}: {clamped.Value} triangle(s) straddle a UV tile edge and were clamped into the atlas region.");
+                foreach (var removed in result.Removed)
+                    context.Diagnostics.Add($"{removed.Key.name}: {removed.Value} triangle(s) in hidden UV tiles removed from the mesh.");
             }
         }
 
