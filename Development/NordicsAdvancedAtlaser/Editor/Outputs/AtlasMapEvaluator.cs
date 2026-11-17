@@ -258,6 +258,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         private static readonly TextureChannel[] Channels = { TextureChannel.R, TextureChannel.G, TextureChannel.B, TextureChannel.A };
 
+        // A color texture over the source's UV 0–1, as Sample does it.
+        public static NordicsTextureWrapper SampleColor(AtlasTextureReference reference, Texture2D texture, int width, int height) =>
+            Sample(reference, texture, TextureDataType.Color, width, height);
+
         // A texture over the source's UV 0–1, with the reference's tiling, offset and rotation on UV0.
         private static NordicsTextureWrapper Sample(AtlasTextureReference reference, Texture2D texture, TextureDataType type, int width, int height)
         {

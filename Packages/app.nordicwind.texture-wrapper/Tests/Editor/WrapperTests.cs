@@ -94,6 +94,19 @@ namespace NordicWind.TextureWrapper.Tests
                 Assert.Throws<ArgumentException>(()=>NordicsTextureWrapper.ContentRegion(new Rect(0f,0f,0.05f,0.05f),64,32,3));
             }
         }
+        [Test] public void BlitStrengthScalesTheInfluenceOfColorBlends()
+        {
+            using(var src=new NordicsTextureWrapper(2,2,ColorSettings()))using(var dst=new NordicsTextureWrapper(2,2,ColorSettings()))
+            {
+                src.Fill(Color.white);
+                dst.Fill(Color.black);
+                dst.Blit(src,strength:0.25f);
+                Assert.AreEqual(0.25f,dst.GetPixel(0,0).r,1e-5f,"replace at a quarter");
+                dst.Fill(new Color(0.1f,0.1f,0.1f,1f));
+                dst.Blit(src,blend:TextureBlendMode.Add,strength:2f);
+                Assert.AreEqual(2.1f,dst.GetPixel(0,0).r,1e-5f,"add twice");
+            }
+        }
         [Test] public void InvalidPaddingThrows()
         {
             using(var src=new NordicsTextureWrapper(2,2))using(var dst=new NordicsTextureWrapper(4,4))

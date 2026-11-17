@@ -406,6 +406,8 @@ namespace NordicWind.TextureWrapper
                 Vector3 mixed=MathUtil.SafeNormal(Vector3.LerpUnclamped(MathUtil.Normal(dst),outN,influence));
                 return MathUtil.Pack(mixed,Mathf.LerpUnclamped(dst.a,src.a,influence));
             }
+            // For color blends the strength scales the influence (for normals it scaled the vector).
+            influence*=strength;
             if(from.HasValue || to.HasValue)
             {
                 TextureChannel source=from??TextureChannel.AverageRGB;

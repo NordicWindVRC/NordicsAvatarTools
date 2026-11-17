@@ -8,6 +8,13 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Base color stack:** each source's color, its static color layers (tiled UV0 textures or
+  colors, every blend including tint and add to luminance, masks, source alpha as opacity)
+  and its static color adjustments (hue in HSV or Oklab, saturation, contrast, brightness,
+  tint, power, clamp, lightness, chromatize; on the base color, the surface color and layer
+  sources) are baked into the base color. The color stays shared when every source has it and
+  nothing is layered on it, so colors above 1 keep working. Live layers, decals, final-color
+  adjustments, the other operations and vertex colors are listed in the diagnostics.
 - **Surface maps:** *Reflection and Specular* bakes each source's metallic and roughness, and
   its highlight and reflection strengths into masks relative to the strongest; *Ambient
   Occlusion* bakes each source's occlusion. Sources without them are matte and unoccluded.

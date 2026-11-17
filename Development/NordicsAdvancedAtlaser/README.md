@@ -84,7 +84,11 @@ and `ATLAS_OUTPUT.md` for the output design.
      to turn it off for single materials, and its name then says how many still use it. Once
      there are features from several groups (Surface, Lighting, Layers, Effects, Render), each
      group gets a small heading. So far:
-     - **Color**: the base color textures.
+     - **Color**: each source's base color: its texture and color, its color layers (details,
+       recolor regions, plain colors, with their masks) and its static color adjustments,
+       baked together. When every source has the same color and nothing is layered on it, the
+       color stays a shared setting. Decals, live (animated) layers and vertex colors follow
+       later; the build lists them.
      - **Alpha**: each source's alpha, in the base color texture's alpha. A cutout source keeps
        its cutoff (moved to the shared one); under a transparent mode its edges stay hard.
        Opaque sources stay solid. A transparent source stays transparent only where the

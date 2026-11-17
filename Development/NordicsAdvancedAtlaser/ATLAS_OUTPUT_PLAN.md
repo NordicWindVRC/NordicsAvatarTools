@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is next. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3a is done, 2.3b is next. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -157,12 +157,22 @@ In two steps, since each output shader stores these maps its own way.
 
 ### 2.3 Color stack and emission
 
+In two steps; vertex colors move to 2.5, with the remapper's vertex color handling.
+
+**2.3a Base color stack**
 - The bakeable subset grows: the base color's own color (multiplied into the texture, or a
-  shared color when every source has the same one), surface layers targeting color
-  (details, decals, recolor regions), static color adjustments, vertex color baked into
-  color.
-- *Emission* (native map, baked into color); *Color adjustments* (baked static, native
-  live).
+  shared color when every source has the same one and nothing is layered on it), surface
+  layers targeting color (tiled details, plain colors, recolor regions with tint or add to
+  luminance), static color adjustments on the base color, the surface color and layer
+  sources.
+- Static: no modulator drives it and its texture doesn't scroll, spin or animate. Live parts,
+  decals, final-color adjustments and the operations without a wrapper equivalent are listed
+  in the diagnostics.
+- **Workable:** toon materials with details and recolor regions atlas without losing them.
+
+**2.3b Decals and emission**
+- Decals (placed sources); *Emission* (native map, baked into color); *Color adjustments*
+  (native live).
 - **Optional maps and fallbacks**: decal and detail color maps baked into the base color,
   and secondary and detail normals into the main normal, when their maps are off.
 - **Workable:** typical toon materials with decals and emission atlas without losing them.
@@ -177,6 +187,8 @@ In two steps, since each output shader stores these maps its own way.
 - **Workable:** features limited to parts of the atlas stay where they were.
 
 ### 2.5 Remapper: UV channels and vertex colors
+
+- Vertex color baked into color (moved here from 2.3).
 
 - The **UV channel allocator** and preserved UVs in UV1 to UV3, with per-source tiling for
   tiled layers. Tiled detail and normal layers can then keep maps of their own.

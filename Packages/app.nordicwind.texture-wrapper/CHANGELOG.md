@@ -23,6 +23,10 @@ Newest first. Versions follow [SemVer](https://semver.org).
     color with the same hue. The simple RGB version is gone.
 - The `Mixed` blend mode is now `base + base × blend` instead of a copy of `Average`.
 
+### Fixed
+- **`Blit`'s `strength` for color blends:** it scales the influence, as documented; before, it
+  only had an effect on normal blends.
+
 ### Added
 - **`ContentRegion`:** the rectangle `Blit` fills with content for a region and padding on a
   texture of a given size, without blitting.
