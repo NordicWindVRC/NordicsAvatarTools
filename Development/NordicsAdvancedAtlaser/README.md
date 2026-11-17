@@ -119,6 +119,9 @@ and `ATLAS_OUTPUT.md` for the output design.
        shader can't set the same way.
      - **Shadow Masks** (Poiyomi): each material's shadow strength mask and detail shadows,
        baked into one *Shadow and detail masks* texture.
+     - **Shadow Colors** and **Skin Thickness** (Poiyomi): each material's band and shade
+       textures, and its skin thickness, baked into their own textures. An SDF face keeps its
+       texture, read through the face's own UVs on a spare UV channel.
      - **Hidden UV Tiles** (Poiyomi's UV tile discard): *Kept live* (the atlas material hides
        the same tiles, read from a spare UV channel the build writes), *Removed from the mesh*
        (any output shader; only tiles hidden on both sides), or *Off*.

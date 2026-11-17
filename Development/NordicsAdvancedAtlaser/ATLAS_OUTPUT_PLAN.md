@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6a and 2.6b are done, 2.6c is next. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is next. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -232,8 +232,16 @@ layers. Until then, live mask steps stay baked at their normal-view value and ar
   has neither, and lists them.
 
 **2.6c Lighting drawn on the texture**
-- Band and shade textures, SDF face maps (with the SDF type), skin thickness and cloth maps
-  (with the cloth type), baked into atlas maps where the output reads them.
+- *Shadow Colors*: every source's band and shade textures (multilayer math, shade map) baked
+  into up to three shadow color textures, white where a source has none.
+- *Skin Thickness*: every source's skin thickness baked into a skin thickness texture, 0
+  where a source has none.
+- SDF faces (the SDF type and the SDF light map) stay live: the reference source's texture,
+  read through every source's own UVs in a channel the allocator gives, since an SDF is
+  sampled mirrored by the light's side, which an atlas can't keep.
+- Baked parts don't count as lighting differently.
+- Cloth maps with the cloth type moved to *Later*: a packed metallic, mask, reflectance and
+  smoothness map and its own type, rarely used.
 - **Workable:** the atlas is shaded like its main source in both shaders.
 
 ### 2.7 Layers
@@ -357,6 +365,8 @@ Not planned in detail yet, in rough order:
 - half-precision buffers or GPU baking, if the memory budget is too tight;
 - a typed-in value for shared values, next to *Automatic* and the sources in the reference
   source drop-down;
+- **cloth lighting** (from 2.6c): Poiyomi's cloth type, with every source's metallic, cloth
+  mask, reflectance and smoothness baked into its packed map;
 - **bake speed**, measured on a 5-material avatar (11 s per output, 2.7 s of it Unity's
   compression), CPU only, the Texture Wrapper kept generic (no GPU color stack: it would move
   growing feature logic into the wrapper):

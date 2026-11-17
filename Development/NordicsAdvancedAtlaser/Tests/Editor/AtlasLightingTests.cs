@@ -60,7 +60,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void PartsDrawnOnTheTextureAreLeftOut()
+        public void PartsDrawnOnTheTextureAreBakedOrListed()
         {
             var texture = new Texture2D(2, 2);
             created.Add(texture);
@@ -71,12 +71,109 @@ namespace NordicWind.AdvancedAtlaser.Tests
             toon.Lighting.Ramp.Bands.Add(band);
             var plan = AtlasOutputPipeline.Resolve(Job((toon, 1f)), Poiyomi);
             var ramp = plan.Output.Lighting.Ramp;
-            // The detail shadow isn't the source's own map: Shadow Masks bakes it into the atlas.
+            // Not the source's own maps: Shadow Masks and Shadow Colors bake them into the atlas.
             Assert.AreNotSame(toon.Lighting.Ramp.TermMask, ramp.TermMask);
             Assert.AreEqual(AtlasChannel.Green, ramp.TermMask.Channel, "baked into the masks texture's G");
-            Assert.IsNull(ramp.Bands.Single().Color.Map);
-            Assert.IsNotNull(band.Color.Map, "the source's own band is untouched");
-            Assert.IsTrue(plan.Notes.Any(n => n.Contains("drawn on the texture")));
+            Assert.IsNotNull(ramp.Bands.Single().Color.Map);
+            Assert.AreNotSame(band.Color.Map, ramp.Bands.Single().Color.Map);
+            Assert.AreSame(texture, band.Color.Map.Texture, "the source's own band is untouched");
+            Assert.IsFalse(plan.Notes.Any(n => n.Contains("drawn on the texture")));
+
+            var mobile = AtlasOutputPipeline.Resolve(Job((toon, 1f)), AtlasShaderRegistry.Output("mobiletoon").Capabilities);
+            Assert.IsTrue(mobile.Notes.Any(n => n.Contains("drawn on the texture") && n.Contains("band and shade textures")));
+        }
+
+        [Test]
+        public void ShadowColorsAndSkinThicknessAreBakedPerSource()
+        {
+            var colored = Lit(AtlasLightingFamily.RampToon);
+            var band = new AtlasShadeBand();
+            band.Color.Map = Gray(0.3f);
+            colored.Lighting.Ramp.Bands.Add(band);
+            var plain = Lit(AtlasLightingFamily.RampToon);
+            plain.Lighting.Ramp.Bands.Add(new AtlasShadeBand());
+            var job = Job((colored, 0.5f), (plain, 0.5f));
+            var plan = AtlasOutputPipeline.Resolve(job, Poiyomi);
+            var request = plan.Maps.Single(m => m.Map == AtlasVirtualMap.ShadowColor1);
+            using (var map = request.Evaluate(0, colored, 4, 4)) Assert.AreEqual(0.3f, map.GetPixel(1, 1).r, 1e-3f, "the source's texture");
+            using (var map = request.Evaluate(1, plain, 4, 4)) Assert.AreEqual(1f, map.GetPixel(1, 1).r, 1e-3f, "none: white");
+            Assert.IsFalse(plan.Notes.Any(n => n.Contains("lit differently")), "baked textures don't count as lit differently");
+
+            var skin = Lit(AtlasLightingFamily.PhysicallyBased);
+            skin.Lighting.Diffuse = AtlasDiffuseModel.PreintegratedSkin;
+            skin.Lighting.Skin.Thickness = new AtlasMask { Map = Gray(0.6f) };
+            var other = Lit(AtlasLightingFamily.PhysicallyBased);
+            other.Lighting.Diffuse = AtlasDiffuseModel.PreintegratedSkin;
+            var skinPlan = AtlasOutputPipeline.Resolve(Job((skin, 0.5f), (other, 0.5f)), Poiyomi);
+            var thickness = skinPlan.Maps.Single(m => m.Map == AtlasVirtualMap.SkinThickness);
+            using (var map = thickness.Evaluate(0, skin, 4, 4)) Assert.AreEqual(0.6f, map.GetPixel(1, 1).r, 1e-3f);
+            using (var map = thickness.Evaluate(1, other, 4, 4)) Assert.AreEqual(0f, map.GetPixel(1, 1).r, 1e-3f, "none: thickness 0");
+            Assert.AreEqual(AtlasChannel.Red, skinPlan.Output.Lighting.Skin.Thickness.Channel);
+        }
+
+        private AtlasUnifiedMaterial SdfFace(AtlasSdfStyle style)
+        {
+            var face = Lit(AtlasLightingFamily.RampToon);
+            face.Lighting.Ramp.Term = AtlasShadingTerm.SdfFace;
+            face.Lighting.Ramp.Sdf = new AtlasSdfFace { Style = style, Map = Gray(0.5f), Blur = 0.2f };
+            return face;
+        }
+
+        [Test]
+        public void AnSdfFaceStaysLiveOnItsOwnUVs()
+        {
+            var face = SdfFace(AtlasSdfStyle.Threshold);
+            var job = Job((face, 0.5f), (Lit(AtlasLightingFamily.RampToon), 0.25f));
+            var plan = AtlasOutputPipeline.Resolve(job, Poiyomi);
+            var sdf = plan.Output.Lighting.Ramp.Sdf;
+            Assert.AreEqual(AtlasShadingTerm.SdfFace, plan.Output.Lighting.Ramp.Term);
+            Assert.AreSame(face.Lighting.Ramp.Sdf.Map.Texture, sdf.Map.Texture, "the face's own texture");
+            Assert.AreEqual(AtlasTextureSpace.UV1, sdf.Map.Space);
+            Assert.AreEqual(AtlasTextureSpace.UV0, face.Lighting.Ramp.Sdf.Map.Space, "the source's own is untouched");
+            var preserved = plan.SourceRemaps[1].PreservedUVs.Single();
+            Assert.AreEqual(1, preserved.Channel);
+            Assert.AreEqual(0, preserved.SourceChannel);
+
+            var mobile = AtlasOutputPipeline.Resolve(job, AtlasShaderRegistry.Output("mobiletoon").Capabilities);
+            Assert.IsTrue(mobile.Notes.Any(n => n.Contains("SDF face maps")));
+        }
+
+        [Test]
+        public void ThePoiyomiWriterSetsTheLightingTexturesTheParserReadsBack()
+        {
+            var shader = Installed("poiyomi10");
+            foreach (var style in new[] { AtlasSdfStyle.Threshold, AtlasSdfStyle.Blended })
+            {
+                var output = SdfFace(style);
+                output.Lighting.Ramp.Sdf.Map.Space = AtlasTextureSpace.UV2;
+                var material = new Material(shader.FindShader());
+                created.Add(material);
+                shader.Write(output, material);
+                var sdf = AtlasShaderRegistry.Detect(material).Parse(material).Lighting.Ramp.Sdf;
+                Assert.AreEqual(style, sdf?.Style, style.ToString());
+                Assert.AreSame(output.Lighting.Ramp.Sdf.Map.Texture, sdf.Map.Texture, style.ToString());
+                Assert.AreEqual(AtlasTextureSpace.UV2, sdf.Map.Space, style.ToString());
+            }
+
+            var banded = Lit(AtlasLightingFamily.RampToon);
+            banded.Lighting.Ramp.Term = AtlasShadingTerm.HalfLambert;
+            var band = new AtlasShadeBand();
+            band.Color.Map = Gray(0.4f);
+            banded.Lighting.Ramp.Bands.Add(band);
+            var bandMaterial = new Material(shader.FindShader());
+            created.Add(bandMaterial);
+            shader.Write(banded, bandMaterial);
+            var parsedBand = AtlasShaderRegistry.Detect(bandMaterial).Parse(bandMaterial).Lighting.Ramp.Bands.First();
+            Assert.AreSame(band.Color.Map.Texture, parsedBand.Color.Map?.Texture, "the band texture");
+
+            var skin = Lit(AtlasLightingFamily.PhysicallyBased);
+            skin.Lighting.Diffuse = AtlasDiffuseModel.PreintegratedSkin;
+            skin.Lighting.Skin.Thickness = new AtlasMask { Map = Gray(0.6f) };
+            var skinMaterial = new Material(shader.FindShader());
+            created.Add(skinMaterial);
+            shader.Write(skin, skinMaterial);
+            var parsedSkin = AtlasShaderRegistry.Detect(skinMaterial).Parse(skinMaterial).Lighting.Skin;
+            Assert.AreSame(skin.Lighting.Skin.Thickness.Map.Texture, parsedSkin.Thickness?.Map?.Texture, "the skin thickness");
         }
 
         private IAtlasOutputShader Installed(string id)

@@ -25,7 +25,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // One value each (3.2): the ramp toon shadow's strength mask, and the detail shadow that
         // multiplies the shading term.
         ShadowStrengthMask,
-        DetailShadow
+        DetailShadow,
+        // Color (3.2): each band's shade texture of banded lighting.
+        ShadowColor1,
+        ShadowColor2,
+        ShadowColor3,
+        // One value (3.3): the pre-integrated skin's thickness.
+        SkinThickness
     }
 
     // Which channels of a texture a virtual map fills.
@@ -133,6 +139,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The writer shades only through a ramp texture: a ramp described otherwise (bands,
         // keys) is generated as one (AtlasRampTexture).
         public bool GeneratedRamp;
+        // The writer reads an SDF face texture through a UV channel it's told, so the reference
+        // source's texture stays live on its preserved UVs (an SDF is sampled mirrored, which an
+        // atlas can't keep).
+        public bool SdfFace;
 
         public AtlasOutputTexture TextureFor(AtlasVirtualMap map) => Textures.Find(t => t.Provides(map));
 

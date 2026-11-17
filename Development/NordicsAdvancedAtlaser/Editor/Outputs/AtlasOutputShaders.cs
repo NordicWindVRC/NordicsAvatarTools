@@ -49,7 +49,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 // _LightingShadowMasks reads R, _LightingDetailShadowMaps G (by their channel strengths).
                 new AtlasOutputTexture("LightingMasks", "Shadow and detail masks") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
                     .With(AtlasVirtualMap.ShadowStrengthMask, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f))
-                    .With(AtlasVirtualMap.DetailShadow, AtlasTextureChannels.G, AtlasOutputTexture.Gray(1f))
+                    .With(AtlasVirtualMap.DetailShadow, AtlasTextureChannels.G, AtlasOutputTexture.Gray(1f)),
+                // _ShadowColorTex / _1st_ShadeMap, _Shadow2ndColorTex / _2nd_ShadeMap, _Shadow3rdColorTex.
+                new AtlasOutputTexture("ShadowColor1", "Shadow color 1") { SizeMode = AtlasTextureSizeMode.MainAspect }
+                    .With(AtlasVirtualMap.ShadowColor1, AtlasTextureChannels.RGBA),
+                new AtlasOutputTexture("ShadowColor2", "Shadow color 2") { SizeMode = AtlasTextureSizeMode.MainAspect }
+                    .With(AtlasVirtualMap.ShadowColor2, AtlasTextureChannels.RGBA),
+                new AtlasOutputTexture("ShadowColor3", "Shadow color 3") { SizeMode = AtlasTextureSizeMode.MainAspect }
+                    .With(AtlasVirtualMap.ShadowColor3, AtlasTextureChannels.RGBA),
+                // _SkinThicknessMap reads R.
+                new AtlasOutputTexture("SkinThickness", "Skin thickness") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
+                    .With(AtlasVirtualMap.SkinThickness, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f))
             },
             SurfaceModes = { AtlasSurfaceMode.Cutout, AtlasSurfaceMode.Transparent, AtlasSurfaceMode.Fade },
             VRChatFallback = true,
@@ -59,7 +69,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // each reading UV0 to UV3.
             TileDiscard = true,
             FaceTileDiscard = true,
-            UVChannels = 3
+            UVChannels = 3,
+            // _SDFShadingTextureUV and _LightDataSDFMapUV pick the channel.
+            SdfFace = true
         };
 
         // Poiyomi 10's rendering presets (_Mode), as its shader's on_value_actions set them, by
@@ -209,7 +221,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var ramp = l.Ramp;
             bool multilayer = l.Family == AtlasLightingFamily.RampToon && ramp.Term != AtlasShadingTerm.Wrapped && ramp.Bands.Count > 0 && !IsShadeMap(ramp);
             // Multilayer Math builds its own half-Lambert terms; Shade Map keeps the light map's.
-            m.SetFloat("_LightingMapMode", multilayer || ramp.Term == AtlasShadingTerm.HalfLambert ? 1 : ramp.Term == AtlasShadingTerm.Lambert ? 2
+            bool blendedSdf = ramp.Term == AtlasShadingTerm.SdfFace && ramp.Sdf?.Style == AtlasSdfStyle.Blended;
+            if (blendedSdf)
+            {
+                // Light map mode SDF: a blended SDF texture's red or green by the light's side.
+                TextureOn(m, "_LightDataSDFMap", ramp.Sdf.Map);
+                m.SetFloat("_LightDataSDFBlendY", ramp.Sdf.VerticalBlend);
+                m.SetFloat("_LightDataSDFMapLOD", ramp.Sdf.Softness);
+                m.SetFloat("_LightDataSDFChannelsBA", ramp.Sdf.MaskChannels ? 1 : 0);
+            }
+            m.SetFloat("_LightingMapMode", blendedSdf ? 4 : multilayer || ramp.Term == AtlasShadingTerm.HalfLambert ? 1 : ramp.Term == AtlasShadingTerm.Lambert ? 2
                 : ramp.Term == AtlasShadingTerm.ShadowsOnly ? 3 : 0);
             // Shadow masks scale the shadow strength; detail shadows multiply the light map.
             PackedMask(m, "_LightingShadowMasks", "_LightingShadowMaskStrength", ramp.RampStrengthMask);
@@ -284,6 +305,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 else m.DisableKeyword(LightingKeywords[k]);
         }
 
+        // A texture slot set from a reference: its texture, tiling and offset, and its UV channel
+        // (UV0 to UV3); no texture without one.
+        private static void TextureOn(Material m, string property, AtlasTextureReference map)
+        {
+            m.SetTexture(property, map?.Texture);
+            m.SetTextureScale(property, map?.Tiling ?? Vector2.one);
+            m.SetTextureOffset(property, map?.Offset ?? Vector2.zero);
+            int uv = map == null ? 0 : (int)(map.Space - AtlasTextureSpace.UV0);
+            m.SetFloat(property + "UV", uv >= 0 && uv <= 3 ? uv : 0);
+        }
+
         // A mask in one channel of a packed texture slot: the channel's strength set, the others 0.
         // Without a mask: no texture, the default strengths (R at 1).
         private static void PackedMask(Material m, string property, string strengths, AtlasMask mask)
@@ -320,7 +352,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         m.SetColor("_LightingShadowColor", l.ShadowTint.gamma);
                         m.SetTexture("_SkinLUT", skin.Lut?.Texture);
                         m.SetFloat("_SssScale", skin.Scattering);
-                        m.SetTexture("_SkinThicknessMap", null);
+                        m.SetTexture("_SkinThicknessMap", skin.Thickness?.Map?.Texture);
+                        m.SetTextureScale("_SkinThicknessMap", Vector2.one);
+                        m.SetTextureOffset("_SkinThicknessMap", Vector2.zero);
+                        m.SetFloat("_SkinThicknessMapUV", 0);
+                        m.SetFloat("_SkinThicknessMapInvert", 0);
                         m.SetFloat("_SkinThicknessPower", skin.ThicknessPower);
                         m.SetVector("_SssTransmissionAbsorption", skin.Absorption);
                         m.SetFloat("_SkinScatteringStability", skin.Stability);
@@ -334,6 +370,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     m.SetFloat("_ShadowStrength", l.ShadowStrength);
                     m.SetColor("_LightingShadowColor", l.ShadowTint.gamma);
                     return 6;
+            }
+            if (ramp.Term == AtlasShadingTerm.SdfFace && ramp.Sdf?.Style == AtlasSdfStyle.Threshold)
+            {
+                // SDF: the face's texture by threshold, mirrored by the light's side; the shadow
+                // as most types share it.
+                TextureOn(m, "_SDFShadingTexture", ramp.Sdf.Map);
+                m.SetVector("_SDFForward", ramp.Sdf.Forward);
+                m.SetVector("_SDFLeft", ramp.Sdf.Left);
+                m.SetFloat("_SDFBlur", ramp.Sdf.Blur);
+                m.SetColor("_LightingShadowColor", ramp.ShadowTint.Color.gamma);
+                m.SetFloat("_LightingIgnoreAmbientColor", ramp.ShadowDirect);
+                m.SetFloat("_ShadowStrength", ramp.RampStrength);
+                return 8;
             }
             if (ramp.Term == AtlasShadingTerm.Wrapped)
             {
@@ -367,12 +416,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     m.SetFloat("_BaseShade_Feather", first.Blur);
                     m.SetFloat("_BaseColor_Step", first.Border + first.Blur * 0.5f);
                     m.SetFloat("_Use_BaseAs1st", first.ColorFromBase ? 1 : 0);
-                    m.SetTexture("_1st_ShadeMap", null);
+                    TextureOn(m, "_1st_ShadeMap", first.Color.Map);
                     m.SetColor("_2nd_ShadeColor", second.Color.Color.gamma);
                     m.SetFloat("_1st2nd_Shades_Feather", second.Blur);
                     m.SetFloat("_ShadeColor_Step", second.Border + second.Blur * 0.5f);
                     m.SetFloat("_Use_1stAs2nd", 0);
-                    m.SetTexture("_2nd_ShadeMap", null);
+                    TextureOn(m, "_2nd_ShadeMap", second.Color.Map);
                     m.SetFloat("_ShadingShadeMapBlendType", ramp.BandsReplaceBase ? 0 : 1);
                     return 4;
                 }
@@ -383,7 +432,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     var band = k < ramp.Bands.Count ? ramp.Bands[k] : null;
                     var color = band != null ? band.Color.Color : Color.clear;
                     m.SetColor(prefixes[k] + "Color", new Color(color.r, color.g, color.b, band != null ? band.Alpha : 0f).gamma);
-                    m.SetTexture(prefixes[k] + "ColorTex", null);
+                    TextureOn(m, prefixes[k] + "ColorTex", band?.Color.Map);
                     if (band == null) continue;
                     m.SetFloat(prefixes[k] + "ColorTexAddition", band.ColorAddition);
                     m.SetFloat(prefixes[k] + "Border", band.Border);

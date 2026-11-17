@@ -8,6 +8,13 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Lighting drawn on the texture:** *Shadow Colors* bakes every source's band and shade
+  textures into up to three shadow color textures, and *Skin Thickness* every source's skin
+  thickness into its own, which the Poiyomi writer sets (`_ShadowColorTex` and its 2nd and 3rd,
+  `_1st_ShadeMap`, `_2nd_ShadeMap`, `_SkinThicknessMap`). An SDF face (the SDF type, or the
+  SDF light map) keeps the reference source's texture, read through every source's own UVs in
+  a free UV channel, since it's sampled mirrored. Baked parts no longer count as lighting
+  differently. Cloth maps are still listed.
 - **Shadow masks:** a *Shadow Masks* feature bakes every source's shadow strength mask and
   detail shadow (`AtlasVirtualMap.ShadowStrengthMask`, `DetailShadow`) into a *Shadow and
   detail masks* texture, which the Poiyomi writer sets as Light Data's shadow masks (R) and
