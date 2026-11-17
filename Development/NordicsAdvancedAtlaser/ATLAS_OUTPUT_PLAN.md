@@ -21,7 +21,7 @@
 
 | Milestone | Result |
 |---|---|
-| **M1 — End to end** | An avatar builds with the sources' base colour textures atlased into one, on both writers, and the manual bake writes the material and its texture |
+| **M1 — End to end** | An avatar builds with the sources' base color textures atlased into one, on both writers, and the manual bake writes the material and its texture |
 | **M2 — Initial features** | Every feature in the design's *Feature inventory*, on both writers |
 | **M3 — More Poiyomi writers** | Poiyomi Toon 11, Pro 10 and Pro 11 as outputs |
 | Later | Mochie Uber as an output, the later features, animation, GPU baking |
@@ -30,9 +30,9 @@
 
 ## M1 — End to end
 
-Only the **base colour texture**, but through every step: collect, resolve, bake, pack,
-write, export, and the mesh remapper. Each source's base colour texture is placed in its
-region as it is; the colour it is multiplied by, vertex colours, layers and adjustments come
+Only the **base color texture**, but through every step: collect, resolve, bake, pack,
+write, export, and the mesh remapper. Each source's base color texture is placed in its
+region as it is; the color it is multiplied by, vertex colors, layers and adjustments come
 in M2 (2.3).
 
 ### 1.1 Output model
@@ -47,11 +47,11 @@ in M2 (2.3).
 - `IAtlasOutputShader` gains capabilities and a texture layout; its writer comes in 1.4. Its
   `Fields`, `AutoConfigure` and `OnConfigurationChanged` are replaced by the shared features.
 - Input parsers' *unmapped* lines are logged only with the debug setting.
-- **Features:** *Colour*, the base colour texture only.
+- **Features:** *Color*, the base color texture only.
 - **Tests:** capability filtering with a test output shader; settings surviving a change of
   output shader.
 
-**Workable:** the inspector shows the Colour feature and its mode from the shared
+**Workable:** the inspector shows the Color feature and its mode from the shared
 descriptions; builds behave as before.
 
 ### 1.2 Inspector
@@ -62,37 +62,37 @@ descriptions; builds behave as before.
   sections with foldouts and the source count, the per-source foldout, auto setup choosing
   default modes.
 - **Memory** per texture for PC and Android, and the totals, from the formats in the output
-  settings. The formats are the first output settings: colour, colour with alpha, normal map,
+  settings. The formats are the first output settings: color, color with alpha, normal map,
   and data, per platform.
 - **Tests:** cache invalidation; memory figures for known sizes and formats.
 
-**Workable:** the full inspector layout for colour, fast with many sources.
+**Workable:** the full inspector layout for color, fast with many sources.
 
-### 1.3 Colour bake
+### 1.3 Color bake
 
-- The CPU evaluator's first **bakeable subset**: the base colour texture, with its tiling,
+- The CPU evaluator's first **bakeable subset**: the base color texture, with its tiling,
   offset and rotation on UV0 resolved into the region. A source without a texture fills its
-  region with white. Everything else in the colour stack is left out until its phase.
+  region with white. Everything else in the color stack is left out until its phase.
 - Per-source bake at the bake size, blit into the source's region, and dilation: the pixels
-  between the regions, the region padding included, take the nearest region's colour.
+  between the regions, the region padding included, take the nearest region's color.
 - The **memory budget** rules: one virtual map at a time, sources one after another.
 - **Tests:** a two-source atlas from small textures gives the expected texels in each region
   and in the padding.
 
-**Workable:** the atlas's base colour map can be produced in a test, without a writer.
+**Workable:** the atlas's base color map can be produced in a test, without a writer.
 
 ### 1.4 Pack, write, export and manual bake
 
-- Packing virtual maps into the layout's textures (the base colour texture only so far).
-- Writers for Poiyomi Toon 10 and VRChat Mobile Toon Standard: the base colour texture (with a
-  white colour), an opaque
+- Packing virtual maps into the layout's textures (the base color texture only so far).
+- Writers for Poiyomi Toon 10 and VRChat Mobile Toon Standard: the base color texture (with a
+  white color), an opaque
   surface mode, the render queue, and what Poiyomi needs to lock the material (Thry's
   animated-property tags, where values are animated).
-- Export rules: no unused alpha, colour space per virtual map, crunch with the 90% rule
+- Export rules: no unused alpha, color space per virtual map, crunch with the 90% rule
   (where the PC format has a crunched form: BC1, BC3).
 - **Bake to Assets…**: folder and name (defaulting to the output name), textures named
   `<material>_<texture>.png`, overwriting textures, and asking before replacing the material.
-- **Tests:** a base-colour round trip for both writers; the crunch rule's choice; file names.
+- **Tests:** a base-color round trip for both writers; the crunch rule's choice; file names.
 
 **Workable:** the manual bake writes a working material and its texture for both shaders.
 
@@ -110,7 +110,7 @@ descriptions; builds behave as before.
     straddling triangle is clamped and counted in one line;
   - submeshes merge, and other submeshes keep their order.
 
-**Workable — M1 reached:** an avatar builds with the atlased base colour texture on both
+**Workable — M1 reached:** an avatar builds with the atlased base color texture on both
 writers.
 
 ---
@@ -128,22 +128,22 @@ Each phase adds features to both writers, with their modes, maps and fallbacks.
 ### 2.2 Normals and surface maps
 
 - *Normal maps*: the main normal in the established order (pre-baked normal, the build's
-  correction, the primary normal, normal layers), strengths normalised to the largest.
+  correction, the primary normal, normal layers), strengths normalized to the largest.
 - **Compound textures**: metallic and roughness through the virtual maps, with neutral values
   for unused channels.
 - *Reflection and specular* (shared groups, spatial constants), *Ambient occlusion* (native
   map).
 - **Workable:** lit materials keep their normals and surface response.
 
-### 2.3 Colour stack and emission
+### 2.3 Color stack and emission
 
-- The bakeable subset grows: the base colour's own colour (multiplied into the texture, or a
-  shared colour when every source has the same one), surface layers targeting colour
-  (details, decals, recolour regions), static colour adjustments, vertex colour baked into
-  colour.
-- *Emission* (native map, baked into colour); *Colour adjustments* (baked static, native
+- The bakeable subset grows: the base color's own color (multiplied into the texture, or a
+  shared color when every source has the same one), surface layers targeting color
+  (details, decals, recolor regions), static color adjustments, vertex color baked into
+  color.
+- *Emission* (native map, baked into color); *Color adjustments* (baked static, native
   live).
-- **Optional maps and fallbacks**: decal and detail colour maps baked into the base colour,
+- **Optional maps and fallbacks**: decal and detail color maps baked into the base color,
   and secondary and detail normals into the main normal, when their maps are off.
 - **Workable:** typical toon materials with decals and emission atlas without losing them.
 
@@ -156,18 +156,18 @@ Each phase adds features to both writers, with their modes, maps and fallbacks.
 - Per-source control: turning a feature off per source, the reference source.
 - **Workable:** features limited to parts of the atlas stay where they were.
 
-### 2.5 Remapper: UV channels and vertex colours
+### 2.5 Remapper: UV channels and vertex colors
 
 - The **UV channel allocator** and preserved UVs in UV1 to UV3, with per-source tiling for
   tiled layers. Tiled detail and normal layers can then keep maps of their own.
-- *Vertex colours*: live (white for sources that don't use them), baked, or off.
+- *Vertex colors*: live (white for sources that don't use them), baked, or off.
 - UV-tile features keep their tiles.
-- **Workable:** tiled details stay sharp, and vertex colours behave as the user chose.
+- **Workable:** tiled details stay sharp, and vertex colors behave as the user chose.
 
 ### 2.6 Lighting
 
 - *Shading, lighting and shadows*: one lighting setup from the reference source, mapped by
-  each writer to its own modes, with shadow colour and ramp masks where supported.
+  each writer to its own modes, with shadow color and ramp masks where supported.
 - *Light volumes*, *LTCGI*.
 - **Workable:** the atlas is shaded like its main source in both shaders.
 
@@ -180,16 +180,16 @@ Each phase adds features to both writers, with their modes, maps and fallbacks.
 ### 2.8 Baking toolkit
 
 - Geometry buffers: the world normal and the overlap map, within the memory budget.
-- The light rigs with roles, colour influence and the strength sliders; the virtual view;
+- The light rigs with roles, color influence and the strength sliders; the virtual view;
   overlapping UVs (symmetric rig, averaging).
-- Bake-ins: full light and form shading, normal-map shading, occlusion maps into colour,
-  matcaps and rims into colour or emission, rims emulated as matcaps.
+- Bake-ins: full light and form shading, normal-map shading, occlusion maps into color,
+  matcaps and rims into color or emission, rims emulated as matcaps.
 - **Workable:** VRChat Mobile Toon Standard keeps much more of the look through baking.
 
 ### 2.9 Effects
 
-- *Glitter and sparkle* (native, emulated into emission, metallic and roughness, and colour),
-  *Proximity colour*, *Subsurface scattering* (native), *AudioLink* (native per feature).
+- *Glitter and sparkle* (native, emulated into emission, metallic and roughness, and color),
+  *Proximity color*, *Subsurface scattering* (native), *AudioLink* (native per feature).
 - *World AO blocker*: typed in the unified material, read by the Poiyomi parser, written as
   one switch.
 - **Workable — M2 reached:** every initial feature, on both writers.

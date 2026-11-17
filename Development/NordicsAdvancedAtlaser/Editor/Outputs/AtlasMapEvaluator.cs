@@ -18,16 +18,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
         }
 
-        // The settings a virtual map is baked with: colour maps sRGB, clamped at the atlas edges.
+        // The settings a virtual map is baked with: color maps sRGB, clamped at the atlas edges.
         public static TextureSettings Settings(AtlasVirtualMap map) => new TextureSettings
         {
             DataType = TextureDataType.Color, SRGB = true, WrapMode = TextureWrapMode.Clamp,
             OutputChannels = TextureOutputChannels.Auto
         };
 
-        // The base colour texture as it is, with its tiling, offset and rotation on UV0; white
+        // The base color texture as it is, with its tiling, offset and rotation on UV0; white
         // without a texture. A texture on another space (a projection, another UV channel) is
-        // taken as it is. The colour it's multiplied by, vertex colours, layers and colour
+        // taken as it is. The color it's multiplied by, vertex colors, layers and color
         // adjustments aren't in the subset yet.
         private static NordicsTextureWrapper BaseColor(AtlasUnifiedMaterial source, int width, int height)
         {
@@ -46,7 +46,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 float rotation = uv0 ? reference.Rotation : 0f;
                 // The unified transform turns the UV counterclockwise around (0.5, 0.5), then
                 // multiplies by the tiling around the origin and adds the offset. The wrapper
-                // scales around the centre instead, which (tiling − 1) / 2 more offset makes up.
+                // scales around the center instead, which (tiling − 1) / 2 more offset makes up.
                 var wrapperOffset = offset + (tiling - Vector2.one) * 0.5f;
                 var result = loaded.Resize(width, height, scale: tiling, offset: wrapperOffset, rotation: rotation,
                     sampling: TextureSamplingMode.Area);

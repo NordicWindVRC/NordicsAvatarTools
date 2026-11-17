@@ -50,7 +50,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         {
             Textures =
             {
-                new AtlasOutputTexture("BaseColor", "Base colour") { SizeMode = AtlasTextureSizeMode.Main }
+                new AtlasOutputTexture("BaseColor", "Base color") { SizeMode = AtlasTextureSizeMode.Main }
                     .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB)
             }
         };
@@ -68,7 +68,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void ColourNeedsTheMainBaseColourTexture()
+        public void ColorNeedsTheMainBaseColorTexture()
         {
             var config = new AtlasOutputConfiguration { mainTexture = { width = 2048, height = 1024 } };
             var overview = Overview(config, 2);
@@ -96,7 +96,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void ColourOffNeedsNoTexture()
+        public void ColorOffNeedsNoTexture()
         {
             var config = new AtlasOutputConfiguration();
             config.features.Add(new AtlasFeatureSetting { featureId = "color", mode = "off" });

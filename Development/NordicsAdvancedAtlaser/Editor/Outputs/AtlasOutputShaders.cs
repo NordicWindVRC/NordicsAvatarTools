@@ -28,12 +28,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             Textures =
             {
-                new AtlasOutputTexture("BaseColor", "Base colour") { SizeMode = AtlasTextureSizeMode.Main }
+                new AtlasOutputTexture("BaseColor", "Base color") { SizeMode = AtlasTextureSizeMode.Main }
                     .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB)
             }
         };
 
-        // Poiyomi 10's main section: _Color (sRGB-authored, so set from the linear colour's
+        // Poiyomi 10's main section: _Color (sRGB-authored, so set from the linear color's
         // gamma value) times _MainTex. A new material is opaque, in the Geometry queue.
         public void Write(AtlasUnifiedMaterial output, Material material)
         {
@@ -54,7 +54,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             Textures =
             {
-                new AtlasOutputTexture("BaseColor", "Base colour") { SizeMode = AtlasTextureSizeMode.Main }
+                new AtlasOutputTexture("BaseColor", "Base color") { SizeMode = AtlasTextureSizeMode.Main }
                     .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB)
             }
         };

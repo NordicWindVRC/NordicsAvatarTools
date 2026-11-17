@@ -7,7 +7,7 @@ are shader specific.
 
 Related documents:
 - [UNIFIED_MATERIAL.md](UNIFIED_MATERIAL.md): the unified material and the input parsers.
-- [UNIFIED_MATERIAL_FEATURES.md](UNIFIED_MATERIAL_FEATURES.md): the feature catalogue. Section
+- [UNIFIED_MATERIAL_FEATURES.md](UNIFIED_MATERIAL_FEATURES.md): the feature catalog. Section
   numbers such as *4.3* in this document refer to it.
 - [NORMAL_BAKER.md](NORMAL_BAKER.md): the normal correction bake that the output reuses.
 - [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md): the implementation plan, in phases and
@@ -17,7 +17,7 @@ Related documents:
 
 ## Goals
 
-- **Features first, not shaders first.** Output processing is organised by unified feature.
+- **Features first, not shaders first.** Output processing is organized by unified feature.
   Each feature has shared, reusable processing: how instances from several sources merge, which
   textures it needs, which output capabilities it needs, and how it is emulated without them.
   Adding an output shader means declaring its capabilities and mapping features into its
@@ -45,9 +45,9 @@ What exists today, which this design builds on:
 |---|---|---|
 | Output component | `Runtime/NordicsAtlasOutput.cs` | `AtlasOutputConfiguration`: output name, output shader ID, region padding, sources (material, UV region, normal correction, pre-baked normal map), main texture size, feature settings (`AtlasFeatureSetting`: mode, reference source, sources turned off, values) and texture settings, by ID |
 | Output shader interface | `Editor/AtlasShaderRegistry.cs` | `IAtlasOutputShader`: ID, display name, `FindShader`, `Capabilities` (the texture layout so far) |
-| Output shaders | `Editor/Outputs/AtlasOutputShaders.cs` | Poiyomi Toon 10 and VRChat Mobile Toon Standard: a base colour texture each; no writer yet |
+| Output shaders | `Editor/Outputs/AtlasOutputShaders.cs` | Poiyomi Toon 10 and VRChat Mobile Toon Standard: a base color texture each; no writer yet |
 | Output model | `Editor/Outputs/AtlasOutputModel.cs`, `AtlasOutputFeature.cs` | Virtual maps, texture layouts, capabilities; `IAtlasOutputFeature` with its modes; the feature registry, available and effective modes |
-| Features | `Editor/Outputs/AtlasColorFeature.cs` | *Colour*: the base colour map |
+| Features | `Editor/Outputs/AtlasColorFeature.cs` | *Color*: the base color map |
 | Resolve | `Editor/Outputs/AtlasOutputPipeline.cs` | Feature choices from the settings, and steps 1 and 2 of the pipeline: the output unified material and its map requests (`AtlasOutputPlan`) |
 | Generator boundary | `Editor/Outputs/AtlasGeneratorJob.cs` | The unified materials, UV regions, bakes and feature choices; no `Material` or `Shader` crosses it |
 | Bake sizing | `Editor/Outputs/AtlasOutputLayout.cs` | Each source is baked at 1.5× its island size, at most 4096 |
@@ -55,17 +55,17 @@ What exists today, which this design builds on:
 | Inspector | `Editor/NordicsAtlasOutputEditor.cs`, `Editor/AtlasOutputUI.cs` | Sources, UV regions, auto setup, the *Textures* section (sizes, memory, formats), the feature sections with modes and per-source switches, UV preview |
 | Source analysis cache | `Editor/AtlasSourceAnalysisCache.cs` | Each source's parse, kept until the material, its shader or an imported texture or shader changes |
 | Overview | `Editor/Outputs/AtlasOutputOverview.cs`, `AtlasTextureMemory.cs` | What an output uses: features with their modes and sources, the textures they need with sizes and memory |
-| Evaluator | `Editor/Outputs/AtlasMapEvaluator.cs` | The bakeable subset: a source's base colour texture with its tiling, offset and rotation on UV0, white without a texture |
+| Evaluator | `Editor/Outputs/AtlasMapEvaluator.cs` | The bakeable subset: a source's base color texture with its tiling, offset and rotation on UV0, white without a texture |
 | Map baker | `Editor/Outputs/AtlasMapBaker.cs` | One virtual map: each source evaluated at its bake size, its UV islands grown over what its meshes don't use, placed in its region, the rest of the atlas filled from the nearest region |
 | Coverage | `Editor/Outputs/AtlasCoverage.cs` | Each source's UV0 triangles (from the output's renderers in the manual bake, the avatar's in the build), painted at bake size; a triangle in another UV tile counts by whole tiles |
 | Packing | `Editor/Outputs/AtlasTexturePacker.cs` | One output texture from its virtual maps, each baked at the texture's size into its channels |
-| Writers | `Editor/Outputs/AtlasOutputShaders.cs` | Poiyomi Toon 10 and VRChat Mobile Toon Standard: the base colour texture and colour, opaque in the Geometry queue |
+| Writers | `Editor/Outputs/AtlasOutputShaders.cs` | Poiyomi Toon 10 and VRChat Mobile Toon Standard: the base color texture and color, opaque in the Geometry queue |
 | Export | `Editor/Outputs/AtlasTextureExport.cs` | PNG assets with the output's formats per platform, crunch where it saves 10% |
 | Manual bake | `Editor/Outputs/AtlasManualBake.cs` | Bake to Assets: the pipeline in edit mode, the textures and the material written as assets |
 | Build generation | `Editor/Outputs/AtlasOutputGenerator.cs` | The build's textures, packed and compressed for the platform being built (crunch where it saves 10%), and the material |
 | Mesh remapper | `Editor/Build/AtlasMeshRemapper.cs` | A new mesh per renderer: vertices split, UV0 into the regions (whole tiles moved, straddling triangles clamped), materials swapped, submeshes of one output merged |
 | Build step | `Editor/NDMF/AtlasOutputBuild.cs` | Generates every output and remaps every mesh before changing anything, then saves the new assets with NDMF and registers the replaced meshes |
-| Texture library | Texture Wrapper (`API.md`) | Float textures with usage flags, `Blit` with blend modes, masks and padding, colour operations, triangle painting, normal difference baking, dilation, PNG and in-memory export, `OutputChannels.Auto` |
+| Texture library | Texture Wrapper (`API.md`) | Float textures with usage flags, `Blit` with blend modes, masks and padding, color operations, triangle painting, normal difference baking, dilation, PNG and in-memory export, `OutputChannels.Auto` |
 
 The build generates each output's material and textures in memory and remaps the avatar's
 meshes onto them; the manual bake writes the same material and textures as assets.
@@ -112,19 +112,19 @@ exported asset after a manual bake).
 
 Bakes depend on each other, so they run in this order per source:
 
-1. **Surface inputs (S1):** base colour, alpha, metallic, roughness, occlusion, specular colour
-   and emission, with the static surface layers and static colour adjustments that the chosen
+1. **Surface inputs (S1):** base color, alpha, metallic, roughness, occlusion, specular color
+   and emission, with the static surface layers and static color adjustments that the chosen
    modes bake. Decals and details whose own maps are turned off are baked in here.
 2. **Normals:** the main tangent-space normal map, in the established order: pre-baked
    normal, the build's normal correction, the primary normal, the surface layers targeting the
    normal. Layers that keep a normal map of their own are left out; layers whose map is turned
-   off are baked in. The strengths are normalised to the largest among the sources.
+   off are baked in. The strengths are normalized to the largest among the sources.
 3. **World normals:** the combined normal from step 2 in world space (avatar-root space, the
    current mesh's tangent frame), the input of every lighting-dependent bake.
 4. **Lighting-dependent bake-ins:** normal-map shading, matcaps, rims, ambient occlusion
    and light, each into a temporary layer.
-5. **Mix-in:** the temporary layers are mixed into the colour or emission maps by their
-   targets and strengths, then the final static colour adjustments run.
+5. **Mix-in:** the temporary layers are mixed into the color or emission maps by their
+   targets and strengths, then the final static color adjustments run.
 
 Step 4 only runs for features whose mode bakes them; with none, steps 3–5 are skipped.
 
@@ -153,7 +153,7 @@ Modes come from a small shared vocabulary, so the UI reads the same everywhere:
 | **Native** | The output shader does it at runtime; instances map to the output's slots |
 | **Merged** | Native, with instances combined to fit fewer slots |
 | **Single** | Native, one instance for the whole material, chosen by the user |
-| **Baked** | Resolved into texture content: colour, emission or surface maps |
+| **Baked** | Resolved into texture content: color, emission or surface maps |
 | **Emulated** | Expressed with a different output feature, for example a rim as a matcap |
 | **Off** | Not produced |
 
@@ -239,9 +239,9 @@ or *baked*). Nothing is reported; the UI shows which features are in which mode.
 mask bus that evaluates the same step. Otherwise the mask is baked with the step's value in
 the normal view: front faces, not in a mirror, the camera at the far distance, no contact.
 
-**Vertex colour masks** are handled by the *Vertex colours* feature (see
+**Vertex color masks** are handled by the *Vertex colors* feature (see
 [*Feature inventory*](#feature-inventory)): kept live, baked into a texture by painting the
-mesh's vertex colours in UV space, or turned off.
+mesh's vertex colors in UV space, or turned off.
 
 ---
 
@@ -299,7 +299,7 @@ Per renderer whose submeshes use a source material of an output:
 1. **Copy the mesh.** Shared mesh assets are never changed.
 2. **Split shared vertices.** A vertex used by triangles of two sources, or of a source and
    a material that isn't atlased, gets one copy per user. Every attribute is copied with it:
-   position, normal, tangent, UVs, vertex colour, bone weights and each blend shape frame's
+   position, normal, tangent, UVs, vertex color, bone weights and each blend shape frame's
    deltas.
 3. **Write UV0:** each source vertex's UV placed in the source's region: `region.min + uv ×
    region.size`, with the UV first brought into 0–1:
@@ -315,7 +315,7 @@ Per renderer whose submeshes use a source material of an output:
    Split vertices (step 2) let the triangles of one vertex move by different tiles.
 4. **Write the preserved UV channels** the allocator assigned (see
    [*UV channels*](#uv-channels)), raw or with each source's tiling and offset.
-5. **Vertex colours:** with the *Vertex colours* feature live, vertices of sources that don't
+5. **Vertex colors:** with the *Vertex colors* feature live, vertices of sources that don't
    use them get white.
 6. **Swap the materials.** The source materials become the output material. Submeshes of one
    renderer that now share the output material are merged into one submesh, which is where
@@ -332,7 +332,7 @@ renderer by its index would point at another slot: that's part of the animation 
 
 ### Virtual maps and textures
 
-Features work with **virtual maps**: one quantity each, such as base colour, alpha, metallic,
+Features work with **virtual maps**: one quantity each, such as base color, alpha, metallic,
 roughness, occlusion, emission, a matcap mask or a glitter mask. The output shader declares
 its **textures**: the texture slots its shader has, and the virtual maps each one provides. A
 texture provides one virtual map, or several in their own channels: a **compound texture**,
@@ -361,7 +361,7 @@ The *Textures* section lists the textures in use, required ones first:
 - **Optional** textures have a checkbox. Turning one off applies the fallback of each virtual
   map it carries (below).
 - **Sizes** follow a size mode per texture:
-  - **main aspect** (UV-space maps: colour, normal, masks, surface maps), a size from the
+  - **main aspect** (UV-space maps: color, normal, masks, surface maps), a size from the
     sizes that keep the main texture's aspect;
   - **square** (matcaps, generated rim matcaps);
   - **custom** (ramps and other lookups).
@@ -379,12 +379,12 @@ is turned off, each of its virtual maps falls back on its own.
 | Optional virtual map | When its texture is turned off |
 |---|---|
 | Secondary and detail normal maps | Baked into the main normal map |
-| Decal textures | Baked into the base colour map (and its emission into the emission map) |
-| Detail colour maps | Baked into the base colour map |
-| Emission map | Baked into the base colour map (the *baked into colour* mode of emission) |
-| Occlusion map | Baked into the base colour map (see *Ambient occlusion baked into colour* under [*Feature inventory*](#feature-inventory)) |
-| Metallic, roughness, reflectance, specular colour, clear coat and thickness maps | The reference source's constant |
-| Shadow colour and ramp masks | The reference source's values |
+| Decal textures | Baked into the base color map (and its emission into the emission map) |
+| Detail color maps | Baked into the base color map |
+| Emission map | Baked into the base color map (the *baked into color* mode of emission) |
+| Occlusion map | Baked into the base color map (see *Ambient occlusion baked into color* under [*Feature inventory*](#feature-inventory)) |
+| Metallic, roughness, reflectance, specular color, clear coat and thickness maps | The reference source's constant |
+| Shadow color and ramp masks | The reference source's values |
 | Mask textures | The allocator's other places, or a mode without a mask (see [*Masks*](#masks)) |
 
 A layer that keeps a map of its own is live, so it can scroll, animate or show only in some
@@ -412,7 +412,7 @@ totals:
 
 ```
 Texture          Size         PC        Android
-Base colour      2048x2048    ...       ...
+Base color      2048x2048    ...       ...
 Normal           2048x2048    ...       ...
 Matcap 0         512x512      ...       ...
 Total                         ...       ...
@@ -433,7 +433,7 @@ The Advanced Atlaser component shows the totals over all its outputs as well.
   such texture is compressed both ways, and crunch is kept only when the crunched size is below
   90% of the size without it. Otherwise the texture keeps normal compression without crunch.
   Crunch changes the download size, not the memory size.
-- **Colour space** follows the virtual map: colour maps sRGB, data and masks linear.
+- **Color space** follows the virtual map: color maps sRGB, data and masks linear.
 
 ---
 
@@ -445,8 +445,8 @@ Wrapper, which stays shader-neutral).
 ### Bakeable subset
 
 Baking means computing on the CPU what the source shader would draw: layers, blends, masks,
-colour adjustments and texture mapping (placement, tiling, rotation), and for the bake-ins the
-lighting families. That is a large part of the feature catalogue. The CPU evaluator therefore
+color adjustments and texture mapping (placement, tiling, rotation), and for the bake-ins the
+lighting families. That is a large part of the feature catalog. The CPU evaluator therefore
 covers an explicit **bakeable subset** that grows feature by feature, with tests against known
 values. Content outside it is never guessed at: its feature uses a native mode, or the bake
 falls back to the source texture as it is (without the unsupported layer or operation).
@@ -480,7 +480,7 @@ correction is flat, and everything else works.
 ### Virtual light rigs
 
 Light-dependent bakes use a fixed rig of three lights in avatar-root space (the avatar faces
-+Z), plus an ambient term. Each light has a role, and its own colour, softness and weights:
++Z), plus an ambient term. Each light has a role, and its own color, softness and weights:
 
 | Light | Temperature | Softness | Diffuse | Specular | Role |
 |---|---|---|---|---|---|
@@ -494,7 +494,7 @@ Light-dependent bakes use a fixed rig of three lights in avatar-root space (the 
   little diffuse wrap, rather than by integrating an area light.
 - **Diffuse and specular weights** let a light shape the form without adding a highlight (the
   fill), or add a highlight without flattening the shading.
-- **The ambient term** is a sky and ground gradient, not a flat colour, so occlusion darkens
+- **The ambient term** is a sky and ground gradient, not a flat color, so occlusion darkens
   light that comes from somewhere.
 
 There are two rigs, chosen per output. They share the lights' settings; only the directions
@@ -502,9 +502,9 @@ differ:
 
 | Light | Classic | Symmetric |
 |---|---|---|
-| Key | front, above, to one side | front, centred, above |
-| Fill | front, low, the other side | front, centred, low |
-| Back (hair) | behind, above | behind, centred, above |
+| Key | front, above, to one side | front, centered, above |
+| Fill | front, low, the other side | front, centered, low |
+| Back (hair) | behind, above | behind, centered, above |
 | Ambient | sky above, ground below | sky above, ground below |
 
 The classic rig needs unique UVs. A source whose UVs overlap (mirrored halves) is baked with
@@ -513,10 +513,10 @@ those sources. Because the lights' settings are shared, those sources still matc
 the atlas. All values are starting values, to tune with real avatars. More rigs can be added
 as presets.
 
-**Light colour in baked textures.** A baked light colour stays in every world, on top of the
-world's own light. So the light's colour is baked only by a **colour influence** (0: the
-light's brightness alone; 1: its full colour), low by default (about 0.25). Form shading
-divides by the average light, so the overall colour stays neutral and only the shift between
+**Light color in baked textures.** A baked light color stays in every world, on top of the
+world's own light. So the light's color is baked only by a **color influence** (0: the
+light's brightness alone; 1: its full color), low by default (about 0.25). Form shading
+divides by the average light, so the overall color stays neutral and only the shift between
 the warm lit side and the cool shadow side remains.
 
 **Light terms per bake.** Every bake uses the same rig, but only the terms its purpose
@@ -528,22 +528,22 @@ needs:
 | Normal-map shading | key and fill, diffuse: detail reads evenly over the surface |
 | Highlights, glitter emulation | the specular terms |
 | Backlight, rim bakes | the back light |
-| Occlusion into colour | the ambient term and reflections; direct light by the source's *occlusion: direct* |
+| Occlusion into color | the ambient term and reflections; direct light by the source's *occlusion: direct* |
 | Subsurface | not baked (native or off) |
 
 **Influence sliders.** The *Baking* section shows, folded by default:
 - the rig (classic or symmetric) and an overall strength;
-- the colour influence;
+- the color influence;
 - one strength per bake in use: form shading or full light, normal-map shading, highlights,
   backlight and rims, occlusion;
 - a *Lights* foldout with each light's intensity, temperature and softness. The directions
   stay fixed by the rig, so the symmetric rig stays symmetric.
 
 The rig is evaluated with each source's own lighting family (3.2, 3.3) and surface response
-(2.4): world normal, base colour, roughness, metallic, specular colour, occlusion.
+(2.4): world normal, base color, roughness, metallic, specular color, occlusion.
 
 Two bake results:
-- **Full light:** the lit colour, for outputs that don't light (unlit or flat).
+- **Full light:** the lit color, for outputs that don't light (unlit or flat).
 - **Form shading:** the light divided by its average over the source, so its average is 1.
   It adds shape to outputs that light flatly, without changing the overall brightness. A
   strength blends it in.
@@ -580,20 +580,20 @@ allocator (see [*Masks*](#masks)). *Merge* uses the strategies above.
 
 | Feature | Unified | Modes | Maps | Merge and notes |
 |---|---|---|---|---|
-| **Colour** | 2.1 base colour<br>4.1 surface layers targeting colour (details, decals, recolour regions)<br>1.10 static adjustments | 1. Native | base colour **(Required)**<br>decal textures → base colour<br>detail colour maps → base colour | Bake. Decals and details keep maps of their own only in the output's slots for them. A layer that tiles in UV0 can't stay on the atlas UVs, where its tiling would differ per region: it keeps a map of its own on a preserved UV channel (see [*UV channels*](#uv-channels)), or is baked. Vertex colour is its own feature (below) |
-| **Alpha** | 2.2 alpha, modifiers<br>6 surface mode, cutoff | 1. Native<br>2. Baked into base alpha | alpha **(Required)**, in the base colour's alpha, when the surface mode uses it | One surface mode for the material: by default the most see-through mode among the sources; opaque sources get alpha 1. Different cutoffs: alpha is remapped per source so each source's cutoff lands on one shared cutoff. Modifiers (fades) are shared values |
-| **Normal maps** | 2.3 normals<br>the normal correction and the pre-baked normal<br>4.1 layers targeting the normal | 1. Native<br>2. Baked into colour (normal-map shading)<br>3. Off | main normal **(Required)**<br>secondary normal → main normal<br>detail normal → main normal | Bake, combined in the established order. A secondary or detail layer is offered a map of its own when every source using it has the same texture and a preserved UV channel is available for it; otherwise it is always baked into the main normal |
-| **Colour adjustments** | 1.10 | 1. Baked (static adjustments, always)<br>2. Native (live adjustments, where the output has the operation) | — | Static adjustments are baked into the maps they target. Live ones (animated or modulated) are shared values; when they differ, the reference source's value is used |
-| **Vertex colours** | 2.1 vertex colour on the base colour and alpha<br>1.4 masks reading vertex colour<br>1.5 vertex colour steps of the mask bus<br>other uses (transition space, anisotropy, outline and fur directions) | 1. Live<br>2. Baked<br>3. Off | base colour, alpha and mask maps, when baked | Shown when a source's material uses vertex colours; the user chooses. *Live*: the vertex colours stay on the mesh and the output reads them the same way; offered only when every source uses them the same way and the output supports that use. Sources that don't use them get neutral vertex colours (white) in their part of the mesh during the remap, so nothing changes for them. *Baked*: the vertex colours are painted in UV space into the maps they affect; texels shared by triangles with different colours get the average. *Off*: they are ignored |
-| **Reflection and specular** | 2.4 metallic, roughness, reflectance, specular colour, highlights, reflections<br>4.3 cubemap lookups | 1. Native<br>2. Off | cubemaps **(Required)**, for cubemap lookups<br>metallic → constant<br>roughness → constant<br>reflectance → constant<br>specular colour → constant | Constants that differ become maps (spatial). Highlight and reflection groups are shared values with their strengths in a mask. A cubemap is a lookup layer and takes a slot |
+| **Color** | 2.1 base color<br>4.1 surface layers targeting color (details, decals, recolor regions)<br>1.10 static adjustments | 1. Native | base color **(Required)**<br>decal textures → base color<br>detail color maps → base color | Bake. Decals and details keep maps of their own only in the output's slots for them. A layer that tiles in UV0 can't stay on the atlas UVs, where its tiling would differ per region: it keeps a map of its own on a preserved UV channel (see [*UV channels*](#uv-channels)), or is baked. Vertex color is its own feature (below) |
+| **Alpha** | 2.2 alpha, modifiers<br>6 surface mode, cutoff | 1. Native<br>2. Baked into base alpha | alpha **(Required)**, in the base color's alpha, when the surface mode uses it | One surface mode for the material: by default the most see-through mode among the sources; opaque sources get alpha 1. Different cutoffs: alpha is remapped per source so each source's cutoff lands on one shared cutoff. Modifiers (fades) are shared values |
+| **Normal maps** | 2.3 normals<br>the normal correction and the pre-baked normal<br>4.1 layers targeting the normal | 1. Native<br>2. Baked into color (normal-map shading)<br>3. Off | main normal **(Required)**<br>secondary normal → main normal<br>detail normal → main normal | Bake, combined in the established order. A secondary or detail layer is offered a map of its own when every source using it has the same texture and a preserved UV channel is available for it; otherwise it is always baked into the main normal |
+| **Color adjustments** | 1.10 | 1. Baked (static adjustments, always)<br>2. Native (live adjustments, where the output has the operation) | — | Static adjustments are baked into the maps they target. Live ones (animated or modulated) are shared values; when they differ, the reference source's value is used |
+| **Vertex colors** | 2.1 vertex color on the base color and alpha<br>1.4 masks reading vertex color<br>1.5 vertex color steps of the mask bus<br>other uses (transition space, anisotropy, outline and fur directions) | 1. Live<br>2. Baked<br>3. Off | base color, alpha and mask maps, when baked | Shown when a source's material uses vertex colors; the user chooses. *Live*: the vertex colors stay on the mesh and the output reads them the same way; offered only when every source uses them the same way and the output supports that use. Sources that don't use them get neutral vertex colors (white) in their part of the mesh during the remap, so nothing changes for them. *Baked*: the vertex colors are painted in UV space into the maps they affect; texels shared by triangles with different colors get the average. *Off*: they are ignored |
+| **Reflection and specular** | 2.4 metallic, roughness, reflectance, specular color, highlights, reflections<br>4.3 cubemap lookups | 1. Native<br>2. Off | cubemaps **(Required)**, for cubemap lookups<br>metallic → constant<br>roughness → constant<br>reflectance → constant<br>specular color → constant | Constants that differ become maps (spatial). Highlight and reflection groups are shared values with their strengths in a mask. A cubemap is a lookup layer and takes a slot |
 | **Clear coat** | 2.4 clear coat | 1. Native<br>2. Emulated (lower roughness and higher reflectance in the coated regions)<br>3. Off | clear coat roughness → constant<br>mask (allocated) | Strength in mask |
-| **Ambient occlusion** | 2.4 occlusion | 1. Native<br>2. Baked into colour<br>3. Off | occlusion **(Required)**, for the native mode | Bake. *Baked into colour* is for sources with an occlusion map when the output has none, or to save the texture. See below |
+| **Ambient occlusion** | 2.4 occlusion | 1. Native<br>2. Baked into color<br>3. Off | occlusion **(Required)**, for the native mode | Bake. *Baked into color* is for sources with an occlusion map when the output has none, or to save the texture. See below |
 
 ### Lighting
 
 | Feature | Unified | Modes | Maps | Merge and notes |
 |---|---|---|---|---|
-| **Shading, lighting and shadows** | 3.1–3.4 | 1. Native (the writer maps the family and parameters to its own modes)<br>2. Baked full light (outputs that don't light)<br>3. Baked form shading (outputs that light flatly) | shadow colour → reference values<br>ramp masks → reference values | Exclusive: one lighting setup, from the reference source. The writer maps unified families to its shader's lighting modes, for example the ramp toon special cases (3.2) to Poiyomi's modes. Spatial values (shadow tint, ramp strength) become maps when the output has them |
+| **Shading, lighting and shadows** | 3.1–3.4 | 1. Native (the writer maps the family and parameters to its own modes)<br>2. Baked full light (outputs that don't light)<br>3. Baked form shading (outputs that light flatly) | shadow color → reference values<br>ramp masks → reference values | Exclusive: one lighting setup, from the reference source. The writer maps unified families to its shader's lighting modes, for example the ramp toon special cases (3.2) to Poiyomi's modes. Spatial values (shadow tint, ramp strength) become maps when the output has them |
 | **Light volumes** | 3.5 | 1. Native<br>2. Off | — | Shared value: on when any source uses it, strengths from the reference source |
 | **LTCGI** | 3.5 | 1. Native<br>2. Off | — | As light volumes |
 
@@ -601,32 +601,32 @@ allocator (see [*Masks*](#masks)). *Merge* uses the strategies above.
 
 | Feature | Unified | Modes | Maps | Merge and notes |
 |---|---|---|---|---|
-| **Matcaps** | 4.3 lookup layers with a 2D texture | 1. Native (one slot each)<br>2. Merged<br>3. Single<br>4. Baked into colour (surface placement) or emission (overlay and emission placements)<br>5. Off | matcap textures, square **(Required)**, for the native modes<br>masks (allocated), one per slot | Slots. *Merged*: instances with the same texture and projection share a slot; matcaps on the same regions with the same blend are combined into one texture (added for *add*, multiplied for *multiply*); what still doesn't fit takes *single* or is dropped. Baking needs the world normals and the virtual view, so it runs after the normal maps |
+| **Matcaps** | 4.3 lookup layers with a 2D texture | 1. Native (one slot each)<br>2. Merged<br>3. Single<br>4. Baked into color (surface placement) or emission (overlay and emission placements)<br>5. Off | matcap textures, square **(Required)**, for the native modes<br>masks (allocated), one per slot | Slots. *Merged*: instances with the same texture and projection share a slot; matcaps on the same regions with the same blend are combined into one texture (added for *add*, multiplied for *multiply*); what still doesn't fit takes *single* or is dropped. Baking needs the world normals and the virtual view, so it runs after the normal maps |
 | **Rim lighting** | 4.4 angle layers, edge source view angle | 1. Native (slots)<br>2. Merged<br>3. Emulated as a matcap<br>4. Baked<br>5. Off | generated matcap, square **(Required)**, when emulated<br>masks (allocated), one per slot | Slots. A view-angle rim depends only on `N·V`, so it can be drawn exactly into a generated matcap: emulation for outputs with matcap slots but no rim |
-| **Environmental rim** | 4.4 colour source environment | 1. Native<br>2. Emulated as a rim with the probe's average colour<br>3. Off | mask (allocated) | As rim lighting |
+| **Environmental rim** | 4.4 color source environment | 1. Native<br>2. Emulated as a rim with the probe's average color<br>3. Off | mask (allocated) | As rim lighting |
 | **Backlight** | 4.4 edge source backlight | 1. Native<br>2. Baked with the rig's back light (form shading)<br>3. Off | mask (allocated) | Light dependent, so no matcap emulation |
-| **Emission** | 4.1 layers targeting emission<br>emission amounts of other layers | 1. Native<br>2. Baked into colour<br>3. Off | emission **(Required)**, for the native mode | Bake. Live parts (blinking, scrolling, audio) stay native only where the output has the same modulator; otherwise they are baked at their current value |
-| **Glitter and sparkle** | 4.6 glitter pattern<br>2.4 glints | 1. Native<br>2. Emulated<br>3. Off | mask (allocated), for the native mode<br>emission, emulated<br>metallic and roughness, emulated<br>base colour, emulated | Native: shared values and a mask. *Emulated* generates the glitter cells as a static pattern in UV space and writes it into any combination of the three targets, each optional with its own strength: bright points in the emission map, metallic and smooth points that sparkle in reflections, lighter points in the base colour. A target whose map is turned off is left out |
+| **Emission** | 4.1 layers targeting emission<br>emission amounts of other layers | 1. Native<br>2. Baked into color<br>3. Off | emission **(Required)**, for the native mode | Bake. Live parts (blinking, scrolling, audio) stay native only where the output has the same modulator; otherwise they are baked at their current value |
+| **Glitter and sparkle** | 4.6 glitter pattern<br>2.4 glints | 1. Native<br>2. Emulated<br>3. Off | mask (allocated), for the native mode<br>emission, emulated<br>metallic and roughness, emulated<br>base color, emulated | Native: shared values and a mask. *Emulated* generates the glitter cells as a static pattern in UV space and writes it into any combination of the three targets, each optional with its own strength: bright points in the emission map, metallic and smooth points that sparkle in reflections, lighter points in the base color. A target whose map is turned off is left out |
 | **Subsurface scattering** | 4.5 subsurface | 1. Native<br>2. Off | thickness → constant | Thickness maps are baked per region. Too dependent on the light to bake or emulate |
 
 ### Effects and render
 
 | Feature | Unified | Modes | Maps | Merge and notes |
 |---|---|---|---|---|
-| **Proximity colour** | 1.9 a modulator with source *camera distance*, driving a colour adjustment | 1. Native<br>2. Off | mask (allocated) | Shared values; strength in mask |
+| **Proximity color** | 1.9 a modulator with source *camera distance*, driving a color adjustment | 1. Native<br>2. Off | mask (allocated) | Shared values; strength in mask |
 | **AudioLink** | 1.3 AudioLink themes<br>1.9 audio modulators<br>4.6 audio patterns | 1. Native, per feature<br>2. Off (the feature keeps its rest value) | Per feature | Each feature that AudioLink drives keeps it only where the output supports AudioLink for that feature. AudioLink modes keyed to UV tiles read a preserved UV channel (see [*UV channels*](#uv-channels)) |
 | **Surface mode and render queue** | 6 | 1. Native | — | The queue follows the chosen surface mode, with an override |
 | **Fallback shader** | 6 (not typed) | 1. The writer's choice, with an override | — | The writer sets the fallback the way its shader exposes it, from the surface mode |
 | **World AO blocker** | 6 render (to be typed; the Poiyomi parser ignores it today) | 1. On<br>2. Off | — | One switch for the whole material. Offered when a source uses it and the output supports it; the user chooses. See below |
 
-**Ambient occlusion baked into colour.** Native occlusion darkens ambient light and
-reflections, not direct light (2.4), so multiplying the colour by the occlusion map would
+**Ambient occlusion baked into color.** Native occlusion darkens ambient light and
+reflections, not direct light (2.4), so multiplying the color by the occlusion map would
 darken the lit side too. Instead, the bake evaluates each source's occlusion under the virtual
 light rig, with the world normals and the virtual view. Each texel is darkened by the share of
 its light that occlusion would darken: the ambient part, the reflections, and the direct part
 only by the source's *occlusion: direct* amount. Texels facing the key light keep most of
 their brightness; creases facing away get the full darkening. A strength blends the result
-in, and a source's occlusion tint (2.4) colours the darkening.
+in, and a source's occlusion tint (2.4) colors the darkening.
 
 **World AO blocker.** Triangles whose UVs lie in the tile left of the default one (U −1 to
 0, V 0 to 1) render to depth only. Screen-space effects that read depth, such as ambient
@@ -710,7 +710,7 @@ every choice the new shader supports:
 - **Feature settings:** feature ID, mode, the mode's values, per-source overrides (turned off,
   reference source), stored by source material.
 - **Texture settings:** texture ID, enabled, size, size mode.
-- **Output settings:** crunch, bake view, light rig, colour influence, the bake strengths,
+- **Output settings:** crunch, bake view, light rig, color influence, the bake strengths,
   and each light's intensity, temperature and softness.
 
 A mode the new shader doesn't support falls back to its default mode; the stored choice is
@@ -722,12 +722,12 @@ kept, so switching back restores it.
 Output name, output shader, sources and UV regions      (as today)
 [Auto Setup]
 ▸ Textures         main size, crunch, the texture list with sizes and memory
-▸ Surface          Colour · Alpha · Normal maps · Colour adjustments · Vertex colours ·
+▸ Surface          Color · Alpha · Normal maps · Color adjustments · Vertex colors ·
                    Reflection and specular · Clear coat · Ambient occlusion
 ▸ Lighting         Shading · Light volumes · LTCGI
 ▸ Layers           Matcaps · Rim lighting · Environmental rim · Backlight ·
                    Emission · Glitter · Subsurface
-▸ Effects          Proximity colour · AudioLink
+▸ Effects          Proximity color · AudioLink
 ▸ Render           Surface mode and queue · Fallback
 ▸ Masks            where each mask went (read only)
 ▸ Baking           light rig, strengths, lights, view     (only when a mode bakes)
@@ -787,8 +787,8 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
 - **Light rigs:** two rigs, classic and symmetric. Sources with overlapping UVs are always
   baked with the symmetric rig.
 - **Light roles:** each light has its own temperature, softness, and diffuse and specular
-  weights. Each bake uses only the light terms its purpose needs. Baked light colour is
-  limited by a colour influence, and every bake has its own strength slider.
+  weights. Each bake uses only the light terms its purpose needs. Baked light color is
+  limited by a color influence, and every bake has its own strength slider.
 - **First writers:** Poiyomi Toon 10 and VRChat Mobile Toon Standard, both from the first
   milestone.
 - **Compound textures:** an output shader's texture can provide several virtual maps in its
@@ -797,10 +797,10 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
 - **Maps are the user's choice:** that the output has a map doesn't mean it is used. Only the
   maps a mode can't work without are required (for normal maps, only the main one). An
   optional map that is turned off is baked into the map it falls back to: secondary and detail
-  normals into the main normal, decals and details into the base colour.
+  normals into the main normal, decals and details into the base color.
 - **Inverted masks:** a placed mask also serves features that need its inverse, when they can
   read it inverted, without another channel.
-- **Ambient occlusion:** a source's occlusion map is baked into the colour map, under the light
+- **Ambient occlusion:** a source's occlusion map is baked into the color map, under the light
   rig, when the output has no occlusion map. Occlusion generated from the mesh is not planned.
 - **Memory:** GPU memory of the compressed textures, for PC and Android, per texture and in
   total per material.
@@ -808,7 +808,7 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
   when a source uses it and the output supports it. The UV remap keeps its tile when it's on.
 - **Input reports:** the input parsers' *unmapped* lines are logged only with the debug
   setting, not in normal builds.
-- **Vertex colours:** when a source uses them, the user chooses to keep them live, bake them
+- **Vertex colors:** when a source uses them, the user chooses to keep them live, bake them
   into textures, or turn them off.
 - **Manual bake:** writes the material and its textures only; no preview copy of the avatar.
 - **UV channels:** UV0 holds the atlas UVs. UV1 to UV3 carry preserved original UVs, with
@@ -821,7 +821,7 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
 - **Animation:** some animations will be supported, designed separately; this design only
   keeps room to record animated properties per source.
 - **The first milestone** is one slice through the whole pipeline, the mesh remapper and the
-  manual bake included, with the base colour texture only. The main normal map and a compound
+  manual bake included, with the base color texture only. The main normal map and a compound
   metallic and roughness texture come first in the next milestone.
 
 ## Open questions

@@ -32,7 +32,7 @@ The component has no settings and is removed from the uploaded avatar.
 - **Summary tiles:** triangles, meshes, material slots, materials, textures, blendshapes, the
   estimated **PC and Quest rank**, and the texture memory your avatar uses on the GPU.
 - **PC and Quest performance:** every VRChat performance category, each with its value, a
-  colour bar from Excellent to Very Poor, and the limit for each rank. Categories at zero
+  color bar from Excellent to Very Poor, and the limit for each rank. Categories at zero
   are hidden, but still count toward the rank. On Quest, components VRChat removes are marked
   *Stripped*, and hard limits are shown.
 - **Parameter budgets:** how much of the 256-bit synced parameter memory and of the custom

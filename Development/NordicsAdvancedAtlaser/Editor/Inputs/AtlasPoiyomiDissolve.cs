@@ -26,13 +26,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     break;
                 case 3:
                     layer.Source = AtlasTransitionSource.Sphere;
-                    layer.Centre = Vector3Of(m, "_SphericalDissolveCenter", Vector3.zero);
+                    layer.Center = Vector3Of(m, "_SphericalDissolveCenter", Vector3.zero);
                     layer.Radius = Float(m, "_SphericalDissolveRadius", 1.5f);
                     layer.InvertThreshold = On(m, "_SphericalDissolveInvert");
                     break;
                 case 4:
-                    layer.Source = AtlasTransitionSource.CentreOut;
-                    layer.CentreOutMode = (AtlasCentreOutMode)Mathf.Clamp(Int(m, "_CenterOutDissolveMode", 1) - 1, 0, 2);
+                    layer.Source = AtlasTransitionSource.CenterOut;
+                    layer.CenterOutMode = (AtlasCenterOutMode)Mathf.Clamp(Int(m, "_CenterOutDissolveMode", 1) - 1, 0, 2);
                     layer.Direction = Vector3Of(m, "_CenterOutDissolveDirection", Vector3.forward);
                     layer.PixelNormalAmount = Float(m, "_CenterOutDissolveNormals", 0f);
                     layer.Linear = On(m, "_CenterOutDissolveLinear", 1f);
@@ -72,12 +72,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 layer.EdgeReplacesColor = true;
                 layer.EdgeEmission = Float(m, "_DissolveEdgeEmission", 1f);
                 if (On(m, "_DissolveEdgeGradient"))
-                    d.Report(AtlasIssueKind.Unmapped, "dissolve.edge-gradient", "A dissolve edge's three-colour gradient isn't mapped yet; its first colour is used.");
+                    d.Report(AtlasIssueKind.Unmapped, "dissolve.edge-gradient", "A dissolve edge's three-color gradient isn't mapped yet; its first color is used.");
                 if (On(m, "_DissolveEdgeHueShiftEnabled"))
                     d.Report(AtlasIssueKind.Unmapped, "dissolve.edge-hue", "A dissolve edge's hue shift isn't mapped yet.");
             }
 
-            // The mask (red, or a vertex colour channel) scales the amount.
+            // The mask (red, or a vertex color channel) scales the amount.
             int vertex = Int(m, "_DissolveUseVertexColors", 0);
             var mask = vertex > 0 ? new AtlasMask { VertexColor = true, Channel = Channels[Mathf.Clamp(vertex - 1, 0, 3)] } : Mask(m, d, "_DissolveMask");
             mask = BusMask(m, mask, "_DissolveMaskGlobalMask");
@@ -88,7 +88,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             string path = "layers[" + index + "]";
 
             LayerHue(m, d, index, "_DissolveHueShift");
-            // Poiyomi 11: the revealed colour's gamma, saturation and brightness, after the hue (with it on).
+            // Poiyomi 11: the revealed color's gamma, saturation and brightness, after the hue (with it on).
             if (On(m, "_DissolveHueShiftEnabled"))
             {
                 float gamma = Float(m, "_DissolveGamma", 1f), saturation = Float(m, "_DissolveSaturation", 0f), brightness = Float(m, "_DissolveBrightness", 0f);

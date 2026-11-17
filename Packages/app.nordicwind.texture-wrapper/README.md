@@ -119,7 +119,7 @@ Known gaps, in no particular order:
   `TextureProcessingSettings`. Unity API calls stay on the main thread. Don't modify one
   wrapper from several threads at once.
 
-## Behaviour contracts
+## Behavior contracts
 
 These are part of the API and covered by tests:
 

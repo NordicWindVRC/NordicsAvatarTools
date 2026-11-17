@@ -46,8 +46,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             switch (space)
             {
                 case AtlasTextureSpace.Polar:
-                    var centre = AtlasMaterialReader.Vector(m, "_PolarCenter", new Vector4(0.5f, 0.5f, 0f, 0f));
-                    custom = Int(m, "_PolarMode", 0) != 0 || Int(m, "_PolarUV", 0) != 0 || centre.x != 0.5f || centre.y != 0.5f
+                    var center = AtlasMaterialReader.Vector(m, "_PolarCenter", new Vector4(0.5f, 0.5f, 0f, 0f));
+                    custom = Int(m, "_PolarMode", 0) != 0 || Int(m, "_PolarUV", 0) != 0 || center.x != 0.5f || center.y != 0.5f
                         || Float(m, "_PolarRadialScale", 1f) != 1f || Float(m, "_PolarLengthScale", 1f) != 1f || Float(m, "_PolarSpiralPower", 0f) != 0f;
                     break;
                 case AtlasTextureSpace.Panosphere:

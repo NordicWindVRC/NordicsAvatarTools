@@ -4,7 +4,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 {
     /// <summary>
     /// VRChat/Mobile/Standard Lite (VRChat SDK): a cut-down metallic Standard, always opaque, one
-    /// per-pixel directional light, no received shadows. Behaviour follows the shader's keywords;
+    /// per-pixel directional light, no received shadows. Behavior follows the shader's keywords;
     /// every main map uses the albedo's tiling. See UNIFIED_MATERIAL_VRCHAT_MOBILE.md.
     /// </summary>
     public sealed class AtlasVRChatStandardLiteParser : AtlasParserBase
@@ -15,7 +15,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         protected override void Populate(Material m, AtlasUnifiedMaterial d)
         {
-            // Albedo × colour × vertex colour, unless the hidden keyword turns vertex colour off.
+            // Albedo × color × vertex color, unless the hidden keyword turns vertex color off.
             // Always opaque: alpha is unused.
             d.Surface.BaseColor.Color = AtlasMaterialReader.ColorLinear(m, "_Color", Color.white);
             d.Surface.BaseColor.Map = Main(m, "_MainTex");
@@ -42,7 +42,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             response.Occlusion.Channel = AtlasChannel.Green;
             response.Occlusion.Constant = AtlasMaterialReader.Float(m, "_OcclusionStrength", 1f);
 
-            // Emission: texture × HDR colour when the checkbox (keyword) is on.
+            // Emission: texture × HDR color when the checkbox (keyword) is on.
             if (Keyword(m, "_EMISSION"))
             {
                 var emission = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission };

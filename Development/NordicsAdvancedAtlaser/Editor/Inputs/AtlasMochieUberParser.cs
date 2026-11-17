@@ -105,7 +105,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             else
             {
-                // Shading off: uniform light clamped to the base colour, the flat family.
+                // Shading off: uniform light clamped to the base color, the flat family.
                 d.Lighting.Family = AtlasLightingFamily.Flat;
                 d.Lighting.Ambient = AtlasAmbientModel.Average;
                 d.Lighting.LimitBrightness = true;
@@ -177,7 +177,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             d.Surface.Alpha.MaskMultiplier = AtlasMaterialReader.Color(m, "_Color", Color.white).a;
         }
 
-        // Base colour: texture × colour on the main transform (tiling, scroll, rotation); vertex colour by amount.
+        // Base color: texture × color on the main transform (tiling, scroll, rotation); vertex color by amount.
         private static void BaseColor(Material m, AtlasUnifiedMaterial d)
         {
             d.Surface.BaseColor.Color = AtlasMaterialReader.ColorLinear(m, "_Color", Color.white);
@@ -191,7 +191,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (Keyword(m, "_BASECOLOR_DISSOLVE_ON")) BaseColorDissolve(m, d);
         }
 
-        // Cube mode: a cubemap along the view direction replaces or blends onto the base colour.
+        // Cube mode: a cubemap along the view direction replaces or blends onto the base color.
         private static void CubeMode(Material m, AtlasUnifiedMaterial d)
         {
             bool cubeOnly = Keyword(m, "_CUBEMAP_ON");
@@ -225,7 +225,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             d.Layers.Add(cube);
         }
 
-        // Base Color Dissolve: a second base colour where the noise is below the amount, with a
+        // Base Color Dissolve: a second base color where the noise is below the amount, with a
         // glowing band just above it.
         private static void BaseColorDissolve(Material m, AtlasUnifiedMaterial d)
         {
@@ -266,7 +266,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             else if (Keyword(m, "_SPECULAR_WORKFLOW_ON"))
             {
-                // Specular colour; smoothness from its own map (1), the specular map's alpha (2), or the scale.
+                // Specular color; smoothness from its own map (1), the specular map's alpha (2), or the scale.
                 bool useMap = Int(m, "_UseSpecMap", 0) == 1;
                 var specular = useMap ? Main(m, "_SpecGlossMap") : null;
                 response.SpecularColor = new AtlasColorInput {
@@ -348,7 +348,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             map.Offset = Vector2.zero;
             map.Scroll = Vector2Of(m, "_Flipbook" + index + "Scroll");
             map.Decal = new AtlasDecal {
-                Centre = Vector2Of(m, "_SpritesheetPos" + suffix) + new Vector2(0.5f, 0.5f),
+                Center = Vector2Of(m, "_SpritesheetPos" + suffix) + new Vector2(0.5f, 0.5f),
                 Scale = (Vector2)AtlasMaterialReader.Vector(m, "_SpritesheetScale" + suffix, Vector4.one),
                 Rotation = Float(m, "_SpritesheetRot" + suffix, 0f),
                 ClipOutside = sheet || Int(m, "_Flipbook" + index + "ClipEdge", 0) == 1
@@ -485,9 +485,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (degrees == 0f) return;
             float radians = -degrees * Mathf.Deg2Rad, cos = Mathf.Cos(radians), sin = Mathf.Sin(radians);
             Vector2 Turn(Vector2 v) => new Vector2(cos * v.x - sin * v.y, sin * v.x + cos * v.y);
-            var centre = new Vector2(0.5f, 0.5f);
+            var center = new Vector2(0.5f, 0.5f);
             map.Rotation = -degrees;
-            map.Offset = Turn(map.Offset) + Vector2.Scale(map.Tiling, Turn(centre) - centre);
+            map.Offset = Turn(map.Offset) + Vector2.Scale(map.Tiling, Turn(center) - center);
             map.Scroll = Turn(map.Scroll);
         }
 
@@ -508,7 +508,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // Baked lighting: without a real-time light the probes stand in for it.
             lighting.Contributions.AmbientAsMainLight = Float(m, "_DirectCont", 0.6f);
             lighting.Contributions.AmbientWithoutMainLight = Float(m, "_IndirectCont", 0.5f);
-            // Clamp Additive saturates each additional light's colour: a limit of 1.
+            // Clamp Additive saturates each additional light's color: a limit of 1.
             lighting.AdditionalLights.LimitBrightness = Int(m, "_ClampAdditive", 1) == 1;
             lighting.Contributions.VertexLights = Float(m, "_VLightCont", 1f);
             lighting.Contributions.AdditionalLights = Float(m, "_AddCont", 1f);
@@ -633,7 +633,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         private static void Matcap(Material m, AtlasUnifiedMaterial d, int index, string texture, string color, string strength, string blend,
-            string unlit, string useRough, string rough, string centre, AtlasMask mask)
+            string unlit, string useRough, string rough, string center, AtlasMask mask)
         {
             var map = AtlasSourceMapping.Texture(m, texture);
             var layer = new AtlasLookupLayer {
@@ -643,7 +643,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 LightResponse = Int(m, unlit, 0) == 1 ? AtlasLightResponse.IgnoreLight : AtlasLightResponse.ScaleByLight,
                 BlurFromRoughness = Int(m, useRough, 0) == 0,
                 Blur = Mathf.Clamp01(Float(m, rough, 0.5f)),
-                CentreEye = Int(m, centre, 0) == 1
+                CenterEye = Int(m, center, 0) == 1
             };
             if (map != null)
             {
@@ -666,7 +666,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             d.Layers.Add(layer);
         }
 
-        // Rim: a power band of the view angle, blended onto the lit colour.
+        // Rim: a power band of the view angle, blended onto the lit color.
         private static void Rim(Material m, AtlasUnifiedMaterial d)
         {
             var (blend, scale) = Blend(Int(m, "_RimBlending", 0));
@@ -934,12 +934,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
             stencil.DepthFail = (AtlasStencilOperation)Mathf.Clamp(Int(m, "_StencilZFail", 0), 0, 7);
         }
 
-        // Filtering: colour adjustments on the surface colour, or with Post Filtering on the lit colour.
+        // Filtering: color adjustments on the surface color, or with Post Filtering on the lit color.
         private static void Filtering(Material m, AtlasUnifiedMaterial d)
         {
             var target = Keyword(m, "_POST_FILTERING_ON") ? AtlasAdjustmentTarget.FinalColor : AtlasAdjustmentTarget.SurfaceColor;
             var mask = Mask(m, UberMask.Filter);
-            // Invert applies to the surface colour, unmasked, before the other filters.
+            // Invert applies to the surface color, unmasked, before the other filters.
             float invert = Float(m, "_Invert", 0f);
             if (invert > 0f)
                 d.ColorAdjustments.Add(new AtlasColorAdjustment { Target = AtlasAdjustmentTarget.SurfaceColor,
@@ -1045,7 +1045,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return packed == null ? null : new AtlasMask { Map = packed, Channel = Channels[(int)mask % 4], Invert = mask == UberMask.SpecularBlend };
         }
 
-        // The main transform: the base colour's tiling and offset, scroll and rotation.
+        // The main transform: the base color's tiling and offset, scroll and rotation.
         private static AtlasTextureReference Main(Material m, string property,
             AtlasTextureInterpretation interpretation = AtlasTextureInterpretation.Color)
         {

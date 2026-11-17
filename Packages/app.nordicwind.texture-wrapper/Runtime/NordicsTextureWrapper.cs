@@ -666,7 +666,7 @@ namespace NordicWind.TextureWrapper
         }
         /// <summary>How far a triangle's surface moves over one pixel of this texture, both axes
         /// together (a, b, c in pixel space): a sample in a pixel lies within this of the
-        /// surface at the pixel's centre, so depth can't be told apart more finely.</summary>
+        /// surface at the pixel's center, so depth can't be told apart more finely.</summary>
         internal static float Footprint(Vector2 a,Vector2 b,Vector2 c,float cross,Vector3 pa,Vector3 pb,Vector3 pc)
         {
             Vector3 e1=pb-pa,e2=pc-pa;
@@ -730,7 +730,7 @@ namespace NordicWind.TextureWrapper
             wa=1f-wb-wc;
         }
         /// <summary>Hidden surfaces within one tile (<see cref="HiddenSurfaceOptions"/>): per pixel
-        /// and UV winding, the average normal at the pixel's centre, and how far out along it the
+        /// and UV winding, the average normal at the pixel's center, and how far out along it the
         /// outermost surface lies there.</summary>
         private sealed class HiddenTile
         {
@@ -746,7 +746,7 @@ namespace NordicWind.TextureWrapper
                 for(int i=0;i<outer.Length;i++)outer[i]=float.NegativeInfinity;
             }
             private int Index(int winding,int x,int y)=>(winding>0?0:width*height)+(y-y0)*width+(x-x0);
-            // First: every pixel centre a triangle covers adds its normal there.
+            // First: every pixel center a triangle covers adds its normal there.
             public void AddNormals(in TriangleSetup t,int cx0,int cx1,int cy0,int cy1)
             {
                 for(int y=cy0;y<cy1;y++)
@@ -758,7 +758,7 @@ namespace NordicWind.TextureWrapper
                         normals[Index(t.Winding,x,y)]+=t.N0*wa+t.N1*wb+t.N2*wc;
                     }
             }
-            // Then the sums become directions (zero where nothing covered the centre).
+            // Then the sums become directions (zero where nothing covered the center).
             public void Normalize()
             {
                 for(int i=0;i<normals.Length;i++)
@@ -767,7 +767,7 @@ namespace NordicWind.TextureWrapper
                     normals[i]=length>1e-10f?n/length:Vector3.zero;
                 }
             }
-            // Then the outermost surface at each pixel centre, along that direction.
+            // Then the outermost surface at each pixel center, along that direction.
             public void AddOuter(in TriangleSetup t,int cx0,int cx1,int cy0,int cy1)
             {
                 for(int y=cy0;y<cy1;y++)
@@ -983,7 +983,7 @@ namespace NordicWind.TextureWrapper
                     {
                         // Overlapping surfaces' frames often cancel out (mirrored halves). Store
                         // no correction there rather than leaving the texel for dilation to fill
-                        // from a neighbouring island.
+                        // from a neighboring island.
                         if (overlap < 1f)
                         {
                             output._pixels[i]=MathUtil.Pack(Vector3.forward,1f);output._usage[i]=1;

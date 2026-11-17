@@ -65,7 +65,7 @@ Shader "Hidden/NordicWind/TextureWrapper/Dilate"
             ENDCG
         }
 
-        // 2: colours: a used pixel keeps its own; an unused one takes its seed's. Normal maps
+        // 2: colors: a used pixel keeps its own; an unused one takes its seed's. Normal maps
         // (_Normal) get alpha 1 wherever there's a value.
         Pass
         {

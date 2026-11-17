@@ -63,7 +63,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public sealed class AtlasNearClip
     {
         public bool Enabled;
-        // Metres.
+        // Meters.
         public float Distance;
         // Hidden where the mask is above 0.5; null: everywhere.
         public AtlasMask Mask;
@@ -101,7 +101,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     }
 
     // 6: how the material is drawn.
-    // The second pass's colour: the base colour's (Same), its own colour and alpha, or only its alpha.
+    // The second pass's color: the base color's (Same), its own color and alpha, or only its alpha.
     public enum AtlasPassColor { Same, ColorAndAlpha, AlphaOnly }
 
     // 6: the whole surface drawn again after the first pass (Poiyomi's Two Pass), with its own
@@ -119,7 +119,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float AlphaPower = 1f;
         public bool AlphaToCoverage;
         public bool ForceOpaque;
-        // ColorAndAlpha: the base colour's constant colour and alpha replaced by Color (linear);
+        // ColorAndAlpha: the base color's constant color and alpha replaced by Color (linear);
         // AlphaOnly: its alpha by Alpha.
         public AtlasPassColor ColorSource = AtlasPassColor.Same;
         public UnityEngine.Color Color = UnityEngine.Color.white;
@@ -140,7 +140,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool TwoSidedLighting;
         public readonly AtlasVisibility Visibility = new AtlasVisibility();
         public readonly System.Collections.Generic.List<AtlasTileDiscard> HiddenTiles = new System.Collections.Generic.List<AtlasTileDiscard>();
-        // Replaces the base colour texture in mirrors; null: none.
+        // Replaces the base color texture in mirrors; null: none.
         public AtlasTextureReference MirrorBaseColor;
         public readonly AtlasNearClip NearClip = new AtlasNearClip();
         public bool Invisible;

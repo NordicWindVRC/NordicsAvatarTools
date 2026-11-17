@@ -153,7 +153,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             int blend = major <= 8 ? 1 : Int(m, n("_RimBlendMode", "_Rim2BlendMode"), 1);
             float lighting = Float(m, n("_RimEnableLighting", "_Rim2EnableLighting"), 1f);
             float parallax = Float(m, n("_RimVRParallaxStrength", "_Rim2VRParallaxStrength"), 1f);
-            // Poiyomi 11's application stage: 0 after lighting (lit by all of it), 1 on the base colour
+            // Poiyomi 11's application stage: 0 after lighting (lit by all of it), 1 on the base color
             // (lit with the surface), 2 after lighting lit by the direct light alone.
             int stage = Int(m, n("_RimApplicationStage", "_Rim2ApplicationStage"), 0);
             var response = lighting < 0.5f ? AtlasLightResponse.IgnoreLight : stage == 2 ? AtlasLightResponse.ScaleByDirectLight : AtlasLightResponse.ScaleByLight;
@@ -195,7 +195,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     texture.Tiling = Vector2.Scale(main.Tiling, texture.Tiling);
                 }
             }
-            // Mask only: the texture's red is a mask instead of a colour.
+            // Mask only: the texture's red is a mask instead of a color.
             if (On(m, n("_RimMaskOnlyMask", "_Rim2MaskOnlyMask")))
             {
                 if (texture != null) { texture.Interpretation = AtlasTextureInterpretation.Data; layer.Mask = new AtlasMask { Map = texture }; }

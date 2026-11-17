@@ -2,9 +2,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
 {
     public enum AtlasMaskBusStepKind
     {
-        // value = the mask's value (1.4: a map's channel with its levels and vertex colour)
+        // value = the mask's value (1.4: a map's channel with its levels and vertex color)
         Texture,
-        // value = saturate(blend(value, a vertex colour channel)), sRGB decoded when VertexLinear
+        // value = saturate(blend(value, a vertex color channel)), sRGB decoded when VertexLinear
         VertexColor,
         // value × (1 on Faces, 0 on the other side)
         Faces,
@@ -40,7 +40,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     // A touch from VRChat's contacts sent to shaders (Poiyomi 11's global mask contacts): each
     // matching contact touches with 1 − smoothstep(InnerRadius, OuterRadius, distance), the
-    // distance from the pixel (AroundTouch) or from the object's origin, the radii in metres at
+    // distance from the pixel (AroundTouch) or from the object's origin, the radii in meters at
     // the avatar's uploaded size (× the toucher's size with ScaleWithToucher); the touches add up,
     // faded in and out as contacts come and go; 1 − it when inverted.
     public sealed class AtlasContact

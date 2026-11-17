@@ -13,7 +13,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void UntouchedMaterialIsTextureTimesVertexColourLitFlat()
+        public void UntouchedMaterialIsTextureTimesVertexColorLitFlat()
         {
             var material = AtlasTestMaterials.Standard();
             try
@@ -27,7 +27,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 Assert.AreEqual(AtlasLightingFamily.Flat, unified.Lighting.Family);
                 Assert.AreEqual(AtlasAmbientModel.Average, unified.Lighting.Ambient);
                 // The shader skips the shadow variants, and lights itself by 20% of the ambient
-                // colour when the world has no real-time light.
+                // color when the world has no real-time light.
                 Assert.AreEqual(0f, unified.Lighting.ReceiveShadows);
                 Assert.AreEqual(0.2f, unified.Lighting.Contributions.AmbientAsMainLight, 1e-6f);
                 Assert.AreEqual(1f, unified.Lighting.Contributions.MainLight);

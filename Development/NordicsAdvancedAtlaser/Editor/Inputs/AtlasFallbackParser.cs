@@ -3,7 +3,7 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     /// <summary>
-    /// Any material no other parser recognises. It reads only the property names most shaders
+    /// Any material no other parser recognizes. It reads only the property names most shaders
     /// share, with Unity's conventions, so its mapping is a guess and is reported as one.
     /// </summary>
     public sealed class AtlasFallbackParser : AtlasParserBase
@@ -16,9 +16,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         protected override void Populate(Material m, AtlasUnifiedMaterial d)
         {
             d.Report(AtlasIssueKind.Unmapped, "material",
-                "Unrecognised shader: only common property names were read, so the result is a guess.");
+                "Unrecognized shader: only common property names were read, so the result is a guess.");
 
-            // Base colour: texture × colour.
+            // Base color: texture × color.
             if (Has(m, "_MainTex"))
                 AtlasSourceMapping.Color(m, d.Surface.BaseColor, "_MainTex", Has(m, "_Color") ? "_Color" : "_BaseColor");
             else if (Has(m, "_BaseMap"))
@@ -39,7 +39,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 AtlasTextureInterpretation.TangentNormal);
             d.Surface.Normal.Strength = Float(m, 1f, "_BumpScale", "_NormalStrength", "_NormalScale");
 
-            // Metallic workflow when the shader has metallic; specular colour when it has only that.
+            // Metallic workflow when the shader has metallic; specular color when it has only that.
             var response = d.Surface.Response;
             string metallicMap = First(m, "_MetallicGlossMap", "_MetallicMap");
             if (Has(m, "_Metallic") || metallicMap != null)
@@ -85,7 +85,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             response.Occlusion.Channel = AtlasChannel.Green;
             response.Occlusion.Constant = Float(m, 1f, "_OcclusionStrength", "_AOIntensity");
 
-            // Emission: texture × colour × strength, when there's a texture or a colour that glows.
+            // Emission: texture × color × strength, when there's a texture or a color that glows.
             var emissionMap = AtlasSourceMapping.Texture(m, First(m, "_EmissionMap", "_EmissionTex", "_EmissiveMap"));
             Color emission = AtlasMaterialReader.ColorLinear(m, First(m, "_EmissionColor", "_EmissionTint"), emissionMap != null ? Color.white : Color.black)
                 * Float(m, 1f, "_EmissionStrength", "_EmissionIntensity");

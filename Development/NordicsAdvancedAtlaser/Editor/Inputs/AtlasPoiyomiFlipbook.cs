@@ -7,7 +7,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     internal sealed partial class AtlasPoiyomiReader
     {
         // Poiyomi's decal placement: the scale fitted to the texture's aspect (1 shrink, 2 grow),
-        // then the side offsets (left, right, down, up) widen it and move its centre.
+        // then the side offsets (left, right, down, up) widen it and move its center.
         private AtlasDecal Placed(AtlasTextureReference map, Vector2 scale, int aspect, Vector4 side, Vector2 position)
         {
             if (aspect > 0 && map.Texture.width > 0 && map.Texture.height > 0)
@@ -19,7 +19,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             return new AtlasDecal
             {
-                Centre = position + new Vector2(side.y - side.x, side.w - side.z) * 0.5f,
+                Center = position + new Vector2(side.y - side.x, side.w - side.z) * 0.5f,
                 Scale = scale + new Vector2(side.x + side.y, side.z + side.w)
             };
         }
@@ -30,7 +30,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             Flipbook(m, d, "1");
         }
 
-        // A placed texture array played as frames, blended into the base colour by its alpha.
+        // A placed texture array played as frames, blended into the base color by its alpha.
         private void Flipbook(Material m, AtlasUnifiedMaterial d, string s)
         {
             if (!On(m, "_EnableFlipbook" + s)) return;
@@ -70,7 +70,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             string path = "layers[" + (d.Layers.Count - 1) + "]";
 
             if (Int(m, "_FlipbookAlphaControlsFinalAlpha" + s, 0) > 0)
-                d.Report(AtlasIssueKind.Unmapped, "flipbook.alpha-override", "A flipbook replacing the material's alpha (and colour) isn't mapped yet.");
+                d.Report(AtlasIssueKind.Unmapped, "flipbook.alpha-override", "A flipbook replacing the material's alpha (and color) isn't mapped yet.");
             if (On(m, "_FlipbookHueShiftEnabled" + s))
                 Hue(m, d, AtlasAdjustmentTarget.Layer, layer, "_FlipbookHueShift" + s, "_FlipbookHueShiftSpeed" + s,
                     "_FlipbookHueShiftColorSpace" + s, "_FlipbookHueSelectOrShift" + s);
@@ -125,7 +125,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return frames;
         }
 
-        // Mirror/Camera Visibility: where the material is drawn, and a texture and colour in mirrors.
+        // Mirror/Camera Visibility: where the material is drawn, and a texture and color in mirrors.
         // UV Tile Discard: hidden tiles, everywhere or on one side.
         private void Visibility(Material m, AtlasUnifiedMaterial d)
         {
@@ -161,8 +161,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             else if (choice == 2) visibility.NotInMirror();
         }
 
-        // In mirrors: lerp(base, blend(base, texture), texture alpha × colour alpha), then
-        // × lerp(1, colour, colour alpha): two layers shown only in mirrors (everywhere when forced).
+        // In mirrors: lerp(base, blend(base, texture), texture alpha × color alpha), then
+        // × lerp(1, color, color alpha): two layers shown only in mirrors (everywhere when forced).
         private void MirrorTexture(Material m, AtlasUnifiedMaterial d)
         {
             var mirror = On(m, "_MirrorTextureForceEnabled") ? AtlasMirrorVisibility.Both : AtlasMirrorVisibility.MirrorOnly;

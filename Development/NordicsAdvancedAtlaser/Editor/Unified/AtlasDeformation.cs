@@ -6,7 +6,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     // 5.4: triangles subdivided before the deformations (Poiyomi Pro's Tessellated variants).
     // Uniform: each edge split Factor times; EdgeLength: into pieces about EdgeLength screen pixels
-    // long; Distance: Factor near the camera, falling to 1 between Distance.x and .y metres.
+    // long; Distance: Factor near the camera, falling to 1 between Distance.x and .y meters.
     // Phong (0–1) bends the new vertices toward the curved surface the vertex normals describe;
     // triangles outside the view (with CullMargin) aren't subdivided.
     public sealed class AtlasTessellation
@@ -28,8 +28,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         Rotate,
         // Object units.
         Translate,
-        // The position rounded up to a grid of Precision steps per metre (world space unless Local);
-        // with Centred, to the middle of its cell (ceil(p × precision) − 0.5) / precision.
+        // The position rounded up to a grid of Precision steps per meter (world space unless Local);
+        // with Centered, to the middle of its cell (ceil(p × precision) − 0.5) / precision.
         Snap,
         // × Amount per axis, around the object origin.
         Scale,
@@ -42,7 +42,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         Displace,
         // xz = lerp(xz, normalize(xz) × Radius + xz × Height, strength × mask).
         Barrel,
-        // p = lerp(p, normalize(p + Centre) × Radius + p × Height, strength × mask).
+        // p = lerp(p, normalize(p + Center) × Radius + p × Height, strength × mask).
         Sphere,
         // Around the y axis: f = pow(smoothstep(HeightRange.x, HeightRange.y, y), Funnel) × mask;
         // p.xz += (cos a, sin a) × Radius × f, a = t × Speed + y × Twist; p.y += Pull × f; blended by f.
@@ -58,7 +58,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // the mean of sin(f), sin(2.2f + 5.52), sin(2.9f + 0.93), sin(4.6f + 8.94)), f = t × Frequency;
         // with an AudioLink band, gate = the band (AudioOverride) or gate + the band.
         Glitch,
-        // Where the scene behind (the depth texture) is within FadeLength metres, pushed along the
+        // Where the scene behind (the depth texture) is within FadeLength meters, pushed along the
         // normal by Amount.x × (1 − smoothstep(0, FadeLength, the separation)); not in mirrors.
         DepthBulge,
         // View clip prevention: parts closer than the near plane (+ Bias) and facing the camera
@@ -72,7 +72,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     }
 
     // Thry's Penetration System: the mesh (measured by the setup tool: length, scale and axes, a
-    // baked mesh or vertex colours) bends along a Bézier curve toward a matching orifice light on
+    // baked mesh or vertex colors) bends along a Bézier curve toward a matching orifice light on
     // its channel, squeezed and bulged around the orifice (each × its hole and ring multipliers),
     // with pumping and an idle shrink when nothing is near.
     public sealed class AtlasTps
@@ -97,7 +97,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     // Flattened against a collider: a VRChat contact (1–8) or an orifice light's plane of
     // PlaneSize; the squish (Strength, spreading sideways by Spread, at most Max, eased over
-    // Falloff, pushed ClipOffset off the plane) is also a colour: the gradient sampled between
+    // Falloff, pushed ClipOffset off the plane) is also a color: the gradient sampled between
     // GradientMin and GradientMax by the squish, × intensity, replacing, multiplying and adding
     // unlit by their weights (a pattern layer of kind Squish).
     public sealed class AtlasSquish
@@ -148,10 +148,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public Vector3 Spin;
         // Inflate: along the normal's absolute value, so everything moves outward on that axis.
         public bool AbsoluteNormal;
-        // Snap: steps per metre.
+        // Snap: steps per meter.
         public float Precision = 100f;
         public bool Local;
-        public bool Centred;
+        public bool Centered;
         // Displace.
         public AtlasTextureReference Map;
         public AtlasChannel MapChannel = AtlasChannel.Red;
@@ -159,7 +159,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Barrel, Sphere, Tornado.
         public float Radius = 1f;
         public float Height;
-        public Vector3 Centre;
+        public Vector3 Center;
         public float Speed;
         public float Twist;
         public float Funnel = 1f;
@@ -181,13 +181,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasMirrorVisibility Mirror = AtlasMirrorVisibility.Both;
         // DepthBulge.
         public float FadeLength = 0.02f;
-        // CameraPush: Bias (metres) and ObjectScale.
+        // CameraPush: Bias (meters) and ObjectScale.
         public float ObjectScale = 1f;
         public AtlasTps Tps;
         public AtlasSquish Squish;
         // 0–1.
         public float Strength = 1f;
-        // Sampled per vertex (a map on its UV, or a vertex colour); null: everywhere.
+        // Sampled per vertex (a map on its UV, or a vertex color); null: everywhere.
         public AtlasMask Mask;
     }
 

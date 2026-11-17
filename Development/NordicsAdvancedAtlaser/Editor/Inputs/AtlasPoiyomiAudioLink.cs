@@ -32,7 +32,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             d.Modulators.Add(AudioModulator(m, target, mode, Int(m, band, 0), values.x, values.y));
         }
 
-        // The colour becomes lerp(colour, override, lerp(ramp.x, ramp.y, smoothstep(ramp.z, ramp.w, band))).
+        // The color becomes lerp(color, override, lerp(ramp.x, ramp.y, smoothstep(ramp.z, ramp.w, band))).
         // The properties are prefix + Enabled, Band, ThemeIndex and Ramp, each + suffix.
         private void AudioColorOverride(Material m, AtlasUnifiedMaterial d, string target, string prefix, string suffix = "")
         {
@@ -53,8 +53,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             d.Modulators.Add(modulator);
         }
 
-        // Strength: + lerp(add) then × lerp(multipliers); centre out: + lerp(add, the band's history
-        // along the view angle); the colour override.
+        // Strength: + lerp(add) then × lerp(multipliers); center out: + lerp(add, the band's history
+        // along the view angle); the color override.
         private void EmissionAudioLink(Material m, AtlasUnifiedMaterial d, int index, int layer)
         {
             string n = index.ToString();
@@ -62,23 +62,23 @@ namespace NordicWind.AdvancedAtlaser.Editor
             string strength = "layers[" + layer + "].targets[0].opacity";
             AudioRange(m, d, strength, AtlasModulatorMode.Add, "_EmissionAL" + n + "StrengthBand", "_EmissionAL" + n + "StrengthMod");
             AudioRange(m, d, strength, AtlasModulatorMode.Multiply, "_EmissionAL" + n + "MultipliersBand", "_EmissionAL" + n + "Multipliers");
-            var centreOut = AtlasMaterialReader.Vector(m, "_AudioLinkEmission" + n + "CenterOut", Vector4.zero);
-            if (centreOut.x != 0f || centreOut.y != 0f)
+            var centerOut = AtlasMaterialReader.Vector(m, "_AudioLinkEmission" + n + "CenterOut", Vector4.zero);
+            if (centerOut.x != 0f || centerOut.y != 0f)
             {
                 float duration = Float(m, "_AudioLinkEmission" + n + "CenterOutDuration", 1f);
-                var history = AudioModulator(m, strength, AtlasModulatorMode.Add, Int(m, "_AudioLinkEmission" + n + "CenterOutBand", 0), centreOut.x, centreOut.y);
+                var history = AudioModulator(m, strength, AtlasModulatorMode.Add, Int(m, "_AudioLinkEmission" + n + "CenterOutBand", 0), centerOut.x, centerOut.y);
                 history.Audio.Spread = AtlasAudioSpread.History;
                 history.Audio.Coordinate = AtlasSpreadCoordinate.ViewAngle;
                 history.Audio.HistoryLength = Mathf.Abs(duration) * 128f;
                 history.Audio.Threshold = Mathf.Min(Float(m, "_AudioLinkEmission" + n + "CenterOutSize", 0f), 0.9999f);
                 d.Modulators.Add(history);
                 if (duration < 0f)
-                    d.Report(AtlasIssueKind.Unmapped, "audiolink.centre-out", "A reversed AudioLink centre-out emission isn't mapped yet.");
+                    d.Report(AtlasIssueKind.Unmapped, "audiolink.center-out", "A reversed AudioLink center-out emission isn't mapped yet.");
             }
             AudioColorOverride(m, d, "layers[" + layer + "].source.color", "_EmissionAL" + n + "ColorOverride");
         }
 
-        // Scale, rotation, alpha and emission by bands, rotation by chronotensity, the colour override.
+        // Scale, rotation, alpha and emission by bands, rotation by chronotensity, the color override.
         private void DecalAudioLink(Material m, AtlasUnifiedMaterial d, int index, int layer)
         {
             if (!AudioLinkOn(m)) return;
@@ -96,10 +96,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (AtlasMaterialReader.Vector(m, p + "SideMin", Vector4.zero) != Vector4.zero || AtlasMaterialReader.Vector(m, p + "SideMax", Vector4.zero) != Vector4.zero)
                 d.Report(AtlasIssueKind.Unmapped, "audiolink.decal-sides", "A decal's side offsets by AudioLink aren't mapped yet.");
             if (On(m, "_AudioLinkDecalCC" + n))
-                d.Report(AtlasIssueKind.Unmapped, "audiolink.colorchord-strip", "A decal coloured by the ColorChord strip isn't mapped yet.");
+                d.Report(AtlasIssueKind.Unmapped, "audiolink.colorchord-strip", "A decal colored by the ColorChord strip isn't mapped yet.");
         }
 
-        // Alpha, emission and intensity by bands, the colour override, on every layer of the matcap.
+        // Alpha, emission and intensity by bands, the color override, on every layer of the matcap.
         private void MatcapAudioLink(Material m, AtlasUnifiedMaterial d, int index, string prefix, int from)
         {
             string p = "_Matcap" + index + "AL";
@@ -110,7 +110,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 string layer = "layers[" + i + "]";
                 AudioRange(m, d, layer + ".source.color.a", AtlasModulatorMode.Add, p + "AlphaAddBand", p + "AlphaAdd");
                 if (i == from) AudioRange(m, d, layer + ".emissionAmount", AtlasModulatorMode.Add, p + "EmissionAddBand", p + "EmissionAdd");
-                // The colour × (intensity + add): × (1 + add / intensity).
+                // The color × (intensity + add): × (1 + add / intensity).
                 var add = AtlasMaterialReader.Vector(m, p + "IntensityAdd", Vector4.zero);
                 if ((add.x != 0f || add.y != 0f) && intensity != 0f)
                     d.Modulators.Add(AudioModulator(m, layer + ".source.color", AtlasModulatorMode.Multiply, Int(m, p + "IntensityAddBand", 0),
@@ -121,7 +121,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 d.Report(AtlasIssueKind.Unmapped, "audiolink.matcap-pan", "A matcap's AudioLink chrono pan isn't mapped yet.");
         }
 
-        // Width, emission and brightness by bands, the colour override (Poiyomi style only).
+        // Width, emission and brightness by bands, the color override (Poiyomi style only).
         private void RimAudioLink(Material m, AtlasUnifiedMaterial d, string p, int layer, float brightness)
         {
             if (!AudioLinkOn(m)) return;

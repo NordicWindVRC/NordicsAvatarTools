@@ -33,7 +33,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         {
             Textures =
             {
-                new AtlasOutputTexture("BaseColor", "Base colour") { SizeMode = AtlasTextureSizeMode.Main }
+                new AtlasOutputTexture("BaseColor", "Base color") { SizeMode = AtlasTextureSizeMode.Main }
                     .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB)
             }
         };
@@ -51,7 +51,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void BaseColourIsPackedIntoTheRGBOfItsTextureWithoutAlpha()
+        public void BaseColorIsPackedIntoTheRGBOfItsTextureWithoutAlpha()
         {
             var config = new AtlasOutputConfiguration { mainTexture = { width = 32, height = 16 } };
             var job = TwoSources();
@@ -72,7 +72,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void WritersSetTheBaseColourTextureTheParserReadsBack()
+        public void WritersSetTheBaseColorTextureTheParserReadsBack()
         {
             bool any = false;
             foreach (var shader in AtlasShaderRegistry.InstalledOutputShaders)
@@ -114,7 +114,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 long crunched = AtlasTextureExport.CrunchedBytes(packed, AtlasTextureFormat.BC1);
                 long plain = AtlasTextureMemory.Bytes(256, 256, AtlasTextureFormat.BC1);
                 Assert.Greater(crunched, 0);
-                Assert.Less(crunched, plain / 2, "A single colour crunches to far less than BC1.");
+                Assert.Less(crunched, plain / 2, "A single color crunches to far less than BC1.");
                 Assert.IsTrue(AtlasTextureExport.CrunchPays(packed, AtlasTextureFormat.BC1));
             }
         }
@@ -131,7 +131,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         [Test]
         public void TexturesAreNamedAfterTheMaterial()
         {
-            Assert.AreEqual("Body_BaseColor", AtlasManualBake.TextureName("Body", new AtlasOutputTexture("BaseColor", "Base colour")));
+            Assert.AreEqual("Body_BaseColor", AtlasManualBake.TextureName("Body", new AtlasOutputTexture("BaseColor", "Base color")));
         }
 
         [Test]

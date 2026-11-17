@@ -36,7 +36,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
         }
 
-        // Colour textures sRGB, data linear; alpha only when a virtual map uses it.
+        // Color textures sRGB, data linear; alpha only when a virtual map uses it.
         public static TextureSettings Settings(AtlasTextureUse use) => new TextureSettings
         {
             DataType = use.Texture.Srgb ? TextureDataType.Color : TextureDataType.LinearData,

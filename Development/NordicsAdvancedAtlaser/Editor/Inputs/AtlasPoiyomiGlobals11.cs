@@ -3,10 +3,10 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi 11: the Skin section, the add pass's blending, the time source, the emission and
-    // final colour multipliers, Early Z and the world AO blocker.
+    // final color multipliers, Early Z and the world AO blocker.
     internal sealed partial class AtlasPoiyomiReader
     {
-        // After the detail texture: a skin colour from pigments, its masks the skin detail map's
+        // After the detail texture: a skin color from pigments, its masks the skin detail map's
         // channels (R: where it doesn't apply; G: freckles; B: tan).
         private void SkinTone(Material m, AtlasUnifiedMaterial d)
         {
@@ -26,7 +26,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (On(m, "_PoiSkinTanEnabled"))
                 skin.TanMask = SkinChannel(m, map, 2, "_PoiSkinTanMapUV", "_PoiSkinTanMapTiling");
 
-            // Where it applies: 1 − the red channel (on UV0, the map's own tiling ignored) × the vertex colour.
+            // Where it applies: 1 − the red channel (on UV0, the map's own tiling ignored) × the vertex color.
             AtlasMask mask = null;
             if (map != null)
             {
@@ -49,7 +49,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             });
         }
 
-        // A skin detail map channel on its own UV and tiling, × its vertex colour source. With
+        // A skin detail map channel on its own UV and tiling, × its vertex color source. With
         // neither map nor source it is 0 (null: the effect is off), or 1 when inverted.
         private AtlasMask SkinChannel(Material m, AtlasTextureReference map, int channel, string uv, string tiling)
         {

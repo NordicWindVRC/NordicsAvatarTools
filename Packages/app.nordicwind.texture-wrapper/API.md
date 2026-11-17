@@ -149,13 +149,13 @@ that take a `Color`.
 |---|---|---|
 | `HueShift` | `Amount`, `ColorSpace` | Rotates hue by `Amount` turns (1 = 360°), in HSV or OKLab. |
 | `HueReplace` | `Amount`, `ColorSpace` | Sets hue to `Amount` turns. |
-| `Saturation` | `Amount` | Mixes toward luminance (0.30, 0.59, 0.11). 1 = unchanged, 0 = grey, above 1 = more saturated. |
+| `Saturation` | `Amount` | Mixes toward luminance (0.30, 0.59, 0.11). 1 = unchanged, 0 = gray, above 1 = more saturated. |
 | `Brightness` | `Amount` | Multiplies RGB by `Amount`. 1 = unchanged. |
 | `Contrast` | `Amount` | Scales around 0.5. 1 = unchanged. |
 | `Gamma` | `Amount` | Signed power: `sign(c) × abs(c) ^ Amount`. |
 | `Exposure` | `Amount` | Multiplies by `2 ^ Amount`. |
 | `Tint` | `Color`, `ColorMap` | Multiplies RGB by the color. |
-| `Colorize` | `Color`, `ColorMap` | Perceptual tint in OKLab: keeps the pixel's lightness, takes the hue from the color, and scales the pixel's chroma by the color's saturation (`1 - min/max` of its RGB), so a grey color gives grey. Mixed in by the color's alpha. Negative results are clipped to 0. |
+| `Colorize` | `Color`, `ColorMap` | Perceptual tint in OKLab: keeps the pixel's lightness, takes the hue from the color, and scales the pixel's chroma by the color's saturation (`1 - min/max` of its RGB), so a gray color gives gray. Mixed in by the color's alpha. Negative results are clipped to 0. |
 | `Multiply` | `Color`, `ColorMap` | Multiplies RGBA by the color. |
 | `Add` | `Color`, `ColorMap` | Adds the color to RGBA. |
 | `Invert` | — | `1 - c` for RGB. |
@@ -170,7 +170,7 @@ that take a `Color`.
 | Type | Members |
 |---|---|
 | `TrianglePaintOptions` | `TriangleRasterizationMode Mode` (`Quality` default, or `Fast`); `int SamplesPerAxis` (default 4, so 4×4 sub-samples per pixel in `Quality` mode). |
-| `HiddenSurfaceOptions` | `IReadOnlyList<Vector3> Positions` and `Normals`, one per corner like the colors, in any one space (normals point out of the surface); `float Margin` (default 0.001, in the positions' units, above zero). At each pixel, the triangles of one UV winding are compared along their average normal at the pixel's centre; a sample more than `Margin` plus its triangle's footprint (how far its surface moves over one pixel) behind the outermost of them there is hidden, so depth is never told apart more finely than a pixel resolves. Triangles of opposite UV winding (mirrored halves) never hide each other; same-winding copies elsewhere in space do, the outermost along that normal winning. Only triangles of the same call are compared. |
+| `HiddenSurfaceOptions` | `IReadOnlyList<Vector3> Positions` and `Normals`, one per corner like the colors, in any one space (normals point out of the surface); `float Margin` (default 0.001, in the positions' units, above zero). At each pixel, the triangles of one UV winding are compared along their average normal at the pixel's center; a sample more than `Margin` plus its triangle's footprint (how far its surface moves over one pixel) behind the outermost of them there is hidden, so depth is never told apart more finely than a pixel resolves. Triangles of opposite UV winding (mirrored halves) never hide each other; same-winding copies elsewhere in space do, the outermost along that normal winning. Only triangles of the same call are compared. |
 | `NormalDifferenceOptions` | `Coverage`: optional `Mask` map of the bake's size, counting coverage per UV winding: R and G for the reference mesh's counter-clockwise and clockwise triangles, B and A for the target's. Paint each triangle into it with `PaintTriangle` and `NormalDifferenceOptions.CoverageColor(uv0, uv1, uv2, target)`. Covered more than once by one winding (stacked copies, from 1.3) or by both windings at all (mirrored copies, already from one sub-sample) means overlapping. `MaxAngle` (default 90°, never more): corrections fade out over the last 10° before it. |
 | `NormalDifferenceStatistics` | `Baked`, `Overlapping` and `Limited` texel counts, and `LargestAngle`, the largest correction kept in degrees. |
 | `TangentBasisData` | `Tangent`, `Bitangent`, `Normal`: three wrappers holding the target mesh's tangent frame as the shader interpolates it, for example painted with `PaintTriangle` from vertex values. Don't normalize them per pixel (reading them with `GetPixel` or exporting them does), and let the bitangent carry the handedness. |

@@ -181,14 +181,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // A mask texture's single channel with Poiyomi 11's options; null without a texture or a
-        // vertex colour source.
+        // vertex color source.
         private AtlasMask Mask(Material m, AtlasUnifiedMaterial d, string property, AtlasChannel channel = AtlasChannel.Red)
         {
             var map = Texture(m, d, property, AtlasTextureInterpretation.Data);
             return MaskOptions(m, map == null ? null : new AtlasMask { Map = map, Channel = channel }, property, System.Array.IndexOf(Channels, channel));
         }
 
-        // Masks whose vertex colour source is per channel; the others take it from x.
+        // Masks whose vertex color source is per channel; the others take it from x.
         private static readonly System.Collections.Generic.HashSet<string> FourChannelMasks = new System.Collections.Generic.HashSet<string>
         {
             "_DecalMask", "_RGBMask", "_MatcapMask", "_Matcap2Mask", "_Matcap3Mask", "_Matcap4Mask", "_AlphaMask", "_DetailMask",
@@ -199,8 +199,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         };
 
         // Poiyomi 11's mask options, named after the mask texture: levels (<mask>ML*, with bounds to
-        // normalise the input range), a vertex colour source (<mask>VertexMask: 1–4 multiply by R–A)
-        // and the levels' invert (<mask>MLInvert), which comes after the vertex colour when there is
+        // normalize the input range), a vertex color source (<mask>VertexMask: 1–4 multiply by R–A)
+        // and the levels' invert (<mask>MLInvert), which comes after the vertex color when there is
         // one. Masks with an Invert toggle of their own invert after everything (set by the caller).
         // Missing properties (Poiyomi 10) leave the mask as it is.
         private AtlasMask MaskOptions(Material m, AtlasMask mask, string property, int channel)
@@ -211,7 +211,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             bool invert = AtlasMaterialReader.Vector(m, property + "MLInvert", Vector4.zero)[channel] >= 0.5f;
             if (mask == null)
             {
-                // No texture: 1 × the vertex colour.
+                // No texture: 1 × the vertex color.
                 if (source <= 0) return null;
                 return new AtlasMask { VertexColor = true, Channel = Channels[Mathf.Clamp(source - 1, 0, 3)], Invert = invert };
             }

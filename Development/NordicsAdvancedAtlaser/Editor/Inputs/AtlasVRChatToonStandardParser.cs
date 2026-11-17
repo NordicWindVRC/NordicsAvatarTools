@@ -32,7 +32,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             bool hueShift = Keyword(m, "USE_HUE_SHIFT");
             var hueMask = hueShift ? Mask(m, "_HueShiftMask", "_HueShiftMaskChannel", 1) : null;
 
-            // Main: texture × colour, optionally × vertex colour; always opaque; culling with the
+            // Main: texture × color, optionally × vertex color; always opaque; culling with the
             // back faces' normal flipped.
             d.Surface.BaseColor.Color = AtlasMaterialReader.ColorLinear(m, "_Color", Color.white);
             d.Surface.BaseColor.Map = AtlasSourceMapping.Texture(m, "_MainTex");
@@ -62,7 +62,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 response.Occlusion.Constant = Float(m, "_OcclusionStrength", 1f);
             }
 
-            // Layers, in the shader's order: colour mask, detail, matcap, emission, AudioLink, rim.
+            // Layers, in the shader's order: color mask, detail, matcap, emission, AudioLink, rim.
             if (Keyword(m, "USE_COLOR_MASK")) ColorMask(m, d);
             if (Keyword(m, "USE_DETAIL_MAPS")) Detail(m, d, normalMaps, hueShift ? hueMask : null, hueShift);
             if (Keyword(m, "USE_MATCAP")) Matcap(m, d);
@@ -126,8 +126,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             response.SpecularAntiAliasing.Enabled = true;
         }
 
-        // Up to four recolour regions, one per mask channel: the greyscale albedo tinted (Multiply)
-        // or added to (Additive), blended in by the colour's alpha; each also adds emission.
+        // Up to four recolor regions, one per mask channel: the grayscale albedo tinted (Multiply)
+        // or added to (Additive), blended in by the color's alpha; each also adds emission.
         private static void ColorMask(Material m, AtlasUnifiedMaterial d)
         {
             var mask = AtlasSourceMapping.Texture(m, "_ColorMask", AtlasTextureInterpretation.Data);
@@ -196,7 +196,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             d.Layers.Add(layer);
         }
 
-        // Always active: map × colour × strength, on UV0 or UV1. Null when nothing glows.
+        // Always active: map × color × strength, on UV0 or UV1. Null when nothing glows.
         private static AtlasSurfaceLayer Emission(Material m, AtlasUnifiedMaterial d)
         {
             Color color = EmissionColor(m);
@@ -222,7 +222,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return map;
         }
 
-        // Audio-reactive emission: an emission layer (tint × intensity, masked) whose colour an
+        // Audio-reactive emission: an emission layer (tint × intensity, masked) whose color an
         // audio modulator scales. Pulse, Scroll and Bar are the spreads none, history and fill.
         private static void AudioLink(Material m, AtlasUnifiedMaterial d, bool emissionChangedByOtherSections)
         {
@@ -252,7 +252,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
                 if (emissionChangedByOtherSections)
                     d.Report(AtlasIssueKind.Unmapped, "audiolink.mask",
-                        "AudioLink is masked by the emission, which hue shift or colour masks also change; the mask uses the emission map and colour only.");
+                        "AudioLink is masked by the emission, which hue shift or color masks also change; the mask uses the emission map and color only.");
             }
             else
             {

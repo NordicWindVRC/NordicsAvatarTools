@@ -51,7 +51,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             };
             int id = material.GetInstanceID();
             if (Entries.TryGetValue(id, out var entry) && entry.Key.Equals(key)) return entry.Analysis;
-            entry = new Entry { Key = key, Analysis = Analyse(material) };
+            entry = new Entry { Key = key, Analysis = Analyze(material) };
             Entries[id] = entry;
             return entry.Analysis;
         }
@@ -59,7 +59,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Textures or shaders changed on disk: every entry is rebuilt on its next read.
         public static void Invalidate() => importVersion++;
 
-        private static AtlasSourceAnalysis Analyse(Material material)
+        private static AtlasSourceAnalysis Analyze(Material material)
         {
             ParseCount++;
             var parser = AtlasShaderRegistry.Detect(material);

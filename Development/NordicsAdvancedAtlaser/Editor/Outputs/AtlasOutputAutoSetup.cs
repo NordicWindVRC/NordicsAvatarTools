@@ -7,7 +7,7 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     /// <summary>
-    /// Auto setup: the main texture size from the sources' base colour textures, and every
+    /// Auto setup: the main texture size from the sources' base color textures, and every
     /// feature back to its default mode, which is the best one the output shader supports.
     /// </summary>
     public static class AtlasOutputAutoSetup
@@ -63,7 +63,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             long largestArea = -1;
             foreach (var source in sources)
             {
-                // Only the base colour sizes the atlas, never a large normal, decal or mask texture.
+                // Only the base color sizes the atlas, never a large normal, decal or mask texture.
                 var tex = source?.Surface.BaseColor.Map?.Texture;
                 if (tex == null || tex.width <= 0 || tex.height <= 0) continue;
                 long area = (long)tex.width * tex.height;

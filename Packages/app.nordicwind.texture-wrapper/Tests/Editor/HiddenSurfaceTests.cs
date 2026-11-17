@@ -99,7 +99,7 @@ namespace NordicWind.TextureWrapper.Tests
         [Test]
         public void ACurvedSurfaceDoesntHideItself()
         {
-            // A dome made of many small triangles, all facing outwards: nothing is behind anything.
+            // A dome made of many small triangles, all facing outward: nothing is behind anything.
             var uv = new List<Vector2>();
             var color = new List<Color>();
             var positions = new List<Vector3>();

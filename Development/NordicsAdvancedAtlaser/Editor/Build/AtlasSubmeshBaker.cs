@@ -22,7 +22,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // and reduced mesh than from real shape, so they fade out (see NormalDifferenceOptions).
         private const float MaxCorrectionAngle = 60f;
         // One summary line per material, never one per texel. Overlapping UVs are a normal
-        // modelling choice and are handled safely, so they are information only. Corrections
+        // modeling choice and are handled safely, so they are information only. Corrections
         // cut by the angle limit point to a mismatch: one warning when they reach 1%.
         private static void ReportCorrection(string material,NormalDifferenceStatistics stats,List<string> diagnostics)
         {
@@ -301,7 +301,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
         private static readonly TrianglePaintOptions Quality = new TrianglePaintOptions { Mode=TriangleRasterizationMode.Quality,SamplesPerAxis=2 };
         private static readonly TrianglePaintOptions Fast = new TrianglePaintOptions { Mode=TriangleRasterizationMode.Fast };
-        // Surfaces more than this far (in avatar-root units: metres on a normally scaled avatar)
+        // Surfaces more than this far (in avatar-root units: meters on a normally scaled avatar)
         // behind another surface with the same UVs are hidden.
         private const float HiddenMargin=0.002f;
         private static void Rasterize(AtlasMeshSection section,NordicsTextureWrapper normals,NordicsTextureWrapper mask,

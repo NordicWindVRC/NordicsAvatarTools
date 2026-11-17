@@ -46,13 +46,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
     }
 
-    // 4.1: a colour or texture applied to one or more surface inputs. Covers what sources call
-    // detail, decal, recolour, back face and emission. Different textures for different targets
-    // (a detail colour map and a detail normal map) are separate layers with the same mask.
+    // 4.1: a color or texture applied to one or more surface inputs. Covers what sources call
+    // detail, decal, recolor, back face and emission. Different textures for different targets
+    // (a detail color map and a detail normal map) are separate layers with the same mask.
     public sealed class AtlasSurfaceLayer : AtlasLayer
     {
         public readonly AtlasColorInput Source = new AtlasColorInput();
-        // The source times the base colour ("use base colour" emission).
+        // The source times the base color ("use base color" emission).
         public bool SourceTimesBaseColor;
         // The source's alpha multiplies every target's opacity (alpha-blended details and decals);
         // the product is clamped to 0–1.
@@ -61,7 +61,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float SourceAlphaOffset;
         // The map's alpha is replaced by its brightest channel, max(r, g, b).
         public bool SourceIntensityIsAlpha;
-        // Only the map's alpha is used: the colour shows where it covers (a colour mask).
+        // Only the map's alpha is used: the color shows where it covers (a color mask).
         public bool SourceMapIsMask;
         // The source goes through this video screen first (4.6); null: none.
         public AtlasVideoScreen Screen;
@@ -69,7 +69,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool EmissionTimesAlpha;
         // The emission below is replaced where the layer covers: e × (1 − coverage) + its own.
         public bool ReplacesEmission;
-        // An emission layer whose emission e also replaces the base colour: lerp(b, saturate(e), max(e)).
+        // An emission layer whose emission e also replaces the base color: lerp(b, saturate(e), max(e)).
         public bool OverridesBaseColor;
         public readonly List<AtlasLayerTarget> Targets = new List<AtlasLayerTarget>();
     }
@@ -77,23 +77,23 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public enum AtlasLightResponse
     {
         IgnoreLight,
-        // Times (main light colour + ambient).
+        // Times (main light color + ambient).
         ScaleByLight,
-        // Times the main light's colour alone.
+        // Times the main light's color alone.
         ScaleByDirectLight
     }
 
     public enum AtlasLookupProjection
     {
         // The normal in view space with world up kept up, so the lookup doesn't roll with the head.
-        ViewStabilised,
+        ViewStabilized,
         // A cubemap sampled along the direction from the camera to the surface.
         ViewDirection,
         // The view-space normal corrected for the view direction, so it doesn't skew at the edges.
         ViewCorrected,
         // The view reflected about the normal, its world x and y: the same on both sides.
         ReflectionPlanar,
-        // u = v = 1 − abs(N·V): a gradient from the centre to the edge.
+        // u = v = 1 − abs(N·V): a gradient from the center to the edge.
         Gradient,
         // The half vector of light and view, in a tangent frame around the normal.
         LightHalfVector,
@@ -106,20 +106,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
     }
 
     // 4.3: a texture looked up by direction instead of by UV (matcap). Placement Surface blends
-    // into the base colour, so it's lit; later placements blend into the lit colour.
+    // into the base color, so it's lit; later placements blend into the lit color.
     public sealed class AtlasLookupLayer : AtlasLayer
     {
         public readonly AtlasColorInput Source = new AtlasColorInput();
-        public AtlasLookupProjection Projection = AtlasLookupProjection.ViewStabilised;
+        public AtlasLookupProjection Projection = AtlasLookupProjection.ViewStabilized;
         // Both eyes use the view from between them.
-        public bool CentreEye;
+        public bool CenterEye;
         // View direction: rotations of the xy, xz and yz planes in that order (degrees), and spin
         // (degrees per second).
         public UnityEngine.Vector3 Rotation;
         public UnityEngine.Vector3 Spin;
         // Scales the lookup coordinate: uv = projection × 0.5 × tiling + 0.5.
         public UnityEngine.Vector2 Tiling = UnityEngine.Vector2.one;
-        // Turns the 2D lookup around its centre (degrees).
+        // Turns the 2D lookup around its center (degrees).
         public float LookupRotation;
         // Blends the lookup coordinate toward a mesh UV channel, per axis.
         public UnityEngine.Vector2 UVBlend;
@@ -128,12 +128,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool MirrorFlip;
         // 0–1: how much of the surface's normal map the lookup follows (0: the mesh normal).
         public float SurfaceNormalAmount = 1f;
-        // 0–1: the colour times lerp(1, base, mix) and lerp(1, direct light colour, mix).
+        // 0–1: the color times lerp(1, base, mix) and lerp(1, direct light color, mix).
         public float BaseColorMix;
         public float LightColorMix;
         // Hidden where the scene has reflection probes (a matcap as their fallback).
         public bool HideWithReflectionProbes;
-        // Fades outside a circle of the lookup: 1 − edge(distance to the centre, radius, blur).
+        // Fades outside a circle of the lookup: 1 − edge(distance to the center, radius, blur).
         public bool CircleMask;
         public float CircleRadius = 0.45f;
         public float CircleBlur = 0.1f;
@@ -213,9 +213,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         Band,
         // smoothstep(edge, 1 − edge, e^power)
         PowerBand,
-        // The colour below rotated (HSV) by frac(power band) turns.
+        // The color below rotated (HSV) by frac(power band) turns.
         HueRotation,
-        // The colour below × the ramp texture at e.
+        // The color below × the ramp texture at e.
         Ramp,
         // x = base^power, the base facing abs(N·V) or edge 1 − abs(N·V) (as angles, linearly, when
         // LinearAngle); a linear step from Low to High (a hard step when equal), or its complement
@@ -228,13 +228,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public enum AtlasAngleColorSource
     {
         Color,
-        // The reflection probe along the reflection, times the colour.
+        // The reflection probe along the reflection, times the color.
         Environment,
-        // The reflection probe along the normal, less EnvironmentThreshold (not below 0), times the colour.
+        // The reflection probe along the normal, less EnvironmentThreshold (not below 0), times the color.
         EnvironmentAlongNormal
     }
 
-    // 4.4: colour driven by how the surface faces the viewer (rim). Usually placement Overlay.
+    // 4.4: color driven by how the surface faces the viewer (rim). Usually placement Overlay.
     public sealed class AtlasAngleLayer : AtlasLayer
     {
         public AtlasAngleSource Source = AtlasAngleSource.ViewAngle;
@@ -270,17 +270,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool EnvironmentRoughnessOverride;
         public float EnvironmentRoughness = 0.5f;
         public float EnvironmentThreshold;
-        // Environment colours: × saturate(|direct light| / it); 0: none.
+        // Environment colors: × saturate(|direct light| / it); 0: none.
         public float ExposureOcclusion;
         // 0–1: the step's range widens by this × the value's change across a pixel.
         public float AntiAliasing = 1f;
         // × the surface's alpha (fade and transparent surfaces).
         public bool TimesAlpha;
-        // 0–1: multiplies by lerp(1, base, mix), and by lerp(1, direct light colour, mix).
+        // 0–1: multiplies by lerp(1, base, mix), and by lerp(1, direct light color, mix).
         public float BaseColorMix;
         public float LightColorMix;
         public AtlasLightResponse LightResponse = AtlasLightResponse.IgnoreLight;
-        // The colour's alpha multiplies the opacity.
+        // The color's alpha multiplies the opacity.
         public bool SourceAlphaIsOpacity;
         // 0–1: how much of the surface's normal map the angle follows (0: the mesh normal).
         public float SurfaceNormalAmount = 1f;
@@ -296,13 +296,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         // × (direct + ambient light), times the received shadow when there's a real-time light.
         DirectAndAmbient,
-        // × lerp(1, direct light colour, LightColorMix) × lerp(1, the light map, ShadowStrength).
+        // × lerp(1, direct light color, LightColorMix) × lerp(1, the light map, ShadowStrength).
         Direct
     }
 
     // 4.5: light through thin parts. light = (pow(saturate(view · −(L + N × distortion)), power)
     // × intensity / π + ambient) × pow(saturate(1 − thickness − ThicknessOffset), thicknessPower)
-    // × the light (Light) × colour.
+    // × the light (Light) × color.
     public sealed class AtlasSubsurfaceLayer : AtlasLayer
     {
         public readonly AtlasColorInput Color = new AtlasColorInput();
@@ -330,7 +330,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         Oscilloscope,
         // Sparkling particles, one per cell of a UV grid; see AtlasGlitter.
         Glitter,
-        // Cells coloured from their edges to their centres; see AtlasVoronoi.
+        // Cells colored from their edges to their centers; see AtlasVoronoi.
         Voronoi,
         // Random quarter-circle arcs on a grid, joined into paths; see AtlasTruchet.
         Truchet,
@@ -338,9 +338,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         Path,
         // Layers of a texture seen below the surface; see AtlasInternalParallax.
         InternalParallax,
-        // Colour and alpha by the distance to the scene behind the surface; see AtlasDepthEffect.
+        // Color and alpha by the distance to the scene behind the surface; see AtlasDepthEffect.
         Depth,
-        // A low, mid and high colour by AudioLink's spectrum along a UV axis; see AtlasAudioVolumeColor.
+        // A low, mid and high color by AudioLink's spectrum along a UV axis; see AtlasAudioVolumeColor.
         AudioVolumeColor,
         // The surface shown as a screen of pixels; see AtlasVideoScreen.
         VideoScreen,
@@ -350,13 +350,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         AmbientOcclusion,
         // Short shadows traced through the depth texture toward the light; see AtlasContactShadow.
         ContactShadow,
-        // The colour of a squish deformation (AtlasSquish, shared with the deformation); coverage = the squish.
+        // The color of a squish deformation (AtlasSquish, shared with the deformation); coverage = the squish.
         Squish,
         // Twinkling stars joined by lines, in four layers at different depths; see AtlasConstellation.
         Constellation,
         // A raymarched lava lamp inside the mesh; see AtlasLavaLamp.
         LavaLamp,
-        // A skin colour from pigments; see AtlasSkinTone.
+        // A skin color from pigments; see AtlasSkinTone.
         SkinTone
     }
 
@@ -364,9 +364,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // pixel (samples within Radius, Quality of them, jittered, biased by depth and cone, rejecting
     // samples by the normal), × Intensity, faded with the camera distance (QualityFalloff, and
     // MaxDistanceFalloff for far samples), hidden near the camera (CameraClip), by alpha
-    // (AlphaFade) and in light (HideInLight). The occlusion blends the layer's colour (× the colour
+    // (AlphaFade) and in light (HideInLight). The occlusion blends the layer's color (× the color
     // map, or the map sampled by the occlusion as a ramp, HSVG-adjusted, × lerp(1, base,
-    // SurfaceColorMix)) into the base colour by the layer's blend. Needs a depth texture (a
+    // SurfaceColorMix)) into the base color by the layer's blend. Needs a depth texture (a
     // depth-providing prefab on avatars).
     public sealed class AtlasScreenOcclusion
     {
@@ -397,7 +397,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // light (the main light, or Direction in its space) up to MaxDistance in Quality steps; geometry
     // in front within Thickness (and RejectionDepth) shadows it, × Intensity, dithered, faded by
     // camera distance (CameraFalloff) and in light (HideInLight). The shadow blends the layer's
-    // colour into the base colour (ApplyToColor) and/or multiplies the shading's light map
+    // color into the base color (ApplyToColor) and/or multiplies the shading's light map
     // (ApplyToLightMap).
     public sealed class AtlasContactShadow
     {
@@ -420,7 +420,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     public enum AtlasScreenType { LCD, TN, CRT, OLED, Gameboy, Projector }
 
-    // 4.6: Poiyomi's video effects, on the base colour c. Grade: c = lerp(c, luminance(c),
+    // 4.6: Poiyomi's video effects, on the base color c. Grade: c = lerp(c, luminance(c),
     // −Saturation), then the contrast saturate(lerp(0.5, c, Contrast + 1)) in gamma. p = the pixel
     // texture tiled Resolution times. LCD: max(c, Backlight / 100), graded, × p × Backlight; TN: as
     // LCD with the view angle shifting contrast (along the bitangent) and hue (gbr, along the
@@ -428,9 +428,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // the Resolution's pixels RefreshRate times a second; saturate(FadeTime − the time since it
     // passed, as a fraction of a sweep)); OLED: graded × p × Backlight; Gameboy: the graded
     // brightness (gamma luminance) through the ramp (when its larger side exceeds 16) or from dark
-    // to light green; Projector: graded, each channel at least × Backlight. The base colour becomes
+    // to light green; Projector: graded, each channel at least × Backlight. The base color becomes
     // lerp(base, screen, mask); with Emission, emission += screen × mask. With Pixelate, the base
-    // colour texture is sampled once per screen pixel (cells of Resolution on the pixel texture's UV).
+    // color texture is sampled once per screen pixel (cells of Resolution on the pixel texture's UV).
     public sealed class AtlasVideoScreen
     {
         public AtlasScreenType Type = AtlasScreenType.OLED;
@@ -466,13 +466,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // band × Volume × lerp(BassBoost, TrebleBoost, band); the band runs over the DFT's first
     // BandRange, or (FrequencyMapping) logarithmically from FrequencyMin to FrequencyMax Hz.
     // Poiyomi 11 adds: Flip, the Arc (radii and angles instead of CircleDimensions), the Display
-    // style, LitSteps, the gradient colour mode, mask coordinates following the spectrum,
+    // style, LitSteps, the gradient color mode, mask coordinates following the spectrum,
     // MasterOpacity, EmissionStrength and TintEmission. Covered where the level is above the volume, or, with
-    // LineWidth below 1, within the line width of it; × the colour mask's alpha. The colour is the
-    // ColorChord colour at the band, or lerp(lerp(Low, Mid, saturate(2s)), High, saturate(2s − 1))
-    // with s the band, volume or level, × the colour mask; emission the same with each colour × its
-    // emission (ColorChordEmission). With Screen, the colour goes through that video screen, and the
-    // emission becomes lerp(emission, the screen's, coverage). The colour blends into the base by the
+    // LineWidth below 1, within the line width of it; × the color mask's alpha. The color is the
+    // ColorChord color at the band, or lerp(lerp(Low, Mid, saturate(2s)), High, saturate(2s − 1))
+    // with s the band, volume or level, × the color mask; emission the same with each color × its
+    // emission (ColorChordEmission). With Screen, the color goes through that video screen, and the
+    // emission becomes lerp(emission, the screen's, coverage). The color blends into the base by the
     // layer's blend × opacity × coverage; alpha = lerp(alpha, alpha × coverage, OverrideAlpha).
     // Nothing without AudioLink.
     public sealed class AtlasAudioSpectrum
@@ -498,7 +498,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float ShapeClipBandWidth = 0.5f;
         public AtlasSpectrumColorMode ColorMode = AtlasSpectrumColorMode.ThreeColors;
         public float ColorChordEmission;
-        // Gradient: the ramp sampled by the colour source, with its emission.
+        // Gradient: the ramp sampled by the color source, with its emission.
         public AtlasTextureReference Gradient;
         public float GradientEmission;
         // u and v flipped in the placed area.
@@ -516,11 +516,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasSpectrumBandSampling BandSampling = AtlasSpectrumBandSampling.Point;
         public AtlasSpectrumResponse Response = AtlasSpectrumResponse.Smooth;
         public float Compression = 1f;
-        // The colour mask sampled in the spectrum's placed area instead of on its own UV.
+        // The color mask sampled in the spectrum's placed area instead of on its own UV.
         public bool MaskFollowsSpectrum;
         public float MasterOpacity = 1f;
         public float EmissionStrength = 1f;
-        // The emission × the colour mask's colour.
+        // The emission × the color mask's color.
         public bool TintEmission;
         public AtlasSpectrumColorSource ColorSource = AtlasSpectrumColorSource.Volume;
         // Linear.
@@ -528,16 +528,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public UnityEngine.Color Mid = UnityEngine.Color.green;
         public UnityEngine.Color High = UnityEngine.Color.red;
         public float LowEmission, MidEmission, HighEmission;
-        // Colour × rgb, coverage × alpha; null: white.
+        // Color × rgb, coverage × alpha; null: white.
         public AtlasTextureReference ColorMask;
         public float OverrideAlpha;
-        // The video screen the colour goes through; null: none.
+        // The video screen the color goes through; null: none.
         public AtlasVideoScreen Screen;
     }
 
     public enum AtlasInternalParallaxMode
     {
-        // Each level adds its colour × its height (or the brightest wins, with LevelMax).
+        // Each level adds its color × its height (or the brightest wins, with LevelMax).
         Basic,
         // A level shows where its height reaches 1 − its ratio, nearer levels in front.
         Heightmap
@@ -546,17 +546,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // 4.6: Poiyomi's internal parallax. For levels j = n − 1 down to 0, r = j / (n − 1): uv = the
     // placed UV + (depth × o + Scroll × t + r × PerLevelOffset) / the map's tiling, depth =
     // lerp(MinDepth, MaxDepth, r), o = −V.xy × 1.3 / (V.z ± 0.3) with V the tangent-space view
-    // (clamped to 0–1 unless Tiled). The tint lerp(MinColor, MaxColor, r) (× the map's colour with
+    // (clamped to 0–1 unless Tiled). The tint lerp(MinColor, MaxColor, r) (× the map's color with
     // HeightFromAlpha) is hue shifted by frac(r × HuePerLevel) when HuePerLevel isn't 0; the height
-    // is the map's alpha (HeightFromAlpha) or red; the level's colour is tint × pow(lerp(MinFade,
+    // is the map's alpha (HeightFromAlpha) or red; the level's color is tint × pow(lerp(MinFade,
     // MaxFade, r), 2.2). n = round(lerp(Iterations, MinIterations, saturate((the object's distance
-    // − near) / (far − near)))). The result blends into the base colour by the layer's blend × mask;
+    // − near) / (far − near)))). The result blends into the base color by the layer's blend × mask;
     // emission adds result × the emission amount × mask.
     public sealed class AtlasInternalParallax
     {
         public AtlasInternalParallaxMode Mode = AtlasInternalParallaxMode.Basic;
         public bool LevelMax;
-        // Colour and height; tiling and offset apply after the placement.
+        // Color and height; tiling and offset apply after the placement.
         public AtlasTextureReference Map;
         public bool Tiled = true;
         public bool HeightFromAlpha;
@@ -567,7 +567,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public UnityEngine.Vector2 PanOffset;
         public int Iterations = 4;
         public int MinIterations = 1;
-        // Near and far object distance (metres) for the falloff to MinIterations.
+        // Near and far object distance (meters) for the falloff to MinIterations.
         public UnityEngine.Vector2 IterationDistance = new UnityEngine.Vector2(5f, 15f);
         public float MinDepth;
         public float MaxDepth = 0.1f;
@@ -586,7 +586,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float RefractionIor = 1.33f;
         public float RefractionNormalAmount = 1f;
         // Each level toward FogColor by 1 − exp(−density × sqrt(1 + |o|²) / max depth × its depth);
-        // Basic adds the fog colour × (1 − exp(−density × sqrt(1 + |o|²))).
+        // Basic adds the fog color × (1 − exp(−density × sqrt(1 + |o|²))).
         public bool Fog;
         public UnityEngine.Color FogColor = new UnityEngine.Color(0.05f, 0.2f, 0.4f, 1f);
         public float FogDensity = 2f;
@@ -600,7 +600,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     // 4.6: Poiyomi's depth FX. d = the distance from the surface to the scene point behind it (from
     // the camera's depth texture). With ColorEnabled, k = lerp(ColorValues.x, ColorValues.y,
-    // saturate((d − ColorRange.x) / (ColorRange.y − ColorRange.x))) × mask and c = the layer's colour
+    // saturate((d − ColorRange.x) / (ColorRange.y − ColorRange.x))) × mask and c = the layer's color
     // × the texture: replace lerp(base, c, k), multiply base × lerp(1, c, k), add saturate(base + c ×
     // k); emission += c × k × the emission amount. With AlphaEnabled, alpha ×= lerp(alpha, a, mask),
     // a = lerp(AlphaValues.x, AlphaValues.y, the same remap over AlphaRange).
@@ -618,9 +618,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public UnityEngine.Vector2 AlphaValues = new UnityEngine.Vector2(1f, 0f);
     }
 
-    // 4.6: Poiyomi's AL volume colour. v = AudioLink's spectrum (filtered) at the UV's u or v across
+    // 4.6: Poiyomi's AL volume color. v = AudioLink's spectrum (filtered) at the UV's u or v across
     // its bins; c = lerp(lerp(Low, Mid, saturate(2v)), High, saturate(2v − 1)), and the emission the
-    // same with each colour × its emission. The colour blends into the base colour by the layer's
+    // same with each color × its emission. The color blends into the base color by the layer's
     // blend and opacity; nothing without AudioLink.
     public sealed class AtlasAudioVolumeColor
     {
@@ -648,7 +648,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // 4.6: Poiyomi's voronoi. p = (the position + Offset) × Scale + Scroll × t (cell units); v =
     // pow(the type's distance, Power); ramp = smoothstep(Gradient.x + n, Gradient.y + n, v), n the
     // noise texture's channel × NoiseIntensity. c = lerp(OuterColor, InnerColor, ramp) (the inner
-    // colour a random HSV per cell with RandomCellColor). Base colour = lerp(base, c.rgb, mask ×
+    // color a random HSV per cell with RandomCellColor). Base color = lerp(base, c.rgb, mask ×
     // c.a) unless EmissionOnly; alpha = lerp(alpha, c.a, mask) with AffectsAlpha; emission +=
     // c.rgb × lerp(OuterEmission, InnerEmission, ramp) × mask × c.a.
     public sealed class AtlasVoronoi
@@ -683,7 +683,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     }
 
     // Each cell takes a band (or a random one of the four) at a random moment of the band's
-    // recent history (× History); the inner colour × lerp(1 − Dim, 1, it), inner emission + Emission × it.
+    // recent history (× History); the inner color × lerp(1 − Dim, 1, it), inner emission + Emission × it.
     public sealed class AtlasVoronoiAudioCells
     {
         // 0–3 bass to treble; 4 random per cell.
@@ -698,8 +698,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // With e = Thickness − abs(distance to the corner − 0.5): coverage = saturate(e / fwidth) ×
     // smoothstep(0, 1 − EdgeSharpness, e) × the mask. The texture is sampled along the path (u the
     // angle, alternating per checker cell, v across the line) + TextureOffset. With k = min(coverage,
-    // texture alpha) × opacity: base = lerp(base, blend(base, texture × colour), k); emission +=
-    // texture × colour × k × the emission amount; with OverrideAlpha, alpha × k.
+    // texture alpha) × opacity: base = lerp(base, blend(base, texture × color), k); emission +=
+    // texture × color × k × the emission amount; with OverrideAlpha, alpha × k.
     public sealed class AtlasTruchet
     {
         public AtlasTextureSpace Space = AtlasTextureSpace.UV0;
@@ -717,24 +717,24 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool HideWithoutAudioLink;
     }
 
-    // 4.6: Poiyomi Pro's constellation. q = (UV − Centre) × Density + Scroll / Density × t + Offset.
+    // 4.6: Poiyomi Pro's constellation. q = (UV − Center) × Density + Scroll / Density × t + Offset.
     // Four copies of a star field at depths z = frac(i / 4 + Phase) (i = 0–3; z = 0 at the back),
     // each at q × lerp(10, 0.5, z) (+ a per-layer shift), weighted by lerp(LayerFade.x, .y, z) and
     // with Depth > 0 sunk below the surface along the tangent-space view (back layers deepest).
     // A star field: one star per grid cell, at a random point that drifts with StarMovement (time
     // × StarSpeed + MovementOffset), its size (StarSize; random magnitudes with StarVariation)
     // twinkling with time × TwinkleSpeed + TwinkleOffset, × StarBrightness; lines join
-    // neighbouring stars (a random share of the links: LineDensity), LineThickness thick (thinner
+    // neighboring stars (a random share of the links: LineDensity), LineThickness thick (thinner
     // toward the ends by LineThicknessVariation), × LineBrightness. coverage = min(the layers'
-    // sum, 1) × the mask. Colour: the layer's colour, or with RandomColors one per star (HSV with
-    // a random hue + HueOffset, saturation and value in ranges; or AudioLink's theme colour
-    // AudioThemeColor, 1–4, slightly jittered per star), blended along the lines. With c = colour
+    // sum, 1) × the mask. Color: the layer's color, or with RandomColors one per star (HSV with
+    // a random hue + HueOffset, saturation and value in ranges; or AudioLink's theme color
+    // AudioThemeColor, 1–4, slightly jittered per star), blended along the lines. With c = color
     // × coverage: the layer's blend with weight coverage (replace, multiply or add), emission +=
     // c × coverage × the emission amount.
     public sealed class AtlasConstellation
     {
         public AtlasTextureSpace Space = AtlasTextureSpace.UV0;
-        public UnityEngine.Vector2 Centre = new UnityEngine.Vector2(0.5f, 0.5f);
+        public UnityEngine.Vector2 Center = new UnityEngine.Vector2(0.5f, 0.5f);
         public float Density = 10f;
         public UnityEngine.Vector2 Scroll;
         public UnityEngine.Vector2 Offset;
@@ -759,16 +759,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public UnityEngine.Vector2 ValueRange = new UnityEngine.Vector2(0.8f, 1f);
         // Turns (0–1).
         public float HueOffset;
-        // 0 off; 1–4 AudioLink's theme colours 0–3 (random colours only, while AudioLink is present).
+        // 0 off; 1–4 AudioLink's theme colors 0–3 (random colors only, while AudioLink is present).
         public int AudioThemeColor;
     }
 
-    // 4.6: a skin colour from pigments (Poiyomi 11's Skin section). Melanin m, its redness r and
-    // hemoglobin h (each saturated after the additions) pick a colour from Lut, a three-panel
+    // 4.6: a skin color from pigments (Poiyomi 11's Skin section). Melanin m, its redness r and
+    // hemoglobin h (each saturated after the additions) pick a color from Lut, a three-panel
     // strip: r chooses between the panels (blended), m runs along a panel's width (kept inside
     // 0.08–0.92), v = 1 − h; white without a lut. Freckles add FreckleStrength × mask^Sharpness to
     // m and that × FreckleRedness to r; a tan adds TanAmount × mask to m and TanRedness × mask to
-    // r. The layer's colour (tint × brightness) multiplies the result.
+    // r. The layer's color (tint × brightness) multiplies the result.
     public sealed class AtlasSkinTone
     {
         public AtlasTextureReference Lut;
@@ -804,11 +804,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // (MinDriftSpeed–MaxDriftSpeed); shapes are spheres or, slowly turning, crosses and rings,
     // stars or hearts; blobs and the reservoirs at BottomHeight and TopHeight melt together
     // (Smoothing); up to Steps march steps.
-    // Shading: the blob colour (CoreColor, optionally blended with a matcap) × the reservoir tint
+    // Shading: the blob color (CoreColor, optionally blended with a matcap) × the reservoir tint
     // (BottomColor to TopColor by height), lit by the main light with wrap Translucency and a GGX
     // highlight (Roughness, Reflectiveness); the reservoirs glow (BottomColor × BottomEmission,
     // TopColor × TopEmission, fading over ColorRange of the span) onto the blobs, through them
-    // (absorbed by the blob colour's complement, × Translucency) and as reflections. The liquid
+    // (absorbed by the blob color's complement, × Translucency) and as reflections. The liquid
     // hazes (HazeColor × the tint, HazeDensity) and tints (TintColor, TintStrength) with distance,
     // in front of the blobs and the surface behind them.
     // Time × lerp(FlowSpeed.x, .y by AudioLink's chronotensity); blob scale lerp(BlobScale.x, .y)
@@ -839,7 +839,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float Reflectiveness = 0.15f;
         public float Roughness = 0.25f;
         public float Translucency = 1f;
-        // The blob colour blended with a matcap (without a texture: white × MatcapIntensity).
+        // The blob color blended with a matcap (without a texture: white × MatcapIntensity).
         public bool Matcap;
         public AtlasTextureReference MatcapMap;
         public float MatcapBorder = 0.5f;
@@ -875,7 +875,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     public enum AtlasPathType { Fill, Path, Loop, Dashed, Off }
     public enum AtlasPathEasing { Linear, In, Out, InOut }
-    // How the lines' colours combine: over each other in order, added (alpha still over), or
+    // How the lines' colors combine: over each other in order, added (alpha still over), or
     // only the brightest line.
     public enum AtlasPathOverlap { Layered, Additive, Brightest }
 
@@ -920,10 +920,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // smoothstep(τ(1 + s), τ(1 + s) − s, g) (step(g, τ) when s is 0); Path = saturate(1 − abs(lerp(−w,
     // 1 + w, τ) − g) / w); Loop = saturate(1 − min(abs(τ − g), 1 − abs(τ − g)) / w); Dashed = dashes of
     // Length and Gap along g moving with τ, edges softened by s; Path and Loop then smoothstep(0, s).
-    // The channels' colours are composited over each other in order R, G, B, A (alpha = line ×
-    // colour alpha), times the colour map (its alpha too); the layer's blend (replace, add,
-    // multiply) puts the result on the base colour; emission adds each line × colour × Emission ×
-    // the colour map.
+    // The channels' colors are composited over each other in order R, G, B, A (alpha = line ×
+    // color alpha), times the color map (its alpha too); the layer's blend (replace, add,
+    // multiply) puts the result on the base color; emission adds each line × color × Emission ×
+    // the color map.
     public sealed class AtlasPath
     {
         public AtlasPathSource Source = AtlasPathSource.Texture;
@@ -938,7 +938,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasPathOverlap Overlap = AtlasPathOverlap.Layered;
         // The lines' edges anti-aliased by the gradient's change across a pixel.
         public bool Antialiasing;
-        // The colour map's alpha masks every line (off: it's ignored).
+        // The color map's alpha masks every line (off: it's ignored).
         public bool ColorMapAlphaMasks = true;
         public readonly AtlasPathChannel[] Channels = { new AtlasPathChannel(), new AtlasPathChannel(), new AtlasPathChannel(), new AtlasPathChannel() };
     }
@@ -951,7 +951,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // A random normal per particle swept through time, compared with the camera direction
         // (the Linear* parameters).
         Linear,
-        // As Angle, against the light's half vector, × N·L and the light colour.
+        // As Angle, against the light's half vector, × N·L and the light color.
         Light
     }
 
@@ -961,12 +961,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // a random point (× RandomPosition) with a random seed. Only the nearest particle is drawn,
     // or, with Overlap, every one that reaches; Layers repeats the grid with other seeds (up to 4).
     // A particle's coverage a is its shape at Size (radius, or half width), anti-aliased; its
-    // sparkle s comes from the mode; its colour is Color × lerp(1, base, BaseColorMix) × the colour
-    // map × the shape texture (× a random HSV colour) (hue shifted); its brightness is
-    // MaxBrightness. Blend add: emission += colour × brightness × s × texture alpha × mask. Blend
-    // replace: base = lerp(base, s × colour × brightness, s × texture alpha × mask), emission +=
-    // s × colour × max(0, (brightness − 1) × texture alpha) × mask. The mask is the layer's mask ×
-    // the colour alpha (Opacity) × lerp(1, the hide in shadow term) × lerp(1, direct light
+    // sparkle s comes from the mode; its color is Color × lerp(1, base, BaseColorMix) × the color
+    // map × the shape texture (× a random HSV color) (hue shifted); its brightness is
+    // MaxBrightness. Blend add: emission += color × brightness × s × texture alpha × mask. Blend
+    // replace: base = lerp(base, s × color × brightness, s × texture alpha × mask), emission +=
+    // s × color × max(0, (brightness − 1) × texture alpha) × mask. The mask is the layer's mask ×
+    // the color alpha (Opacity) × lerp(1, the hide in shadow term) × lerp(1, direct light
     // luminance, LightScale). Time τ = t / 20 + SparkleOffset.
     public sealed class AtlasGlitter
     {
@@ -1023,7 +1023,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool RandomStartFrame;
         public AtlasTextureReference ColorMap;
         public float BaseColorMix;
-        // × an HSV colour of random hue, saturation in SaturationRange, value in BrightnessRange.
+        // × an HSV color of random hue, saturation in SaturationRange, value in BrightnessRange.
         public bool RandomColors;
         public UnityEngine.Vector2 SaturationRange = new UnityEngine.Vector2(0.8f, 1f);
         public UnityEngine.Vector2 BrightnessRange = new UnityEngine.Vector2(0.8f, 1f);
@@ -1080,24 +1080,24 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The threshold texture's channel.
         Texture,
         // Along a line from Start to End: saturate(dot(p − start, direction) / length), p the
-        // object or world position, the vertex colour, or a UV (z 0).
+        // object or world position, the vertex color, or a UV (z 0).
         PointToPoint,
-        // saturate(distance(object position, Centre) / Radius).
+        // saturate(distance(object position, Center) / Radius).
         Sphere,
         // From the facing, the direction or the light: abs(N·V), N·dir × 0.5 + 0.5, or N·L × 0.5 + 0.5,
         // the normal map by PixelNormalAmount; as an angle when Linear; 1 − it unless inverted.
-        CentreOut
+        CenterOut
     }
 
     public enum AtlasTransitionSpace { Object, World, VertexColor, UV }
-    public enum AtlasCentreOutMode { View, Direction, Light }
-    public enum AtlasWaveBounds { Edge, Centre, Loop }
+    public enum AtlasCenterOutMode { View, Direction, Light }
+    public enum AtlasWaveBounds { Edge, Center, Loop }
 
     // 4.2: a second appearance revealed where the threshold g is below the amount a. Dissolved
     // d = 1 − smoothstep(a′ − s, a′ + s, g), s = Softness / 2, a′ = lerp(−pad, 1 + pad, a) when
     // Padded (pad = 2s + edge width + detail strength / 2, so 0 and 1 are fully in and out).
     // An edge band of EdgeWidth past the boundary on the undissolved side (the dissolved side
-    // when EdgeFlip) shows the edge colour. The mask scales the amount.
+    // when EdgeFlip) shows the edge color. The mask scales the amount.
     public sealed class AtlasTransitionLayer : AtlasLayer
     {
         public AtlasTransitionSource Source = AtlasTransitionSource.Texture;
@@ -1110,10 +1110,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasTextureSpace SpaceUV = AtlasTextureSpace.UV0;
         public UnityEngine.Vector3 Start = new UnityEngine.Vector3(0f, -1f, 0f), End = new UnityEngine.Vector3(0f, 1f, 0f);
         // Sphere.
-        public UnityEngine.Vector3 Centre;
+        public UnityEngine.Vector3 Center;
         public float Radius = 1.5f;
-        // Centre out.
-        public AtlasCentreOutMode CentreOutMode = AtlasCentreOutMode.View;
+        // Center out.
+        public AtlasCenterOutMode CenterOutMode = AtlasCenterOutMode.View;
         public UnityEngine.Vector3 Direction = UnityEngine.Vector3.forward;
         public float PixelNormalAmount;
         public bool Linear = true;
@@ -1129,14 +1129,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool Wave;
         public float WaveWidth = 0.1f;
         public AtlasWaveBounds WaveBounds = AtlasWaveBounds.Edge;
-        // The revealed colour replaces the surface (and its alpha) by d, plus emission; or, with
+        // The revealed color replaces the surface (and its alpha) by d, plus emission; or, with
         // AlphaOnly, the alpha × lerp(x, y, smoothstep(z, w, d)).
         public readonly AtlasColorInput Revealed = new AtlasColorInput();
         public float RevealedEmission;
         public bool AlphaOnly;
         public UnityEngine.Vector4 AlphaCurve = new UnityEngine.Vector4(1f, 0f, 0f, 1f);
-        // 0 < threshold − amount ≤ width glows with the edge colour, added after lighting; or with
-        // EdgeReplacesColor, the colour becomes it, with EdgeEmission × it added as emission.
+        // 0 < threshold − amount ≤ width glows with the edge color, added after lighting; or with
+        // EdgeReplacesColor, the color becomes it, with EdgeEmission × it added as emission.
         public float EdgeWidth;
         // Linear.
         public UnityEngine.Color EdgeColor = UnityEngine.Color.white;
@@ -1149,13 +1149,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         // Hair strands (Kajiya-Kay), per lobe: smoothstep(−1, 0, T′·H) × sin(T′, H)^Exponent ×
         // Strength, T′ = normalize(T + (Offset + OffsetMapStrength × map alpha) × N), T the tangent
-        // or bitangent; stylised: linstep(Edge − Blur/2, Edge + Blur/2) of that. Lobes add. Colour
-        // × lerp(luminance(light), light, LightColorMix); replace blends by saturate(max(colour)).
+        // or bitangent; stylized: linstep(Edge − Blur/2, Edge + Blur/2) of that. Lobes add. Color
+        // × lerp(luminance(light), light, LightColorMix); replace blends by saturate(max(color)).
         Strand,
         // A toon highlight on a = N·H × 0.5 + 0.5, per lobe: realistic a^(2^(11 − 10 × size)), or
         // smooth-edged at 1 − size^5 with the feather; × strength, summed and saturated. Then
         // min(it × mask × lerp(ramp, 1, IgnoreShadows), occlusion, lerp(saturate(N·L), 1,
-        // ShowOnBack), lerp(light map, 1, IgnoreShadows)) × Strength; colour × lerp(1, light, LightColorMix).
+        // ShowOnBack), lerp(light map, 1, IgnoreShadows)) × Strength; color × lerp(1, light, LightColorMix).
         Toon
     }
 
@@ -1168,7 +1168,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool Bitangent;
         // The half vector projected onto the strand's plane, so the band keeps one width.
         public bool EvenWidth;
-        public bool Stylised;
+        public bool Stylized;
         public float Edge = 0.5f, Blur;
         // Linear.
         public UnityEngine.Color Tint = UnityEngine.Color.white;
@@ -1180,7 +1180,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public sealed class AtlasHighlightLayer : AtlasLayer
     {
         public AtlasHighlightKind Kind = AtlasHighlightKind.Strand;
-        // Strand: the map's RGB colours it and its alpha offsets the strands.
+        // Strand: the map's RGB colors it and its alpha offsets the strands.
         public readonly AtlasColorInput Color = new AtlasColorInput();
         public readonly System.Collections.Generic.List<AtlasHighlightLobe> Lobes = new System.Collections.Generic.List<AtlasHighlightLobe>();
         // Toon: realistic lobes instead of toon ones.
@@ -1202,8 +1202,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     public enum AtlasBlurPattern { Sunflower, Gaussian, Hexagon }
 
-    // 4.7: the grabbed screen blurred: samples within a radius of Strength × 0.1 metres seen at
-    // lerp(1, the camera distance, CameraFalloff) metres, × lerp(1, roughness, ByRoughness), × the
+    // 4.7: the grabbed screen blurred: samples within a radius of Strength × 0.1 meters seen at
+    // lerp(1, the camera distance, CameraFalloff) meters, × lerp(1, roughness, ByRoughness), × the
     // depth fade, × the mask; up to Quality² samples (fewer for small radii). Pattern: sunflower
     // (a golden-angle spiral at radius r^(Power + 1), weights 1 − r × Power), gaussian (the spiral,
     // weights exp(−r² (3 + 5 Power))) or a hexagonal bokeh (even weights). With DepthFade, the
@@ -1237,10 +1237,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     public enum AtlasScreenRampPalette { Texture, GameBoy, VirtualBoy, Cga, Sepia, Neon }
 
-    // 4.7: the grabbed screen recoloured by its brightness: t = its luminance (gamma), then
+    // 4.7: the grabbed screen recolored by its brightness: t = its luminance (gamma), then
     // saturate((t − 0.5)(Contrast + 1) + 0.5 + Offset); with Quantize, Levels steps, dithered
-    // first by an 8 × 8 Bayer pattern × Dither / Levels. The colour is the Texture at t (palette
-    // Texture), or a four-colour palette blended along t. Blended in by Blend × the mask.
+    // first by an 8 × 8 Bayer pattern × Dither / Levels. The color is the Texture at t (palette
+    // Texture), or a four-color palette blended along t. Blended in by Blend × the mask.
     public sealed class AtlasScreenRamp
     {
         public AtlasScreenRampPalette Palette = AtlasScreenRampPalette.GameBoy;
@@ -1259,7 +1259,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // FieldOfViewScale × the field-of-view scale ÷ max(camera distance, 1); × (1 − N·V)^FresnelPower
     // when that isn't 0; × the refraction mask; with IgnoreForeground, not offset onto things in
     // front of the surface. Chromatic aberration spreads the offset × strength over a spectrum.
-    // Then blur, pixelation, the colour (lerp(screen, (screen × Brightness + AddBrightness) × Tint,
+    // Then blur, pixelation, the color (lerp(screen, (screen × Brightness + AddBrightness) × Tint,
     // then the layer's hue adjustments, vibrance and saturation, ColorMask)) and the ramp. Blend:
     // k = Amount × (1 − alpha with ByAlpha) × AlphaMask; result = lerp(SourceBlend × surface +
     // DestinationBlend × screen, surface, 1 − k), the factors' source alpha being 1 − k. SelfGrab:

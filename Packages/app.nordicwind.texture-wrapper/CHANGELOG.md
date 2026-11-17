@@ -5,7 +5,7 @@ Newest first. Versions follow [SemVer](https://semver.org).
 ## 0.10.0 — unreleased
 
 ### Changed
-- **Behaviour change: colors are linear inside the wrapper.** The C# API is unchanged, but
+- **Behavior change: colors are linear inside the wrapper.** The C# API is unchanged, but
   results differ for sRGB textures and sRGB output:
   - Loading an sRGB `Texture2D` decodes its colors to linear. A linear texture's values are
     kept as stored.
@@ -43,7 +43,7 @@ Newest first. Versions follow [SemVer](https://semver.org).
   - With a coverage map counted per UV winding (`CoverageColor`), texels covered by more than
     one surface get no correction: mirrored halves (both windings) and stacked copies (one
     winding twice). This includes texels where the overlapping frames cancel out, which used to
-    be left for dilation to fill from a neighbouring island.
+    be left for dilation to fill from a neighboring island.
   - Corrections beyond `MaxAngle` fade out over its last 10°, and corrections that would point
     into the surface are never stored.
   The overload without options is unchanged.
@@ -110,11 +110,11 @@ EditMode tests pass in Unity 2022.3.22 (2026-11-03).
   renamed `NordicWind.TextureWrapper` → `NordicWind.TextureWrapper.Runtime`. The C# API and the
   `NordicWind.TextureWrapper` namespace are unchanged.
 - Package name `app.nordicwind.texture-wrapper`. MIT license.
-- README reorganised into features, roadmap and key concepts. The dilation tie rule (lower x,
+- README reorganized into features, roadmap and key concepts. The dilation tie rule (lower x,
   then lower y) is documented.
 
 ### Fixed
-- A dilation regression test expected the opposite tie rule. The behaviour is unchanged.
+- A dilation regression test expected the opposite tie rule. The behavior is unchanged.
 
 ## 0.8.4
 

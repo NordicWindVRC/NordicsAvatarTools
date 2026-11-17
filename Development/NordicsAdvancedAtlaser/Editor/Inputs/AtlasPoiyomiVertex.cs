@@ -3,7 +3,7 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi: Vertex Options (Basics & Fun, LookAt, Glitching), Depth Bulge and View Clip
-    // Prevention as deformations (catalogue 5.3), in the order Poiyomi applies them.
+    // Prevention as deformations (catalog 5.3), in the order Poiyomi applies them.
     internal sealed partial class AtlasPoiyomiReader
     {
         private void Vertex(Material m, AtlasUnifiedMaterial d)
@@ -180,7 +180,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 AddDeformation(d, new AtlasDeformation
                 {
                     Kind = AtlasDeformationKind.Sphere, Radius = Float(m, "_VertexSphereRadius", 1f), Height = Float(m, "_VertexSphereHeight", 1f),
-                    Centre = Vector3Of(m, "_VertexSphereCenter", Vector3.zero), Strength = Float(m, "_VertexSphereAlpha", 0f),
+                    Center = Vector3Of(m, "_VertexSphereCenter", Vector3.zero), Strength = Float(m, "_VertexSphereAlpha", 0f),
                     Mask = VertexMask(m, masks, "_VertexSphereMaskChannel")
                 });
             if (On(m, "_VertexTornadoMode"))
@@ -249,7 +249,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 float interval = Mathf.Max(Float(m, "_VertexRoundingDivision", 0.02f), 0.0000001f);
                 AddDeformation(d, new AtlasDeformation
                 {
-                    Kind = AtlasDeformationKind.Snap, Precision = 1f / interval, Centred = true,
+                    Kind = AtlasDeformationKind.Snap, Precision = 1f / interval, Centered = true,
                     Local = Int(m, "_VertexRoundingSpace", 0) == 1, Mask = VertexMask(m, masks, "_VertexRoundingMaskChannel")
                 });
                 var range = AtlasMaterialReader.Vector(m, "_VertexRoundingRangeAL", Vector4.zero);
@@ -275,7 +275,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     d.Modulators.Add(AudioModulator(m, "deformations[" + deformation + "].amount." + axes[i], AtlasModulatorMode.Add, band, min[i], max[i]));
         }
 
-        // A channel of the effects mask (0–3) or of the vertex colour (4–7); null when the map's
+        // A channel of the effects mask (0–3) or of the vertex color (4–7); null when the map's
         // channel is chosen without a map.
         private AtlasMask VertexMask(Material m, AtlasTextureReference masks, string channel)
         {

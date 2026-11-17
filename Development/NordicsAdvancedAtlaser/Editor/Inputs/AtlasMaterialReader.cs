@@ -170,7 +170,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return type == ShaderPropertyType.Int ? material.GetInt(name) : material.GetFloat(name);
         }
 
-        // The colour as stored: gamma-encoded, as the material inspector shows it.
+        // The color as stored: gamma-encoded, as the material inspector shows it.
         public static Color Color(Material material, string name, Color fallback)
         {
             if (!Has(material, name)) return fallback;
@@ -182,7 +182,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return material.GetColor(name);
         }
 
-        // The colour converted to linear, as the unified material stores colours. The fallback
+        // The color converted to linear, as the unified material stores colors. The fallback
         // is linear already. Alpha is unchanged.
         public static Color ColorLinear(Material material, string name, Color fallback) =>
             Has(material, name) ? Color(material, name, fallback).linear : fallback;

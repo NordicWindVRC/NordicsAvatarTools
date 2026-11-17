@@ -3,11 +3,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // 3.1: how the surface is shaded.
     public enum AtlasLightingFamily
     {
-        // The base colour as is.
+        // The base color as is.
         Unlit,
         // Uniform light, no shading across the surface: base × (main light × shadow + ambient).
         Flat,
-        // A shading term mapped through a ramp to brightness and shade colour.
+        // A shading term mapped through a ramp to brightness and shade color.
         RampToon,
         // Energy-conserving diffuse plus the surface response.
         PhysicallyBased
@@ -30,18 +30,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
         Lambert,
         // Burley's diffuse: edges darken or brighten with roughness, as Unity Standard on PC.
         Disney,
-        // Pre-integrated skin: a colour lookup by half-Lambert and scattering replaces N·L (Skin).
+        // Pre-integrated skin: a color lookup by half-Lambert and scattering replaces N·L (Skin).
         PreintegratedSkin
     }
 
-    // Where the direct and ambient light colours come from.
+    // Where the direct and ambient light colors come from.
     public enum AtlasLightColorModel
     {
         // Direct from the main light, ambient from the probes.
         Separate,
         // The probes' dominant light joins the direct light, keeping the total's luminance.
         MergedProbes,
-        // Ambient = the brighter of the probes' average and their downward colour, at least a
+        // Ambient = the brighter of the probes' average and their downward color, at least a
         // floor of 0.05, times the floor intensity; direct = at least the ambient.
         Floored,
         // The probes split into a direct and an ambient part along their dominant direction,
@@ -79,7 +79,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     public enum AtlasAmbientModel
     {
-        // The ambient light's average colour, the same in every direction.
+        // The ambient light's average color, the same in every direction.
         Average,
         // Ambient light sampled along the normal.
         Directional
@@ -90,7 +90,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public AtlasLightingFamily Family = AtlasLightingFamily.PhysicallyBased;
         public AtlasPhysicalModel PhysicalModel = AtlasPhysicalModel.Standard;
-        // Every light colour (direct, ambient, additional) × LightMultiplier + LightAddition, at
+        // Every light color (direct, ambient, additional) × LightMultiplier + LightAddition, at
         // least 0.
         public float LightMultiplier = 1f;
         public float LightAddition;
@@ -113,7 +113,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public UnityEngine.Vector3 LightDirection = new UnityEngine.Vector3(0f, 0.75f, 1f);
         public bool DirectionLocal;
         public float ViewYaw, ViewPitch;
-        // Replaces the direct light's colour.
+        // Replaces the direct light's color.
         public bool FixedLightColor;
         public UnityEngine.Color LightColor = UnityEngine.Color.white;
         // 0–1: how much the main light's shadow darkens, lerp(1, shadow, value).
@@ -122,7 +122,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float ShadowSoftness;
         // Smooths the received shadow's stair-stepped edge.
         public bool CleanShadows;
-        // 0–1: the light toward its luminance (grey).
+        // 0–1: the light toward its luminance (gray).
         public float Monochrome;
         public readonly AtlasLightContributions Contributions = new AtlasLightContributions();
         // Physically based: the light × lerp(1, term, ShadowStrength) × lerp(1, ShadowTint,
@@ -138,7 +138,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float BrightnessCeiling = 1f;
         // 0–1: the direct light's limit blends from per channel to scaling by luminance, keeping the hue.
         public float LimitByLuminance;
-        // The limit scales the colour so its brightest channel is at the ceiling, keeping the hue
+        // The limit scales the color so its brightest channel is at the ceiling, keeping the hue
         // (LimitByLuminance then unused).
         public bool LimitKeepsHue;
         // 0–1: raises the light's luminance (direct and ambient) to at least this, keeping the hue.
@@ -184,7 +184,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // × occlusion; L = lerp(D, min(S + LUT × D × shadow, D), Strength).
     public sealed class AtlasSkin
     {
-        // Sampled at (half-Lambert, scattering × lerp(luminance(light), 1, Stability)); colour.
+        // Sampled at (half-Lambert, scattering × lerp(luminance(light), 1, Stability)); color.
         public AtlasTextureReference Lut;
         // scattering = saturate((1 − thickness)^ThicknessPower × Scattering × 2).
         public float Scattering = 1f;
@@ -301,7 +301,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // Names a ramp's shape, so a writer can use its own equivalent.
     public enum AtlasRampPreset { None, Flat, Realistic, RealisticSoft, RealisticVerySoft, TwoBands, ThreeBands, FourBands }
 
-    // 3.2, one formula for every source; the lit colour is base × L:
+    // 3.2, one formula for every source; the lit color is base × L:
     //   b = lerp(1, min(1, ramp(term) × occlusion(direct) + lift), strength × strength mask)
     //   A = ambient, darkened by occlusion (indirect)
     //   D = direct + LitAmbient × A
@@ -314,7 +314,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasShadingTerm Term = AtlasShadingTerm.HalfLambert;
         // 0–1: back faces' term × (1 − it), so they fall into shadow.
         public float BackFaceShadow;
-        // Sampled along u at the shading term; a colour. Without a ramp or keys: white, fully lit.
+        // Sampled along u at the shading term; a color. Without a ramp or keys: white, fully lit.
         public AtlasTextureReference Ramp;
         // Instead of a texture: piecewise linear keys, in position order.
         public readonly System.Collections.Generic.List<AtlasRampKey> Keys = new System.Collections.Generic.List<AtlasRampKey>();
@@ -333,7 +333,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float Wrap, WrapNormalization;
         // The SdfFace term's face; null otherwise.
         public AtlasSdfFace Sdf;
-        // Bands: the band colours replace the base colour in the shadow instead of multiplying it.
+        // Bands: the band colors replace the base color in the shadow instead of multiplying it.
         public bool BandsReplaceBase;
         // Tints the direct light on the lit side.
         public UnityEngine.Color LitTint = UnityEngine.Color.white;
@@ -349,7 +349,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // 0–1
         public float ShadowLift;
         public readonly AtlasColorInput ShadowTint = new AtlasColorInput();
-        // 0–1: C toward the base colour.
+        // 0–1: C toward the base color.
         public float ShadowColorFromBase;
         // How much direct light the shadow side keeps, scaled by b or occlusion as set.
         public float ShadowDirect;
@@ -363,13 +363,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // A band of a layered ramp. Edge e = (t − lo) / (hi − lo), lo = Border − Blur/2, hi = Border + Blur/2.
     public sealed class AtlasShadeBand
     {
-        // The band's shade colour: colour × texture, the texture's RGB + ColorAddition (saturated)
+        // The band's shade color: color × texture, the texture's RGB + ColorAddition (saturated)
         // and faded toward white by the texture's alpha.
         public readonly AtlasColorInput Color = new AtlasColorInput();
         public float ColorAddition;
-        // The colour (and map) times the base colour.
+        // The color (and map) times the base color.
         public bool ColorFromBase;
-        // The first band's colour applies when its alpha is above 0; the others blend in by it.
+        // The first band's color applies when its alpha is above 0; the others blend in by it.
         public float Alpha = 1f;
         public float Border = 0.5f;
         public float Blur = 0.1f;
@@ -390,7 +390,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float VertexLights = 1f;
         // Ambient and light probes, including the lights Unity folds into them.
         public float Ambient = 1f;
-        // Without a real-time main light (most worlds are lit by probes alone): the ambient colour
+        // Without a real-time main light (most worlds are lit by probes alone): the ambient color
         // × AmbientAsMainLight stands in for the main light (0: none), and the ambient light counts
         // by AmbientWithoutMainLight instead of Ambient.
         public float AmbientAsMainLight;

@@ -20,7 +20,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             if (!On(m, "_EnableDepthRimLighting")) return;
             float ignoreLighting = Float(m, "_DepthRimIgnoreLighting", 0f);
-            // Ignoring the lighting divides the colour by it: the result shows as is, after lighting.
+            // Ignoring the lighting divides the color by it: the result shows as is, after lighting.
             var placement = ignoreLighting >= 0.5f ? AtlasPlacement.Overlay : AtlasPlacement.Surface;
             var weights = new (string Property, AtlasBlend Blend, AtlasPlacement Placement, float Fallback)[]
             {
@@ -110,7 +110,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             d.Layers.Add(layer);
         }
 
-        // Light shining through from behind, scaled by the light's colour, added after lighting.
+        // Light shining through from behind, scaled by the light's color, added after lighting.
         private void Backlight(Material m, AtlasUnifiedMaterial d, string s)
         {
             if (!On(m, "_BacklightEnabled" + s)) return;
@@ -142,7 +142,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // pow(saturate(V · −(L + N × distortion)), spread) × strength × saturate(1 − thickness − mod)
-        // × lerp(1, light colour, mix) × colour × map × lerp(1, light map, shadow strength) × lerp(1, base, mix).
+        // × lerp(1, light color, mix) × color × map × lerp(1, light map, shadow strength) × lerp(1, base, mix).
         private void Subsurface(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_SubsurfaceScattering")) return;

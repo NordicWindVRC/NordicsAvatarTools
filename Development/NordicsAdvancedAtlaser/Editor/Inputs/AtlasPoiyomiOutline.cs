@@ -98,7 +98,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             outline.ClipAtZeroWidth = On(m, N("_OutlineClipAtZeroWidth"), 1f);
 
-            // Colour: texture × lerp(1, base (squared, UTS style), main texture blend) × colour.
+            // Color: texture × lerp(1, base (squared, UTS style), main texture blend) × color.
             outline.Color.Color = TintColor(m, d, N("_LineColor"), N("_LineColorThemeIndex"), outline.Color);
             outline.Color.Map = Texture(m, d, N("_OutlineTexture"));
             outline.BaseColorMultiply = Float(m, N("_OutlineTintMix"), 0f);
@@ -203,7 +203,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (gamma != 1f) Add(AtlasColorOperation.Power, gamma);
         }
 
-        // Size (in hundredths), emission and highlight emission by bands; the colour overrides; the
+        // Size (in hundredths), emission and highlight emission by bands; the color overrides; the
         // texture's offset by a band and by chronotensity (Poiyomi 11).
         private void OutlineAudioLink(Material m, AtlasUnifiedMaterial d, int index, System.Func<string, string> N)
         {

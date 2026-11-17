@@ -65,7 +65,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             AtlasMapEvaluator.Evaluate(AtlasVirtualMap.BaseColor, material, 8, 8);
 
         [Test]
-        public void BaseColourWithoutATextureIsWhite()
+        public void BaseColorWithoutATextureIsWhite()
         {
             using (var map = Evaluate(WithBaseColor(null)))
                 AssertColor(Color.white, map, 3, 3);
@@ -139,7 +139,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         {
             var job = new AtlasGeneratorJob();
             var source = new AtlasGeneratorSource { Material = WithBaseColor(Halves()), UVRegion = new Rect(0f, 0f, 1f, 1f) };
-            // The island ends inside the red half: where it ends at the colour change, its edge
+            // The island ends inside the red half: where it ends at the color change, its edge
             // pixels are a filtered mix of both, and that mix is what grows.
             source.Coverage.Add(LeftHalf(width: 0.375f));
             job.Sources.Add(source);
@@ -154,7 +154,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void SourcesArePlacedInTheirRegionsAndTheGapsTakeTheNearestColour()
+        public void SourcesArePlacedInTheirRegionsAndTheGapsTakeTheNearestColor()
         {
             var job = new AtlasGeneratorJob();
             job.Sources.Add(new AtlasGeneratorSource { Material = WithBaseColor(Solid(Color.red)), UVRegion = new Rect(0f, 0f, 0.25f, 1f) });
@@ -167,7 +167,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 AssertColor(Color.red, atlas, 8, 16);
                 AssertColor(Color.blue, atlas, 56, 16);
                 AssertColor(Color.white, atlas, 20, 24);
-                // Between the regions: the nearest one's colour.
+                // Between the regions: the nearest one's color.
                 AssertColor(Color.red, atlas, 20, 4);
                 AssertColor(Color.blue, atlas, 44, 4);
                 Assert.IsTrue(atlas.IsPixelUsed(40, 4), "Every pixel is filled.");

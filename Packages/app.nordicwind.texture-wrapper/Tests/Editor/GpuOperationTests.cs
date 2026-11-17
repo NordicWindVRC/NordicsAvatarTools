@@ -17,11 +17,11 @@ namespace NordicWind.TextureWrapper.Tests
             float R() => (float)random.NextDouble();
             for (int t = 0; t < count; t++)
             {
-                var centre = new Vector2(R() * 1.1f - 0.05f, R() * 1.1f - 0.05f);
+                var center = new Vector2(R() * 1.1f - 0.05f, R() * 1.1f - 0.05f);
                 float size = t % 10 == 0 ? 0.4f : 0.06f;
                 for (int k = 0; k < 3; k++)
                 {
-                    uv.Add(centre + new Vector2((R() - 0.5f) * size, (R() - 0.5f) * size));
+                    uv.Add(center + new Vector2((R() - 0.5f) * size, (R() - 0.5f) * size));
                     color.Add(new Color(R(), R() * 2f - 1f, R(), R()));
                 }
             }

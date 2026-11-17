@@ -7,8 +7,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // Step 3 of the pipeline (ATLAS_OUTPUT.md, "Pipeline" and "Memory budget"): one requested
     // virtual map at a time, each source evaluated at its bake size, its UV islands grown over
     // the parts its meshes don't use, placed in its region of the atlas, and released before the
-    // next. The pixels between the regions take the colour of the nearest region, so filtering
-    // and mipmaps at an island's or region's edge don't pull in other colours.
+    // next. The pixels between the regions take the color of the nearest region, so filtering
+    // and mipmaps at an island's or region's edge don't pull in other colors.
     public static class AtlasMapBaker
     {
         // `timings` (optional) gets a "[Time] …" line for each step.

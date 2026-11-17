@@ -17,8 +17,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             for (int i = 0; i < 4; i++) decals |= On(m, "_DecalEnabled" + (i == 0 ? "" : i.ToString()));
             if (decals) Note("decals", "decal placement and blending (and its TPS depth masks)");
             if (On(m, "_EnableALDecal")) Note("audiolink-decal", "AudioLink decal (its UV position, scale and rotation)");
-            if (On(m, "_EnableDissolve")) Note("dissolve", "dissolve (edge hardness, detail edge smoothing, continuous dissolve, per-tile alphas, clamps, centre-out power)");
-            if (On(m, "_GlitterEnable")) Note("glitter", "glitter (its centre size; 8's panning, jitter and linear emissive frequency)");
+            if (On(m, "_EnableDissolve")) Note("dissolve", "dissolve (edge hardness, detail edge smoothing, continuous dissolve, per-tile alphas, clamps, center-out power)");
+            if (On(m, "_GlitterEnable")) Note("glitter", "glitter (its center size; 8's panning, jitter and linear emissive frequency)");
             bool matcaps = false;
             foreach (string p in new[] { "_MatcapEnable", "_Matcap2Enable", "_Matcap3Enable", "_Matcap4Enable" }) matcaps |= On(m, p);
             if (matcaps) Note("matcap", "matcap");
@@ -30,7 +30,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (On(m, "_MochieBRDF")) Note("reflections", "reflections and specular");
             if (On(m, "_StylizedSpecular")) Note("stylized-specular", "stylized specular");
             if (On(m, "_SubsurfaceScattering")) Note("sss", "subsurface scattering");
-            if (On(m, "_RGBMaskEnabled")) Note("rgb-mask", "RGBA colour masking (8's vertex colour source, multiplicative blending and normals)");
+            if (On(m, "_RGBMaskEnabled")) Note("rgb-mask", "RGBA color masking (8's vertex color source, multiplicative blending and normals)");
             if (On(m, "_VoronoiEnabled")) Note("voronoi", "voronoi");
             if (On(m, "_VideoEffectsEnable")) Note("video", "video screen");
             if (On(m, "_BacklightEnabled")) Note("backlight", "backlight");
@@ -38,11 +38,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (On(m, "_EnableOutlines") && On(m, "_EnableAudioLink"))
             {
                 var mod = AtlasMaterialReader.Vector(m, "_AudioLinkOutlineColorMod", new Vector4(0f, 1f, 0f, 0f));
-                if (mod.x != 0f || mod.y != 1f) Note("outline-audiolink", "outline colour by AudioLink");
+                if (mod.x != 0f || mod.y != 1f) Note("outline-audiolink", "outline color by AudioLink");
             }
             if (major <= 7)
             {
-                Note("lighting", "lighting (its ramp mask, HSL shadows, shadow mix, colour modes and limits)");
+                Note("lighting", "lighting (its ramp mask, HSL shadows, shadow mix, color modes and limits)");
                 void Old(string toggle, string feature, string what)
                 {
                     if (On(m, toggle)) d.Report(AtlasIssueKind.Unmapped, "poiyomi7." + feature, "Poiyomi 7.3's " + what + " isn't mapped.");
@@ -82,10 +82,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // Pro 9's features that Pro 10 rewrote.
             if (ProFeatures)
             {
-                if (On(m, "_SSAOEnabled")) Note("ssao", "screen-space ambient occlusion (its sampling, and the colour map read as a ramp)");
+                if (On(m, "_SSAOEnabled")) Note("ssao", "screen-space ambient occlusion (its sampling, and the color map read as a ramp)");
                 if (On(m, "_ConstellationEnable")) Note("constellation", "constellation (its lines and sparkles)");
                 if (d.Fur.Enabled && d.Fur.Method == AtlasFurMethod.Shells)
-                    Note("fur-shells", "fur shells (their spacing at a distance, the root occlusion curve and the fur colour on the skin)");
+                    Note("fur-shells", "fur shells (their spacing at a distance, the root occlusion curve and the fur color on the skin)");
             }
             // 9.0's settings 9.3 already dropped.
             if (AtlasMaterialReader.Texture(m, "_AnisoNoiseMap") != null)

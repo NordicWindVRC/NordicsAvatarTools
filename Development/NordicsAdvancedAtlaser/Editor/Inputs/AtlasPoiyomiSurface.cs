@@ -13,7 +13,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             (5, AtlasSurfaceMode.SoftAdditive, 4, 1), (6, AtlasSurfaceMode.Multiplicative, 2, 0), (7, AtlasSurfaceMode.MultiplicativeDouble, 2, 3)
         };
 
-        // Main: texture × colour, pixel mode, ignore alpha, vertex colouring.
+        // Main: texture × color, pixel mode, ignore alpha, vertex coloring.
         private void Main(Material m, AtlasUnifiedMaterial d)
         {
             var surface = d.Surface;
@@ -21,7 +21,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             surface.BaseColor.Map = Texture(m, d, "_MainTex");
             if (surface.BaseColor.Map != null && On(m, "_MainPixelMode")) surface.BaseColor.Map.Sampling = AtlasTextureSampling.Pixel;
             if (On(m, "_MainIgnoreTexAlpha")) surface.Alpha.Source = AtlasAlphaSource.BaseColorConstantAlpha;
-            // 7.3 has no toggle: its vertex colour slider is always live.
+            // 7.3 has no toggle: its vertex color slider is always live.
             if (major <= 7 || On(m, "_MainVertexColoringEnabled"))
             {
                 var vertex = surface.VertexColor;
@@ -29,7 +29,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 vertex.MultiplyColor = vertex.Amount > 0f;
                 vertex.AlphaAmount = Float(m, "_MainUseVertexColorAlpha", 0f);
                 vertex.MultiplyAlpha = vertex.AlphaAmount > 0f;
-                // "Linear Colors" converts the vertex colours from sRGB to linear.
+                // "Linear Colors" converts the vertex colors from sRGB to linear.
                 vertex.SrgbData = On(m, "_MainVertexColoringLinearSpace", 1f);
                 if (On(m, "_MainVertexColorHueShiftEnabled"))
                 {
@@ -183,7 +183,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             d.Layers.Add(layer);
         }
 
-        // Rendering: the preset (or custom blend factors), culling, depth, colour mask, stencil, fog.
+        // Rendering: the preset (or custom blend factors), culling, depth, color mask, stencil, fog.
         private void Render(Material m, AtlasUnifiedMaterial d)
         {
             var render = d.Render;
@@ -212,7 +212,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             SecondPass(m, d);
         }
 
-        // Culling, depth, colour mask and stencil; the second pass's names end in 2 (_Stencil2…).
+        // Culling, depth, color mask and stencil; the second pass's names end in 2 (_Stencil2…).
         private void PassSettings(Material m, AtlasUnifiedMaterial d, AtlasPassSettings pass, string n)
         {
             int cull = Int(m, "_Cull" + n, 2);

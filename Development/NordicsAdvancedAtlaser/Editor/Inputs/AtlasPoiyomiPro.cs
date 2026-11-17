@@ -3,11 +3,11 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Poiyomi Pro: screen-space AO, contact shadows and constellation (pattern layers), TPS and
-    // squish, the outline bake, GT7 tone mapping and neutral surface emission (colour operations). Pro is paid: the parser reads its properties;
+    // squish, the outline bake, GT7 tone mapping and neutral surface emission (color operations). Pro is paid: the parser reads its properties;
     // none of its source is copied.
     internal sealed partial class AtlasPoiyomiReader
     {
-        // After the surface layers, where Pro applies them to the base colour.
+        // After the surface layers, where Pro applies them to the base color.
         private void ScreenShadows(Material m, AtlasUnifiedMaterial d)
         {
             if (!ProFeatures) return;
@@ -69,8 +69,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
         }
 
-        // TPS and Squish as deformations after the vertex options; squish's colour as a pattern layer.
-        // Pro 9: the screen-space AO's colour map and mask each have a toggle, and it has no camera
+        // TPS and Squish as deformations after the vertex options; squish's color as a pattern layer.
+        // Pro 9: the screen-space AO's color map and mask each have a toggle, and it has no camera
         // clip (0 in Pro 10's meaning).
         private bool SsaoMap(Material m, string toggle) => major >= 10 || On(m, toggle);
 
@@ -116,7 +116,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var mask = Mask(m, d, "_SquishMask", Channels[Mathf.Clamp(Int(m, "_SquishMaskChannel", 0), 0, 3)]);
             if (mask != null) mask.Invert = On(m, "_SquishMaskInvert");
             AddDeformation(d, new AtlasDeformation { Kind = AtlasDeformationKind.Squish, Squish = squish, Mask = mask });
-            // Without a gradient the colour part does nothing.
+            // Without a gradient the color part does nothing.
             if (squish.Gradient == null) return;
             var layer = new AtlasPatternLayer { Kind = AtlasPatternKind.Squish, Squish = squish, Placement = AtlasPlacement.Surface, Mask = mask };
             d.Layers.Add(layer);
@@ -133,7 +133,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var constellation = new AtlasConstellation
             {
                 Space = UVSpace(m, d, "_ConstellationUV"),
-                Centre = Vector2Of(m, "_ConstellationCenter", new Vector2(0.5f, 0.5f)),
+                Center = Vector2Of(m, "_ConstellationCenter", new Vector2(0.5f, 0.5f)),
                 Density = Float(m, "_ConstellationDensity", 10f),
                 Scroll = Vector2Of(m, "_ConstellationPanSpeed", Vector2.zero),
                 Offset = new Vector2(offset.x, offset.y), Phase = offset.z,
@@ -157,7 +157,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var layer = new AtlasPatternLayer
             {
                 Kind = AtlasPatternKind.Constellation, Constellation = constellation, Placement = AtlasPlacement.Surface,
-                // The colour's alpha is unused.
+                // The color's alpha is unused.
                 Color = new Color(color.r, color.g, color.b, 1f),
                 Blend = blend == 0 ? AtlasBlend.Replace : blend == 1 ? AtlasBlend.Multiply : AtlasBlend.Add,
                 EmissionAmount = Float(m, "_ConstellationEmissionStrength", 3f),
@@ -177,7 +177,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             AudioChrono(m, d, path + ".constellation.movementOffset", "_ConstellationALMovementBand", "_ConstellationALMovementType", Float(m, "_ConstellationALMovementSpeed", 0f));
             if (random)
                 AudioChrono(m, d, path + ".constellation.hueOffset", "_ConstellationALHueShiftBand", "_ConstellationALHueShiftType", Float(m, "_ConstellationALHueShiftSpeed", 0f));
-            // On the resolved colour (each star's with random colours).
+            // On the resolved color (each star's with random colors).
             AudioColorOverride(m, d, path + ".color", "_ConstellationALColorOverride");
         }
 
@@ -223,7 +223,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             triplanar.CameraFade = new Vector2(camera.x, camera.y);
             triplanar.DepthBlur = Float(m, "_TriplanarDepthBlur", 1f);
             triplanar.MaskStrength = Float(m, "_TriplanarMaskStrength", 1f);
-            // The invert comes before the vertex colour: the levels' invert.
+            // The invert comes before the vertex color: the levels' invert.
             var mask = Mask(m, d, "_TriplanarMask", Channels[Mathf.Clamp(Int(m, "_TriplanarMaskChannel", 0), 0, 3)]);
             if (On(m, "_TriplanarMaskInvert"))
             {
@@ -255,7 +255,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             };
         }
 
-        // GT7 tone mapping on the final colour (before emission); neutral surface emission on the emission.
+        // GT7 tone mapping on the final color (before emission); neutral surface emission on the emission.
         private void ProToneMapping(Material m, AtlasUnifiedMaterial d)
         {
             if (!ProFeatures) return;

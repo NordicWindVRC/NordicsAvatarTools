@@ -111,7 +111,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void SmoothnessFromAlbedoAlphaLeavesTheColourAlphaAsTransparency()
+        public void SmoothnessFromAlbedoAlphaLeavesTheColorAlphaAsTransparency()
         {
             material.SetTexture("_MainTex", textureA);
             material.SetFloat("_GlossMapScale", 0.5f);
@@ -166,14 +166,14 @@ namespace NordicWind.AdvancedAtlaser.Tests
         [Test]
         public void EmissionIsAnEmissionLayerInLinear()
         {
-            var colour = new Color(2f, 0.5f, 0.25f, 1f);
-            material.SetColor("_EmissionColor", colour);
+            var color = new Color(2f, 0.5f, 0.25f, 1f);
+            material.SetColor("_EmissionColor", color);
             material.SetTexture("_EmissionMap", textureA);
             Assert.IsEmpty(Parse().Layers, "Without its keyword the shader shows no emission.");
             material.EnableKeyword("_EMISSION");
             var layer = (AtlasSurfaceLayer)Parse().Layers[0];
             Assert.AreEqual(AtlasPlacement.Emission, layer.Placement);
-            Assert.AreEqual(0f, Vector4.Distance(colour.linear, layer.Source.Color), 1e-4f);
+            Assert.AreEqual(0f, Vector4.Distance(color.linear, layer.Source.Color), 1e-4f);
             Assert.AreSame(textureA, layer.Source.Map.Texture);
             Assert.AreEqual(1, layer.Targets.Count);
             Assert.AreEqual(AtlasSurfaceTarget.Emission, layer.Targets[0].Target);
@@ -181,7 +181,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void DetailIsAColourLayerAndANormalLayerSharingTheMask()
+        public void DetailIsAColorLayerAndANormalLayerSharingTheMask()
         {
             material.SetTexture("_MainTex", textureC);
             material.SetTextureScale("_MainTex", new Vector2(2f, 2f));
@@ -195,16 +195,16 @@ namespace NordicWind.AdvancedAtlaser.Tests
             material.EnableKeyword("_NORMALMAP");
             var layers = Parse().Layers;
             Assert.AreEqual(2, layers.Count);
-            var colour = (AtlasSurfaceLayer)layers[0];
+            var color = (AtlasSurfaceLayer)layers[0];
             var normal = (AtlasSurfaceLayer)layers[1];
-            Assert.AreSame(colour.Mask, normal.Mask);
-            Assert.AreSame(textureC, colour.Mask.Map.Texture);
-            Assert.AreEqual(AtlasChannel.Alpha, colour.Mask.Channel);
-            Assert.AreEqual(new Vector2(2f, 2f), colour.Mask.Map.Tiling);
-            Assert.AreSame(textureA, colour.Source.Map.Texture);
-            Assert.AreEqual(AtlasTextureSpace.UV1, colour.Source.Map.Space);
-            Assert.AreEqual(AtlasBlend.MultiplyDouble, colour.Targets[0].Blend);
-            Assert.AreEqual(AtlasSurfaceTarget.BaseColor, colour.Targets[0].Target);
+            Assert.AreSame(color.Mask, normal.Mask);
+            Assert.AreSame(textureC, color.Mask.Map.Texture);
+            Assert.AreEqual(AtlasChannel.Alpha, color.Mask.Channel);
+            Assert.AreEqual(new Vector2(2f, 2f), color.Mask.Map.Tiling);
+            Assert.AreSame(textureA, color.Source.Map.Texture);
+            Assert.AreEqual(AtlasTextureSpace.UV1, color.Source.Map.Space);
+            Assert.AreEqual(AtlasBlend.MultiplyDouble, color.Targets[0].Blend);
+            Assert.AreEqual(AtlasSurfaceTarget.BaseColor, color.Targets[0].Target);
             Assert.AreSame(textureB, normal.Source.Map.Texture);
             Assert.AreEqual(new Vector2(8f, 8f), normal.Source.Map.Tiling);
             Assert.AreEqual(AtlasTextureSpace.UV1, normal.Source.Map.Space);
@@ -213,17 +213,17 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void SpecularSetupKeepsTheSpecularColourAndAMapReplacesIt()
+        public void SpecularSetupKeepsTheSpecularColorAndAMapReplacesIt()
         {
             var shader = Shader.Find("Standard (Specular setup)");
             if (shader == null) Assert.Ignore("Standard (Specular setup) is not available.");
             Object.DestroyImmediate(material);
             material = new Material(shader);
-            var colour = new Color(0.8f, 0.4f, 0.2f, 1f);
-            material.SetColor("_SpecColor", colour);
+            var color = new Color(0.8f, 0.4f, 0.2f, 1f);
+            material.SetColor("_SpecColor", color);
             Assert.IsInstanceOf<AtlasUnityStandardSpecularParser>(AtlasShaderRegistry.Detect(material));
             var specular = Parse().Surface.Response.SpecularColor;
-            Assert.AreEqual(0f, Vector4.Distance(colour.linear, specular.Color), 1e-4f);
+            Assert.AreEqual(0f, Vector4.Distance(color.linear, specular.Color), 1e-4f);
             Assert.IsNull(specular.Map);
 
             material.SetTexture("_SpecGlossMap", textureA);

@@ -3,30 +3,30 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
 {
-    // Colour (ATLAS_OUTPUT.md, "Feature inventory"): the base colour map, made of each
-    // source's base colour texture placed in its region as it is.
+    // Color (ATLAS_OUTPUT.md, "Feature inventory"): the base color map, made of each
+    // source's base color texture placed in its region as it is.
     public sealed class AtlasColorFeature : IAtlasOutputFeature
     {
         private static readonly AtlasFeatureMode[] ModeList =
         {
             new AtlasFeatureMode
             {
-                Id = "native", Label = "Base colour map", Kind = AtlasFeatureModeKind.Native,
+                Id = "native", Label = "Base color map", Kind = AtlasFeatureModeKind.Native,
                 RequiredMaps = new[] { AtlasVirtualMap.BaseColor }
             },
             AtlasFeatureMode.Off
         };
 
         public string Id => "color";
-        public string DisplayName => "Colour";
+        public string DisplayName => "Color";
         public AtlasFeatureSection Section => AtlasFeatureSection.Surface;
         public int Order => 0;
         public IReadOnlyList<AtlasFeatureMode> Modes => ModeList;
 
-        // Every material has a base colour.
+        // Every material has a base color.
         public bool IsPresent(AtlasUnifiedMaterial source) => source != null;
 
-        // The map holds the sources' base colour textures, so the colour is white.
+        // The map holds the sources' base color textures, so the color is white.
         public void Resolve(AtlasFeatureContext context)
         {
             var baseColor = context.Output.Surface.BaseColor;

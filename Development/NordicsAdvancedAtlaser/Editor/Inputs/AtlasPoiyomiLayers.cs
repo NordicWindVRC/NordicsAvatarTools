@@ -2,13 +2,13 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
 {
-    // Poiyomi: the surface layers: detail texture, back face, colour masking, decals (4), emissions (4).
+    // Poiyomi: the surface layers: detail texture, back face, color masking, decals (4), emissions (4).
     internal sealed partial class AtlasPoiyomiReader
     {
         // Decal and Poiyomi blend types, by their enum values.
         private AtlasBlend PoiyomiBlend(int type)
         {
-            // 8.0 offered more modes, some on numbers 10 reuses: burns read as multiply, colour
+            // 8.0 offered more modes, some on numbers 10 reuses: burns read as multiply, color
             // dodge (7, subtract in 10) as screen, the light modes (10–19) as overlay; reported.
             if (major <= 8 && (type == 3 || type == 4 || type == 7 || (type >= 10 && type < 20)))
             {
@@ -48,7 +48,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             if (!On(m, "_DetailEnabled")) return;
             var layer = new AtlasSurfaceLayer { Mask = Mask(m, d, "_DetailMask") };
-            // Without a texture the shader uses grey (0.2176 linear), which × 2 in gamma is neutral.
+            // Without a texture the shader uses gray (0.2176 linear), which × 2 in gamma is neutral.
             layer.Source.Map = Texture(m, d, "_DetailTex");
             var tint = TintColor(m, d, "_DetailTint", "_DetailTintThemeIndex") * Float(m, "_DetailBrightness", 1f)
                 * (layer.Source.Map == null ? 0.21763764f : 1f);
@@ -58,7 +58,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             layer.Mask = BusMask(m, layer.Mask, "_DetailTexGlobalMask");
         }
 
-        // Back faces take the colour × texture, by mask × alpha (or replacing the alpha), and glow.
+        // Back faces take the color × texture, by mask × alpha (or replacing the alpha), and glow.
         private void BackFace(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_BackFaceEnabled")) return;
@@ -80,7 +80,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 d.Report(AtlasIssueKind.Unmapped, "backface.mods", "Back Face's detail intensity and emission multiplier aren't mapped yet.");
         }
 
-        // A placed texture blended into the base colour by its alpha, replacing the emission under it.
+        // A placed texture blended into the base color by its alpha, replacing the emission under it.
         private void Decal(Material m, AtlasUnifiedMaterial d, int index)
         {
             string s = index == 0 ? "" : index.ToString(), n = index.ToString();
@@ -89,7 +89,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var map = Texture(m, d, "_DecalTexture" + s, On(m, "_Decal" + n + "MSDF") ? AtlasTextureInterpretation.Msdf : AtlasTextureInterpretation.Color);
             if (map == null)
             {
-                d.Report(AtlasIssueKind.Unmapped, "decal.no-texture", "A decal without a texture (a placed colour) isn't mapped yet.");
+                d.Report(AtlasIssueKind.Unmapped, "decal.no-texture", "A decal without a texture (a placed color) isn't mapped yet.");
                 return;
             }
             var decal = Placed(map, AtlasMaterialReader.Vector(m, "_DecalScale" + s, Vector4.one), Int(m, "_Decal" + n + "AspectRatioMode", 0),
@@ -165,7 +165,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             BusWrite(m, d, layer, "_Decal" + n + "ApplyGlobalMaskIndex", "_Decal" + n + "ApplyGlobalMaskBlendType");
         }
 
-        // Emission: colour × map (× base colour) × strength × alpha, masked; modulators from EmissionModulators.
+        // Emission: color × map (× base color) × strength × alpha, masked; modulators from EmissionModulators.
         private void Emission(Material m, AtlasUnifiedMaterial d, int index)
         {
             string s = index == 0 ? "" : index.ToString(), n = index.ToString();
@@ -181,7 +181,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             };
             layer.Source.Color = TintColor(m, d, "_EmissionColor" + s, index == 0 ? "_EmissionColorThemeIndex" : "_EmissionColor" + n + "ThemeIndex", layer.Source);
             layer.Source.Map = Texture(m, d, "_EmissionMap" + s);
-            // Centre out: the map sampled at 0.5 + 0.5 × facing (both axes) × its tiling, panning at the speed.
+            // Center out: the map sampled at 0.5 + 0.5 × facing (both axes) × its tiling, panning at the speed.
             if (On(m, "_EmissionCenterOutEnabled" + s) && layer.Source.Map != null)
             {
                 var map = layer.Source.Map;

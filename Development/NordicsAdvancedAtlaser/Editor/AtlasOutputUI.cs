@@ -134,8 +134,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static void Formats(SerializedProperty formats, string platform)
         {
             EditorGUILayout.LabelField(platform, EditorStyles.boldLabel);
-            EditorGUILayout.PropertyField(formats.FindPropertyRelative("color"), new GUIContent("Colour"));
-            EditorGUILayout.PropertyField(formats.FindPropertyRelative("colorAlpha"), new GUIContent("Colour with alpha"));
+            EditorGUILayout.PropertyField(formats.FindPropertyRelative("color"), new GUIContent("Color"));
+            EditorGUILayout.PropertyField(formats.FindPropertyRelative("colorAlpha"), new GUIContent("Color with alpha"));
             EditorGUILayout.PropertyField(formats.FindPropertyRelative("normal"), new GUIContent("Normal map"));
             EditorGUILayout.PropertyField(formats.FindPropertyRelative("data"), new GUIContent("Data and masks"));
         }

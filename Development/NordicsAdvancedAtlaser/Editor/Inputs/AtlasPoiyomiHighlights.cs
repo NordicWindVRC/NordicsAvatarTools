@@ -12,7 +12,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             StylizedReflections(m, d);
         }
 
-        // Two strand lobes, added after lighting and replacing the base colour by weights: one layer each.
+        // Two strand lobes, added after lighting and replacing the base color by weights: one layer each.
         private void Anisotropics(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_EnableAniso")) return;
@@ -52,7 +52,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         Bitangent = !On(m, p + "SwitchDirection"),
                         EvenWidth = On(m, p + "EvenWidth"),
                         Tint = TintColor(m, d, p + "Tint", p + "TintIndex"),
-                        Stylised = On(m, p + "ToonMode"),
+                        Stylized = On(m, p + "ToonMode"),
                         Edge = Float(m, p + "Edge", 0.5f),
                         Blur = Float(m, p + "Blur", 0f)
                     });
@@ -75,7 +75,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var layer = new AtlasHighlightLayer
             {
                 Kind = AtlasHighlightKind.Toon,
-                // Add goes after lighting; the others blend into the base colour.
+                // Add goes after lighting; the others blend into the base color.
                 Placement = blend == 1 ? AtlasPlacement.Overlay : AtlasPlacement.Surface,
                 Blend = blend == 1 ? AtlasBlend.Add : blend == 2 ? AtlasBlend.Screen : blend == 3 ? AtlasBlend.Multiply : AtlasBlend.Replace,
                 Realistic = Int(m, "_Is_SpecularToHighColor", 0) == 1,

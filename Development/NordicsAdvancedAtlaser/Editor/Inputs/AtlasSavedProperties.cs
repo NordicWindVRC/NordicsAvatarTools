@@ -12,7 +12,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     internal sealed class AtlasSavedProperties
     {
         public readonly Dictionary<string, float> Floats = new Dictionary<string, float>();
-        // Colours and vectors share one list in the material asset.
+        // Colors and vectors share one list in the material asset.
         public readonly Dictionary<string, Vector4> Vectors = new Dictionary<string, Vector4>();
         public readonly Dictionary<string, (Texture Texture, Vector2 Scale, Vector2 Offset)> Textures =
             new Dictionary<string, (Texture, Vector2, Vector2)>();

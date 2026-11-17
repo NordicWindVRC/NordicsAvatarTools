@@ -53,7 +53,7 @@ Shader "Hidden/NordicWind/TextureWrapper/PaintTriangles"
             if (dot(n, n) == 0) return false;
             float2 outer = _Outer.Load(int3(pixel, 0)).xy;
             float o = ccw ? outer.x : outer.y;
-            // A sample lies within its triangle's footprint of the surface at the pixel's centre.
+            // A sample lies within its triangle's footprint of the surface at the pixel's center.
             return o > 0 && o - (dot(i.world.xyz, n) + _Offset) > _Margin + i.normal.w;
         }
         ENDCG
@@ -81,7 +81,7 @@ Shader "Hidden/NordicWind/TextureWrapper/PaintTriangles"
         }
 
         // 2: hidden surfaces, first: the normals of one UV winding (_Winding) at the pixel
-        // centres, added up.
+        // centers, added up.
         Pass
         {
             CGPROGRAM
@@ -96,7 +96,7 @@ Shader "Hidden/NordicWind/TextureWrapper/PaintTriangles"
             ENDCG
         }
 
-        // 3: hidden surfaces, second: the outermost surface at each pixel centre, along the
+        // 3: hidden surfaces, second: the outermost surface at each pixel center, along the
         // average normal there.
         Pass
         {

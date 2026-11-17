@@ -2,13 +2,13 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
 {
-    // Building blocks the features are made of (section 1). Units follow section 1.0: colours are
+    // Building blocks the features are made of (section 1). Units follow section 1.0: colors are
     // linear, angles in degrees, strengths and opacities 0–1, time in seconds.
 
     public enum AtlasTextureInterpretation
     {
         Color,
-        // Numbers, not colours: masks, metallic, roughness.
+        // Numbers, not colors: masks, metallic, roughness.
         Data,
         TangentNormal,
         // A tangent-space direction map, composited like a normal map (fur).
@@ -24,7 +24,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // View-space normal, as matcaps use.
         View,
         Screen,
-        // u = v = 0.5 + 0.5 × abs(N·V) (the view from between the eyes): rings from the centre
+        // u = v = 0.5 + 0.5 × abs(N·V) (the view from between the eyes): rings from the center
         // of the view outward; Linear: the angle instead, 0.5 + 0.5 × (1 − angle / 90°).
         FacingGradient, FacingGradientLinear
     }
@@ -48,7 +48,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasTextureSpace Space = AtlasTextureSpace.UV0;
         public Vector2 Tiling = Vector2.one;
         public Vector2 Offset = Vector2.zero;
-        // Degrees, around the tile centre.
+        // Degrees, around the tile center.
         public float Rotation;
         // UV units per second.
         public Vector2 Scroll;
@@ -88,8 +88,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     public sealed class AtlasDecal
     {
-        // The decal's centre, in UV.
-        public Vector2 Centre = new Vector2(0.5f, 0.5f);
+        // The decal's center, in UV.
+        public Vector2 Center = new Vector2(0.5f, 0.5f);
         public Vector2 Scale = Vector2.one;
         // Degrees, and degrees per second.
         public float Rotation;
@@ -135,12 +135,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool Crossfade;
         public Vector2 CrossfadeRange = new Vector2(0.75f, 1f);
         // Sprite sheets: the part of the texture the grid covers (from the top left), and an inset
-        // pulling each frame's samples toward its centre (0–1).
+        // pulling each frame's samples toward its center (0–1).
         public Vector2 Area = Vector2.one;
         public float Inset;
     }
 
-    // How the screen texture space is laid out: square, centred on each eye's optical centre (so
+    // How the screen texture space is laid out: square, centered on each eye's optical center (so
     // it fuses in stereo); with ObjectRelative, sized to WorldSize world units at the object's
     // distance and anchored to its origin, so it keeps its size on the object.
     public sealed class AtlasScreenSpace
@@ -163,8 +163,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // within MaxSize of the origin (faded over the last EdgeFade.y − EdgeFade.x) and while the
     // camera is nearer than CameraFade.y (faded from CameraFade.x); nothing without a depth
     // texture. The surface is evaluated once per projection and blended by weights from n
-    // (Normal: |n| − Sharpness, normalised; Sharp: |n|⁶, normalised; Asymmetric: the sides where
-    // the horizontal normal passes 0.67, the top where |n.y| passes 0.675): colour, alpha, normals,
+    // (Normal: |n| − Sharpness, normalized; Sharp: |n|⁶, normalized; Asymmetric: the sides where
+    // the horizontal normal passes 0.67, the top where |n.y| passes 0.675): color, alpha, normals,
     // emission, additive light and the mask bus. Then base = lerp(the first projection's, the
     // blend, mask), alpha = the blended alpha × mask × the fades, and emission and lighting ×
     // that alpha. The mask is Mask's value (sampled per projection and blended) × MaskStrength.
@@ -264,12 +264,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
     }
 
-    // 1.3: colour × texture. Linear; values above 1 are allowed (HDR).
+    // 1.3: color × texture. Linear; values above 1 are allowed (HDR).
     public sealed class AtlasColorInput
     {
         public Color Color = Color.white;
         public AtlasTextureReference Map;
-        // The colour comes from AudioLink: ColorChord colours 0–3, or the world's theme colours 4–7;
+        // The color comes from AudioLink: ColorChord colors 0–3, or the world's theme colors 4–7;
         // without AudioLink, Color. −1: none.
         public int AudioTheme = -1;
     }
@@ -300,8 +300,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
     }
 
-    // The value: the map's channel (1 without a map; the vertex colour's channel with VertexColor),
-    // through Levels, × a vertex colour channel (TimesVertexColor), inverted, lerp(1, v, Strength),
+    // The value: the map's channel (1 without a map; the vertex color's channel with VertexColor),
+    // through Levels, × a vertex color channel (TimesVertexColor), inverted, lerp(1, v, Strength),
     // then blended with a bus channel.
     public sealed class AtlasMask
     {
@@ -310,7 +310,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // strength; 1 without a map) by BusBlend; −1: none.
         public int Bus = -1;
         public AtlasMaskBlend BusBlend = AtlasMaskBlend.Multiply;
-        // The channel is read from the vertex colour instead of a map.
+        // The channel is read from the vertex color instead of a map.
         public bool VertexColor;
         public AtlasChannel Channel = AtlasChannel.Red;
         // Null: the value as it is.
@@ -321,7 +321,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // lerp(1, value, strength)
         public float Strength = 1f;
 
-        // Without vertex colours: the map's sample through the levels and the invert.
+        // Without vertex colors: the map's sample through the levels and the invert.
         public float Evaluate(float sample = 1f)
         {
             if (Map == null) return 1f;

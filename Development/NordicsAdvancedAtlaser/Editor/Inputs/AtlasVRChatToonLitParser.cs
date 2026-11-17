@@ -3,8 +3,8 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     /// <summary>
-    /// VRChat/Mobile/Toon Lit (VRChat SDK): one texture times vertex colour, lit uniformly by the
-    /// main light and the average ambient colour. See UNIFIED_MATERIAL_VRCHAT_MOBILE.md.
+    /// VRChat/Mobile/Toon Lit (VRChat SDK): one texture times vertex color, lit uniformly by the
+    /// main light and the average ambient color. See UNIFIED_MATERIAL_VRCHAT_MOBILE.md.
     /// </summary>
     public sealed class AtlasVRChatToonLitParser : AtlasParserBase
     {
@@ -14,7 +14,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         protected override void Populate(Material m, AtlasUnifiedMaterial d)
         {
-            // Texture times vertex colour, which is used as stored. There is no tint colour.
+            // Texture times vertex color, which is used as stored. There is no tint color.
             d.Surface.BaseColor.Map = AtlasSourceMapping.Texture(m, "_MainTex");
             d.Surface.VertexColor.MultiplyColor = true;
             // Always opaque, back faces culled (the render defaults); the texture's alpha is unused.
@@ -23,7 +23,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // The same light everywhere: main light + the ambient average. The shader skips every
             // shadow variant, so it receives no shadows. No other per-pixel or per-vertex lights;
             // lights Unity folds into the ambient still count. Without a real-time main light, 20%
-            // of the ambient colour stands in for it.
+            // of the ambient color stands in for it.
             d.Lighting.Family = AtlasLightingFamily.Flat;
             d.Lighting.Ambient = AtlasAmbientModel.Average;
             d.Lighting.ReceiveShadows = 0f;

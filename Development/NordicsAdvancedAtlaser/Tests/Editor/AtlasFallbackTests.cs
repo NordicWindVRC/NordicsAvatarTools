@@ -147,19 +147,19 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void SpecularColourWhenTheShaderHasNoMetallic()
+        public void SpecularColorWhenTheShaderHasNoMetallic()
         {
             var shader = Shader.Find("Legacy Shaders/Specular");
             if (shader == null) Assert.Ignore("Legacy Shaders/Specular is not available.");
             var specular = new Material(shader);
             try
             {
-                var colour = new Color(0.5f, 0.25f, 1f, 1f);
-                specular.SetColor("_SpecColor", colour);
+                var color = new Color(0.5f, 0.25f, 1f, 1f);
+                specular.SetColor("_SpecColor", color);
                 var parser = AtlasShaderRegistry.Detect(specular);
                 Assert.IsInstanceOf<AtlasFallbackParser>(parser);
                 var response = parser.Parse(specular).Surface.Response;
-                Assert.AreEqual(0f, Vector4.Distance(colour.linear, response.SpecularColor.Color), 1e-4f);
+                Assert.AreEqual(0f, Vector4.Distance(color.linear, response.SpecularColor.Color), 1e-4f);
                 Assert.AreEqual(0f, response.Metallic.Evaluate());
             }
             finally { Object.DestroyImmediate(specular); }

@@ -53,7 +53,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         // Uber turns the UV clockwise around its origin after the tiling and offset; read as the
-        // unified rotation (counterclockwise around the centre, before them), every UV lands on
+        // unified rotation (counterclockwise around the center, before them), every UV lands on
         // the same texel.
         [Test]
         public void MainTextureRotationGivesTheSameUV()
@@ -84,7 +84,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var d = Parse();
             Assert.AreEqual(AtlasLightingFamily.PhysicallyBased, d.Lighting.Family);
             Assert.AreEqual(AtlasAmbientModel.Average, d.Lighting.Ambient, "Light-probe strength defaults to 0.");
-            Assert.IsTrue(d.Lighting.LimitBrightness, "Colour preservation defaults to on.");
+            Assert.IsTrue(d.Lighting.LimitBrightness, "Color preservation defaults to on.");
             Assert.AreEqual(AtlasSurfaceMode.Opaque, d.Render.SurfaceMode);
             Assert.IsFalse(d.Surface.Response.Highlights.Enabled);
             Assert.IsFalse(d.Surface.Response.Reflections.Enabled);
@@ -102,7 +102,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void ShadingOffIsFlatLightClampedToTheBaseColour()
+        public void ShadingOffIsFlatLightClampedToTheBaseColor()
         {
             Uber();
             material.DisableKeyword("_SHADING_ON");
@@ -236,7 +236,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void FilteringBecomesColourAdjustmentsOnTheSurfaceOrFinalColour()
+        public void FilteringBecomesColorAdjustmentsOnTheSurfaceOrFinalColor()
         {
             Uber();
             material.EnableKeyword("_FILTERING_ON");
@@ -333,7 +333,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void FiltersInvertTeamColoursMonoTintAndToneMapping()
+        public void FiltersInvertTeamColorsMonoTintAndToneMapping()
         {
             Uber();
             material.EnableKeyword("_FILTERING_ON");
@@ -447,8 +447,8 @@ namespace NordicWind.AdvancedAtlaser.Tests
             material.SetInt("_UnlitSpritesheet", 1);
             var layer = (AtlasSurfaceLayer)Parse().Layers.Single();
             var map = layer.Source.Map;
-            Assert.AreEqual(0.6f, map.Decal.Centre.x, 1e-5f);
-            Assert.AreEqual(0.3f, map.Decal.Centre.y, 1e-5f);
+            Assert.AreEqual(0.6f, map.Decal.Center.x, 1e-5f);
+            Assert.AreEqual(0.3f, map.Decal.Center.y, 1e-5f);
             Assert.AreEqual(AtlasFrameSource.SpriteSheet, map.Frames.Source);
             Assert.AreEqual(4, map.Frames.Columns);
             Assert.AreEqual(2, map.Frames.Rows);
@@ -581,7 +581,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void CubeModeIsAViewDirectionLookupOnTheBaseColour()
+        public void CubeModeIsAViewDirectionLookupOnTheBaseColor()
         {
             Uber();
             material.EnableKeyword("_CUBEMAP_COMBINED_ON");

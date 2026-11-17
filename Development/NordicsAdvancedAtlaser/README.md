@@ -138,15 +138,15 @@ The Atlaser reads these shaders. Each source material is converted into one shad
 description before an output shader uses it.
 
 
-| Shader | Recognised by | What is read | Reported or not covered |
+| Shader | Recognized by | What is read | Reported or not covered |
 |---|---|---|---|
 | Unity **Standard** | Shader name | Rendering modes, base color, metallic/smoothness, normal, parallax, occlusion, emission, detail maps, highlights and reflections | — |
-| Unity **Standard (Specular setup)** | Shader name | Same as Standard, with the specular colour | — |
+| Unity **Standard (Specular setup)** | Shader name | Same as Standard, with the specular color | — |
 | **VRChat/Mobile/Standard Lite** | Shader name | Base color and vertex color, metallic workflow, normal, occlusion, emission, detail, highlights and reflections, specular anti-aliasing | — |
 | **VRChat/Mobile/Toon Lit** | Shader name | Base texture, vertex color, flat lighting | — |
 | **VRChat/Mobile/Toon Standard** (and Outline) | Shader name | Every section by its toggle: toon ramp, specular, matcap, rim, emission, detail, occlusion, color masks, hue shift, outline, AudioLink | AudioLink's rim mask and UV-based mode (reported) |
-| **Mochie/Uber** (and Outline) | Shader name, or its saved properties | Every section of the free version: render, base colour and cube mode, workflows and map filters, detail, masks, lighting and shadows, reflections, highlights, matcaps, rims, subsurface, refraction, iridescence, emission, filtering, dissolve, flipbooks, UV distortion, vertex manipulation, outline, AudioLink, light volumes, mirror and near clip | Flipbook alpha, AudioLink rim pulse, AudioLink on vertex rotation and UV distortion (reported). Uber X is unsupported |
-| **Poiyomi Toon 10.x, 11.x** (and its avatar variants: Two Pass, Early Outline, Grab Pass, Lil Fur) | Version label in the shader, then name/path, or its saved properties | Every section: UV options and global masks, main colour and alpha, normals, all lighting types, reflections, clear coat, decals, emissions, matcaps and cubemaps, rims and depth rims, dissolve, flipbooks, glitter, voronoi, truchet, pathing and the other patterns, outlines, vertex options, fur, AudioLink, Two Pass's second pass and Grab Pass's screen effects | A few details, each reported (for example hextile sampling and the newer UV distortion modes); the stats overlay is out of scope |
+| **Mochie/Uber** (and Outline) | Shader name, or its saved properties | Every section of the free version: render, base color and cube mode, workflows and map filters, detail, masks, lighting and shadows, reflections, highlights, matcaps, rims, subsurface, refraction, iridescence, emission, filtering, dissolve, flipbooks, UV distortion, vertex manipulation, outline, AudioLink, light volumes, mirror and near clip | Flipbook alpha, AudioLink rim pulse, AudioLink on vertex rotation and UV distortion (reported). Uber X is unsupported |
+| **Poiyomi Toon 10.x, 11.x** (and its avatar variants: Two Pass, Early Outline, Grab Pass, Lil Fur) | Version label in the shader, then name/path, or its saved properties | Every section: UV options and global masks, main color and alpha, normals, all lighting types, reflections, clear coat, decals, emissions, matcaps and cubemaps, rims and depth rims, dissolve, flipbooks, glitter, voronoi, truchet, pathing and the other patterns, outlines, vertex options, fur, AudioLink, Two Pass's second pass and Grab Pass's screen effects | A few details, each reported (for example hextile sampling and the newer UV distortion modes); the stats overlay is out of scope |
 | **Poiyomi Pro 9.x, 10.x, 11.x** (and its variants) | Shader name, then the version label, or its saved properties | Everything Poiyomi Toon reads, plus SSAO, contact shadows, TPS, squish, constellation, the lava lamp, GT7 tone mapping and neutral emission, the outline bake, shell fur, Triple Outline, Self Grab, Triplanar Projection and tessellation | Geometric Dissolve, ShatterWave and the particle variants (reported) |
 | **Poiyomi Toon 7.3, 8.x, 9.x** | As above | Read on the Poiyomi 10 parser with version tables for renamed and re-meaning settings | Features Poiyomi 10 rewrote are read with 10's meaning and noted; 7.3's own specular, metallics, BRDF, clear coat, SSS and panosphere sections are reported. Pro 9's screen-space AO, constellation and shell fur are read with Pro 10's meaning and noted. Pro before 9 is read as Toon of its version, without its Pro features |
 | Poiyomi Toon (unversioned) | Poiyomi Toon without a version | As above, best effort | As above |
@@ -157,15 +157,15 @@ build lists them with *Verbose Logging* (Tools > NordicWind > Advanced Atlaser).
 
 **Source shaders don't need to be installed.** A material whose shader is missing, such as a
 Poiyomi material copied into a Quest project, is still read from the values it saved. Poiyomi
-and Mochie Uber are recognised from their properties, including the Poiyomi version and Pro.
+and Mochie Uber are recognized from their properties, including the Poiyomi version and Pro.
 A few option names that only the shader declares are reported instead of read.
 
 ## Output shaders
 
 | Output shader | ID | Features | Status |
 |---|---|---|---|
-| **Poiyomi Toon 10** | `poiyomi10` | Colour (the base colour texture) | Generated |
-| **VRChat Mobile Toon Standard** | `mobiletoon` | Colour (the base colour texture) | Generated |
+| **Poiyomi Toon 10** | `poiyomi10` | Color (the base color texture) | Generated |
+| **VRChat Mobile Toon Standard** | `mobiletoon` | Color (the base color texture) | Generated |
 
 **Output shaders must be installed,** since the new materials are made with them. The picker
 only lists installed ones. An output whose shader isn't installed shows a warning, and is
@@ -178,7 +178,7 @@ supports.
 
 ## Limitations
 
-- Outputs carry only the base colour texture so far: the colour it's multiplied by, the
+- Outputs carry only the base color texture so far: the color it's multiplied by, the
   other maps and every other feature come in later versions. The build compresses the
   textures for the platform being built; **Bake to Assets…** writes the same material and
   textures to a folder without building.

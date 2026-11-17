@@ -2,8 +2,8 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
 {
-    // Poiyomi: Color Adjust (the base colour), Post Processing (the final colour), and the layers'
-    // own hue shifts and colour adjusts.
+    // Poiyomi: Color Adjust (the base color), Post Processing (the final color), and the layers'
+    // own hue shifts and color adjusts.
     internal sealed partial class AtlasPoiyomiReader
     {
         private void ColorAdjust(Material m, AtlasUnifiedMaterial d)
@@ -14,8 +14,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             ProToneMapping(m, d);
         }
 
-        // The final colour and or the emission × lerp(min colour, max colour, the camera distance
-        // through its curve): a tint whose colour a camera distance modulator blends to the max.
+        // The final color and or the emission × lerp(min color, max color, the camera distance
+        // through its curve): a tint whose color a camera distance modulator blends to the max.
         private void ProximityColor(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_FXProximityColor")) return;
@@ -47,11 +47,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 d.Modulators.Add(distance);
             }
             if (solid && Float(m, "_FXProximityColorEdgeWidth", 0.05f) > 0f && LinearColor(m, "_FXProximityColorEdgeColor", Color.white) != Color.white)
-                d.Report(AtlasIssueKind.Unmapped, "proximity.edge", "Proximity colour's edge colour isn't mapped yet.");
+                d.Report(AtlasIssueKind.Unmapped, "proximity.edge", "Proximity color's edge color isn't mapped yet.");
             if (On(m, "_FXProximityColorBackFace"))
-                d.Report(AtlasIssueKind.Unmapped, "proximity.backface", "Proximity colour's forced back face colour isn't mapped yet.");
+                d.Report(AtlasIssueKind.Unmapped, "proximity.backface", "Proximity color's forced back face color isn't mapped yet.");
             if (On(m, "_FXProximityColorOverrideAlpha"))
-                d.Report(AtlasIssueKind.Unmapped, "proximity.alpha", "Proximity colour overriding the alpha isn't mapped yet.");
+                d.Report(AtlasIssueKind.Unmapped, "proximity.alpha", "Proximity color overriding the alpha isn't mapped yet.");
         }
 
         // In the shader's order: hue (mask R), gradient map, gamma (A), saturation (B), chromatize
@@ -140,7 +140,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (On(m, "_MainColorAdjustClamp", 1f)) Add(AtlasColorOperation.Clamp, 1f, null);
         }
 
-        // The finished colour: hue, tint, RGB, saturation, HDR boost (sRGB decode), contrast,
+        // The finished color: hue, tint, RGB, saturation, HDR boost (sRGB decode), contrast,
         // brightness, lightness, posterization, all by the mask.
         private void PostProcessing(Material m, AtlasUnifiedMaterial d)
         {
@@ -214,7 +214,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return adjustment;
         }
 
-        // The hue colour space (0 Oklab, 1 HSV); 7.3 and 8.x always shift in HSV.
+        // The hue color space (0 Oklab, 1 HSV); 7.3 and 8.x always shift in HSV.
         private AtlasHueMethod HueMethodOf(Material m, string property) =>
             major <= 8 || Int(m, property, 0) == 1 ? AtlasHueMethod.HSV : AtlasHueMethod.Oklab;
 

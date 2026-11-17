@@ -107,7 +107,7 @@ namespace NordicWind.TextureWrapper
     /// <summary>Leaves out surfaces hidden close behind another surface with the same UVs, for
     /// <see cref="NordicsTextureWrapper.PaintTriangles(IReadOnlyList{Vector2}, IReadOnlyList{Color}, TrianglePaintOptions, HiddenSurfaceOptions)"/>.
     /// Every corner has a position and a normal, in any one space. At each pixel, the triangles
-    /// of one UV winding are compared along their average normal at the pixel's centre: a
+    /// of one UV winding are compared along their average normal at the pixel's center: a
     /// sample lying more than <see cref="Margin"/> behind the outermost of them there is hidden
     /// and isn't painted. Triangles of opposite UV winding, such as mirrored halves, never hide
     /// each other. Only the triangles of the same call are compared.</summary>

@@ -14,7 +14,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     }
 
     // Where a source's meshes use its texture. The map bake grows the UV islands over the rest,
-    // so filtering and mipmaps at an island's edge read the island's own colours, not whatever
+    // so filtering and mipmaps at an island's edge read the island's own colors, not whatever
     // the unused parts of the texture hold.
     public static class AtlasCoverage
     {
@@ -61,8 +61,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     if (a < 0 || b < 0 || c < 0 || a >= part.UV.Length || b >= part.UV.Length || c >= part.UV.Length) continue;
                     Vector2 uv0 = part.UV[a], uv1 = part.UV[b], uv2 = part.UV[c];
                     if (!Finite(uv0) || !Finite(uv1) || !Finite(uv2)) continue;
-                    var centre = (uv0 + uv1 + uv2) / 3f;
-                    var tile = new Vector2(Mathf.Floor(centre.x), Mathf.Floor(centre.y));
+                    var center = (uv0 + uv1 + uv2) / 3f;
+                    var tile = new Vector2(Mathf.Floor(center.x), Mathf.Floor(center.y));
                     corners.Add(uv0 - tile);
                     corners.Add(uv1 - tile);
                     corners.Add(uv2 - tile);

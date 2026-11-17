@@ -2,8 +2,8 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
 {
-    // Poiyomi: the Grab Pass and Self Grab variants' screen effects (catalogue 4.7): refraction,
-    // blur, pixelation, colour, colour ramp and the blend onto the surface, each with a channel of
+    // Poiyomi: the Grab Pass and Self Grab variants' screen effects (catalog 4.7): refraction,
+    // blur, pixelation, color, color ramp and the blend onto the surface, each with a channel of
     // the blend map and a global mask; Pro's lava lamp after it.
     internal sealed partial class AtlasPoiyomiReader
     {
@@ -13,7 +13,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             LavaLamp(m, d);
         }
 
-        // Blended into the base colour where Poiyomi does it, after the dissolve and before the
+        // Blended into the base color where Poiyomi does it, after the dissolve and before the
         // decals, and exempt from the lighting (Poiyomi divides the screen by it).
         private void ScreenGrab(Material m, AtlasUnifiedMaterial d)
         {
@@ -75,7 +75,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     Quantize = On(m, "_GrabRampQuantize", 1f), Levels = Mathf.Max(2, Int(m, "_GrabRampLevels", 4)),
                     Dither = Float(m, "_GrabRampDither", 1f), Mask = rampMask
                 };
-                // A custom ramp reads its texture when it's wider than 16 texels; otherwise grey steps.
+                // A custom ramp reads its texture when it's wider than 16 texels; otherwise gray steps.
                 var texture = AtlasSourceMapping.Texture(m, "_GrabRampTex", AtlasTextureInterpretation.Color);
                 if (ramp.Palette == AtlasScreenRampPalette.Texture && texture != null && texture.Texture != null
                     && Mathf.Max(texture.Texture.width, texture.Texture.height) > 16)

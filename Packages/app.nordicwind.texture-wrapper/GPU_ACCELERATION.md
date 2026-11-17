@@ -40,7 +40,7 @@ under 1% of pixels took a farther one, never more than 2 pixels farther.
 
 ### G3 — triangle painting
 
-The mesh is drawn with its UVs as positions, so the GPU rasterises in texture space; the
+The mesh is drawn with its UVs as positions, so the GPU rasterizes in texture space; the
 values to paint are interpolated linearly, like the CPU's barycentric weights. Every sample
 belongs to exactly one triangle on both, but the GPU snaps corners to a sub-pixel grid and
 interpolates in its own precision: values drift slightly (well under one 8-bit step), and a
@@ -58,12 +58,12 @@ Where triangles share a pixel, the ones lying behind another surface are left ou
 depth test. "Behind" needs a direction that is the same for every surface at the pixel, so
 three steps run per pixel and UV winding:
 
-1. Every triangle covering the pixel's centre adds its interpolated normal there.
+1. Every triangle covering the pixel's center adds its interpolated normal there.
 2. Along that average direction, the outermost covering surface's distance is recorded.
 3. While painting, a sample whose distance along the same direction is more than `Margin`
    plus its triangle's footprint below that record is hidden. The footprint is how far the
    triangle's surface moves over one pixel: a sample lies up to that far from the surface at
-   the pixel's centre, so on coarse or tilted triangles anything finer would let a surface
+   the pixel's center, so on coarse or tilted triangles anything finer would let a surface
    hide parts of itself.
 
 Because all surfaces at a pixel are measured along the same direction, an error in that
@@ -78,5 +78,5 @@ one.
 On the CPU, the steps run per 64-pixel tile before the tile paints, so memory stays small.
 On the GPU, two draws at the texture's own size fill the average normals (ARGBHalf per
 winding; the error cancels as above) and the outermost distance (RGFloat, `BlendOp Max`),
-and the painting passes discard hidden samples. Pixels whose centre no triangle covers have
+and the painting passes discard hidden samples. Pixels whose center no triangle covers have
 no record, so their samples paint as without the option; this only happens along edges.

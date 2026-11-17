@@ -61,7 +61,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 d.Report(AtlasIssueKind.Unmapped, "lighting.shadow-masks", "Light Data's shadow masks aren't mapped for this lighting type, or with a second strength mask.");
         }
 
-        // Light Data: where the light's colour and direction come from, the light map (the shading
+        // Light Data: where the light's color and direction come from, the light map (the shading
         // term), AO and shadow maps, received shadows, brightness limits, additional lights.
         private void LightData(Material m, AtlasUnifiedMaterial d)
         {
@@ -289,7 +289,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 || AtlasMaterialReader.Vector(m, property + "MLOutputMin", Vector4.zero) != Vector4.zero
                 || AtlasMaterialReader.Vector(m, property + "MLOutputMax", Vector4.one) != Vector4.one
                 || AtlasMaterialReader.Vector(m, property + "MLInvert", Vector4.zero) != Vector4.zero)
-                d.Report(AtlasIssueKind.Unmapped, "mask.levels-packed", "Mask levels and vertex colour sources on a map that isn't a plain mask aren't mapped yet.");
+                d.Report(AtlasIssueKind.Unmapped, "mask.levels-packed", "Mask levels and vertex color sources on a map that isn't a plain mask aren't mapped yet.");
         }
 
         // A packed RGBA map whose channels each apply by a strength (<prefix>R … A): the channel in
@@ -383,7 +383,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
         }
 
-        // Unity-Chan style: the base colour toward the 1st and 2nd shade colours by two steps.
+        // Unity-Chan style: the base color toward the 1st and 2nd shade colors by two steps.
         private void ShadeMap(Material m, AtlasUnifiedMaterial d)
         {
             var lighting = d.Lighting;
@@ -399,7 +399,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             ramp.Bands.Add(second);
             ramp.BandsReplaceBase = Int(m, "_ShadingShadeMapBlendType", 0) == 0;
             ramp.RampStrength = Float(m, "_ShadowStrength", 1f);
-            // Both sides are lit by the direct light; the shade colours are occluded.
+            // Both sides are lit by the direct light; the shade colors are occluded.
             ramp.ShadowDirect = 1f;
             ramp.DirectOccluded = true;
             ramp.ShadowAmbient = 0f;
@@ -480,7 +480,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             lighting.Cloth.Mask = BusMask(m, lighting.Cloth.Mask, "_ClothMaskGlobalMask");
         }
 
-        // Up to three bands: the first gives the light map, the others shade the shadow colour.
+        // Up to three bands: the first gives the light map, the others shade the shadow color.
         private void MultilayerMath(Material m, AtlasUnifiedMaterial d)
         {
             d.Lighting.Family = AtlasLightingFamily.RampToon;

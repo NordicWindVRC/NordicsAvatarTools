@@ -3,7 +3,7 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     /// <summary>
-    /// Unity's built-in Standard shader, metallic and specular setup. Behaviour follows the
+    /// Unity's built-in Standard shader, metallic and specular setup. Behavior follows the
     /// shader's keywords, as the shader does, and every main map uses the albedo's tiling and
     /// offset. See UNIFIED_MATERIAL_UNITY_STANDARD.md.
     /// </summary>
@@ -25,12 +25,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
             else if (Keyword(m, "_ALPHAPREMULTIPLY_ON")) d.Render.SurfaceMode = AtlasSurfaceMode.Transparent;
             d.Render.Pass.DepthWrite = AtlasMaterialReader.Float(m, "_ZWrite", 1f) > 0.5f;
 
-            // Albedo. With smoothness in the albedo's alpha, alpha is the colour's alone.
+            // Albedo. With smoothness in the albedo's alpha, alpha is the color's alone.
             d.Surface.BaseColor.Color = AtlasMaterialReader.ColorLinear(m, "_Color", Color.white);
             d.Surface.BaseColor.Map = Main(m, "_MainTex");
             if (smoothnessFromAlbedo) d.Surface.Alpha.Source = AtlasAlphaSource.BaseColorConstantAlpha;
 
-            // Metallic or Specular: a map replaces the slider or colour.
+            // Metallic or Specular: a map replaces the slider or color.
             var response = d.Surface.Response;
             string glossMap = SpecularSetup ? "_SpecGlossMap" : "_MetallicGlossMap";
             bool hasGlossMap = Keyword(m, SpecularSetup ? "_SPECGLOSSMAP" : "_METALLICGLOSSMAP");
@@ -89,7 +89,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             response.Occlusion.Channel = AtlasChannel.Green;
             response.Occlusion.Constant = AtlasMaterialReader.Float(m, "_OcclusionStrength", 1f);
 
-            // Emission: texture × HDR colour, added after lighting.
+            // Emission: texture × HDR color, added after lighting.
             if (Keyword(m, "_EMISSION"))
             {
                 var emission = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission };

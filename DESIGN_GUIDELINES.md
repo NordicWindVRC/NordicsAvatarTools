@@ -13,7 +13,7 @@ you next touch it. Each rule names its exceptions.
 |---|---|---|
 | **Submesh Splitter** | Splits a skinned mesh renderer into one renderer per submesh, keeping the original but disabled. Parts exist only for **explicit per-part actions**: Meshia settings per part, disabling a part to cut it, MA Mesh Cutter, a Blendshape Toggle on a slot. Everything general (materials, bounds, blendshapes, animations, AAO, VRCFury) acts on the original renderer, and those tools never see the parts. At build time the parts are recombined into the original renderer and removed. | NDMF, VRChat SDK |
 | **Blendshape Toggle** | Emulates object toggles after renderers are merged or atlased. A generated blendshape shrinks a submesh and hides it inside the avatar. | NDMF |
-| **Avatar Statistics** | Shows VRChat performance metrics and optimization statistics in the NDMF console that match what the game shows. Values come from the SDK, or are calculated where the SDK only gives estimates. Stays backwards compatible across SDK versions and supports face-tracking metrics. | NDMF, VRChat SDK |
+| **Avatar Statistics** | Shows VRChat performance metrics and optimization statistics in the NDMF console that match what the game shows. Values come from the SDK, or are calculated where the SDK only gives estimates. Stays backward compatible across SDK versions and supports face-tracking metrics. | NDMF, VRChat SDK |
 | **Texture Wrapper** | Standalone CPU texture library, multithreaded with GPU acceleration possible later. Reads, creates and edits textures, builds UV island masks and bakes normal maps, for example normal correction after mesh reduction. **Its public API must stay compatible with existing callers.** | none |
 | **Advanced Atlaser** | Work-in-progress material processor for atlasing, material optimization, normal baking, Quest or optimized variants, and non-destructive edits such as decals. Mapping is per material, not per submesh. Input parsers convert source shaders into one shader-agnostic material model. Output generators read only that model. | NDMF, Texture Wrapper |
 
@@ -135,7 +135,7 @@ package in `Packages/` is read-only. Debug output, which is Atlaser only, goes o
    - When a combination genuinely can't work, block it with a clear explanation, the way
      the Splitter blocks VRCFury's Blendshape Optimizer. Never break the result silently.
    - Test each tool on its own, then with each of these tools, then with all of them together.
-7. **Don't tie behaviour to a specific version.** Find SDK and tool features at runtime
+7. **Don't tie behavior to a specific version.** Find SDK and tool features at runtime
    by checking whether a member exists, not by comparing version numbers. Fall back
    gracefully when a member is missing. Version numbers can appear in comments as
    context, never as conditions.
@@ -143,7 +143,7 @@ package in `Packages/` is read-only. Debug output, which is Atlaser only, goes o
    once the question is answered. Only the Advanced Atlaser keeps diagnostic output, and
    it stays opt-in through a Tools-menu toggle stored in `EditorPrefs` and runs only on
    avatars that use the component.
-9. **Call estimates what they are.** When a value approximates the behaviour of VRChat
+9. **Call estimates what they are.** When a value approximates the behavior of VRChat
    or a shader, the UI says "estimate" and the docs explain how it may differ.
 10. **Model meaning, not sources.** Shared data types describe the meaning of a value,
    for example `Lighting.Mode`, not where it came from, for example "Poiyomi 8 lighting".
@@ -155,7 +155,7 @@ package in `Packages/` is read-only. Debug output, which is Atlaser only, goes o
 
 ## 4. Documentation
 
-- **README.md** describes the *current* behaviour only, in this order: one-paragraph
+- **README.md** describes the *current* behavior only, in this order: one-paragraph
   summary, Requirements, Install, Usage, How it works (NDMF phases), Limitations,
   Verification status. Keep it short enough to read in five minutes.
 - **CHANGELOG.md** holds each tool's history, newest first. The current version is one
@@ -170,6 +170,8 @@ package in `Packages/` is read-only. Debug output, which is Atlaser only, goes o
 - **Verification status** is a single line at the top of every CHANGELOG entry, either
   `Verified: Unity 2022.3.x, SDK 3.x, NDMF 1.x — EditMode tests + Manual Bake on <avatar>`
   or `Unverified: not compiled in Unity`.
+- **American English spelling** everywhere: documentation, code comments, identifiers, log
+  messages and inspector text ("color", "center", "behavior", "normalize", "gray").
 - **Code comments explain *why*.** Leave version numbers out of code comments and log
   strings ("v0.2.3 …"), because git and the CHANGELOG track history.
 - `/// <summary>` is required on public types and members of runtime assemblies and on
@@ -219,7 +221,7 @@ package in `Packages/` is read-only. Debug output, which is Atlaser only, goes o
   2. The core transformation has numeric tests on synthetic meshes or textures.
   3. A build-pass test runs the pass on a synthetic avatar and then checks the result,
      that the components were removed, and that the source assets are unchanged.
-- Test names are sentences in PascalCase that state the expected behaviour, for example
+- Test names are sentences in PascalCase that state the expected behavior, for example
   `DilationCopiesValidNormalAcrossUnusedPixels`. Group them into one test class per
   production class.
 - Tests create every object they need and destroy it in `finally` or `[TearDown]`.

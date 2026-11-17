@@ -88,7 +88,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         [Test]
         public void NewTriangleFromExistingVertices_IsChanged()
         {
-            // A reducer that removed vertex 4 joins its neighbours into new, larger triangles.
+            // A reducer that removed vertex 4 joins its neighbors into new, larger triangles.
             var originals = Originals(out _);
             var current = Merge(new[] { (originals[0], new[] { 0, 1, 3, 1, 5, 3, 1, 2, 5 }) });
             Assert.IsFalse(AtlasGeometryComparison.SurvivingTrianglesUnchanged(originals, current));

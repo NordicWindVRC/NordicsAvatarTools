@@ -1,6 +1,6 @@
 namespace NordicWind.AdvancedAtlaser.Editor
 {
-    // BlendToColor: a colour target becomes lerp(target, Color, value).
+    // BlendToColor: a color target becomes lerp(target, Color, value).
     public enum AtlasModulatorMode { Add, Multiply, Replace, BlendToColor }
     public enum AtlasModulatorSource { Audio, Time, LightLevel, Sweep, CameraDistance }
 
@@ -44,7 +44,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     // A band sweeping along a direction over time: value = (p^Width + (1 − p)^(4 Width)) / 2,
     // p = frac((position · Direction − (t + Offset) × Speed) / Interval), the position in object
-    // space (or the vertex colour's RGB).
+    // space (or the vertex color's RGB).
     public sealed class AtlasSweepSource
     {
         public UnityEngine.Vector3 Direction = new UnityEngine.Vector3(0f, -10f, 0f);
@@ -90,7 +90,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // "deformations[1].amount.x". Names match the model's fields without regard to case.
     public static class AtlasModulatorPath
     {
-        // The type of the value the path ends at (a number, a vector or a colour, or one of their
+        // The type of the value the path ends at (a number, a vector or a color, or one of their
         // components), or null when the path doesn't lead to one in this material.
         public static System.Type Resolve(AtlasUnifiedMaterial material, string path)
         {

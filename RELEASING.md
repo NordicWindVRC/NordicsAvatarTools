@@ -64,7 +64,7 @@ GitHub Pages  https://vpm.nordicwind.app/index.json   ← VCC reads this
    add the NDMF listing (`https://vpm.nadena.dev/vpm.json`).
 
 The listing id `app.nordicwind.vpm` and the URL in `vpm.json` must never change once people
-have added the listing. VCC uses them to recognise it.
+have added the listing. VCC uses them to recognize it.
 
 ## Releasing a version
 

@@ -5,7 +5,7 @@ using UnityEngine;
 namespace NordicWind.TextureWrapper.Tests
 {
     /// <summary>Runs a check on the CPU and, where there is a GPU, on the GPU too, with the
-    /// settings restored afterwards. Operations with a GPU version use it to compare both.</summary>
+    /// settings restored afterward. Operations with a GPU version use it to compare both.</summary>
     internal static class BothProcessors
     {
         internal static void Run(Action<string> check)

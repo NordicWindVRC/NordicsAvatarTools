@@ -10,32 +10,32 @@ EditMode tests pass in Unity 2022.3.22.
 ### Added
 - **Unified material.** Each source material is parsed into a shader-independent, typed
   description in `Editor/Unified/`, specified in `UNIFIED_MATERIAL_FEATURES.md`: building
-  blocks (texture references, scalar and colour inputs, masks and the mask bus, blends,
-  placement, modulators, colour adjustments), the surface, four lighting families, an ordered
+  blocks (texture references, scalar and color inputs, masks and the mask bus, blends,
+  placement, modulators, color adjustments), the surface, four lighting families, an ordered
   list of layers (surface, transition, lookup, angle, subsurface, procedural pattern,
   refraction, highlight), outlines, fur, deformations and geometry effects, and render
-  settings including visibility and a second pass. Colours are linear. Values without a typed
+  settings including visibility and a second pass. Colors are linear. Values without a typed
   home become report lines (unmapped, unsupported, ignored or note), at most one per kind and
   feature per material, listed in the build only with *Verbose Logging*.
 - **Output model** (`ATLAS_OUTPUT.md`): shared output features with modes, filtered by what
   the output shader can express (its capabilities and texture layout); the output is resolved
   into one merged unified material and the virtual maps it needs. The first feature is
-  *Colour*, the base colour map. Output settings are stored by feature ID, so changing the
+  *Color*, the base color map. Output settings are stored by feature ID, so changing the
   output shader keeps every choice the new one supports. Nothing is baked or written yet.
 - **Output inspector:** a *Textures* section with the textures the chosen modes need, their
   sizes, and GPU memory estimates for PC and Android with totals, following per-platform
   formats; feature sections that fold to one line each (mode and source count), with
   per-source switches. Sources are read through a cache, rebuilt only when a material, its
   shader, or an imported texture or shader changes.
-- **Base colour bake:** each source's base colour texture, with its tiling, offset and rotation,
+- **Base color bake:** each source's base color texture, with its tiling, offset and rotation,
   placed in its region of the atlas map. Its UV islands, from the meshes that use it, grow over
   the parts of the texture they don't use, and the pixels between the regions take the nearest
-  region's colour. A source without a texture is white. Maps are baked one at a time, and
+  region's color. A source without a texture is white. Maps are baked one at a time, and
   sources one after another, to bound memory.
 - **The build generates the outputs:** each output's textures, compressed for the platform
   being built (PC or Android formats, crunch where it saves 10%), and its material, saved with
   NDMF. A **mesh remapper** then gives each renderer a new mesh: vertices shared with another
-  region or material are split with all their data (UVs, colours, bone weights, blend shape
+  region or material are split with all their data (UVs, colors, bone weights, blend shape
   deltas), UV0 is placed in the source's region (a triangle in another UV tile is moved back by
   whole tiles; only one straddling a tile edge is clamped), the source materials become the
   output material, and submeshes of one output are merged. Everything is made before anything
@@ -43,7 +43,7 @@ EditMode tests pass in Unity 2022.3.22.
 - **Bake to Assets** on each output: its textures (`<material>_<texture>.png`) and material,
   written where you choose; the save dialog asks before replacing a material already there,
   and textures of the same names are overwritten. Writers for Poiyomi Toon 10 and VRChat Mobile
-  Toon Standard set the base colour texture. Mipmaps are made with the Kaiser filter and
+  Toon Standard set the base color texture. Mipmaps are made with the Kaiser filter and
   stream, in the build and in the manual bake. Textures get the output's formats for PC and
   Android, no alpha channel unless it's used, and crunch (on by default) only where it makes a
   BC1 or BC3 texture at least 10% smaller.
@@ -62,7 +62,7 @@ EditMode tests pass in Unity 2022.3.22.
 - **Source shaders don't need to be installed.** When a material's shader is missing, the
   parsers read the values the material saved, through `AtlasMaterialReader` (new
   `AtlasSavedProperties`); parsing reads materials only through it. Poiyomi (family, Pro,
-  version 7–11) and Mochie Uber are recognised from saved property names. Option names that
+  version 7–11) and Mochie Uber are recognized from saved property names. Option names that
   only the shader declares are reported, not guessed. Such materials get an info note.
 - **Output shaders must be installed.** `IAtlasOutputShader.FindShader()` finds the Unity
   shader an output uses. The output picker lists only installed ones, the validator warns
@@ -137,7 +137,7 @@ EditMode tests pass in Unity 2022.3.22.
   configurations are not migrated.
 - **The bake releases its maps as soon as it's done.** Only the maps the bake needs exist at
   the same time (6 instead of 8: about 1.7 GB instead of 2.3 GB at 4096²), and each material
-  keeps only its usage mask and correction afterwards (2 maps instead of 4). The frame-normal
+  keeps only its usage mask and correction afterward (2 maps instead of 4). The frame-normal
   map serves as the bake's coverage area, and the usage mask is painted after the bake. Results
   are unchanged. `AtlasSubmeshBake` no longer has `OriginalWorldNormals` or
   `CurrentWorldNormals`; debug exports still write them.
@@ -153,7 +153,7 @@ EditMode tests pass in Unity 2022.3.22.
 ### Fixed
 - **Mochie Uber's texture rotation** (main and detail) was taken over as it is, but Uber turns
   the UV clockwise around its origin after the tiling. It's now converted to the unified
-  rotation, which is defined as counterclockwise around the centre, before the tiling.- With *Export Intermediate Maps* on, the tangent-frame maps were exported (which normalizes
+  rotation, which is defined as counterclockwise around the center, before the tiling.- With *Export Intermediate Maps* on, the tangent-frame maps were exported (which normalizes
   them) before the normal correction bake, so debug builds baked slightly different
   corrections. They're now exported after the bake.
 

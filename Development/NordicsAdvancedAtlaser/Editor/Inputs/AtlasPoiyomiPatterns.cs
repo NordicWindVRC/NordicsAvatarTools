@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
 {
-    // Poiyomi: the procedural patterns (catalogue 4.6): Glitter / Sparkle, Pathing, Internal Parallax,
+    // Poiyomi: the procedural patterns (catalog 4.6): Glitter / Sparkle, Pathing, Internal Parallax,
     // Voronoi, Truchet, Depth FX, AL Volume Color, Video Effects, AL Spectrum; the stats overlay is
     // reported.
     internal sealed partial class AtlasPoiyomiReader
@@ -105,7 +105,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 d.Report(AtlasIssueKind.Unmapped, "audiolink.parallax-history", "Internal parallax levels lit by AudioLink's history aren't mapped yet.");
         }
 
-        // Depth FX: colour, emission and alpha by the distance to the scene behind.
+        // Depth FX: color, emission and alpha by the distance to the scene behind.
         private void DepthEffect(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_EnableTouchGlow")) return;
@@ -143,7 +143,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             });
         }
 
-        // AL Volume Color: a three-colour gradient by AudioLink's spectrum along a UV axis.
+        // AL Volume Color: a three-color gradient by AudioLink's spectrum along a UV axis.
         private void AudioVolumeColor(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_EnableVolumeColor")) return;
@@ -169,7 +169,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             });
         }
 
-        // Video Effects: the base colour shown as a screen, right after the main colour.
+        // Video Effects: the base color shown as a screen, right after the main color.
         private void VideoScreen(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_VideoEffectsEnable")) return;
@@ -293,7 +293,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             });
         }
 
-        // Poiyomi multiplies the colour by its theme colour, which is the colour itself without a theme.
+        // Poiyomi multiplies the color by its theme color, which is the color itself without a theme.
         private Color VolumeColor(Material m, AtlasUnifiedMaterial d, string property)
         {
             var color = LinearColor(m, property, Color.white) * TintColor(m, d, property, property + "ThemeIndex");
@@ -399,7 +399,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             if (history) d.Report(AtlasIssueKind.Unmapped, "audiolink.path-history", "A path drawn by AudioLink's band history isn't mapped yet.");
             if (correlator) d.Report(AtlasIssueKind.Unmapped, "audiolink.path-autocorrelator", "A path drawn by AudioLink's autocorrelator isn't mapped yet.");
-            if (strip) d.Report(AtlasIssueKind.Unmapped, "audiolink.colorchord-strip", "A path coloured by the ColorChord strip isn't mapped yet.");
+            if (strip) d.Report(AtlasIssueKind.Unmapped, "audiolink.colorchord-strip", "A path colored by the ColorChord strip isn't mapped yet.");
         }
 
         private void Voronoi(Material m, AtlasUnifiedMaterial d)
@@ -447,7 +447,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Blend = AtlasBlend.Replace,
                 Mask = BusMask(m, Mask(m, d, "_VoronoiMask", Channels[Mathf.Clamp(Int(m, "_VoronoiMaskChannel", 0), 0, 3)]), "_VoronoiGlobalMask")
             });
-            // Poiyomi 11: the resolved colour's hue, for colour and emission alike.
+            // Poiyomi 11: the resolved color's hue, for color and emission alike.
             if (On(m, "_VoronoiHueShiftEnabled"))
                 Hue(m, d, AtlasAdjustmentTarget.Layer, d.Layers[d.Layers.Count - 1], "_VoronoiHueShift", "_VoronoiHueShiftSpeed",
                     "_VoronoiHueShiftColorSpace", "_VoronoiHueSelectOrShift");
@@ -500,7 +500,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Kind = AtlasPatternKind.Truchet,
                 Truchet = truchet,
                 Placement = AtlasPlacement.Surface,
-                // The colour's alpha is unused.
+                // The color's alpha is unused.
                 Color = new Color(color.r, color.g, color.b, 1f),
                 Opacity = Float(m, "_TruchetAlpha", 1f),
                 Blend = PoiyomiBlend(Int(m, "_TruchetBlendType", 0)),

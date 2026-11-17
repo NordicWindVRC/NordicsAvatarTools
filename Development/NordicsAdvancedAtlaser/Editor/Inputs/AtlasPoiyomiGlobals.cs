@@ -2,13 +2,13 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
 {
-    // Poiyomi: Global Mask (the mask bus: textures, vertex colours, modifiers, options) and Global
-    // Themes (theme colours, resolved to colours here).
+    // Poiyomi: Global Mask (the mask bus: textures, vertex colors, modifiers, options) and Global
+    // Themes (theme colors, resolved to colors here).
     internal sealed partial class AtlasPoiyomiReader
     {
         private const int BusChannels = 16;
 
-        // The bus's producers, in the shader's order: textures, vertex colours, back face, mirror,
+        // The bus's producers, in the shader's order: textures, vertex colors, back face, mirror,
         // camera and distance modifiers, then the options.
         private void MaskBus(Material m, AtlasUnifiedMaterial d)
         {
@@ -117,7 +117,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Poiyomi's blend selectors use the bus blends' order.
-        // 8.1's inspector listed colour blends (screen, add, overlay, mixed) the mask blend doesn't
+        // 8.1's inspector listed color blends (screen, add, overlay, mixed) the mask blend doesn't
         // have: past 7 the shader gave 0. Read as replace and reported.
         private AtlasMaskBlend BusBlend(int type)
         {
@@ -157,7 +157,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 });
             }
             if (themed)
-                d.Report(AtlasIssueKind.Unmapped, "contact.person-color", "A contact tinting a theme colour by who touches isn't mapped yet.");
+                d.Report(AtlasIssueKind.Unmapped, "contact.person-color", "A contact tinting a theme color by who touches isn't mapped yet.");
         }
 
         private AtlasMask BusMask(Material m, AtlasMask mask, string selector, string blend = null)
@@ -195,8 +195,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             });
         }
 
-        // A colour, or the theme colour its selector names: Theme Color 0–3 are resolved here;
-        // ColorChord 0–3 and AudioLink themes 0–3 go on the colour input when there is one.
+        // A color, or the theme color its selector names: Theme Color 0–3 are resolved here;
+        // ColorChord 0–3 and AudioLink themes 0–3 go on the color input when there is one.
         private Color TintColor(Material m, AtlasUnifiedMaterial d, string property, string themeIndex, AtlasColorInput input = null)
         {
             var color = LinearColor(m, property, Color.white);
@@ -204,20 +204,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (theme <= 0) return color;
             if (theme > 4)
             {
-                // Without AudioLink the shader uses the colour as is.
+                // Without AudioLink the shader uses the color as is.
                 if (!AudioLinkOn(m)) return color;
                 if (input != null) input.AudioTheme = Mathf.Min(theme - 5, 7);
                 else
-                    d.Report(AtlasIssueKind.Unmapped, "palette.audiolink", "A ColorChord or AudioLink theme colour here isn't mapped yet.");
+                    d.Report(AtlasIssueKind.Unmapped, "palette.audiolink", "A ColorChord or AudioLink theme color here isn't mapped yet.");
                 return color;
             }
             var resolved = ThemeColor(m, d, theme - 1);
             return new Color(resolved.r, resolved.g, resolved.b, color.a);
         }
 
-        // A theme colour as the shader computes it: the HDR colour split into colour and exposure,
+        // A theme color as the shader computes it: the HDR color split into color and exposure,
         // hue shifted (Oklab or HSV) and saturated (old: HSV saturation and value offsets; new:
-        // saturation and brightness as exposure), normalised to 1, the exposure applied.
+        // saturation and brightness as exposure), normalized to 1, the exposure applied.
         private Color ThemeColor(Material m, AtlasUnifiedMaterial d, int index)
         {
             string i = index.ToString();
@@ -227,7 +227,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             float exposure = 0f;
             if (max > 1f) { exposure = Mathf.Log(max, 2f); c /= max; }
             if (Float(m, "_GlobalThemeHueSpeed" + i, 0f) != 0f)
-                d.Report(AtlasIssueKind.Unmapped, "palette.hue-speed", "A theme colour's hue speed isn't mapped yet; its colour at time 0 is used.");
+                d.Report(AtlasIssueKind.Unmapped, "palette.hue-speed", "A theme color's hue speed isn't mapped yet; its color at time 0 is used.");
             float hue = Float(m, "_GlobalThemeHue" + i, 0f);
             bool hsv = Int(m, "_GlobalThemeHueShiftColorSpace" + i, 0) == 1;
             if (Int(m, "_GlobalThemeSaturationMethod" + i, 1) == 0)

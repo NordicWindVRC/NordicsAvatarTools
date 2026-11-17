@@ -151,7 +151,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             AtlasTestMaterials.AddSavedFloat(material, "_NormalCorrect", 1f);
             AtlasTestMaterials.AddSavedFloat(material, "_NormalCorrectAmount", 0.6f);
             var d = ParseSaved();
-            // The detail section also adds its colour layer.
+            // The detail section also adds its color layer.
             var layers = d.Layers.Cast<AtlasSurfaceLayer>().Where(l => l.Targets[0].Target == AtlasSurfaceTarget.Normal).ToList();
             Assert.AreEqual(2, layers.Count);
             Assert.AreSame(textureA, layers[0].Source.Map.Texture);
@@ -526,7 +526,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 var decal = layer.Source.Map.Decal;
                 Assert.AreEqual(1.4f, decal.Scale.x, 1e-5f, "Widened by left and right.");
                 Assert.AreEqual(0.5f, decal.Scale.y, 1e-5f, "Shrunk to the 2:1 texture.");
-                Assert.AreEqual(0.6f, decal.Centre.x, 1e-5f, "Moved by half of right − left.");
+                Assert.AreEqual(0.6f, decal.Center.x, 1e-5f, "Moved by half of right − left.");
                 Assert.AreEqual(20f, decal.Spin, 1e-5f);
                 Assert.AreEqual(AtlasBlend.Multiply, layer.Targets[0].Blend);
                 Assert.AreEqual(1f, layer.Targets[0].Opacity, 1e-5f);
@@ -583,7 +583,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void ColorMaskByVertexColourWithANormal()
+        public void ColorMaskByVertexColorWithANormal()
         {
             AtlasTestMaterials.AddSavedFloat(material, "_RGBMaskEnabled", 1f);
             AtlasTestMaterials.AddSavedFloat(material, "_RGBMaskType", 1f);
@@ -651,7 +651,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             AtlasTestMaterials.AddSavedFloat(material, "_Matcap1CustomNormal", 1f);
             AtlasTestMaterials.AddSavedTexture(material, "_Matcap1NormalMap", textureB);
             var layer = ParseSaved().Layers.OfType<AtlasLookupLayer>().Single();
-            Assert.AreEqual(AtlasLookupProjection.ViewStabilised, layer.Projection, "Top pinch is the default.");
+            Assert.AreEqual(AtlasLookupProjection.ViewStabilized, layer.Projection, "Top pinch is the default.");
             Assert.AreEqual(0.4f, layer.UVBlend.y, 1e-5f);
             Assert.AreSame(textureB, layer.NormalMap.Texture);
         }
@@ -671,7 +671,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(AtlasBlend.Add, layer.Blend);
             Assert.AreEqual(0.6f, layer.Opacity, 1e-5f);
             Assert.AreEqual(45f, layer.Rotation.y, 1e-5f, "The xz plane.");
-            Assert.AreEqual(0.5f, layer.Source.Color.a, 1e-5f, "Without a cubemap: grey at half alpha.");
+            Assert.AreEqual(0.5f, layer.Source.Color.a, 1e-5f, "Without a cubemap: gray at half alpha.");
             Assert.AreEqual(reported, d.Issues.Any(i => i.Feature == "cubemap.rotation-order"));
         }
 
@@ -843,7 +843,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var lobes = layers[0].Lobes;
             Assert.AreEqual(AtlasHighlightKind.Strand, layers[0].Kind);
             Assert.AreEqual(200f, lobes[0].Exponent, 1e-3f, "Power × 1000.");
-            Assert.IsTrue(lobes[0].Stylised);
+            Assert.IsTrue(lobes[0].Stylized);
             Assert.IsTrue(lobes[0].Bitangent);
             Assert.IsFalse(lobes[1].Bitangent, "Switched to the tangent.");
         }
@@ -1002,7 +1002,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void ThemeColoursAreResolved()
+        public void ThemeColorsAreResolved()
         {
             material.SetColor("_Color", Color.white);
             AtlasTestMaterials.AddSavedFloat(material, "_ColorThemeIndex", 1f);
@@ -1024,7 +1024,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var turning = ParseSaved().Modulators.Single();
             Assert.AreEqual("colorAdjustments[0].amount", turning.Target);
             Assert.AreEqual(AtlasModulatorMode.Add, turning.Mode);
-            Assert.AreEqual(AtlasWaveform.ReverseSaw, turning.Time.Waveform, "A negative speed turns backwards.");
+            Assert.AreEqual(AtlasWaveform.ReverseSaw, turning.Time.Waveform, "A negative speed turns backward.");
             Assert.AreEqual(0.1f, turning.Time.Frequency, 1e-5f, "Speed in turns per 20 seconds.");
         }
 
@@ -1110,7 +1110,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void ColorChordThemeGoesOnTheColourInput()
+        public void ColorChordThemeGoesOnTheColorInput()
         {
             AtlasTestMaterials.AddSavedFloat(material, "_EnableAudioLink", 1f);
             AtlasTestMaterials.AddSavedFloat(material, "_ColorThemeIndex", 6f);
@@ -1144,7 +1144,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var d = ParseSaved();
             CollectionAssert.AreEqual(new[] { AtlasAdjustmentTarget.FinalColor, AtlasAdjustmentTarget.Emission },
                 d.ColorAdjustments.Select(a => a.Target).ToArray());
-            Assert.AreEqual(0f, d.ColorAdjustments[0].Color.g, 1e-4f, "The min colour is the tint.");
+            Assert.AreEqual(0f, d.ColorAdjustments[0].Color.g, 1e-4f, "The min color is the tint.");
             CollectionAssert.AreEqual(new[] { "colorAdjustments[0].color", "colorAdjustments[1].color" }, d.Modulators.Select(x => x.Target).ToArray());
             var distance = d.Modulators[0];
             Assert.AreEqual(AtlasModulatorSource.CameraDistance, distance.Source);
@@ -1154,7 +1154,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void EmissionFluorescenceAndCentreOut()
+        public void EmissionFluorescenceAndCenterOut()
         {
             // Standard declares _EmissionMap itself, so it's set, not added.
             material.SetTexture("_EmissionMap", textureA);
@@ -1174,7 +1174,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void OutlineShapeWidthColourAndBlending()
+        public void OutlineShapeWidthColorAndBlending()
         {
             AtlasTestMaterials.AddSavedFloat(material, "_EnableOutlines", 1f);
             AtlasTestMaterials.AddSavedFloat(material, "_OutlineExpansionMode", 4f);
@@ -1432,9 +1432,9 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsTrue(layers.All(l => l.Mirror == AtlasMirrorVisibility.MirrorOnly));
             Assert.AreSame(textureA, layers[0].Source.Map.Texture);
             Assert.AreEqual(AtlasBlend.Multiply, layers[0].Targets[0].Blend);
-            Assert.AreEqual(0.5f, layers[0].Targets[0].Opacity, 1e-5f, "Texture alpha × colour alpha.");
+            Assert.AreEqual(0.5f, layers[0].Targets[0].Opacity, 1e-5f, "Texture alpha × color alpha.");
             Assert.AreEqual(Color.red, layers[1].Source.Color);
-            Assert.AreEqual(0.5f, layers[1].Targets[0].Opacity, 1e-5f, "× lerp(1, colour, colour alpha).");
+            Assert.AreEqual(0.5f, layers[1].Targets[0].Opacity, 1e-5f, "× lerp(1, color, color alpha).");
         }
 
         [Test]
@@ -1512,7 +1512,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsTrue(glitter.HueRandomOffset);
             Assert.AreEqual(AtlasBlend.Replace, layer.Blend);
             Assert.AreEqual(AtlasPlacement.Surface, layer.Placement);
-            Assert.AreEqual(0.5f, layer.Opacity, 1e-5f, "The colour's alpha.");
+            Assert.AreEqual(0.5f, layer.Opacity, 1e-5f, "The color's alpha.");
             Assert.AreEqual(0.5f, layer.HideInShadow, 1e-5f);
             Assert.IsTrue(layer.Mask.Invert);
             Assert.AreEqual(1, d.ColorAdjustments.Count(a => a.Layer == layer));
@@ -1597,7 +1597,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(AtlasBlend.Add, layer.Blend);
             Assert.AreEqual(0.5f, layer.Opacity, 1e-5f);
             Assert.AreEqual(3f, layer.EmissionAmount, 1e-5f);
-            Assert.AreEqual(Color.red, layer.Color, "The colour's alpha is unused.");
+            Assert.AreEqual(Color.red, layer.Color, "The color's alpha is unused.");
             CollectionAssert.AreEqual(new[] { "layers[0].opacity", "layers[0].truchet.textureOffset.y" },
                 d.Modulators.Select(x => x.Target).ToArray());
             Assert.AreEqual(AtlasModulatorMode.Multiply, d.Modulators[0].Mode);
@@ -1676,7 +1676,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void DepthFxColoursByTheSceneBehind()
+        public void DepthFxColorsByTheSceneBehind()
         {
             AtlasTestMaterials.AddSavedFloat(material, "_EnableTouchGlow", 1f);
             AtlasTestMaterials.AddSavedFloat(material, "_DepthColorToggle", 1f);
@@ -1716,7 +1716,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsTrue(volume.AlongV);
             Assert.AreEqual(AtlasBlend.Multiply, layer.Blend);
             float red = Mathf.GammaToLinearSpace(0.5f);
-            Assert.AreEqual(red * red, volume.Low.r, 1e-4f, "Poiyomi multiplies the colour by itself without a theme.");
+            Assert.AreEqual(red * red, volume.Low.r, 1e-4f, "Poiyomi multiplies the color by itself without a theme.");
             Assert.AreEqual(3f, volume.HighEmission, 1e-5f);
         }
 
@@ -1807,7 +1807,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 AtlasDeformationKind.Wind, AtlasDeformationKind.TranslateWorld, AtlasDeformationKind.Displace, AtlasDeformationKind.Snap
             }, deformations.Select(x => x.Kind).ToArray());
             Assert.AreEqual(2f, deformations[0].Amount.x, 1e-5f);
-            Assert.IsTrue(deformations[0].Mask.VertexColor, "Vertex colour green.");
+            Assert.IsTrue(deformations[0].Mask.VertexColor, "Vertex color green.");
             Assert.AreEqual(AtlasChannel.Green, deformations[0].Mask.Channel);
             Assert.AreEqual(90f, deformations[1].Amount.y, 1e-5f);
             Assert.AreEqual(1f, deformations[1].Spin.y, 1e-5f, "Degrees per 20 seconds.");
@@ -1819,7 +1819,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(0.05f, deformations[6].Amount.x, 1e-5f);
             Assert.AreEqual(20f, deformations[7].Precision, 1e-3f);
             Assert.IsTrue(deformations[7].Local);
-            Assert.IsTrue(deformations[7].Centred);
+            Assert.IsTrue(deformations[7].Centered);
         }
 
         [Test]
@@ -2026,7 +2026,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void ToonSevenVertexColourHasNoToggle()
+        public void ToonSevenVertexColorHasNoToggle()
         {
             AtlasTestMaterials.AddSavedFloat(material, "_MainVertexColoring", 0.5f);
             var vertex = ParseSaved7().Surface.VertexColor;
@@ -2073,16 +2073,16 @@ namespace NordicWind.AdvancedAtlaser.Tests
             AtlasTestMaterials.AddSavedColor(material, "_BackFaceMaskMLBoundsMin", new Color(0.2f, 0f, 0f, 0f));
             AtlasTestMaterials.AddSavedColor(material, "_BackFaceMaskMLBoundsMax", new Color(0.6f, 1f, 1f, 1f));
             var mask = ParseSaved().Layers.OfType<AtlasSurfaceLayer>().Single().Mask;
-            Assert.AreEqual(0.4f, mask.Levels.InputMin, 1e-5f, "Normalised into the bounds.");
+            Assert.AreEqual(0.4f, mask.Levels.InputMin, 1e-5f, "Normalized into the bounds.");
             Assert.AreEqual(0.6f, mask.Levels.InputMax, 1e-5f);
             Assert.AreEqual(0.25f, mask.Levels.Midpoint, 1e-5f);
-            Assert.IsTrue(mask.Levels.Invert, "Without a vertex colour source the levels invert.");
+            Assert.IsTrue(mask.Levels.Invert, "Without a vertex color source the levels invert.");
             Assert.IsFalse(mask.Invert);
             Assert.AreEqual(1f, mask.Evaluate(0.3f), 1e-5f, "Below the input range, inverted.");
         }
 
         [Test]
-        public void VertexColourMaskSources()
+        public void VertexColorMaskSources()
         {
             AtlasTestMaterials.AddSavedFloat(material, "_EnableEmission", 1f);
             AtlasTestMaterials.AddSavedColor(material, "_EmissionMaskVertexMask", new Color(3f, 0f, 0f, 0f));
@@ -2098,9 +2098,9 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(AtlasChannel.Green, decal.Channel, "Decal 1 reads green.");
             Assert.IsTrue(decal.TimesVertexColor);
             Assert.AreEqual(AtlasChannel.Alpha, decal.VertexChannel, "The decal mask's source is per channel.");
-            Assert.IsTrue(decal.Invert, "With a vertex colour source the invert comes after it.");
+            Assert.IsTrue(decal.Invert, "With a vertex color source the invert comes after it.");
             var emission = layers.Single(l => l.Placement == AtlasPlacement.Emission).Mask;
-            Assert.IsTrue(emission.VertexColor, "No texture: the vertex colour alone.");
+            Assert.IsTrue(emission.VertexColor, "No texture: the vertex color alone.");
             Assert.AreEqual(AtlasChannel.Blue, emission.Channel);
             Assert.IsTrue(emission.Invert, "The emission mask's own invert.");
         }
@@ -2226,7 +2226,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             AtlasTestMaterials.AddSavedTexture(material, "_RGBAAOMaps", textureB);
             AtlasTestMaterials.AddSavedFloat(material, "_RGBAGreenAOMaskChannel", 3f);
             var layers = ParseSaved().Layers.OfType<AtlasSurfaceLayer>().ToArray();
-            Assert.AreEqual(3, layers.Length, "Colour, alpha, occlusion.");
+            Assert.AreEqual(3, layers.Length, "Color, alpha, occlusion.");
             Assert.AreEqual(AtlasSurfaceTarget.Alpha, layers[1].Targets[0].Target);
             Assert.AreEqual(AtlasChannel.Alpha, layers[1].Targets[0].Channel);
             var occlusion = layers[2];
@@ -2239,7 +2239,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void VertexColourHueDitherModeAndDitheredShadows()
+        public void VertexColorHueDitherModeAndDitheredShadows()
         {
             AtlasTestMaterials.AddSavedFloat(material, "_MainVertexColoringEnabled", 1f);
             AtlasTestMaterials.AddSavedFloat(material, "_MainVertexColoring", 1f);
@@ -2371,7 +2371,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void OutlineColorAdjustAndEmissionColour()
+        public void OutlineColorAdjustAndEmissionColor()
         {
             AtlasTestMaterials.AddSavedFloat(material, "_EnableOutlines", 1f);
             AtlasTestMaterials.AddSavedFloat(material, "_OutlineHueShift", 1f);
@@ -2600,7 +2600,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsTrue(squish.Orifice);
             Assert.AreEqual(0.5f, squish.Strength, 1e-5f);
             var layer = d.Layers.OfType<AtlasPatternLayer>().Single();
-            Assert.AreSame(squish, layer.Squish, "The deformation and its colour share the settings.");
+            Assert.AreSame(squish, layer.Squish, "The deformation and its color share the settings.");
             Assert.AreSame(layer, d.MaskBus.Steps.Single().Layer);
             var curvature = d.Outlines.Single().Curvature;
             Assert.AreSame(textureB, curvature.Data.Texture);
@@ -2760,7 +2760,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(0, fur.ContactIndex, "Without the global mask contacts there is no contact.");
             Assert.AreEqual(2f, fur.ContactPush, 1e-6f);
             Assert.AreEqual(0.8f, fur.CutoutLength, 1e-6f);
-            // No mask texture: the blue channel's vertex colour source (alpha) alone.
+            // No mask texture: the blue channel's vertex color source (alpha) alone.
             Assert.IsTrue(fur.LengthMask.VertexColor);
             Assert.AreEqual(AtlasChannel.Alpha, fur.LengthMask.Channel);
         }
@@ -2786,7 +2786,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             AtlasTestMaterials.AddSavedFloat(material, "_GrabPassHueShift", 0.3f);
             var d = ParseSaved();
             var layer = d.Layers.OfType<AtlasRefractionLayer>().Single();
-            Assert.AreEqual(AtlasPlacement.Surface, layer.Placement, "Blended into the base colour, exempt from lighting.");
+            Assert.AreEqual(AtlasPlacement.Surface, layer.Placement, "Blended into the base color, exempt from lighting.");
             Assert.IsTrue(layer.Refracts);
             Assert.AreEqual(1.5f, layer.IOR, 1e-5f);
             Assert.IsTrue(layer.ByAlpha);
@@ -3113,7 +3113,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             }
         }
 
-        // Pro 9's screen-space AO: the colour map and the mask have their own toggles, and there's
+        // Pro 9's screen-space AO: the color map and the mask have their own toggles, and there's
         // no camera clip.
         [TestCase(false)]
         [TestCase(true)]
@@ -3234,7 +3234,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             AtlasTestMaterials.AddSavedFloat(material, "_AlphaGlobalMask", 1f);
             AtlasTestMaterials.AddSavedFloat(material, "_AlphaGlobalMaskBlendType", 8f);
             var d = ParseSaved8();
-            Assert.AreEqual(AtlasBlend.Screen, d.Layers.OfType<AtlasSurfaceLayer>().Single().Targets[0].Blend, "8.0's colour dodge.");
+            Assert.AreEqual(AtlasBlend.Screen, d.Layers.OfType<AtlasSurfaceLayer>().Single().Targets[0].Blend, "8.0's color dodge.");
             Assert.IsTrue(d.Issues.Any(i => i.Feature == "poiyomi8.blend-modes"));
             Assert.IsTrue(d.Issues.Any(i => i.Feature == "poiyomi8.mask-blend"));
             Assert.IsTrue(d.Issues.Any(i => i.Feature == "poiyomi8.decals"));

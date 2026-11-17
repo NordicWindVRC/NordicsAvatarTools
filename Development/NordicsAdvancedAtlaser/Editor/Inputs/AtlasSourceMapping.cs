@@ -21,7 +21,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             };
         }
 
-        // A colour property times a texture property. The colour is converted to linear.
+        // A color property times a texture property. The color is converted to linear.
         public static void Color(Material m, AtlasColorInput target, string texture, string color)
         {
             target.Color = AtlasMaterialReader.ColorLinear(m, color, UnityEngine.Color.white);
@@ -30,7 +30,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // Unity's detail maps (Standard, Standard Lite): detail albedo ×2 and detail normal on the
         // detail tiling and UV set (_UVSec), faded in by the detail mask's alpha, which uses the
-        // albedo's tiling. Added as a colour layer and a normal layer sharing the mask.
+        // albedo's tiling. Added as a color layer and a normal layer sharing the mask.
         public static void UnityDetail(Material m, AtlasUnifiedMaterial d, bool withNormal)
         {
             AtlasMask mask = null;

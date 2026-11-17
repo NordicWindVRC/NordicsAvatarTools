@@ -12,7 +12,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         {
             Textures =
             {
-                new AtlasOutputTexture("BaseColor", "Base colour") { SizeMode = AtlasTextureSizeMode.Main }
+                new AtlasOutputTexture("BaseColor", "Base color") { SizeMode = AtlasTextureSizeMode.Main }
                     .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB)
             }
         };
@@ -50,7 +50,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void ColourIsRegisteredInTheSurfaceSection()
+        public void ColorIsRegisteredInTheSurfaceSection()
         {
             Assert.NotNull(Color());
             Assert.AreEqual(AtlasFeatureSection.Surface, Color().Section);
@@ -88,7 +88,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void ColourRequestsOneBaseColourMapFromEverySource()
+        public void ColorRequestsOneBaseColorMapFromEverySource()
         {
             var plan = AtlasOutputPipeline.Resolve(Job(2), WithBaseColor());
             var request = plan.Maps.Single();
@@ -146,7 +146,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void EveryOutputShaderHasAMainBaseColourTexture()
+        public void EveryOutputShaderHasAMainBaseColorTexture()
         {
             foreach (var shader in AtlasShaderRegistry.OutputShaders)
             {

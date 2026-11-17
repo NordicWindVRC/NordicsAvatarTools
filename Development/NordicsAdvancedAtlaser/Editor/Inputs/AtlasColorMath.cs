@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
 {
-    // Colour math for parsers that resolve a source's colour settings to colours: linear RGB,
+    // Color math for parsers that resolve a source's color settings to colors: linear RGB,
     // Oklab and HSV, as shaders compute them.
     internal static class AtlasColorMath
     {
@@ -72,7 +72,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return FromHsv(h);
         }
 
-        // Oklab chroma × (1 + amount), at most that of the most saturated colour of the hue.
+        // Oklab chroma × (1 + amount), at most that of the most saturated color of the hue.
         public static Vector3 Chromatize(Vector3 c, float amount)
         {
             float min = Mathf.Min(c.x, Mathf.Min(c.y, c.z)), max = Mathf.Max(c.x, Mathf.Max(c.y, c.z)), range = max - min;

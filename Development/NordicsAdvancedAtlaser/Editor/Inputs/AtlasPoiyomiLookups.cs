@@ -7,7 +7,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         private static readonly AtlasLookupProjection[] MatcapProjections =
         {
-            AtlasLookupProjection.ViewCorrected, AtlasLookupProjection.ViewStabilised, AtlasLookupProjection.ReflectionPlanar,
+            AtlasLookupProjection.ViewCorrected, AtlasLookupProjection.ViewStabilized, AtlasLookupProjection.ReflectionPlanar,
             AtlasLookupProjection.Gradient, AtlasLookupProjection.LightHalfVector
         };
 
@@ -70,7 +70,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     UVBlend = (Vector2)AtlasMaterialReader.Vector(m, index == 0 ? "_MatCapBlendUV1" : "_MatCap" + ordinal + "BlendUV1", Vector4.zero),
                     UVBlendSpace = UVSpace(m, d, p + "UVToBlend", 1),
                     MirrorFlip = mode != 3,
-                    CentreEye = Float(m, index == 0 ? "_MatCapVRParallaxStrength" : "_MatCap" + ordinal + "VRParallaxStrength", 1f) < 0.5f,
+                    CenterEye = Float(m, index == 0 ? "_MatCapVRParallaxStrength" : "_MatCap" + ordinal + "VRParallaxStrength", 1f) < 0.5f,
                     SurfaceNormalAmount = Float(m, p + "Normal", 1f),
                     BaseColorMix = Float(m, p + "BaseColorMix", 0f),
                     LightColorMix = Float(m, p + "LightColorMix", 0f),
@@ -98,7 +98,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
             float parallax = Float(m, index == 0 ? "_MatCapVRParallaxStrength" : "_MatCap" + ordinal + "VRParallaxStrength", 1f);
             if (parallax > 0f && parallax < 1f)
-                d.Report(AtlasIssueKind.Unmapped, "matcap.vr-parallax", "A matcap's VR parallax between the eyes and their centre isn't mapped yet; the nearer is used.");
+                d.Report(AtlasIssueKind.Unmapped, "matcap.vr-parallax", "A matcap's VR parallax between the eyes and their center isn't mapped yet; the nearer is used.");
             if (On(m, p + "MaskSmoothnessApply"))
                 d.Report(AtlasIssueKind.Unmapped, "matcap.smoothness-mask", "A matcap's smoothness from its mask isn't mapped yet.");
             if (Float(m, p + "AlphaOverride", 0f) > 0f || On(m, p + "ApplyToAlphaEnabled"))
@@ -109,7 +109,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 d.Report(AtlasIssueKind.Unsupported, "tps", "TPS depth masks aren't supported.");
         }
 
-        // A cubemap blended into the base colour: replace, multiply or add, by its alpha × blend amount.
+        // A cubemap blended into the base color: replace, multiply or add, by its alpha × blend amount.
         private void CubeMap(Material m, AtlasUnifiedMaterial d)
         {
             if (!On(m, "_CubeMapEnabled")) return;
@@ -133,7 +133,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (layer.Mask != null) layer.Mask.Invert = On(m, "_CubeMapMaskInvert");
             var color = TintColor(m, d, "_CubeMapColor", "_CubeMapColorThemeIndex") * Float(m, "_CubeMapIntensity", 1f);
             layer.Source.Map = AtlasSourceMapping.Texture(m, "_CubeMap");
-            // Without a cubemap the shader uses grey at half alpha.
+            // Without a cubemap the shader uses gray at half alpha.
             if (layer.Source.Map == null) color = new Color(color.r * 0.21763764f, color.g * 0.21763764f, color.b * 0.21763764f, 0.5f);
             layer.Source.Color = color;
             // Poiyomi turns the yz, xz and then xy planes; the layer turns xy, xz, yz. One axis maps exactly.

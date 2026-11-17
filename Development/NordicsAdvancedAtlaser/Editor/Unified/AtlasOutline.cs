@@ -22,7 +22,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Linear; its alpha scales the line.
         public UnityEngine.Color Color = new UnityEngine.Color(1f, 0.48f, 0f, 1f);
         public float Emission;
-        // The colour × the outline's texture and base colour mix.
+        // The color × the outline's texture and base color mix.
         public bool TintFromTexture;
         public float Border = 0.85f, Blur = 0.1f;
         public bool ReceiveShadows;
@@ -55,17 +55,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public bool Enabled = true;
         public AtlasOutlineShape Shape = AtlasOutlineShape.NormalExpansion;
-        // Metres; in object space (scaled with the object) when ObjectSpace.
+        // Meters; in object space (scaled with the object) when ObjectSpace.
         public float Width = 0.0005f;
         public bool ObjectSpace;
         // ViewDirectional and DropShadow.
         public UnityEngine.Vector3 Direction = UnityEngine.Vector3.right;
-        // The expansion follows a tangent-space direction in the vertex colour (RGB × 2 − 1).
+        // The expansion follows a tangent-space direction in the vertex color (RGB × 2 − 1).
         public bool NormalsFromVertexColor;
-        // Width × lerp(1, the vertex colour channel, strength × VertexStrengthMask); null: none.
+        // Width × lerp(1, the vertex color channel, strength × VertexStrengthMask); null: none.
         public AtlasMask WidthVertexMask;
         public AtlasMask VertexStrengthMask;
-        // LightFacing's falloff and side widths (metres, like Width).
+        // LightFacing's falloff and side widths (meters, like Width).
         public UnityEngine.Vector2 LightFalloff = new UnityEngine.Vector2(0f, 1f);
         public float SizeFollowsLight = 1f;
         public float LightSideWidth, DarkSideWidth;
@@ -80,39 +80,39 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool ClipAtZeroWidth = true;
         // Null: everywhere.
         public AtlasMask WidthMask;
-        // The largest on-screen offset in normalised device coordinates; 0 = no limit.
+        // The largest on-screen offset in normalized device coordinates; 0 = no limit.
         public float ScreenWidthLimit;
-        // Width × vertex colour; black vertices have no outline.
+        // Width × vertex color; black vertices have no outline.
         public bool WidthFromVertexColor;
-        // No outline closer to the camera than this, in metres.
+        // No outline closer to the camera than this, in meters.
         public float HideWithin;
         public readonly AtlasColorInput Color = new AtlasColorInput { Color = UnityEngine.Color.black };
-        // 0–1: blends toward the base colour (with vertex colour).
+        // 0–1: blends toward the base color (with vertex color).
         public float BaseColorMix;
-        // Colour × the base colour.
+        // Color × the base color.
         public bool MultiplyByBaseColor;
-        // Colour × lerp(1, base, amount × TextureBlendMask); squared base when BaseColorSquared (UTS style).
+        // Color × lerp(1, base, amount × TextureBlendMask); squared base when BaseColorSquared (UTS style).
         public float BaseColorMultiply;
         public AtlasMask TextureBlendMask;
-        // The colour applies × ColorMask: lerp(1, colour, mask); its alpha × AlphaMask.
+        // The color applies × ColorMask: lerp(1, color, mask); its alpha × AlphaMask.
         public AtlasMask ColorMask;
         public AtlasMask AlphaMask;
-        // Applied to the outline's colour (and its highlight's) by ColorAdjustMask, in order.
+        // Applied to the outline's color (and its highlight's) by ColorAdjustMask, in order.
         public readonly System.Collections.Generic.List<AtlasColorAdjustment> ColorAdjustments = new System.Collections.Generic.List<AtlasColorAdjustment>();
         public AtlasMask ColorAdjustMask;
         public bool BaseColorSquared;
-        // 0–1: toward the direct light's colour.
+        // 0–1: toward the direct light's color.
         public float LightColorMix;
         // Lit: how much the shading's shadow shows, 0–1; the lighting × LitMask (lerp(1, lighting, mask)).
         public float ShadowStrength = 1f;
         public AtlasMask LitMask;
-        // The outline's colour (or EmissionColor) × amount × EmissionMask, added as emission.
+        // The outline's color (or EmissionColor) × amount × EmissionMask, added as emission.
         public float EmissionAmount;
         public AtlasMask EmissionMask;
-        // Null: the outline's colour.
+        // Null: the outline's color.
         public AtlasColorInput EmissionColor;
         public readonly AtlasOutlineHighlight Highlight = new AtlasOutlineHighlight();
-        // The outline's alpha is its colour's alpha instead of the base alpha × it.
+        // The outline's alpha is its color's alpha instead of the base alpha × it.
         public bool OverrideAlpha;
         // Alpha × the mask; nothing where it is 0. Null: everywhere.
         public AtlasMask Mask;
@@ -125,7 +125,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly System.Collections.Generic.List<AtlasAlphaModifier> AlphaModifiers = new System.Collections.Generic.List<AtlasAlphaModifier>();
         public AtlasBlendFactor SourceBlend = AtlasBlendFactor.One;
         public AtlasBlendFactor DestinationBlend = AtlasBlendFactor.Zero;
-        // Unlit: the colour as is.
+        // Unlit: the color as is.
         public bool Lit;
         // The material's emission also shows on the outline.
         public bool Emission;

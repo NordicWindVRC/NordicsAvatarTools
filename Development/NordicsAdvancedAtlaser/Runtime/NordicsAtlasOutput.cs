@@ -60,7 +60,7 @@ namespace NordicWind.AdvancedAtlaser
         public bool toggle;
         /// <summary>The value when it is a number.</summary>
         public float number;
-        /// <summary>The value when it is a colour.</summary>
+        /// <summary>The value when it is a color.</summary>
         public Color color = Color.white;
     }
 
@@ -95,9 +95,9 @@ namespace NordicWind.AdvancedAtlaser
     [Serializable]
     public sealed class AtlasPlatformFormats
     {
-        /// <summary>Colour without alpha.</summary>
+        /// <summary>Color without alpha.</summary>
         public AtlasTextureFormat color;
-        /// <summary>Colour with alpha.</summary>
+        /// <summary>Color with alpha.</summary>
         public AtlasTextureFormat colorAlpha;
         /// <summary>Tangent-space normal maps.</summary>
         public AtlasTextureFormat normal;

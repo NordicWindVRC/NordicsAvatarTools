@@ -70,7 +70,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void AlwaysOpaqueWithVertexColourUnlessDisabled()
+        public void AlwaysOpaqueWithVertexColorUnlessDisabled()
         {
             var d = ParseSaved();
             Assert.IsTrue(d.Surface.VertexColor.MultiplyColor);
@@ -111,7 +111,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             material.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
             material.EnableKeyword("_GLOSSYREFLECTIONS_OFF");
             var d = ParseSaved();
-            Assert.AreEqual(3, d.Layers.Count, "Emission, detail colour, detail normal.");
+            Assert.AreEqual(3, d.Layers.Count, "Emission, detail color, detail normal.");
             Assert.AreEqual(AtlasPlacement.Emission, d.Layers[0].Placement);
             Assert.AreEqual(AtlasBlend.MultiplyDouble, ((AtlasSurfaceLayer)d.Layers[1]).Targets[0].Blend);
             Assert.AreEqual(AtlasSurfaceTarget.Normal, ((AtlasSurfaceLayer)d.Layers[2]).Targets[0].Target);

@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
 {
-    // Poiyomi: the Lil Fur variants' fur pass (catalogue 5.2): the LilFur category and the LilFur
+    // Poiyomi: the Lil Fur variants' fur pass (catalog 5.2): the LilFur category and the LilFur
     // Rendering section; Poiyomi Pro Fur's shells.
     internal sealed partial class AtlasPoiyomiReader
     {
@@ -17,7 +17,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             fur.Transparent = Int(m, "_FurRenderingMode", 0) == 1;
             fur.AlphaToCoverage = On(m, "_FurAlphaToMask", 1f);
 
-            // Shape: the vector's xyz is the direction, its w the length in metres.
+            // Shape: the vector's xyz is the direction, its w the length in meters.
             var vector = AtlasMaterialReader.Vector(m, "_FurVector", new Vector4(0f, 0f, 1f, 0.02f));
             fur.Direction = new Vector3(vector.x, vector.y, vector.z);
             fur.Length = vector.w;

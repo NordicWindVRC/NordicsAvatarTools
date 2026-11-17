@@ -80,7 +80,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void RampPresetIsRecognisedByItsTexture()
+        public void RampPresetIsRecognizedByItsTexture()
         {
             textureA.name = "ShadowRampToon3Band";
             material.SetTexture("_Ramp", textureA);
@@ -124,7 +124,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void ColorMaskIsARecolourLayerPerChannel()
+        public void ColorMaskIsARecolorLayerPerChannel()
         {
             material.EnableKeyword("USE_COLOR_MASK");
             material.SetTexture("_ColorMask", textureA);
@@ -182,13 +182,13 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(AtlasPlacement.Surface, layer.Placement);
             Assert.AreEqual(AtlasBlend.Multiply, layer.Blend);
             Assert.AreEqual(0.6f, layer.Opacity, 1e-5f);
-            Assert.AreEqual(AtlasLookupProjection.ViewStabilised, layer.Projection);
+            Assert.AreEqual(AtlasLookupProjection.ViewStabilized, layer.Projection);
             Assert.AreEqual(AtlasTextureSpace.View, layer.Source.Map.Space);
             Assert.AreEqual(Vector2.one, layer.Source.Map.Tiling);
         }
 
         [Test]
-        public void HueShiftsBecomeColourAdjustmentsInTurns()
+        public void HueShiftsBecomeColorAdjustmentsInTurns()
         {
             material.EnableKeyword("USE_HUE_SHIFT");
             material.EnableKeyword("USE_DETAIL_MAPS");

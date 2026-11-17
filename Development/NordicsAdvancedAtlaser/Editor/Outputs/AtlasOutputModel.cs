@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
 {
-    // A quantity a feature produces, one per map: base colour, roughness, a matcap mask. An
+    // A quantity a feature produces, one per map: base color, roughness, a matcap mask. An
     // output shader's textures provide them, one or several per texture (ATLAS_OUTPUT.md,
     // "Virtual maps and textures").
     public enum AtlasVirtualMap
@@ -42,7 +42,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public string Id;
         public string Label;
         public AtlasTextureSizeMode SizeMode = AtlasTextureSizeMode.MainAspect;
-        // Colour textures are sRGB; data and masks are linear.
+        // Color textures are sRGB; data and masks are linear.
         public bool Srgb = true;
         // A tangent-space normal map.
         public bool Normal;

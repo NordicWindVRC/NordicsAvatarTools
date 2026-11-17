@@ -115,7 +115,7 @@ namespace NordicWind.SubmeshSplitter.Editor
         {
             if (EditorUtility.DisplayCancelableProgressBar("Nordic's Submesh Splitter", label,
                 Mathf.Clamp01((float)current / Math.Max(1, total))))
-                throw new OperationCanceledException("Mesh generation cancelled; existing assets were not changed.");
+                throw new OperationCanceledException("Mesh generation canceled; existing assets were not changed.");
         }
 
         private static void EnsureFolder() => NordicWindSettings.EnsureFolder(AssetFolder);

@@ -85,7 +85,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void AutoSetupSizesTheAtlasByTheLargestBaseColourOnly()
+        public void AutoSetupSizesTheAtlasByTheLargestBaseColorOnly()
         {
             var small = new Texture2D(128, 256);
             var large = new Texture2D(1024, 512);
@@ -106,7 +106,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void FallbackReadsTheBaseColourInLinear()
+        public void FallbackReadsTheBaseColorInLinear()
         {
             // A built-in shader no other parser reads.
             var shader = Shader.Find("Legacy Shaders/Diffuse");

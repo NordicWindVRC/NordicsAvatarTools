@@ -3,7 +3,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // 2: what the surface is made of (stage S1) and how it reflects light (S2).
     public sealed class AtlasSurface
     {
-        // 2.1: base colour = colour input × vertex colour (where enabled).
+        // 2.1: base color = color input × vertex color (where enabled).
         public readonly AtlasColorInput BaseColor = new AtlasColorInput();
         public readonly AtlasVertexColor VertexColor = new AtlasVertexColor();
         // 2.2
@@ -17,18 +17,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly AtlasParallax Parallax = new AtlasParallax();
     }
 
-    // 2.1: how the mesh's vertex colours change the base colour.
+    // 2.1: how the mesh's vertex colors change the base color.
     public sealed class AtlasVertexColor
     {
         public bool MultiplyColor;
         public bool MultiplyAlpha;
-        // 0–1: base × lerp(1, vertex colour, amount).
+        // 0–1: base × lerp(1, vertex color, amount).
         public float Amount = 1f;
         // 0–1: for MultiplyAlpha, alpha × lerp(1, vertex alpha, amount).
         public float AlphaAmount = 1f;
-        // Off: vertex colours are used as stored, as linear values. On: converted from sRGB first.
+        // Off: vertex colors are used as stored, as linear values. On: converted from sRGB first.
         public bool SrgbData;
-        // The colour's hue shifted (after the conversion) by HueShift + HueSpeed × t turns, or set to it.
+        // The color's hue shifted (after the conversion) by HueShift + HueSpeed × t turns, or set to it.
         public bool HueEnabled;
         public float HueShift;
         public float HueSpeed;
@@ -38,9 +38,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     public enum AtlasAlphaSource
     {
-        // Colour alpha × texture alpha.
+        // Color alpha × texture alpha.
         BaseColorAlpha,
-        // The base colour's colour alpha alone, when the texture's alpha means something else.
+        // The base color's color alpha alone, when the texture's alpha means something else.
         BaseColorConstantAlpha,
         Mask,
         // 1
@@ -132,7 +132,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // CorrectOrigin (object space), by CorrectAmount, before normal maps.
         public float CorrectAmount;
         public UnityEngine.Vector3 CorrectOrigin;
-        // The amount × the mask (a vertex colour channel); null: everywhere.
+        // The amount × the mask (a vertex color channel); null: everywhere.
         public AtlasMask CorrectMask;
         // The triangle's face normal instead of the smooth normal: a faceted look.
         public bool FlatShading;
@@ -147,7 +147,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly AtlasScalarInput Roughness = new AtlasScalarInput(0.5f);
         // 0.5 = 4% reflectance at normal incidence (F0 = 0.16 × r²).
         public readonly AtlasScalarInput Reflectance = new AtlasScalarInput(0.5f);
-        // The specular colour (F0) of the specular workflow; null for the metallic workflow.
+        // The specular color (F0) of the specular workflow; null for the metallic workflow.
         public AtlasColorInput SpecularColor;
         // Darkens ambient light and reflections, not direct light. The constant is the strength:
         // 1 − (1 − map) × strength.
@@ -156,7 +156,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float OcclusionDirect;
         public float OcclusionIndirect = 1f;
         public float OcclusionReflections = 1f;
-        // Occlusion darkens toward this colour instead of black; null: black.
+        // Occlusion darkens toward this color instead of black; null: black.
         public AtlasColorInput OcclusionTint;
         public readonly AtlasHighlights Highlights = new AtlasHighlights();
         public readonly AtlasReflections Reflections = new AtlasReflections();
@@ -189,7 +189,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // 2.4: glints: a multi-scale grid of flakes on a UV at Density flakes per UV unit, each with a
     // hashed position and normal; a flake sparkles where its normal is the half vector (spread by
     // FlakeRoughness, sized by Size), filtered by the pixel's footprint so distant flakes average
-    // into a smooth lobe of Roughness. Flake colour lerp(Color, the base F0, BaseReflectanceMix),
+    // into a smooth lobe of Roughness. Flake color lerp(Color, the base F0, BaseReflectanceMix),
     // varied toward rainbow hues by ColorVariation; the mask keeps that fraction of the flakes.
     public sealed class AtlasGlints
     {
@@ -212,7 +212,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     }
 
     // 2.4: anisotropic GGX. a = clamp(Amount + (sample × 2 − 1), −1, 1), the sample from the map's
-    // channel or a vertex colour channel; the highlight stretches along the tangent (a > 0) or the
+    // channel or a vertex color channel; the highlight stretches along the tangent (a > 0) or the
     // bitangent, the reflection direction by ReflectionStretch, and RoughnessAnisotropy keeps
     // that much of the roughness along the stretch.
     public sealed class AtlasAnisotropy
@@ -263,7 +263,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // 0: smooth; otherwise floor(h × steps) / steps.
         public int Steps;
         public bool RealtimeLightOnly;
-        // 0–1: the highlight colour toward the base colour.
+        // 0–1: the highlight color toward the base color.
         public float BaseColorMix;
         // Not scaled by the diffuse light.
         public bool IgnoreLightColor;
@@ -306,7 +306,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         Probes,
         // A fixed cubemap.
         Cubemap,
-        // A flat colour from the sky's ambient specular (Unity's reflections off).
+        // A flat color from the sky's ambient specular (Unity's reflections off).
         AmbientColor
     }
 
@@ -328,7 +328,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasTextureReference Cubemap;
         // A fixed cubemap scaled by the surroundings' brightness.
         public bool CubemapLit;
-        // 0: smooth; otherwise quantised to this many steps, less on rough surfaces.
+        // 0: smooth; otherwise quantized to this many steps, less on rough surfaces.
         public int Steps;
         // 0–1: stronger where lit, lerp(1, N·L + 0.3, amount).
         public float LightBased;

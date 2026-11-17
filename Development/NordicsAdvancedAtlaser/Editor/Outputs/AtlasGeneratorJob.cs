@@ -43,7 +43,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         //   3. the material's primary normal map (Material.Surface.Normal)
         //   4. its surface layers that target the normal, in layer order (secondary and detail
         //      normal maps)
-        // Strengths are normalised to the largest strength among the atlas's sources.
+        // Strengths are normalized to the largest strength among the atlas's sources.
         public Texture2D PrebakedNormalMap;
         // Null when disabled; missing submeshes instead have an explicit empty/flat bake.
         public AtlasBakedInputSet Bakes;

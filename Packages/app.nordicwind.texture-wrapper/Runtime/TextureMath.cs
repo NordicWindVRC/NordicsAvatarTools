@@ -98,7 +98,7 @@ namespace NordicWind.TextureWrapper
                 case ColorOperationCode.Colorize: {
                     // Perceptual tint in OKLab: keeps the pixel's lightness, takes the hue from
                     // the color, and keeps as much of the pixel's chroma as the color is
-                    // saturated (a grey color makes the pixel grey). Mixed in by color.a.
+                    // saturated (a gray color makes the pixel gray). Mixed in by color.a.
                     Vector3 lab=ToOKLab(new Vector3(input.r,input.g,input.b));
                     Vector3 tintLab=ToOKLab(new Vector3(color.r,color.g,color.b));
                     float hue=Mathf.Atan2(tintLab.z,tintLab.y);

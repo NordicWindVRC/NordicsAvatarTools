@@ -8,7 +8,7 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Export rules (ATLAS_OUTPUT.md, "Export rules"): the output's formats per platform, no alpha
-    // channel unless a virtual map uses it, colour space per texture, mipmaps made with the
+    // channel unless a virtual map uses it, color space per texture, mipmaps made with the
     // Kaiser filter and streamed, and crunch only where it pays. PNG assets for the manual bake;
     // the build makes the same textures in memory through Unity's texture generator, which runs
     // the importer's own pipeline.
