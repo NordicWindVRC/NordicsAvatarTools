@@ -21,7 +21,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         SpecularMask,
         Occlusion,
         // Emission (S5), relative to the output's emission strength.
-        Emission
+        Emission,
+        // One value each (3.2): the ramp toon shadow's strength mask, and the detail shadow that
+        // multiplies the shading term.
+        ShadowStrengthMask,
+        DetailShadow
     }
 
     // Which channels of a texture a virtual map fills.

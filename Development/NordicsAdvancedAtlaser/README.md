@@ -117,6 +117,8 @@ and `ATLAS_OUTPUT.md` for the output design.
        its ramp, shadow and brightness settings. Lighting drawn on the texture (shadow masks,
        band textures, SDF faces) follows later; the build lists it, and what the output
        shader can't set the same way.
+     - **Shadow Masks** (Poiyomi): each material's shadow strength mask and detail shadows,
+       baked into one *Shadow and detail masks* texture.
      - **Hidden UV Tiles** (Poiyomi's UV tile discard): *Kept live* (the atlas material hides
        the same tiles, read from a spare UV channel the build writes), *Removed from the mesh*
        (any output shader; only tiles hidden on both sides), or *Off*.

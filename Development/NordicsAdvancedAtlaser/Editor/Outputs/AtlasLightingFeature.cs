@@ -37,7 +37,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
             int reference = Reference(context);
             var lighting = context.Output.Lighting;
             AtlasFieldwise.Copy(job.Sources[reference].Material.Lighting, lighting);
+            var masked = context.Sources.Where(i => job.Sources[i].Material.Lighting.Ramp.RampStrengthMask != null ||
+                                                    job.Sources[i].Material.Lighting.Ramp.TermMask != null).ToList();
             bool painted = LeaveOutPainted(lighting);
+            // Shadow masks and detail shadows go to their own feature where the output has a place.
+            if (masked.Count > 0 && !context.Capabilities.Provides(AtlasVirtualMap.ShadowStrengthMask))
+                context.Notes.Add($"The output shader has no shadow masks or detail shadows; those of {Numbers(masked)} are left out.");
             // An output that shades only through a ramp texture gets the bands' edge as keys,
             // which the build turns into one.
             var ramp = lighting.Ramp;
@@ -50,7 +55,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (differ.Count > 0)
                 context.Notes.Add($"Lighting is taken from source {reference + 1}; {Numbers(differ)} {(differ.Count == 1 ? "is" : "are")} lit differently.");
             if (painted)
-                context.Notes.Add("Lighting parts drawn on the texture (shadow masks, detail shadows, band and shade textures, SDF face maps, skin thickness, cloth maps) aren't merged yet; the atlas is lit without them.");
+                context.Notes.Add("Lighting parts drawn on the texture (band and shade textures, SDF face maps, skin thickness, cloth maps) aren't merged yet; the atlas is lit without them.");
         }
 
         // The chosen source when it's one of the output's, otherwise the one with the largest region.
@@ -67,7 +72,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static bool LeaveOutPainted(AtlasLighting lighting)
         {
             var ramp = lighting.Ramp;
-            bool painted = ramp.TermMask != null || ramp.RampStrengthMask != null || lighting.Skin.Thickness != null || lighting.Cloth != null;
+            // The masks are the Shadow Masks feature's: it bakes every source's.
+            bool painted = lighting.Skin.Thickness != null || lighting.Cloth != null;
             ramp.TermMask = null;
             ramp.RampStrengthMask = null;
             lighting.Skin.Thickness = null;

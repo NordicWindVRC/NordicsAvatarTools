@@ -45,7 +45,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 // _LightingAOMaps: occlusion in R.
                 new AtlasOutputTexture("Occlusion", "Ambient occlusion") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
                     .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f)),
-                EmissionTexture()
+                EmissionTexture(),
+                // _LightingShadowMasks reads R, _LightingDetailShadowMaps G (by their channel strengths).
+                new AtlasOutputTexture("LightingMasks", "Shadow and detail masks") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
+                    .With(AtlasVirtualMap.ShadowStrengthMask, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f))
+                    .With(AtlasVirtualMap.DetailShadow, AtlasTextureChannels.G, AtlasOutputTexture.Gray(1f))
             },
             SurfaceModes = { AtlasSurfaceMode.Cutout, AtlasSurfaceMode.Transparent, AtlasSurfaceMode.Fade },
             VRChatFallback = true,
@@ -207,6 +211,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // Multilayer Math builds its own half-Lambert terms; Shade Map keeps the light map's.
             m.SetFloat("_LightingMapMode", multilayer || ramp.Term == AtlasShadingTerm.HalfLambert ? 1 : ramp.Term == AtlasShadingTerm.Lambert ? 2
                 : ramp.Term == AtlasShadingTerm.ShadowsOnly ? 3 : 0);
+            // Shadow masks scale the shadow strength; detail shadows multiply the light map.
+            PackedMask(m, "_LightingShadowMasks", "_LightingShadowMaskStrength", ramp.RampStrengthMask);
+            PackedMask(m, "_LightingDetailShadowMaps", "_LightingDetailShadowStrength", ramp.TermMask);
+            for (int c = 0; c < 4; c++)
+                m.SetFloat("_LightingAddDetailShadowStrength" + "RGBA"[c], m.GetFloat("_LightingDetailShadowStrength" + "RGBA"[c]));
             m.SetFloat("_LightingCastedShadows", l.ReceiveShadows);
             m.SetFloat("_LightingShadowSoftness", l.ShadowSoftness);
             m.SetFloat("_LightingCleanCastedShadows", l.CleanShadows ? 1 : 0);
@@ -273,6 +282,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
             for (int k = 0; k < LightingKeywords.Length; k++)
                 if (k == type) m.EnableKeyword(LightingKeywords[k]);
                 else m.DisableKeyword(LightingKeywords[k]);
+        }
+
+        // A mask in one channel of a packed texture slot: the channel's strength set, the others 0.
+        // Without a mask: no texture, the default strengths (R at 1).
+        private static void PackedMask(Material m, string property, string strengths, AtlasMask mask)
+        {
+            var texture = mask?.Map?.Texture;
+            m.SetTexture(property, texture);
+            m.SetTextureScale(property, Vector2.one);
+            m.SetTextureOffset(property, Vector2.zero);
+            m.SetFloat(property + "UV", 0);
+            int channel = texture == null ? 0 : Mathf.Clamp((int)mask.Channel, 0, 3);
+            for (int c = 0; c < 4; c++)
+                m.SetFloat(strengths + "RGBA"[c], c == channel ? (texture == null ? 1f : Mathf.Clamp01(mask.Strength)) : 0f);
         }
 
         // Shade Map's reading: two steps, both sides lit by the direct light, the shades occluded.

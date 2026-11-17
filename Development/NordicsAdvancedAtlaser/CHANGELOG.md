@@ -8,6 +8,11 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Shadow masks:** a *Shadow Masks* feature bakes every source's shadow strength mask and
+  detail shadow (`AtlasVirtualMap.ShadowStrengthMask`, `DetailShadow`) into a *Shadow and
+  detail masks* texture, which the Poiyomi writer sets as Light Data's shadow masks (R) and
+  detail shadows (G) by their channel strengths. For ramp toon lighting; outputs without them
+  list them.
 - **Lighting:** a *Lighting* feature: one lighting setup from the reference source, with
   *Lighting from* when the materials are lit differently. The Poiyomi writer writes its
   parser's reading back (Light Data, the texture ramp, multilayer math, wrapped, skin, shade

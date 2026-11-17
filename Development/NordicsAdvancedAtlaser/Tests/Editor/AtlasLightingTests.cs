@@ -71,7 +71,9 @@ namespace NordicWind.AdvancedAtlaser.Tests
             toon.Lighting.Ramp.Bands.Add(band);
             var plan = AtlasOutputPipeline.Resolve(Job((toon, 1f)), Poiyomi);
             var ramp = plan.Output.Lighting.Ramp;
-            Assert.IsNull(ramp.TermMask);
+            // The detail shadow isn't the source's own map: Shadow Masks bakes it into the atlas.
+            Assert.AreNotSame(toon.Lighting.Ramp.TermMask, ramp.TermMask);
+            Assert.AreEqual(AtlasChannel.Green, ramp.TermMask.Channel, "baked into the masks texture's G");
             Assert.IsNull(ramp.Bands.Single().Color.Map);
             Assert.IsNotNull(band.Color.Map, "the source's own band is untouched");
             Assert.IsTrue(plan.Notes.Any(n => n.Contains("drawn on the texture")));
@@ -196,6 +198,52 @@ namespace NordicWind.AdvancedAtlaser.Tests
             shader.Write(plan.Output, material);
             Assert.AreSame(texture, material.GetTexture("_Ramp"));
             Assert.AreEqual(0.6f, material.GetFloat("_ShadowAlbedo"), 1e-3f, "the first band's shadow color");
+        }
+
+        private AtlasTextureReference Gray(float value)
+        {
+            var texture = new Texture2D(4, 4, TextureFormat.RGBAFloat, false, true);
+            texture.SetPixels(Enumerable.Repeat(new Color(value, value, value, 1f), 16).ToArray());
+            texture.Apply();
+            created.Add(texture);
+            return new AtlasTextureReference { Texture = texture, Interpretation = AtlasTextureInterpretation.Data };
+        }
+
+        [Test]
+        public void ShadowMasksAreBakedPerSource()
+        {
+            var masked = Lit(AtlasLightingFamily.RampToon);
+            masked.Lighting.Ramp.RampStrengthMask = new AtlasMask { Map = Gray(0.4f) };
+            var plain = Lit(AtlasLightingFamily.RampToon);
+            var job = Job((masked, 0.5f), (plain, 0.5f));
+            var plan = AtlasOutputPipeline.Resolve(job, Poiyomi);
+            var request = plan.Maps.Single(m => m.Map == AtlasVirtualMap.ShadowStrengthMask);
+            using (var map = request.Evaluate(0, masked, 4, 4)) Assert.AreEqual(0.4f, map.GetPixel(1, 1).r, 1e-3f, "the source's mask");
+            using (var map = request.Evaluate(1, plain, 4, 4)) Assert.AreEqual(1f, map.GetPixel(1, 1).r, 1e-3f, "none: full strength");
+            Assert.AreEqual(AtlasChannel.Red, plan.Output.Lighting.Ramp.RampStrengthMask.Channel);
+            Assert.IsNull(plan.Output.Lighting.Ramp.TermMask, "no detail shadows: none requested");
+            Assert.IsFalse(plan.Maps.Any(m => m.Map == AtlasVirtualMap.DetailShadow));
+
+            var mobile = AtlasOutputPipeline.Resolve(job, AtlasShaderRegistry.Output("mobiletoon").Capabilities);
+            Assert.IsTrue(mobile.Notes.Any(n => n.Contains("no shadow masks or detail shadows") && n.Contains("source 1")));
+        }
+
+        [Test]
+        public void ThePoiyomiWriterSetsTheMasksTheParserReadsBack()
+        {
+            var shader = Installed("poiyomi10");
+            var output = Lit(AtlasLightingFamily.RampToon);
+            var strength = Gray(0.5f);
+            output.Lighting.Ramp.RampStrengthMask = new AtlasMask { Map = strength, Channel = AtlasChannel.Red };
+            output.Lighting.Ramp.TermMask = new AtlasMask { Map = strength, Channel = AtlasChannel.Green };
+            var material = new Material(shader.FindShader());
+            created.Add(material);
+            shader.Write(output, material);
+            var ramp = AtlasShaderRegistry.Detect(material).Parse(material).Lighting.Ramp;
+            Assert.AreSame(strength.Texture, ramp.RampStrengthMask?.Map?.Texture);
+            Assert.AreEqual(AtlasChannel.Red, ramp.RampStrengthMask.Channel);
+            Assert.AreSame(strength.Texture, ramp.TermMask?.Map?.Texture);
+            Assert.AreEqual(AtlasChannel.Green, ramp.TermMask.Channel);
         }
 
         [Test]
