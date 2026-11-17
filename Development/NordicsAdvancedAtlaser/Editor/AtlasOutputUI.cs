@@ -272,9 +272,36 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 int next = EditorGUI.Popup(fieldRect, index, state.Modes.Select(m => m.Label).ToArray());
                 if (next != index) stored.stringValue = state.Modes[next].Id;
             }
+            if (state.SharedValuesDiffer)
+                using (new EditorGUI.IndentLevelScope())
+                    SharedValue(setting, state, materials);
             if (open)
                 using (new EditorGUI.IndentLevelScope())
                     Sources(setting, state, materials);
+        }
+
+        // The source a shared value is taken from, where the sources' values differ: automatic
+        // (the one with the largest region) or a chosen one.
+        private static void SharedValue(SerializedProperty setting, AtlasFeatureState state, IReadOnlyList<Material> materials)
+        {
+            var feature = (IAtlasSharedValueFeature)state.Feature;
+            var reference = setting.FindPropertyRelative("referenceSource");
+            var choices = state.Active.Select(i => materials[i]).ToList();
+            var options = new List<string> { "Automatic" };
+            options.AddRange(state.Active.Select(i => "Source " + (i + 1) + " (" + materials[i].name + ")"));
+            // A chosen source that is turned off or gone shows as automatic, as the build uses it.
+            int index = choices.IndexOf(reference.objectReferenceValue as Material) + 1;
+            var label = new GUIContent(feature.SharedValueName + " from",
+                "The materials' " + feature.SharedValueName.ToLowerInvariant() + " differs, and the atlas material has one. " +
+                "Automatic takes it from the material with the largest area in the atlas.");
+            var row = EditorGUILayout.GetControlRect();
+            EditorGUI.LabelField(new Rect(row.x, row.y, EditorGUIUtility.labelWidth, row.height), label);
+            var fieldRect = new Rect(row.x + EditorGUIUtility.labelWidth, row.y, row.width - EditorGUIUtility.labelWidth, row.height);
+            using (new IndentReset())
+            {
+                int next = EditorGUI.Popup(fieldRect, index, options.ToArray());
+                if (next != index) reference.objectReferenceValue = next == 0 ? null : choices[next - 1];
+            }
         }
 
         private static bool FoldAt(Rect rect, string key, GUIContent label)
@@ -285,29 +312,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return next;
         }
 
-        // Each source that has the feature: on or off, and the reference source where the mode
-        // takes shared values from one.
+        // Each source that has the feature, on or off.
         private static void Sources(SerializedProperty setting, AtlasFeatureState state, IReadOnlyList<Material> materials)
         {
             var disabled = setting.FindPropertyRelative("disabledSources");
-            var reference = setting.FindPropertyRelative("referenceSource");
             foreach (int i in state.Present)
             {
                 var material = materials[i];
-                using (new EditorGUILayout.HorizontalScope())
+                int at = IndexOf(disabled, material);
+                bool on = EditorGUILayout.ToggleLeft(material.name, at < 0);
+                if (on && at >= 0) RemoveAt(disabled, at);
+                else if (!on && at < 0)
                 {
-                    int at = IndexOf(disabled, material);
-                    bool on = EditorGUILayout.ToggleLeft(material.name, at < 0);
-                    if (on && at >= 0) RemoveAt(disabled, at);
-                    else if (!on && at < 0)
-                    {
-                        disabled.InsertArrayElementAtIndex(disabled.arraySize);
-                        disabled.GetArrayElementAtIndex(disabled.arraySize - 1).objectReferenceValue = material;
-                    }
-                    if (!state.Mode.UsesReferenceSource) continue;
-                    bool isReference = reference.objectReferenceValue == material;
-                    if (EditorGUILayout.ToggleLeft("Reference", isReference, GUILayout.Width(90)) && !isReference)
-                        reference.objectReferenceValue = material;
+                    disabled.InsertArrayElementAtIndex(disabled.arraySize);
+                    disabled.GetArrayElementAtIndex(disabled.arraySize - 1).objectReferenceValue = material;
                 }
             }
         }

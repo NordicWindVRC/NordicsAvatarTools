@@ -85,10 +85,13 @@ and `ATLAS_OUTPUT.md` for the output design.
      there are features from several groups (Surface, Lighting, Layers, Effects, Render), each
      group gets a small heading. So far:
      - **Color**: each source's base color: its texture and color, its color layers (details,
-       recolor regions, plain colors, with their masks) and its static color adjustments,
-       baked together. When every source has the same color and nothing is layered on it, the
-       color stays a shared setting. Decals, live (animated) layers and vertex colors follow
-       later; the build lists them.
+       decals, recolor regions, plain colors, with their masks) and its static color
+       adjustments, baked together. When every source has the same color and nothing is
+       layered on it, the color stays a shared setting. Live (animated) layers and vertex
+       colors follow later; the build lists them.
+     - **Emission**: each source's emission in one emission map, relative to the strongest
+       source's, which the output glows at. Sources without emission stay dark. Blinking,
+       scrolling, audio or light-based emission follows later.
      - **Alpha**: each source's alpha, in the base color texture's alpha. A cutout source keeps
        its cutoff (moved to the shared one); under a transparent mode its edges stay hard.
        Opaque sources stay solid. A transparent source stays transparent only where the
@@ -102,8 +105,9 @@ and `ATLAS_OUTPUT.md` for the output design.
        sources'; the weaker ones are baked at their share of it, so each looks as before.
      - **Reflection and Specular**: each source's metallic and roughness in maps, and how
        strong its highlights and reflections are, in masks (Poiyomi; relative to the
-       strongest). Sources without them stay matte. Reflectance comes from the reference
-       source.
+       strongest). Sources without them stay matte. Poiyomi's reflectance is fixed; on Toon
+       Standard, where the materials need different reflectance, *Reflectance from* picks
+       the material it comes from (*Automatic*: the one with the largest area).
      - **Ambient Occlusion**: each source's occlusion map, at its strength; sources without
        one stay unoccluded.
      - **Surface Mode**: *Automatic* takes the most see-through mode among the sources that

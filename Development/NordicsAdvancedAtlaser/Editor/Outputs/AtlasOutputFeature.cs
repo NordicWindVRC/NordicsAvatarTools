@@ -24,8 +24,6 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Virtual maps the mode uses when the output provides them and the user keeps their
         // texture on; without one, its content goes to the map it falls back to.
         public AtlasVirtualMap[] OptionalMaps = Array.Empty<AtlasVirtualMap>();
-        // The mode takes shared values from the reference source, which the user can choose.
-        public bool UsesReferenceSource;
         // Other capabilities the mode needs; null: none.
         public Func<AtlasOutputCapabilities, bool> Requires;
 
@@ -55,6 +53,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // A feature that is part of every output and can't be turned off, as a whole or per source:
     // the surface mode, the fallback shader.
     public interface IAtlasAlwaysOnFeature : IAtlasOutputFeature { }
+
+    // A feature with a value the output has only once while each source can have its own. Where
+    // the sources need different values, the user picks the source it is taken from (the
+    // reference source); automatic: the source with the largest region.
+    public interface IAtlasSharedValueFeature : IAtlasOutputFeature
+    {
+        // The value's name, for the inspector.
+        string SharedValueName { get; }
+        // Whether the given sources need different values on this output.
+        bool SharedValuesDiffer(IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasOutputCapabilities capabilities);
+    }
 
     // A feature a source can have without its material having it, from what the build adds (the
     // geometry bake's correction) or the source's settings (a pre-baked normal map).

@@ -39,7 +39,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         /// <summary>Whether anything is layered on or adjusts the base color, which then can't be
-        /// left to a shared color multiplied afterwards.</summary>
+        /// left to a shared color multiplied afterward.</summary>
         public static bool HasStack(AtlasUnifiedMaterial source)
         {
             for (int i = 0; i < source.Layers.Count; i++)
@@ -58,21 +58,90 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static bool IsStatic(AtlasUnifiedMaterial source, string path) =>
             !source.Modulators.Any(m => m.Target != null && (m.Target == path || m.Target.StartsWith(path + ".") || m.Target.StartsWith(path + "[")));
 
-        // A texture that stays still on UV0, tiled over the surface.
+        // A texture that stays still on UV0: tiled over the surface, or placed as a decal that
+        // CanPlace bakes.
         private static bool StillOnUV0(AtlasTextureReference map) =>
-            map.Texture is Texture2D && map.Space == AtlasTextureSpace.UV0 && map.Decal == null && map.Frames == null &&
-            map.Scroll == Vector2.zero && map.Spin == 0f && map.Distortion == null;
+            map.Texture is Texture2D && map.Space == AtlasTextureSpace.UV0 && map.Frames == null &&
+            map.Scroll == Vector2.zero && map.Spin == 0f && map.Distortion == null && (map.Decal == null || CanPlace(map));
+
+        /// <summary>Whether a decal's placement is baked: placed by center, scale and rotation, not
+        /// spinning, without symmetry, mirror sides, parallax depth, or a texture rotation or
+        /// MSDF text.</summary>
+        public static bool CanPlace(AtlasTextureReference map)
+        {
+            var decal = map.Decal;
+            return decal != null && decal.Symmetry == AtlasDecalSymmetry.None && decal.Mirror == AtlasDecalMirror.None &&
+                decal.Depth == 0f && decal.Spin == 0f && decal.Scale.x > 0f && decal.Scale.y > 0f &&
+                map.Rotation == 0f && map.Interpretation != AtlasTextureInterpretation.Msdf;
+        }
 
         /// <summary>Whether a surface layer's color targets are baked: enabled, static, on the
-        /// surface on both faces and in every view, its source a color or a still UV0 texture, its
-        /// mask bakeable.</summary>
+        /// surface on both faces and in every view, its source a color or a still UV0 texture
+        /// (tiled or a decal), its mask bakeable.</summary>
         public static bool CanBake(AtlasUnifiedMaterial source, int index, AtlasSurfaceLayer layer) =>
-            layer.Enabled && layer.Placement == AtlasPlacement.Surface && layer.Faces == AtlasFaces.Both &&
-            layer.Mirror == AtlasMirrorVisibility.Both && layer.HideInShadow <= 0f && layer.Screen == null &&
-            !layer.SourceTimesBaseColor && !layer.SourceIntensityIsAlpha && layer.Source.AudioTheme < 0 &&
+            Bakeable(source, index, layer, emission: false);
+
+        /// <summary>The same for a layer's emission targets, which may also take the base color as
+        /// their source's multiplier.</summary>
+        public static bool CanBakeEmission(AtlasUnifiedMaterial source, int index, AtlasSurfaceLayer layer) =>
+            Bakeable(source, index, layer, emission: true);
+
+        private static bool Bakeable(AtlasUnifiedMaterial source, int index, AtlasSurfaceLayer layer, bool emission) =>
+            layer.Enabled && (layer.Placement == AtlasPlacement.Surface || (emission && layer.Placement == AtlasPlacement.Emission)) &&
+            layer.Faces == AtlasFaces.Both && layer.Mirror == AtlasMirrorVisibility.Both && layer.HideInShadow <= 0f && layer.Screen == null &&
+            (emission || !layer.SourceTimesBaseColor) && !layer.SourceIntensityIsAlpha && layer.Source.AudioTheme < 0 &&
+            (!emission || (!layer.OverridesBaseColor && !layer.EmissionTimesAlpha)) &&
             (layer.Source.Map == null || StillOnUV0(layer.Source.Map)) &&
             (layer.Mask == null || AtlasMapEvaluator.CanEvaluate(layer.Mask)) &&
             IsStatic(source, "layers[" + index + "]");
+
+        /// <summary>A source's emission: its baked emission layers added up, divided by
+        /// <paramref name="outputStrength"/>, the strength the output's emission is drawn at.</summary>
+        public static NordicsTextureWrapper EvaluateEmission(AtlasUnifiedMaterial source, int width, int height, float outputStrength)
+        {
+            var result = new NordicsTextureWrapper(width, height, AtlasMapEvaluator.Settings(AtlasVirtualMap.BaseColor));
+            result.Fill(new Color(0f, 0f, 0f, 1f));
+            try
+            {
+                for (int i = 0; i < source.Layers.Count; i++)
+                {
+                    if (!(source.Layers[i] is AtlasSurfaceLayer layer) || !CanBakeEmission(source, i, layer)) continue;
+                    foreach (var target in layer.Targets.Where(t => t.Target == AtlasSurfaceTarget.Emission))
+                        using (var layerSource = Source(layer, width, height, out var coverage))
+                        using (coverage)
+                        {
+                            Adjust(layerSource, source, AtlasAdjustmentTarget.Layer, layer, width, height);
+                            if (layer.SourceTimesBaseColor)
+                                using (var baseColor = Evaluate(source, width, height, multiplyColor: true))
+                                    layerSource.Blit(baseColor, blend: TextureBlendMode.Multiply);
+                            using (var mask = Mask(layer, layerSource, coverage, width, height))
+                                result.Blit(layerSource, mask: mask, maskOptions: mask != null ? new TextureMaskOptions { Channel = TextureChannel.R } : null,
+                                    blend: TextureBlendMode.Add, strength: Mathf.Max(0f, target.Opacity));
+                        }
+                }
+                float scale = 1f / Mathf.Max(outputStrength, 1e-4f);
+                result.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Tint, Parameters = { Color = new Color(scale, scale, scale, 1f) } });
+                result.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Clamp, Parameters = { Amount = 0f, Amount2 = 1f } });
+                return result;
+            }
+            catch
+            {
+                result.Dispose();
+                throw;
+            }
+        }
+
+        /// <summary>The most a source's baked emission reaches: each layer's brightest color
+        /// channel × its strength, added up (maps reach at most 1).</summary>
+        public static float EmissionStrength(AtlasUnifiedMaterial source)
+        {
+            float strength = 0f;
+            for (int i = 0; i < source.Layers.Count; i++)
+                if (source.Layers[i] is AtlasSurfaceLayer layer && CanBakeEmission(source, i, layer))
+                    foreach (var target in layer.Targets.Where(t => t.Target == AtlasSurfaceTarget.Emission))
+                        strength += Mathf.Max(0f, target.Opacity) * Mathf.Max(0f, Mathf.Max(layer.Source.Color.r, Mathf.Max(layer.Source.Color.g, layer.Source.Color.b)));
+            return strength;
+        }
 
         /// <summary>Whether a color adjustment is baked: static, on the base color, the surface
         /// color or a layer's source, an operation the wrapper has, its mask bakeable.</summary>
@@ -104,7 +173,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 if (!(source.Layers[i] is AtlasSurfaceLayer layer) || !layer.Enabled) continue;
                 bool color = layer.Targets.Any(t => t.Target == AtlasSurfaceTarget.BaseColor);
-                if (color && layer.Source.Map?.Decal != null) notes.Add("Decals aren't baked yet; they're left out.");
+                if (color && layer.Source.Map?.Decal != null && !CanPlace(layer.Source.Map))
+                    notes.Add("A decal with symmetry, mirror sides, parallax depth, spin, a rotated texture or MSDF text isn't baked yet; it's left out.");
                 else if (color && !CanBake(source, i, layer))
                     notes.Add("A color layer that is live (modulated, scrolling, animated), lit, on one side or in mirrors, or masked by the mask bus or vertex colors isn't baked yet; it's left out.");
                 if (layer.Targets.Any(t => t.Target == AtlasSurfaceTarget.Metallic || t.Target == AtlasSurfaceTarget.Roughness ||
@@ -129,10 +199,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static void Apply(NordicsTextureWrapper result, AtlasUnifiedMaterial material, AtlasSurfaceLayer layer, AtlasLayerTarget target,
             int width, int height)
         {
-            using (var source = Source(layer, width, height))
+            using (var source = Source(layer, width, height, out var coverage))
+            using (coverage)
             {
                 Adjust(source, material, AtlasAdjustmentTarget.Layer, layer, width, height);
-                using (var mask = Mask(layer, source, width, height))
+                using (var mask = Mask(layer, source, coverage, width, height))
                 {
                     var options = mask != null ? new TextureMaskOptions { Channel = TextureChannel.R } : null;
                     float opacity = Mathf.Max(0f, target.Opacity);
@@ -183,10 +254,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // The layer's source: its color × its map (RGB and alpha); with "source map is mask", the
-        // color alone, the map's alpha as its alpha.
-        private static NordicsTextureWrapper Source(AtlasSurfaceLayer layer, int width, int height)
+        // color alone, the map's alpha as its alpha. A decal also gives its coverage (1 where it's
+        // placed), null otherwise.
+        private static NordicsTextureWrapper Source(AtlasSurfaceLayer layer, int width, int height, out NordicsTextureWrapper coverage)
         {
+            coverage = null;
             var color = layer.Source.Color;
+            if (layer.Source.Map?.Decal != null && layer.Source.Map.Texture is Texture2D decalTexture)
+                return Decal(layer, decalTexture, width, height, out coverage);
             var result = new NordicsTextureWrapper(width, height, AtlasMapEvaluator.Settings(AtlasVirtualMap.BaseColor));
             result.Fill(color);
             if (layer.Source.Map?.Texture is Texture2D texture)
@@ -199,14 +274,59 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return result;
         }
 
-        // The layer's mask × (with "source alpha is opacity") its source's alpha plus the offset;
-        // null when neither applies.
-        private static NordicsTextureWrapper Mask(AtlasSurfaceLayer layer, NordicsTextureWrapper source, int width, int height)
+        // A placed decal (Poiyomi's decalUV): the UV turned by the rotation around the center, then
+        // the rectangle center ± scale / 2 mapped to 0–1, where the texture is sampled with its
+        // tiling and offset. With "clip outside" nothing is sampled outside that rectangle; the
+        // coverage is 1 where something was.
+        private static NordicsTextureWrapper Decal(AtlasSurfaceLayer layer, Texture2D texture, int width, int height,
+            out NordicsTextureWrapper coverage)
+        {
+            var map = layer.Source.Map;
+            var decal = map.Decal;
+            var color = layer.Source.Color;
+            var result = new NordicsTextureWrapper(width, height, AtlasMapEvaluator.Settings(AtlasVirtualMap.BaseColor));
+            coverage = AtlasMapEvaluator.Constant(AtlasVirtualMap.Metallic, 0f, width, height);
+            float theta = decal.Rotation * Mathf.Deg2Rad, cs = Mathf.Cos(theta), sn = Mathf.Sin(theta);
+            int x0 = 0, y0 = 0, x1 = width, y1 = height;
+            if (decal.ClipOutside)
+            {
+                // The placed rectangle's bounds in UV: its corners turned back by the rotation.
+                float minU = float.MaxValue, minV = float.MaxValue, maxU = float.MinValue, maxV = float.MinValue;
+                foreach (var corner in new[] { new Vector2(-0.5f, -0.5f), new Vector2(0.5f, -0.5f), new Vector2(-0.5f, 0.5f), new Vector2(0.5f, 0.5f) })
+                {
+                    var q = Vector2.Scale(corner, decal.Scale);
+                    var uv = decal.Center + new Vector2(q.x * cs + q.y * sn, -q.x * sn + q.y * cs);
+                    minU = Mathf.Min(minU, uv.x); maxU = Mathf.Max(maxU, uv.x);
+                    minV = Mathf.Min(minV, uv.y); maxV = Mathf.Max(maxV, uv.y);
+                }
+                x0 = Mathf.Clamp(Mathf.FloorToInt(minU * width), 0, width); x1 = Mathf.Clamp(Mathf.CeilToInt(maxU * width), 0, width);
+                y0 = Mathf.Clamp(Mathf.FloorToInt(minV * height), 0, height); y1 = Mathf.Clamp(Mathf.CeilToInt(maxV * height), 0, height);
+            }
+            var white = Color.white;
+            using (var loaded = new NordicsTextureWrapper(texture, TextureDataType.Color))
+                for (int y = y0; y < y1; y++)
+                    for (int x = x0; x < x1; x++)
+                    {
+                        var d = new Vector2((x + 0.5f) / width, (y + 0.5f) / height) - decal.Center;
+                        var p = new Vector2((d.x * cs - d.y * sn) / decal.Scale.x + 0.5f, (d.x * sn + d.y * cs) / decal.Scale.y + 0.5f);
+                        if (decal.ClipOutside && (p.x < 0f || p.x > 1f || p.y < 0f || p.y > 1f)) continue;
+                        var sample = loaded.Sample(Vector2.Scale(p, map.Tiling) + map.Offset, TextureSamplingMode.Bilinear, TextureWrapMode.Repeat);
+                        result.SetPixel(x, y, layer.SourceMapIsMask ? new Color(color.r, color.g, color.b, color.a * sample.a) : color * sample);
+                        coverage.SetPixel(x, y, white);
+                    }
+            return result;
+        }
+
+        // The layer's mask × (with "source alpha is opacity") its source's alpha plus the offset, ×
+        // a decal's coverage; null when none applies.
+        private static NordicsTextureWrapper Mask(AtlasSurfaceLayer layer, NordicsTextureWrapper source, NordicsTextureWrapper coverage,
+            int width, int height)
         {
             bool alpha = layer.SourceAlphaIsOpacity || layer.SourceMapIsMask;
-            if (layer.Mask == null && !alpha) return null;
+            if (layer.Mask == null && !alpha && coverage == null) return null;
             var mask = layer.Mask != null ? AtlasMapEvaluator.ScaledMask(layer.Mask, 1f, width, height)
                 : AtlasMapEvaluator.Constant(AtlasVirtualMap.Metallic, 1f, width, height);
+            if (coverage != null) mask.Blit(coverage, blend: TextureBlendMode.Multiply);
             if (!alpha) return mask;
             using (var opacity = AtlasMapEvaluator.Constant(AtlasVirtualMap.Metallic, 1f, width, height))
             {

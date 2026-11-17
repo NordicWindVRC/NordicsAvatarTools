@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3a is done, 2.3b is next. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3a is done, 2.3b is implemented. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -171,10 +171,13 @@ In two steps; vertex colors move to 2.5, with the remapper's vertex color handli
 - **Workable:** toon materials with details and recolor regions atlas without losing them.
 
 **2.3b Decals and emission**
-- Decals (placed sources); *Emission* (native map, baked into color); *Color adjustments*
-  (native live).
-- **Optional maps and fallbacks**: decal and detail color maps baked into the base color,
-  and secondary and detail normals into the main normal, when their maps are off.
+- Decals (placed sources: center, scale and rotation, clipped or not) baked into the base
+  color, as Poiyomi places them; symmetry, mirror sides, depth, spin and MSDF text are listed.
+- *Emission* (native map only: baked into color wouldn't glow), relative to the strongest
+  source's emission; live emission is listed.
+- **Optional maps and fallbacks**: no output has a separate decal, detail or secondary normal
+  texture yet, so they are always baked into the base color and the main normal.
+- Live color adjustments (native) move to 2.9, with the other modulated effects.
 - **Workable:** typical toon materials with decals and emission atlas without losing them.
 
 ### 2.4 Masks
@@ -224,6 +227,7 @@ In two steps; vertex colors move to 2.5, with the remapper's vertex color handli
   *Proximity color*, *Subsurface scattering* (native), *AudioLink* (native per feature).
 - *World AO blocker*: typed in the unified material, read by the Poiyomi parser, written as
   one switch.
+- *Color adjustments* (native live), with the output's modulators.
 - **Workable — M2 reached:** every initial feature, on both writers.
 
 ---
@@ -308,4 +312,6 @@ Not planned in detail yet, in rough order:
   patterns, refraction, highlight layers, parallax, deformations and geometry effects,
   second pass and visibility, screen-space lighting;
 - animation support;
-- half-precision buffers or GPU baking, if the memory budget is too tight.
+- half-precision buffers or GPU baking, if the memory budget is too tight;
+- a typed-in value for shared values, next to *Automatic* and the sources in the reference
+  source drop-down.

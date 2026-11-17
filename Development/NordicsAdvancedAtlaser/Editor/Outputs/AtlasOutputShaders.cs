@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
@@ -43,7 +44,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     .With(AtlasVirtualMap.SpecularMask, AtlasTextureChannels.A, AtlasOutputTexture.Gray(0f)),
                 // _LightingAOMaps: occlusion in R.
                 new AtlasOutputTexture("Occlusion", "Ambient occlusion") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
-                    .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f))
+                    .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f)),
+                EmissionTexture()
             },
             SurfaceModes = { AtlasSurfaceMode.Cutout, AtlasSurfaceMode.Transparent, AtlasSurfaceMode.Fade },
             VRChatFallback = true,
@@ -87,6 +89,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetTextureOffset("_BumpMap", Vector2.zero);
             material.SetFloat("_BumpMapUV", 0);
             WriteSurfaceResponse(output.Surface.Response, material);
+            WriteEmission(output, material);
             var render = output.Render;
             var preset = Array.Find(Presets, p => p.Mode == render.SurfaceMode &&
                 (p.Mode != AtlasSurfaceMode.Fade || (p.ZWrite == 1) == render.Pass.DepthWrite));
@@ -117,6 +120,36 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetFloat("_OutlineBlendOpAlpha", 4);
             material.renderQueue = render.Queue >= 0 ? render.Queue : preset.Queue;
             material.SetOverrideTag("VRCFallback", Fallback(render));
+        }
+
+        // The emission map, sRGB, a size keeping the main texture's aspect.
+        public static AtlasOutputTexture EmissionTexture() =>
+            new AtlasOutputTexture("Emission", "Emission") { SizeMode = AtlasTextureSizeMode.MainAspect }
+                .With(AtlasVirtualMap.Emission, AtlasTextureChannels.RGB, new Color(0f, 0f, 0f, 1f));
+
+        // Emission 0 (_EnableEmission with its _EMISSION keyword): _EmissionColor (HDR, set from
+        // the linear color's gamma value) × _EmissionMap × _EmissionStrength (0–20; above that the
+        // rest goes into the color).
+        private static void WriteEmission(AtlasUnifiedMaterial output, Material material)
+        {
+            var emission = AtlasEmissionFeature.Of(output);
+            var map = emission?.Source.Map?.Texture;
+            material.SetFloat("_EnableEmission", map != null ? 1 : 0);
+            if (map == null)
+            {
+                material.DisableKeyword("_EMISSION");
+                return;
+            }
+            material.EnableKeyword("_EMISSION");
+            float total = emission.Targets.First(t => t.Target == AtlasSurfaceTarget.Emission).Opacity;
+            float strength = Mathf.Min(total, 20f);
+            float rest = total / Mathf.Max(strength, 1e-4f);
+            material.SetTexture("_EmissionMap", map);
+            material.SetTextureScale("_EmissionMap", Vector2.one);
+            material.SetTextureOffset("_EmissionMap", Vector2.zero);
+            material.SetFloat("_EmissionMapUV", 0);
+            material.SetColor("_EmissionColor", new Color(rest, rest, rest, 1f).gamma);
+            material.SetFloat("_EmissionStrength", strength);
         }
 
         // Reflections & Specular (MOCHIE_PBR) from the packed map: metallic = R, smoothness = G,
@@ -197,8 +230,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 new AtlasOutputTexture("Surface", "Metallic, gloss and occlusion") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
                     .With(AtlasVirtualMap.Metallic, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f))
                     .With(AtlasVirtualMap.Roughness, AtlasTextureChannels.G, AtlasOutputTexture.Gray(0f), invert: true)
-                    .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.B, AtlasOutputTexture.Gray(1f))
-            }
+                    .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.B, AtlasOutputTexture.Gray(1f)),
+                PoiyomiToon10OutputShader.EmissionTexture()
+            },
+            Reflectance = AtlasReflectanceSupport.FollowsSmoothness
         };
 
         // Toon Standard: _Color (sRGB-authored) times _MainTex; the normal map, behind its
@@ -246,6 +281,24 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 material.SetFloat("_OcclusionStrength", Mathf.Clamp01(response.Occlusion.Constant));
             }
             else material.DisableKeyword("USE_OCCLUSION_MAP");
+
+            // Emission: _EmissionColor (set from the linear color's gamma value) × _EmissionStrength
+            // (0–2; above that the rest goes into the color) × _EmissionMap on UV0.
+            var emission = AtlasEmissionFeature.Of(output);
+            var emissionMap = emission?.Source.Map?.Texture;
+            material.SetTexture("_EmissionMap", emissionMap);
+            if (emissionMap != null)
+            {
+                float total = emission.Targets.First(t => t.Target == AtlasSurfaceTarget.Emission).Opacity;
+                float strength = Mathf.Min(total, 2f);
+                float rest = total / Mathf.Max(strength, 1e-4f);
+                material.SetColor("_EmissionColor", new Color(rest, rest, rest, 1f).gamma);
+                material.SetFloat("_EmissionStrength", strength);
+                material.SetFloat("_EmissionUV", 0);
+                material.SetTextureScale("_EmissionMap", Vector2.one);
+                material.SetTextureOffset("_EmissionMap", Vector2.zero);
+            }
+            else material.SetColor("_EmissionColor", Color.black);
             material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
         }
     }

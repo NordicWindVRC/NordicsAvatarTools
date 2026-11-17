@@ -180,5 +180,55 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 Assert.IsNull(none.Occlusion.Map, shader.DisplayName + ": no occlusion map");
             }
         }
+
+        // Reflectance that follows the gloss map, as Toon Standard's: gloss × reflectance.
+        private static AtlasUnifiedMaterial Glossy(AtlasTextureReference gloss, float reflectance, float glossStrength)
+        {
+            var material = Lit(1f, 1f);
+            var response = material.Surface.Response;
+            response.Roughness.Map = gloss;
+            response.Roughness.Channel = AtlasChannel.Alpha;
+            response.Roughness.Constant = glossStrength;
+            response.Roughness.InvertResult = true;
+            response.Reflectance.Map = gloss;
+            response.Reflectance.Channel = AtlasChannel.Alpha;
+            response.Reflectance.Constant = reflectance;
+            return material;
+        }
+
+        [Test]
+        public void ReflectanceIsChosenOnlyWhereTheOutputSetsItAndTheSourcesDiffer()
+        {
+            var gloss = new AtlasTextureReference { Texture = Solid(Color.white), Interpretation = AtlasTextureInterpretation.Data };
+            var toon = AtlasShaderRegistry.Output("mobiletoon").Capabilities;
+            var feature = new AtlasSpecularFeature();
+            // Toon Standard's output reflectance is its smoothness map × one value: reflectance over smoothness strength.
+            var a = Glossy(gloss, 0.4f, 0.8f);
+            var b = Glossy(gloss, 0.25f, 0.5f);
+            var c = Lit(1f, 1f, roughness: 0.5f);
+            Assert.AreEqual(0.5f, AtlasSpecularFeature.OutputReflectance(a.Surface.Response, toon.Reflectance, out bool exact), 1e-5f);
+            Assert.IsTrue(exact);
+            Assert.AreEqual(1f, AtlasSpecularFeature.OutputReflectance(c.Surface.Response, toon.Reflectance, out exact), 1e-5f, "0.5 over smoothness 0.5");
+            Assert.IsTrue(exact, "both constants");
+            c.Surface.Response.Roughness.Map = gloss;
+            c.Surface.Response.Roughness.InvertResult = true;
+            AtlasSpecularFeature.OutputReflectance(c.Surface.Response, toon.Reflectance, out exact);
+            Assert.IsFalse(exact, "a constant reflectance against a smoothness map");
+
+            Assert.IsFalse(feature.SharedValuesDiffer(new[] { a, b }, toon), "the same ratio");
+            Assert.IsTrue(feature.SharedValuesDiffer(new[] { a, c }, toon));
+            Assert.IsFalse(feature.SharedValuesDiffer(new[] { a, c }, Poiyomi), "Poiyomi's reflectance is fixed");
+
+            var job = Job(a, c);
+            var plan = AtlasOutputPipeline.Resolve(job, toon);
+            Assert.AreEqual(0.5f, plan.Output.Surface.Response.Reflectance.Constant, 1e-5f, "automatic: the first of equal regions");
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("taken from source 1")));
+            job.Features.Add(new AtlasFeatureChoice { FeatureId = "specular", ReferenceSource = 1 });
+            plan = AtlasOutputPipeline.Resolve(job, toon);
+            Assert.AreEqual(1f, plan.Output.Surface.Response.Reflectance.Constant, 1e-5f, "the chosen source");
+
+            plan = AtlasOutputPipeline.Resolve(Job(a, c), Poiyomi);
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("fixed at 0.5")));
+        }
     }
 }

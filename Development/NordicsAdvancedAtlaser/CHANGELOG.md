@@ -8,6 +8,20 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Reflectance from:** a drop-down under *Reflection and Specular*, shown only when the
+  materials need different reflectance on the output: *Automatic* (the material with the
+  largest area) or a chosen material. It replaces the clipped *Reference* checkboxes in the
+  material list. Outputs say how they set reflectance (`AtlasReflectanceSupport`): Poiyomi's
+  is fixed, so it is never shown there. Toon Standard's reflectance is its gloss map ×
+  `_Reflectance`, so each source's value is its reflectance over its smoothness, which keeps
+  Toon Standard sources' reflectance unchanged; before, it was halved at the default settings.
+- **Decals and emission:** decals placed by center, scale and rotation (clipped or not) are
+  baked into the base color as Poiyomi places them. *Emission* bakes each source's static
+  emission layers into one emission map, relative to the strongest source's emission, which
+  both writers set (Poiyomi emission 0 with its keyword; Toon Standard's emission), strengths
+  above the shaders' sliders going into the color. No *baked into color* mode: it wouldn't
+  glow. Decals with symmetry, mirror sides, depth, spin or MSDF text, and live emission, are
+  listed in the diagnostics.
 - **Base color stack:** each source's color, its static color layers (tiled UV0 textures or
   colors, every blend including tint and add to luminance, masks, source alpha as opacity)
   and its static color adjustments (hue in HSV or Oklab, saturation, contrast, brightness,

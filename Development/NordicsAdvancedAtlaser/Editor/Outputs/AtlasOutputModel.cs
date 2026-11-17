@@ -19,7 +19,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         Roughness,
         ReflectionMask,
         SpecularMask,
-        Occlusion
+        Occlusion,
+        // Emission (S5), relative to the output's emission strength.
+        Emission
     }
 
     // Which channels of a texture a virtual map fills.
@@ -78,6 +80,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool Provides(AtlasVirtualMap map) => Channels.Exists(c => c.Map == map);
     }
 
+    // How an output shader sets reflectance, the reflectivity of non-metal surfaces.
+    public enum AtlasReflectanceSupport
+    {
+        // Fixed by the shader (Poiyomi's Reflections & Specular: 4%, reflectance 0.5).
+        None,
+        // One value for the whole material: the output's Reflectance.Constant.
+        Constant,
+        // The smoothness map times one value, the output's Reflectance.Constant (Toon Standard:
+        // the gloss map × _Reflectance).
+        FollowsSmoothness
+    }
+
     // What an output shader can express, in unified terms. Feature modes are offered only
     // when the capabilities they need are here. Grows with the features.
     public sealed class AtlasOutputCapabilities
@@ -90,6 +104,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The writer can fade by alpha while writing depth, so parts at alpha 1 sort like opaque
         // ones (Poiyomi's TransClipping).
         public bool BlendedDepthWrite;
+        public AtlasReflectanceSupport Reflectance;
 
         public AtlasOutputTexture TextureFor(AtlasVirtualMap map) => Textures.Find(t => t.Provides(map));
 

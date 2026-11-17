@@ -16,6 +16,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly List<int> Present = new List<int>();
         // Those of them the feature isn't turned off for.
         public readonly List<int> Active = new List<int>();
+        // The active sources need different values for the feature's shared value
+        // (IAtlasSharedValueFeature), so the user can pick the source it is taken from.
+        public bool SharedValuesDiffer;
     }
 
     // One output texture the chosen modes use, with its size and memory.
@@ -83,6 +86,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 bool off = setting?.disabledSources != null && setting.disabledSources.Contains(materials[i]);
                 if (!off) state.Active.Add(i);
             }
+            state.SharedValuesDiffer = feature is IAtlasSharedValueFeature shared && state.Active.Count > 1 &&
+                state.Mode.Kind != AtlasFeatureModeKind.Off &&
+                shared.SharedValuesDiffer(state.Active.Select(i => unified[i]).ToList(), capabilities);
             return state;
         }
 

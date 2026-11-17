@@ -8,8 +8,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // Reflection and specular (ATLAS_OUTPUT.md, "Feature inventory"): each source's metallic and
     // roughness baked into maps; the strengths of its highlights and reflections into masks,
     // relative to the largest, which the output uses. Sources without them get no metallic, full
-    // roughness and no highlights or reflections. Reflectance is shared, from the reference source.
-    public sealed class AtlasSpecularFeature : IAtlasOutputFeature
+    // roughness and no highlights or reflections. Reflectance is one value in the output: where
+    // the sources need different ones, it comes from the reference source.
+    public sealed class AtlasSpecularFeature : IAtlasSharedValueFeature
     {
         private static readonly AtlasFeatureMode[] ModeList =
         {
@@ -17,8 +18,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 Id = "native", Label = "Metallic and smoothness maps", Kind = AtlasFeatureModeKind.Native,
                 RequiredMaps = new[] { AtlasVirtualMap.Metallic, AtlasVirtualMap.Roughness },
-                OptionalMaps = new[] { AtlasVirtualMap.ReflectionMask, AtlasVirtualMap.SpecularMask },
-                UsesReferenceSource = true
+                OptionalMaps = new[] { AtlasVirtualMap.ReflectionMask, AtlasVirtualMap.SpecularMask }
             },
             AtlasFeatureMode.Off
         };
@@ -28,6 +28,48 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasFeatureSection Section => AtlasFeatureSection.Surface;
         public int Order => 3;
         public IReadOnlyList<AtlasFeatureMode> Modes => ModeList;
+        public string SharedValueName => "Reflectance";
+
+        public bool SharedValuesDiffer(IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasOutputCapabilities capabilities)
+        {
+            if (capabilities.Reflectance == AtlasReflectanceSupport.None || sources.Count < 2) return false;
+            float first = OutputReflectance(sources[0].Surface.Response, capabilities.Reflectance, out _);
+            return sources.Skip(1).Any(s => !Same(OutputReflectance(s.Surface.Response, capabilities.Reflectance, out _), first));
+        }
+
+        private static bool Same(float a, float b) => Mathf.Abs(a - b) <= 0.005f;
+
+        // The output's reflectance value that gives the source its reflectance. Where the output
+        // multiplies it by the smoothness map, that is the source's reflectance over its
+        // smoothness: exact where the source's reflectance follows its smoothness (Toon
+        // Standard's gloss map × _Reflectance) or both are constants. `exact` is false where the
+        // output can't give the source's reflectance everywhere.
+        public static float OutputReflectance(AtlasSurfaceResponse response, AtlasReflectanceSupport support, out bool exact)
+        {
+            var reflectance = response.Reflectance;
+            if (support != AtlasReflectanceSupport.FollowsSmoothness)
+            {
+                exact = reflectance.Map == null;
+                return Mathf.Clamp01(reflectance.Constant);
+            }
+            var roughness = response.Roughness;
+            // Smoothness is the map × this strength (roughness inverted after the multiply), or
+            // the constant alone without a map.
+            float smoothness = roughness.InvertResult ? roughness.Constant : 1f - roughness.Constant;
+            bool follows = reflectance.Map != null && roughness.Map != null && roughness.InvertResult && !roughness.InvertSample &&
+                           !reflectance.InvertSample && !reflectance.InvertResult && reflectance.Map.Texture == roughness.Map.Texture &&
+                           reflectance.Channel == roughness.Channel;
+            bool constants = reflectance.Map == null && roughness.Map == null;
+            if (smoothness <= 0f)
+            {
+                // No smoothness, so no reflectance either.
+                exact = reflectance.Constant <= 0f;
+                return Mathf.Clamp01(reflectance.Constant);
+            }
+            float value = reflectance.Constant / smoothness;
+            exact = (follows || constants) && value <= 1f;
+            return Mathf.Clamp01(value);
+        }
 
         // Unlit and flat lighting show no highlights or reflections.
         public bool IsPresent(AtlasUnifiedMaterial source)
@@ -50,8 +92,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (response.Highlights.Enabled) highlights = Mathf.Max(highlights, response.Highlights.Strength);
             }
             var output = context.Output.Surface.Response;
-            var reference = job.Sources[Reference(context)].Material.Surface.Response;
-            output.Reflectance.Constant = reference.Reflectance.Constant;
+            var support = context.Capabilities.Reflectance;
+            int reference = Reference(context);
+            if (support != AtlasReflectanceSupport.None)
+                output.Reflectance.Constant = OutputReflectance(job.Sources[reference].Material.Surface.Response, support, out _);
             output.Reflections.Enabled = reflections > 0f;
             output.Reflections.Strength = reflections;
             output.Highlights.Enabled = highlights > 0f;
@@ -74,6 +118,34 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         m.Surface.Response.Highlights.Mask, m.Surface.Response.Highlights.Strength / highlights, w, h))
                 };
             Notes(context, active);
+            ReflectanceNotes(context, reference);
+        }
+
+        // Sources whose reflectance the output doesn't keep, by source number.
+        private static void ReflectanceNotes(AtlasFeatureContext context, int reference)
+        {
+            var support = context.Capabilities.Reflectance;
+            var sources = context.Sources.Select(i => (index: i, response: context.Job.Sources[i].Material.Surface.Response)).ToList();
+            if (support == AtlasReflectanceSupport.None)
+            {
+                var lost = sources.Where(s => s.response.Reflectance.Map != null || !Same(s.response.Reflectance.Constant, 0.5f)).ToList();
+                if (lost.Count > 0)
+                    context.Notes.Add($"The output shader's reflectance is fixed at 0.5 (4%); the reflectance of {Numbers(lost.Select(s => s.index))} isn't kept.");
+                return;
+            }
+            float used = OutputReflectance(context.Job.Sources[reference].Material.Surface.Response, support, out _);
+            var differ = sources.Where(s => !Same(OutputReflectance(s.response, support, out _), used)).ToList();
+            if (differ.Count > 0)
+                context.Notes.Add($"Reflectance is taken from source {reference + 1}; the reflectance of {Numbers(differ.Select(s => s.index))} differs.");
+            var inexact = sources.Where(s => { OutputReflectance(s.response, support, out bool exact); return !exact; }).ToList();
+            if (inexact.Count > 0 && support == AtlasReflectanceSupport.FollowsSmoothness)
+                context.Notes.Add($"The output shader's reflectance follows its smoothness map; the reflectance of {Numbers(inexact.Select(s => s.index))} doesn't, so it matches only where the smoothness is full.");
+        }
+
+        private static string Numbers(IEnumerable<int> indices)
+        {
+            var list = indices.Select(i => (i + 1).ToString()).ToList();
+            return (list.Count == 1 ? "source " : "sources ") + string.Join(", ", list);
         }
 
         // The reference source: the chosen one when it has the feature, otherwise the one with the
