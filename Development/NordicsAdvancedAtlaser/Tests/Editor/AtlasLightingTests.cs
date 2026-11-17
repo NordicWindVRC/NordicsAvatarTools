@@ -344,6 +344,36 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
+        public void EachWriterSetsItsFloorFromTheUnifiedFloors()
+        {
+            var toonStandard = Installed("mobiletoon");
+            var lit = Lit(AtlasLightingFamily.RampToon);
+            lit.Lighting.MinimumLight = 0.04f;
+            var material = new Material(toonStandard.FindShader());
+            created.Add(material);
+            toonStandard.Write(lit, material);
+            Assert.AreEqual(0.04f, material.GetFloat("_MinBrightness"), 1e-4f, "the minimum light");
+
+            lit.Lighting.MinimumLight = 0f;
+            lit.Lighting.ColorModel = AtlasLightColorModel.Floored;
+            lit.Lighting.FloorIntensity = 1f;
+            toonStandard.Write(lit, material);
+            Assert.AreEqual(0.05f, material.GetFloat("_MinBrightness"), 1e-4f, "the floored color's ambient floor");
+
+            lit.Lighting.MinimumLight = 0.5f;
+            toonStandard.Write(lit, material);
+            Assert.AreEqual(0.1f, material.GetFloat("_MinBrightness"), 1e-4f, "capped at the slider's 0.1");
+
+            var poiyomi = Installed("poiyomi10");
+            var bright = Lit(AtlasLightingFamily.RampToon);
+            bright.Lighting.MinimumBrightness = 0.06f;
+            var poiyomiMaterial = new Material(poiyomi.FindShader());
+            created.Add(poiyomiMaterial);
+            poiyomi.Write(bright, poiyomiMaterial);
+            Assert.AreEqual(0.06f, poiyomiMaterial.GetFloat("_LightingMinLightBrightness"), 1e-4f, "Toon Standard's minimum brightness");
+        }
+
+        [Test]
         public void ToonStandardTakesTheRampAndShadowSettingsItHas()
         {
             var shader = Installed("mobiletoon");

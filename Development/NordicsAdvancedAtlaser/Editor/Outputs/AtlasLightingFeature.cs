@@ -222,6 +222,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return c;
         }
 
+        /// <summary>The darkest the lighting lets the surface get, as a share of its base color: the
+        /// largest of the unified floors (the minimum brightness added like emission, the minimum
+        /// light, and the floored light color's ambient floor of 0.05 × its intensity). For writers
+        /// with one control for it.</summary>
+        public static float Floor(AtlasLighting lighting) =>
+            Mathf.Max(lighting.MinimumBrightness, Mathf.Max(lighting.MinimumLight,
+                lighting.ColorModel == AtlasLightColorModel.Floored ? 0.05f * lighting.FloorIntensity : 0f));
+
         /// <summary>Whether the build generates a ramp texture for the output: one that shades
         /// only through a ramp, whose ramp is described by keys.</summary>
         public static bool NeedsGeneratedRamp(AtlasUnifiedMaterial output, AtlasOutputCapabilities capabilities) =>

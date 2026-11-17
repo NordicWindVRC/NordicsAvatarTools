@@ -8,6 +8,11 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Lighting floors:** each writer sets its one floor from the unified floors, so an atlas
+  stays visible in dark worlds whatever the source shader: Toon Standard's Min Brightness from
+  the largest of the unified minimum brightness, minimum light and the floored light color's
+  ambient floor (capped at its 0.1), Poiyomi's Min Brightness from the larger of the minimum
+  light and minimum brightness (`AtlasLightingFeature.Floor`).
 - **Lighting drawn on the texture:** *Shadow Colors* bakes every source's band and shade
   textures into up to three shadow color textures, and *Skin Thickness* every source's skin
   thickness into its own, which the Poiyomi writer sets (`_ShadowColorTex` and its 2nd and 3rd,

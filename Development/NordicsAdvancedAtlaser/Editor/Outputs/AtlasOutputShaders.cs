@@ -246,7 +246,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             m.SetFloat("_LightingCapLuminance", l.LimitByLuminance);
             m.SetFloat("_LightingCapMode", l.LimitKeepsHue ? 1 : 0);
             m.SetFloat("_BackfaceForceShadow", ramp.BackFaceShadow);
-            m.SetFloat("_LightingMinLightBrightness", l.MinimumLight);
+            // Its one floor: the minimum light, or a brightness added like emission (Toon Standard's).
+            m.SetFloat("_LightingMinLightBrightness", Mathf.Max(l.MinimumLight, l.MinimumBrightness));
             m.SetFloat("_LightingForceColorEnabled", l.FixedLightColor ? 1 : 0);
             m.SetColor("_LightingForcedColor", l.LightColor.gamma);
             m.SetFloat("_LightingForcedColorThemeIndex", 0);
@@ -600,7 +601,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // Banded shading keeps its shadow color in the first band.
             var tint = ramp.Bands.Count > 0 ? ramp.Bands[0].Color.Color : ramp.ShadowTint.Color;
             m.SetFloat("_ShadowAlbedo", Mathf.Clamp01(tint.r * 0.2126f + tint.g * 0.7152f + tint.b * 0.0722f));
-            m.SetFloat("_MinBrightness", Mathf.Clamp(l.MinimumBrightness, 0f, 0.1f));
+            // Its one floor (base × it, added like emission): the unified floors' largest.
+            m.SetFloat("_MinBrightness", Mathf.Clamp(AtlasLightingFeature.Floor(l), 0f, 0.1f));
             m.SetFloat("_LimitBrightness", l.LimitBrightness ? 1 : 0);
         }
 
