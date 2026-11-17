@@ -61,8 +61,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             context.Maps.Add(request);
 
             var materials = active.Select(i => job.Sources[i].Material).ToList();
-            if (materials.Any(m => NormalLayers(m).Any(l => !AtlasMapEvaluator.CanBakeNormalLayer(l))))
-                context.Notes.Add("A normal layer that is placed, masked by the mask bus or vertex colors, on another UV, or lerped isn't baked yet; it's left out.");
+            if (materials.Any(m => NormalLayers(m).Any(l => !AtlasMapEvaluator.CanBakeNormalLayer(l, m))))
+                context.Notes.Add("A normal layer that is placed, masked by vertex colors or a global mask written by vertex colors, layers or the second pass, on another UV, or lerped isn't baked yet; it's left out.");
         }
 
         // The surface layers that change the normal.
@@ -79,7 +79,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (AtlasMapEvaluator.Correction(source) != null) strength = 1f;
             var material = source.Material;
             if (material?.Surface.Normal.Map?.Texture != null) strength = Mathf.Max(strength, material.Surface.Normal.Strength);
-            foreach (var layer in NormalLayers(material).Where(AtlasMapEvaluator.CanBakeNormalLayer))
+            foreach (var layer in NormalLayers(material).Where(l => AtlasMapEvaluator.CanBakeNormalLayer(l, material)))
                 foreach (var target in layer.Targets.Where(t => t.Target == AtlasSurfaceTarget.Normal))
                     strength = Mathf.Max(strength, target.Opacity);
             return strength;

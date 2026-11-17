@@ -8,6 +8,15 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Mask baking:** masks are baked with their levels, and the mask bus (Poiyomi's global
+  masks) is baked per source by `AtlasMaskBusEvaluator`: texture, offset, remap and force
+  steps exactly; back face, mirror, camera, distance, blacklight and contact steps as the
+  avatar is normally seen (front faces, outside mirrors and cameras, far away, nothing
+  touching), which the build lists. Masks and scalar inputs (metallic, smoothness, occlusion)
+  read their channel by Poiyomi's mask blend, the scalars before the smoothness is turned
+  into roughness. Color layers, adjustments, alpha masks, normal layers, emission and the
+  highlight and reflection masks gain it. Channels with vertex color, layer coverage or
+  second-pass steps are still listed as not baked.
 - **Conflicts decided by the user or reported:** where the output can't give every material
   what it had, the user decides or the build log says so.
   - *Alpha to coverage* (On or Off) under *Surface Mode*, shown only when the cutout

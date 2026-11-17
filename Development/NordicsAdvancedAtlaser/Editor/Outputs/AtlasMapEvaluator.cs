@@ -16,9 +16,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 case AtlasVirtualMap.BaseColor: return BaseColor(source, width, height);
                 case AtlasVirtualMap.Alpha: return Alpha(source, width, height, default);
-                case AtlasVirtualMap.Metallic: return Scalar(source.Surface.Response.Metallic, width, height);
-                case AtlasVirtualMap.Roughness: return Scalar(source.Surface.Response.Roughness, width, height);
-                case AtlasVirtualMap.Occlusion: return Scalar(source.Surface.Response.Occlusion, width, height);
+                case AtlasVirtualMap.Metallic: return Scalar(source.Surface.Response.Metallic, width, height, source);
+                case AtlasVirtualMap.Roughness: return Scalar(source.Surface.Response.Roughness, width, height, source);
+                case AtlasVirtualMap.Occlusion: return Scalar(source.Surface.Response.Occlusion, width, height, source);
                 case AtlasVirtualMap.ReflectionMask:
                 case AtlasVirtualMap.SpecularMask: return Constant(map, 1f, width, height);
                 case AtlasVirtualMap.Normal:
@@ -70,14 +70,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (primary?.Map?.Texture is Texture2D texture)
                     using (var sampled = Sample(primary.Map, texture, TextureDataType.NormalTangent, width, height))
                         result.Blit(sampled, blend: TextureBlendMode.NormalWhiteout, strength: primary.Strength * scale);
-                foreach (var layer in AtlasNormalFeature.NormalLayers(material).Where(CanBakeNormalLayer))
+                foreach (var layer in AtlasNormalFeature.NormalLayers(material).Where(l => CanBakeNormalLayer(l, material)))
                     foreach (var target in layer.Targets.Where(t => t.Target == AtlasSurfaceTarget.Normal))
                         using (var sampled = Sample(layer.Source.Map, (Texture2D)layer.Source.Map.Texture, TextureDataType.NormalTangent, width, height))
                         {
                             if (layer.Mask == null)
                                 result.Blit(sampled, blend: TextureBlendMode.NormalWhiteout, strength: target.Opacity * scale);
                             else
-                                using (var mask = Mask(layer.Mask, width, height))
+                                using (var mask = Mask(layer.Mask, width, height, material))
                                     result.Blit(sampled, mask: mask, maskOptions: new TextureMaskOptions { Channel = TextureChannel.R },
                                         blend: TextureBlendMode.NormalWhiteout, strength: target.Opacity * scale);
                         }
@@ -98,10 +98,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         /// <summary>Whether a normal layer is in the bakeable subset: a texture on UV0, tiled over
         /// the surface, on both faces and in every view, whiteout (not lerped), with a mask that
         /// CanEvaluate or none.</summary>
-        public static bool CanBakeNormalLayer(AtlasSurfaceLayer layer) =>
+        public static bool CanBakeNormalLayer(AtlasSurfaceLayer layer, AtlasUnifiedMaterial source = null) =>
             layer != null && layer.Source.Map?.Texture is Texture2D && layer.Source.Map.Space == AtlasTextureSpace.UV0 &&
             layer.Source.Map.Decal == null && layer.Placement == AtlasPlacement.Surface && layer.Faces == AtlasFaces.Both &&
-            layer.Mirror == AtlasMirrorVisibility.Both && (layer.Mask == null || CanEvaluate(layer.Mask)) &&
+            layer.Mirror == AtlasMirrorVisibility.Both && (layer.Mask == null || CanEvaluate(layer.Mask, source)) &&
             layer.Targets.Where(t => t.Target == AtlasSurfaceTarget.Normal).All(t => !t.ReplaceNormal);
 
         // One value everywhere; a one-value map holds it in RGB.
@@ -133,16 +133,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             using (var sampled = Sample(source.Surface.BaseColor.Map, texture, TextureDataType.Color, width, height))
                                 ChannelToRgb(result, sampled, TextureChannel.A);
                         Scale(result, colorAlpha);
-                        if (alpha.Mask != null && CanEvaluate(alpha.Mask))
-                            using (var mask = Mask(alpha.Mask, width, height))
+                        if (alpha.Mask != null && CanEvaluate(alpha.Mask, source))
+                            using (var mask = Mask(alpha.Mask, width, height, source))
                                 Combine(result, mask, alpha.MaskBlend);
                         break;
                     case AtlasAlphaSource.BaseColorConstantAlpha:
                         Scale(result, colorAlpha);
                         break;
                     case AtlasAlphaSource.Mask:
-                        if (alpha.Mask != null && CanEvaluate(alpha.Mask))
-                            using (var mask = Mask(alpha.Mask, width, height))
+                        if (alpha.Mask != null && CanEvaluate(alpha.Mask, source))
+                            using (var mask = Mask(alpha.Mask, width, height, source))
                                 result.Blit(mask);
                         Scale(result, alpha.MaskMultiplier);
                         break;
@@ -166,13 +166,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         /// <summary>
         /// A scalar input (1.2) in RGB: the constant × the map's channel (the sample inverted
-        /// first when asked; for strength around one, 1 − (1 − channel) × constant), then the result
-        /// inverted when asked, clamped to 0–1. A map outside CanEvaluate counts as its constant
-        /// alone (the feature reports it).
+        /// first when asked; for strength around one, 1 − (1 − channel) × constant), combined with
+        /// its mask bus channel, then the result inverted when asked, clamped to 0–1. An input
+        /// outside CanEvaluate counts as its constant alone (the feature reports it). The bus
+        /// needs the input's material, <paramref name="source"/>.
         /// </summary>
-        public static NordicsTextureWrapper Scalar(AtlasScalarInput input, int width, int height)
+        public static NordicsTextureWrapper Scalar(AtlasScalarInput input, int width, int height, AtlasUnifiedMaterial source = null)
         {
-            if (!CanEvaluate(input) || !(input.Map?.Texture is Texture2D texture))
+            var texture = input.Map?.Texture as Texture2D;
+            if (!CanEvaluate(input, source) || (texture == null && input.Bus < 0))
             {
                 var probe = new AtlasScalarInput { Constant = input.Constant, Combine = input.Combine, InvertResult = input.InvertResult };
                 return Constant(AtlasVirtualMap.Metallic, Mathf.Clamp01(probe.Evaluate()), width, height);
@@ -180,15 +182,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var result = Constant(AtlasVirtualMap.Metallic, 1f, width, height);
             try
             {
-                using (var sampled = Sample(input.Map, texture, TextureDataType.LinearData, width, height))
-                    ReadChannel(result, sampled, input.Channel);
-                if (input.InvertSample) result.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Invert });
-                if (input.Combine == AtlasScalarCombine.StrengthAroundOne)
+                if (texture != null)
                 {
-                    Scale(result, input.Constant);
-                    Add(result, 1f - input.Constant);
+                    using (var sampled = Sample(input.Map, texture, TextureDataType.LinearData, width, height))
+                        ReadChannel(result, sampled, input.Channel);
+                    if (input.InvertSample) result.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Invert });
+                    if (input.Combine == AtlasScalarCombine.StrengthAroundOne)
+                    {
+                        Scale(result, input.Constant);
+                        Add(result, 1f - input.Constant);
+                    }
+                    else Scale(result, input.Constant);
                 }
-                else Scale(result, input.Constant);
+                else Scale(result, new AtlasScalarInput { Constant = input.Constant, Combine = input.Combine }.Evaluate());
+                if (input.Bus >= 0)
+                    using (var channel = AtlasMaskBusEvaluator.Channel(source, input.Bus, width, height))
+                        AtlasMaskBusEvaluator.Blend(result, channel, input.BusBlend);
                 if (input.InvertResult) result.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Invert });
                 Clamp(result);
                 return result;
@@ -201,17 +210,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         /// <summary>Whether a scalar input is in the bakeable subset: a constant, or a map on UV0,
-        /// tiled over the surface, without a remap or the mask bus.</summary>
-        public static bool CanEvaluate(AtlasScalarInput input) =>
-            input != null && input.Bus < 0 && (input.Map == null ||
+        /// tiled over the surface, without a remap; on a mask bus channel of
+        /// <paramref name="source"/> that AtlasMaskBusEvaluator can bake.</summary>
+        public static bool CanEvaluate(AtlasScalarInput input, AtlasUnifiedMaterial source = null) =>
+            input != null && (input.Bus < 0 || AtlasMaskBusEvaluator.CanBake(source, input.Bus)) && (input.Map == null ||
                 (input.Map.Texture is Texture2D && input.Map.Space == AtlasTextureSpace.UV0 && input.Map.Decal == null && input.Remap == null));
 
         /// <summary>A mask's value in RGB, × <paramref name="scale"/>; <paramref name="scale"/> alone
-        /// without a mask or outside CanEvaluate.</summary>
-        public static NordicsTextureWrapper ScaledMask(AtlasMask mask, float scale, int width, int height)
+        /// without a mask or outside CanEvaluate. The bus needs the mask's material,
+        /// <paramref name="source"/>.</summary>
+        public static NordicsTextureWrapper ScaledMask(AtlasMask mask, float scale, int width, int height, AtlasUnifiedMaterial source = null)
         {
-            if (mask == null || !CanEvaluate(mask)) return Constant(AtlasVirtualMap.Metallic, Mathf.Max(0f, scale), width, height);
-            var result = Mask(mask, width, height);
+            if (mask == null || !CanEvaluate(mask, source)) return Constant(AtlasVirtualMap.Metallic, Mathf.Max(0f, scale), width, height);
+            var result = Mask(mask, width, height, source);
             Scale(result, Mathf.Max(0f, scale));
             return result;
         }
@@ -227,33 +238,51 @@ namespace NordicWind.AdvancedAtlaser.Editor
             else ChannelToRgb(target, sampled, Channels[(int)channel]);
         }
 
-        /// <summary>Whether a mask is in the bakeable subset: a texture channel on UV0 with its
-        /// invert and strength, without the mask bus, vertex colors or levels.</summary>
-        public static bool CanEvaluate(AtlasMask mask) =>
-            mask != null && mask.Map?.Texture is Texture2D && mask.Map.Space == AtlasTextureSpace.UV0 &&
-            mask.Bus < 0 && !mask.VertexColor && !mask.TimesVertexColor && mask.Levels == null;
+        /// <summary>Whether a mask is in the bakeable subset: a texture channel on UV0 (or none)
+        /// with its levels, invert and strength, combined with a mask bus channel of
+        /// <paramref name="source"/> that AtlasMaskBusEvaluator can bake; without vertex colors.</summary>
+        public static bool CanEvaluate(AtlasMask mask, AtlasUnifiedMaterial source = null) =>
+            mask != null && !mask.VertexColor && !mask.TimesVertexColor &&
+            (mask.Map == null || (mask.Map.Texture is Texture2D && mask.Map.Space == AtlasTextureSpace.UV0)) &&
+            (mask.Bus < 0 || AtlasMaskBusEvaluator.CanBake(source, mask.Bus));
 
-        // The mask's value in RGB.
-        private static NordicsTextureWrapper Mask(AtlasMask mask, int width, int height)
+        // The mask's value in RGB: the channel through the levels, inverted, lerp(1, v, strength)
+        // (1 without a map), then combined with its bus channel.
+        private static NordicsTextureWrapper Mask(AtlasMask mask, int width, int height, AtlasUnifiedMaterial source)
         {
             var result = Constant(AtlasVirtualMap.Alpha, 1f, width, height);
-            using (var sampled = Sample(mask.Map, (Texture2D)mask.Map.Texture, TextureDataType.LinearData, width, height))
+            try
             {
-                if (mask.Channel == AtlasChannel.Luminance)
+                if (mask.Map?.Texture is Texture2D texture)
                 {
-                    // Saturation 0 leaves the luminance in every channel.
-                    sampled.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Saturation, Parameters = { Amount = 0f } });
-                    ChannelToRgb(result, sampled, TextureChannel.R);
+                    using (var sampled = Sample(mask.Map, texture, TextureDataType.LinearData, width, height))
+                    {
+                        if (mask.Channel == AtlasChannel.Luminance)
+                        {
+                            // Saturation 0 leaves the luminance in every channel.
+                            sampled.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Saturation, Parameters = { Amount = 0f } });
+                            ChannelToRgb(result, sampled, TextureChannel.R);
+                        }
+                        else ChannelToRgb(result, sampled, Channels[(int)mask.Channel]);
+                    }
+                    if (mask.Levels != null) AtlasMaskBusEvaluator.Each(result, mask.Levels.Evaluate);
+                    if (mask.Invert) result.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Invert });
+                    if (mask.Strength < 1f)
+                    {
+                        Scale(result, Mathf.Clamp01(mask.Strength));
+                        Add(result, 1f - Mathf.Clamp01(mask.Strength));
+                    }
                 }
-                else ChannelToRgb(result, sampled, Channels[(int)mask.Channel]);
+                if (mask.Bus >= 0)
+                    using (var channel = AtlasMaskBusEvaluator.Channel(source, mask.Bus, width, height))
+                        AtlasMaskBusEvaluator.Blend(result, channel, mask.BusBlend);
+                return result;
             }
-            if (mask.Invert) result.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Invert });
-            if (mask.Strength < 1f)
+            catch
             {
-                Scale(result, Mathf.Clamp01(mask.Strength));
-                Add(result, 1f - Mathf.Clamp01(mask.Strength));
+                result.Dispose();
+                throw;
             }
-            return result;
         }
 
         private static readonly TextureChannel[] Channels = { TextureChannel.R, TextureChannel.G, TextureChannel.B, TextureChannel.A };

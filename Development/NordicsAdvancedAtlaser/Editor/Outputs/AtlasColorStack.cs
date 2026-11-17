@@ -92,7 +92,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             (emission || !layer.SourceTimesBaseColor) && !layer.SourceIntensityIsAlpha && layer.Source.AudioTheme < 0 &&
             (!emission || (!layer.OverridesBaseColor && !layer.EmissionTimesAlpha)) &&
             (layer.Source.Map == null || StillOnUV0(layer.Source.Map)) &&
-            (layer.Mask == null || AtlasMapEvaluator.CanEvaluate(layer.Mask)) &&
+            (layer.Mask == null || AtlasMapEvaluator.CanEvaluate(layer.Mask, source)) &&
             IsStatic(source, "layers[" + index + "]");
 
         /// <summary>A source's emission: its baked emission layers added up, divided by
@@ -114,7 +114,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             if (layer.SourceTimesBaseColor)
                                 using (var baseColor = Evaluate(source, width, height, multiplyColor: true))
                                     layerSource.Blit(baseColor, blend: TextureBlendMode.Multiply);
-                            using (var mask = Mask(layer, layerSource, coverage, width, height))
+                            using (var mask = Mask(layer, source, layerSource, coverage, width, height))
                                 result.Blit(layerSource, mask: mask, maskOptions: mask != null ? new TextureMaskOptions { Channel = TextureChannel.R } : null,
                                     blend: TextureBlendMode.Add, strength: Mathf.Max(0f, target.Opacity));
                         }
@@ -148,7 +148,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static bool CanBake(AtlasUnifiedMaterial source, int index, AtlasColorAdjustment adjustment)
         {
             if (adjustment.Target == AtlasAdjustmentTarget.FinalColor || adjustment.Target == AtlasAdjustmentTarget.Emission) return false;
-            if (adjustment.Mask != null && !AtlasMapEvaluator.CanEvaluate(adjustment.Mask)) return false;
+            if (adjustment.Mask != null && !AtlasMapEvaluator.CanEvaluate(adjustment.Mask, source)) return false;
             if (!IsStatic(source, "colorAdjustments[" + index + "]")) return false;
             switch (adjustment.Operation)
             {
@@ -176,7 +176,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (color && layer.Source.Map?.Decal != null && !CanPlace(layer.Source.Map))
                     notes.Add("A decal with symmetry, mirror sides, parallax depth, spin, a rotated texture or MSDF text isn't baked yet; it's left out.");
                 else if (color && !CanBake(source, i, layer))
-                    notes.Add("A color layer that is live (modulated, scrolling, animated), lit, on one side or in mirrors, or masked by the mask bus or vertex colors isn't baked yet; it's left out.");
+                    notes.Add("A color layer that is live (modulated, scrolling, animated), lit, on one side or in mirrors, or masked by vertex colors or a global mask written by vertex colors, layers or the second pass isn't baked yet; it's left out.");
                 if (layer.Targets.Any(t => t.Target == AtlasSurfaceTarget.Metallic || t.Target == AtlasSurfaceTarget.Roughness ||
                                             t.Target == AtlasSurfaceTarget.Occlusion || t.Target == AtlasSurfaceTarget.Alpha))
                     notes.Add("Layers targeting alpha, metallic, roughness or occlusion aren't baked yet; they're left out.");
@@ -187,7 +187,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (adjustment.Target == AtlasAdjustmentTarget.FinalColor)
                     notes.Add("Final color adjustments aren't merged yet; they're left out.");
                 else if (adjustment.Target != AtlasAdjustmentTarget.Emission && !CanBake(source, i, adjustment))
-                    notes.Add("A color adjustment that is live, masked by the mask bus or vertex colors, or an operation without a baked form yet (" +
+                    notes.Add("A color adjustment that is live, masked by vertex colors or a global mask written by vertex colors, layers or the second pass, or an operation without a baked form yet (" +
                         adjustment.Operation + ") isn't baked; it's left out.");
             }
             if (source.Surface.VertexColor.MultiplyColor)
@@ -203,7 +203,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             using (coverage)
             {
                 Adjust(source, material, AtlasAdjustmentTarget.Layer, layer, width, height);
-                using (var mask = Mask(layer, source, coverage, width, height))
+                using (var mask = Mask(layer, material, source, coverage, width, height))
                 {
                     var options = mask != null ? new TextureMaskOptions { Channel = TextureChannel.R } : null;
                     float opacity = Mathf.Max(0f, target.Opacity);
@@ -319,12 +319,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // The layer's mask × (with "source alpha is opacity") its source's alpha plus the offset, ×
         // a decal's coverage; null when none applies.
-        private static NordicsTextureWrapper Mask(AtlasSurfaceLayer layer, NordicsTextureWrapper source, NordicsTextureWrapper coverage,
-            int width, int height)
+        private static NordicsTextureWrapper Mask(AtlasSurfaceLayer layer, AtlasUnifiedMaterial material, NordicsTextureWrapper source,
+            NordicsTextureWrapper coverage, int width, int height)
         {
             bool alpha = layer.SourceAlphaIsOpacity || layer.SourceMapIsMask;
             if (layer.Mask == null && !alpha && coverage == null) return null;
-            var mask = layer.Mask != null ? AtlasMapEvaluator.ScaledMask(layer.Mask, 1f, width, height)
+            var mask = layer.Mask != null ? AtlasMapEvaluator.ScaledMask(layer.Mask, 1f, width, height, material)
                 : AtlasMapEvaluator.Constant(AtlasVirtualMap.Metallic, 1f, width, height);
             if (coverage != null) mask.Blit(coverage, blend: TextureBlendMode.Multiply);
             if (!alpha) return mask;
@@ -350,7 +350,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 var adjustment = source.ColorAdjustments[i];
                 if (adjustment.Target != target || (target == AtlasAdjustmentTarget.Layer && adjustment.Layer != layer)) continue;
                 if (!CanBake(source, i, adjustment)) continue;
-                using (var mask = adjustment.Mask != null ? AtlasMapEvaluator.ScaledMask(adjustment.Mask, 1f, width, height) : null)
+                using (var mask = adjustment.Mask != null ? AtlasMapEvaluator.ScaledMask(adjustment.Mask, 1f, width, height, source) : null)
                 {
                     var operation = Operation(adjustment);
                     if (mask != null)

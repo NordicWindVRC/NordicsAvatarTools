@@ -102,19 +102,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
             output.Highlights.Strength = highlights;
 
             output.Metallic.Constant = 1f;
-            output.Metallic.Map = Request(context, AtlasVirtualMap.Metallic, active, 0f, (m, w, h) => AtlasMapEvaluator.Scalar(m.Surface.Response.Metallic, w, h));
+            output.Metallic.Map = Request(context, AtlasVirtualMap.Metallic, active, 0f, (m, w, h) => AtlasMapEvaluator.Scalar(m.Surface.Response.Metallic, w, h, m));
             output.Roughness.Constant = 1f;
-            output.Roughness.Map = Request(context, AtlasVirtualMap.Roughness, active, 1f, (m, w, h) => AtlasMapEvaluator.Scalar(m.Surface.Response.Roughness, w, h));
+            output.Roughness.Map = Request(context, AtlasVirtualMap.Roughness, active, 1f, (m, w, h) => AtlasMapEvaluator.Scalar(m.Surface.Response.Roughness, w, h, m));
             if (context.Capabilities.Provides(AtlasVirtualMap.ReflectionMask) && reflections > 0f)
                 output.Reflections.Mask = new AtlasMask
                 {
-                    Map = Request(context, AtlasVirtualMap.ReflectionMask, active, 0f, (m, w, h) => Strength(m.Surface.Response.Reflections.Enabled,
+                    Map = Request(context, AtlasVirtualMap.ReflectionMask, active, 0f, (m, w, h) => Strength(m, m.Surface.Response.Reflections.Enabled,
                         m.Surface.Response.Reflections.Mask, m.Surface.Response.Reflections.Strength / reflections, w, h))
                 };
             if (context.Capabilities.Provides(AtlasVirtualMap.SpecularMask) && highlights > 0f)
                 output.Highlights.Mask = new AtlasMask
                 {
-                    Map = Request(context, AtlasVirtualMap.SpecularMask, active, 0f, (m, w, h) => Strength(m.Surface.Response.Highlights.Enabled,
+                    Map = Request(context, AtlasVirtualMap.SpecularMask, active, 0f, (m, w, h) => Strength(m, m.Surface.Response.Highlights.Enabled,
                         m.Surface.Response.Highlights.Mask, m.Surface.Response.Highlights.Strength / highlights, w, h))
                 };
             Notes(context, active);
@@ -171,8 +171,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 .ThenBy(i => i).First();
         }
 
-        private static NordicsTextureWrapper Strength(bool enabled, AtlasMask mask, float strength, int width, int height) =>
-            enabled ? AtlasMapEvaluator.ScaledMask(mask, Mathf.Clamp01(strength), width, height)
+        private static NordicsTextureWrapper Strength(AtlasUnifiedMaterial material, bool enabled, AtlasMask mask, float strength, int width, int height) =>
+            enabled ? AtlasMapEvaluator.ScaledMask(mask, Mathf.Clamp01(strength), width, height, material)
                 : AtlasMapEvaluator.Constant(AtlasVirtualMap.SpecularMask, 0f, width, height);
 
         // A one-value map for every source: the active ones evaluated, the others at `neutral`.
@@ -194,12 +194,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         private static void Notes(AtlasFeatureContext context, IEnumerable<int> active)
         {
-            var responses = active.Select(i => context.Job.Sources[i].Material.Surface.Response).ToList();
-            if (responses.Any(r => !AtlasMapEvaluator.CanEvaluate(r.Metallic) || !AtlasMapEvaluator.CanEvaluate(r.Roughness)))
-                context.Notes.Add("A metallic or roughness map on another UV, remapped or on the mask bus isn't baked yet; its slider value is used.");
-            if (responses.Any(r => (r.Highlights.Mask != null && !AtlasMapEvaluator.CanEvaluate(r.Highlights.Mask)) ||
-                                   (r.Reflections.Mask != null && !AtlasMapEvaluator.CanEvaluate(r.Reflections.Mask))))
-                context.Notes.Add("A highlight or reflection mask on the mask bus, vertex colors or levels isn't baked yet; it counts as 1.");
+            var materials = active.Select(i => context.Job.Sources[i].Material).ToList();
+            var responses = materials.Select(m => m.Surface.Response).ToList();
+            if (materials.Any(m => !AtlasMapEvaluator.CanEvaluate(m.Surface.Response.Metallic, m) || !AtlasMapEvaluator.CanEvaluate(m.Surface.Response.Roughness, m)))
+                context.Notes.Add("A metallic or roughness map on another UV, remapped or on a global mask written by vertex colors, layers or the second pass isn't baked yet; its slider value is used.");
+            if (materials.Any(m => (m.Surface.Response.Highlights.Mask != null && !AtlasMapEvaluator.CanEvaluate(m.Surface.Response.Highlights.Mask, m)) ||
+                                   (m.Surface.Response.Reflections.Mask != null && !AtlasMapEvaluator.CanEvaluate(m.Surface.Response.Reflections.Mask, m))))
+                context.Notes.Add("A highlight or reflection mask on another UV, vertex colors or a global mask written by vertex colors, layers or the second pass isn't baked yet; it counts as 1.");
             if (responses.Any(r => r.SpecularColor != null))
                 context.Notes.Add("The specular workflow's specular color isn't converted yet; the metallic and roughness are used.");
             context.Notes.Add("Highlight and reflection settings other than their strengths and masks (tints, fresnel, steps, anisotropy, cubemaps) aren't merged yet; the output shader's defaults are used.");
@@ -236,9 +237,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             occlusion.Constant = 1f;
             occlusion.Combine = AtlasScalarCombine.StrengthAroundOne;
             occlusion.Map = AtlasSpecularFeature.Request(context, AtlasVirtualMap.Occlusion, active, 1f,
-                (m, w, h) => AtlasMapEvaluator.Scalar(m.Surface.Response.Occlusion, w, h));
-            if (active.Any(i => !AtlasMapEvaluator.CanEvaluate(context.Job.Sources[i].Material.Surface.Response.Occlusion)))
-                context.Notes.Add("An occlusion map on another UV, remapped or on the mask bus isn't baked yet; it's left out.");
+                (m, w, h) => AtlasMapEvaluator.Scalar(m.Surface.Response.Occlusion, w, h, m));
+            if (active.Any(i => !AtlasMapEvaluator.CanEvaluate(context.Job.Sources[i].Material.Surface.Response.Occlusion, context.Job.Sources[i].Material)))
+                context.Notes.Add("An occlusion map on another UV, remapped or on a global mask written by vertex colors, layers or the second pass isn't baked yet; it's left out.");
         }
     }
 }

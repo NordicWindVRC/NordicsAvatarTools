@@ -111,6 +111,9 @@ and `ATLAS_OUTPUT.md` for the output design.
        the material it comes from (*Automatic*: the one with the largest area).
      - **Ambient Occlusion**: each source's occlusion map, at its strength; sources without
        one stay unoccluded.
+     - Masks, including Poiyomi's global masks, are baked into the features they limit.
+       Global mask options that change live (back faces, mirrors, cameras, distance,
+       contacts) are baked as the avatar is normally seen, and the build lists them.
      - **Surface Mode**: *Automatic* takes the most see-through mode among the sources that
        the output shader supports (Poiyomi: opaque, cutout, transparent, fade; Mobile Toon
        Standard: opaque). When transparent sources share the atlas with solid ones, it uses

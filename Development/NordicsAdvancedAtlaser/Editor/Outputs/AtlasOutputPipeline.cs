@@ -26,6 +26,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Resolve(job, capabilities, feature, plan);
             if (job.Sources.Count > 0)
                 plan.Notes.Add("Lighting (shading, shadows, light volumes) isn't merged yet; the output shader's default lighting is used.");
+            var live = new List<string>();
+            for (int i = 0; i < job.Sources.Count; i++)
+                if (AtlasMaskBusEvaluator.HasLiveSteps(job.Sources[i].Material)) live.Add((i + 1).ToString());
+            if (live.Count > 0)
+                plan.Notes.Add("Global masks that change live (back faces, mirrors, cameras, distance, blacklights, contacts) are baked as normally seen: " +
+                    "front faces, outside mirrors and cameras, from far away, with no blacklight or touch (" +
+                    (live.Count == 1 ? "source " : "sources ") + string.Join(", ", live) + ").");
             return plan;
         }
 

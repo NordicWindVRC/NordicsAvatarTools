@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3a is done, 2.3b is implemented. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4a is done, 2.4b is next. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -182,11 +182,19 @@ In two steps; vertex colors move to 2.5, with the remapper's vertex color handli
 
 ### 2.4 Masks
 
+**2.4a Mask baking**
+- Masks with their levels, and the mask bus (global masks) baked per source: texture,
+  offset, remap and force steps exactly; the live steps (faces, mirror, camera, distance,
+  blacklight, contact) at their normal-view value, listed in the diagnostics. Masks and
+  scalar inputs read their channel by Poiyomi's mask blend. Vertex color, layer coverage and
+  second-pass steps wait for 2.5, 2.7 and the second pass.
+- Per-source control (turning a feature off per source, the reference source) is in place
+  from 2.2 and the conflict controls.
+
+**2.4b Output masks**
 - The **mask allocator**: constants, shared masks, inverted masks, packed channels, mask bus
   channels, and dropping or falling back when places run out.
-- Global masks on Poiyomi, with live steps baked at their normal-view value where the output
-  lacks them.
-- Per-source control: turning a feature off per source, the reference source.
+- Global masks on Poiyomi, keeping live steps live where the output's bus has them.
 - **Workable:** features limited to parts of the atlas stay where they were.
 
 ### 2.5 Remapper: UV channels and vertex colors
