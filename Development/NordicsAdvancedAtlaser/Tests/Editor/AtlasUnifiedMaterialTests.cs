@@ -85,7 +85,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void AutoSetupSizesTheAtlasByTheLargestBaseColorOnly()
+        public void AutoSetupSizesASourceByItsBaseColorOnly()
         {
             var small = new Texture2D(128, 256);
             var large = new Texture2D(1024, 512);
@@ -97,10 +97,9 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 var second = new AtlasUnifiedMaterial();
                 second.Surface.BaseColor.Map = new AtlasTextureReference { Texture = large };
                 second.Surface.Normal.Map = new AtlasTextureReference { Texture = hugeNormal };
-                var main = new AtlasTextureSize();
-                AtlasOutputAutoSetup.SetMainTextureDimensions(new List<AtlasUnifiedMaterial> { first, second }, main);
-                Assert.AreEqual(1024, main.width);
-                Assert.AreEqual(512, main.height);
+                Assert.AreEqual(new Vector2Int(128, 256), AtlasOutputAutoSetup.BaseColorSize(first));
+                Assert.AreEqual(new Vector2Int(1024, 512), AtlasOutputAutoSetup.BaseColorSize(second));
+                Assert.AreEqual(new Vector2Int(128, 128), AtlasOutputAutoSetup.BaseColorSize(new AtlasUnifiedMaterial()));
             }
             finally { Object.DestroyImmediate(small); Object.DestroyImmediate(large); Object.DestroyImmediate(hugeNormal); }
         }

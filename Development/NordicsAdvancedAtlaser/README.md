@@ -61,9 +61,18 @@ and `ATLAS_OUTPUT.md` for the output design.
    use (Poiyomi or VRChat), at the highest installed version. You can change it; the pick
    only happens when the output is created. Choose the main texture size (default 4096 × 4096), and assign source materials
    with their UV rectangles; each source is listed with its material's name, such as
-   *Source 1 (Body)*. **Region Padding** (default 4 px) separates the sources' regions,
-   so it's only used with two or more source materials. **Auto Setup** picks the largest base
-   texture and sets every feature to its default mode. Each source material may be assigned to
+   *Source 1 (Body)*. **Region Padding** (default 4 px) keeps the sources apart: each
+   source's texture is placed inside its region, half the padding from each edge, and its
+   meshes are remapped to match, so the regions themselves can touch. It's only used with two
+   or more source materials. **Auto Setup** works on the sources
+   you assigned (it never adds or removes one): it lays out their UV regions by the size of
+   their base color textures, in the smallest atlas that holds them at full size (or 4096 ×
+   4096 with every region scaled down alike as little as fits, then grown back where there is
+   room), sets the main texture size to match, and sets every feature
+   to its default mode. If you edited a region, it asks before replacing it. When the layout
+   leaves part of the atlas empty, it asks whether to stretch the regions to fill it: they keep
+   all their detail and gain some in one direction, but are no longer in proportion. Undo reverts it
+   in one step. Each source material may be assigned to
    only one output.
    - **Textures** is a table of the textures the chosen feature modes need: each one's size and
      an estimate of its GPU memory on PC and Android (compressed, with mipmaps, as VRChat's

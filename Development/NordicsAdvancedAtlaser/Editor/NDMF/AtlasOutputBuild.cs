@@ -30,7 +30,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         context.Diagnostics.AddRange(output.Timings);
                         foreach (var source in job.Sources)
                             if (source.Input?.Unified != null)
-                                targets[source.Input.SourceMaterial] = new AtlasRemapTarget { Region = source.UVRegion, Output = output.Material };
+                                targets[source.Input.SourceMaterial] = new AtlasRemapTarget
+                                {
+                                    // Into the part the content fills, inside the padding.
+                                    Region = AtlasOutputLayout.ContentRegion(source.UVRegion, job.Configuration.mainTexture,
+                                        AtlasOutputLayout.EffectivePadding(job.Configuration)),
+                                    Output = output.Material
+                                };
                         context.Diagnostics.Add($"{job.Configuration.outputName}: {output.Textures.Count} texture(s) for {job.Shader.DisplayName}, {(mobile ? "mobile" : "PC")} formats.");
                     }
                 if (targets.Count > 0)

@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); A1 is done, A2 is next, then 2.1. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) is done; 2.1 is next. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -249,9 +249,17 @@ The design's *Auto setup*, in two phases.
 - The button sets up the assigned sources only (it never adds or removes one): it lays out
   their UV regions and sets the main texture size, the feature modes and the optional
   textures, as the design describes, in one Undo step.
-- The regions: base color texture sizes, packed largest first with the padding, the
-  smallest atlas up to 4096, halved until they fit.
-- The dialog before replacing edited regions, and the summary line.
+- The regions: base color texture sizes, packed largest first into the smallest atlas up
+  to 4096 that holds them at full size, or 4096 × 4096 with every region scaled down alike as
+  little as fits. The regions tile; the padding goes inside them, in the bake's Blit and the
+  mesh remap (Texture Wrapper `ContentRegion`).
+- Later: use the coverage to skip padding where a source already has room at its edges.
+- Optional textures are only reset to their defaults here; turning them on by what the
+  sources use comes with the first optional texture, in 2.2.
+- The dialog before replacing edited regions, and a log line saying what it did.
+- The free space goes to the scaled-down sources, largest first, each up to its full size;
+  then, if the user agrees in a dialog, every region stretches into the free space beside it,
+  so the atlas is used whole.
 - **Tests:** the packer (no overlaps, padding kept, proportions kept when halved, the
   smallest atlas), the sources left as they were, edited regions kept on *Keep*, and a full
   setup on synthetic materials.

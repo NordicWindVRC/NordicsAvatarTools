@@ -160,13 +160,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
             EditorGUILayout.Space();
             using (new EditorGUI.DisabledScope(!HasAssignedMaterials(sources) || AtlasShaderRegistry.Output(config.FindPropertyRelative("shaderId").stringValue) == null))
             {
-                if (GUILayout.Button("Auto Setup Output Configuration"))
+                if (GUILayout.Button(new GUIContent("Auto Setup",
+                        "Lays out the assigned sources' UV regions by their base color textures, sets the main texture size, " +
+                        "and sets every feature to its default mode. Sources aren't added or removed.")))
                 {
                     // Commit pending source assignment, shader selection and UV edits first.
                     serializedObject.ApplyModifiedProperties();
-                    AtlasOutputAutoSetup.Apply(output);
-                    serializedObject.Update();
-                    config = serializedObject.FindProperty("configuration");
+                    AutoSetup(output);
                 }
             }
             // The sources are read through the analysis cache, so redrawing doesn't parse them.
@@ -201,6 +201,36 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     EditorGUILayout.HelpBox(warning, MessageType.Warning);
             }
         }
+        // Asks first when replacing the regions would lose an edit, and whether to stretch the
+        // regions when that would fill free space; the dialogs end this GUI pass.
+        private void AutoSetup(NordicsAtlasOutput output)
+        {
+            var regions = AtlasAutoSetupRegions.Replace;
+            if (AtlasOutputAutoSetup.HasEditedRegions(output.configuration))
+            {
+                int choice = EditorUtility.DisplayDialogComplex("Auto Setup",
+                    "Some UV regions differ from the automatic layout. Replace them, or keep them and set up the rest?",
+                    "Replace", "Cancel", "Keep My Regions");
+                if (choice == 1) GUIUtility.ExitGUI();
+                regions = choice == 2 ? AtlasAutoSetupRegions.Keep : AtlasAutoSetupRegions.Replace;
+            }
+            bool stretch = false;
+            if (regions == AtlasAutoSetupRegions.Replace && AtlasOutputAutoSetup.StretchChangesLayout(output.configuration))
+            {
+                int choice = EditorUtility.DisplayDialogComplex("Auto Setup",
+                    "At their textures' proportions, the sources leave part of the atlas empty. Stretch the regions to fill it? " +
+                    "Stretched regions keep all their detail and gain some in one direction, but their textures are no longer " +
+                    "in proportion.",
+                    "Stretch to Fill", "Cancel", "Keep Proportions");
+                if (choice == 1) GUIUtility.ExitGUI();
+                stretch = choice == 0;
+            }
+            // It logs what it did.
+            AtlasOutputAutoSetup.Apply(output, regions, stretch);
+            serializedObject.Update();
+            GUIUtility.ExitGUI();
+        }
+
         // Asks for the material's folder and name (the output name by default); the save dialog
         // itself asks before replacing a material that's there. Textures of the same names are
         // overwritten.

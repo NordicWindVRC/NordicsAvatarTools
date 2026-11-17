@@ -34,9 +34,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             if (coverage != null)
                                 using (new AtlasStageTimer("grow islands (dilate) " + label, timings))
                                     AtlasCoverage.GrowIslands(content, coverage);
-                        // Padding 0: the content's usage is copied, so the dilation knows the regions.
+                        // The content goes inside the region, inset by the side padding, whose ring
+                        // takes the content's edge; its usage is copied, so the dilation knows the
+                        // regions. The mesh remap uses the same inset (AtlasOutputLayout.ContentRegion).
+                        int padding = AtlasOutputLayout.SidePadding(job.RegionPadding, job.MainTexture, width);
                         using (new AtlasStageTimer("place " + label, timings))
-                            atlas.Blit(content, region: source.UVRegion, padding: 0, sampling: TextureSamplingMode.Area);
+                            atlas.Blit(content, region: source.UVRegion, padding: padding, sampling: TextureSamplingMode.Area);
                     }
                 }
                 using (new AtlasStageTimer($"fill between regions (dilate) {request.Map} ({width}×{height})", timings))

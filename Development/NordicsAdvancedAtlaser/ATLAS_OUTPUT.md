@@ -52,6 +52,7 @@ What exists today, which this design builds on:
 | Generator boundary | `Editor/Outputs/AtlasGeneratorJob.cs` | The unified materials, UV regions, bakes and feature choices; no `Material` or `Shader` crosses it |
 | Bake sizing | `Editor/Outputs/AtlasOutputLayout.cs` | Each source is baked at 1.5× its island size, at most 4096 |
 | Geometry bake | `Editor/Build/AtlasSubmeshBaker.cs` | Per source: the current mesh's coverage mask and the tangent-space normal correction. The world-space normal and tangent frame maps exist only during the bake |
+| Auto setup | `Editor/Outputs/AtlasOutputAutoSetup.cs`, `AtlasRegionPacker.cs` | The Auto Setup button's work for the assigned sources: regions packed by base color size, the main texture size, default modes (see [*Auto setup*](#auto-setup)) |
 | Output shader pick | `Editor/Outputs/AtlasOutputShaderPick.cs` | A new output's shader, once: the family most unused sources use, at its highest installed rank (see [*Auto setup*](#auto-setup)) |
 | Inspector | `Editor/NordicsAtlasOutputEditor.cs`, `Editor/AtlasOutputUI.cs` | Sources, UV regions, auto setup, the *Textures* section (sizes, memory, formats), the feature sections with modes and per-source switches, UV preview |
 | Source analysis cache | `Editor/AtlasSourceAnalysisCache.cs` | Each source's parse, kept until the material, its shader or an imported texture or shader changes |
@@ -773,19 +774,45 @@ without a shader chosen). It never changes a shader chosen before.
 Undo step. It never adds or removes sources, and never runs by itself: a new output has no
 sources, and running it whenever a source is added would overwrite choices made since.
 1. **UV regions:** each source gets a region the size of its base color texture (keeping
-   its aspect; a source without one gets the smallest size), so texture detail stays even.
-   The regions are packed largest first, with the region padding, into the smallest atlas
-   that holds them at full size, up to 4096 per side; when they don't fit at 4096, every
-   region is halved until they do, which keeps their sizes in the same proportions.
+   its aspect; a source without one gets the smallest texture size, 128), so texture detail
+   stays even. The regions are packed largest first (MaxRects, best short side fit) into the
+   smallest atlas of supported texture sizes that holds them at full size, up to 4096 per
+   side. When none does, the atlas is 4096 × 4096 and every region is scaled down alike, in
+   whole percent, as little as still fits. Sizes and positions are worked out in hundredths of
+   a pixel, so the regions are exact decimals (0.8 and 0.2, not 0.8000488); the bake's Blit
+   snaps them to whole pixels where the content is placed. Then the free space goes to the
+   sources that were scaled down, the largest texture first: each grows toward its full size,
+   in whole percent, as far as everything still fits, so a small source next to the free
+   space gets its full detail at no cost. Last, when that still leaves free space, a dialog
+   asks whether to **stretch to fill**: every region then grows into the free space beside it
+   (up, right, down, left, to the nearest region or the atlas edge), the largest texture first,
+   so the atlas is used whole. No region loses detail and some gain it along one axis, but the
+   textures are no longer in proportion; *Keep Proportions* leaves the free space empty.
+   For example: four 4096 textures become four 0.5 × 0.5 regions, and a 4096 body
+   with three 1024 textures beside it gets 80% of its size. The regions tile the atlas; the
+   padding isn't part of them (see *Region padding*).
 2. **Main texture size:** the packed atlas's size.
 3. **Feature modes:** each feature's default mode, as before: native when supported, the
    cheapest emulation when not, off when neither.
-4. **Optional textures:** on only where a source uses what they hold, sized from the
-   sources' own textures.
+4. **Texture settings:** back to their defaults. Turning optional textures on only where a
+   source uses what they hold, sized from the sources' own textures, comes with the first
+   optional texture (phase 2.2).
 
-When a source's UV region was edited (any region other than the whole texture), a dialog
-asks first: replace the regions, keep them (the rest is still set up), or cancel. Afterward,
-a short line under the button says what changed, until the next edit.
+**Region padding** keeps the sources apart without changing the regions the user sees.
+With two or more sources, the map bake places each source's content inside its region, inset
+by half the padding (rounded up) on every side, and fills that ring with the content's edge
+(the Texture Wrapper's `Blit` with `padding`); the mesh remapper moves the meshes' UVs into
+the same inset rectangle (`ContentRegion`, on the main texture's pixels), so they sample
+exactly the content. A 0.5 × 0.5 region on 4096 with 4 px padding holds its content in
+2044 × 2044 px. A texture of another size gets the padding scaled to it, at least one pixel.
+Later, the coverage could show where a source already has room at its edges, so no padding
+is added there.
+
+When a source's region differs from both the whole texture and the layout Auto Setup would
+make now, replacing it would lose an edit, so a dialog asks first: *Replace*, *Keep My
+Regions* (the regions and the main texture size stay; the rest is set up) or *Cancel*.
+Afterward, the console log says what it did, with each source's scale when they were
+scaled down.
 
 ---
 

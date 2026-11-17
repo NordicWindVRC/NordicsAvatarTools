@@ -24,6 +24,8 @@ Newest first. Versions follow [SemVer](https://semver.org).
 - The `Mixed` blend mode is now `base + base × blend` instead of a copy of `Average`.
 
 ### Added
+- **`ContentRegion`:** the rectangle `Blit` fills with content for a region and padding on a
+  texture of a given size, without blitting.
 - **`PaintTriangles`:** paints a batch of triangles (three corners each) with the same result as
   `PaintTriangle` per triangle in order. The CPU version paints tiles of the texture on every
   core instead of one triangle at a time, which mostly ran on one core; large batches on large

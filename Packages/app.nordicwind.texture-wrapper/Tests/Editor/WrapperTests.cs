@@ -84,6 +84,16 @@ namespace NordicWind.TextureWrapper.Tests
                 Assert.IsTrue(tex.IsPixelUsed(0,0));Assert.Greater(tex.GetPixel(0,0).r,0f);
             }
         }
+        [Test] public void ContentRegionIsTheRectangleBlitFills()
+        {
+            using(var src=new NordicsTextureWrapper(3,3))using(var dst=new NordicsTextureWrapper(64,32))
+            {
+                var region=new Rect(0.25f,0.1f,0.5f,0.6f);
+                foreach(int padding in new[]{0,1,3})
+                    Assert.AreEqual(dst.Blit(src,region:region,padding:padding),NordicsTextureWrapper.ContentRegion(region,64,32,padding),"padding "+padding);
+                Assert.Throws<ArgumentException>(()=>NordicsTextureWrapper.ContentRegion(new Rect(0f,0f,0.05f,0.05f),64,32,3));
+            }
+        }
         [Test] public void InvalidPaddingThrows()
         {
             using(var src=new NordicsTextureWrapper(2,2))using(var dst=new NordicsTextureWrapper(4,4))

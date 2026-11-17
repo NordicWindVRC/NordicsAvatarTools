@@ -224,12 +224,32 @@ namespace NordicWind.TextureWrapper
         private static Rect Bounds(Rect? region)=>region??new Rect(0,0,1,1);
         private void PixelBounds(Rect? region,out int x0,out int y0,out int x1,out int y1)
         {
-            ValidateRect(region);Rect r=Bounds(region);
-            x0=Mathf.Clamp(Mathf.CeilToInt(r.xMin*Width-.00001f),0,Width);
-            y0=Mathf.Clamp(Mathf.CeilToInt(r.yMin*Height-.00001f),0,Height);
-            x1=Mathf.Clamp(Mathf.FloorToInt(r.xMax*Width+.00001f),0,Width);
-            y1=Mathf.Clamp(Mathf.FloorToInt(r.yMax*Height+.00001f),0,Height);
+            ValidateRect(region);
+            PixelBounds(Bounds(region),Width,Height,out x0,out y0,out x1,out y1);
+        }
+        // The whole pixels inside a UV rectangle on a texture of this size.
+        private static void PixelBounds(Rect r,int width,int height,out int x0,out int y0,out int x1,out int y1)
+        {
+            x0=Mathf.Clamp(Mathf.CeilToInt(r.xMin*width-.00001f),0,width);
+            y0=Mathf.Clamp(Mathf.CeilToInt(r.yMin*height-.00001f),0,height);
+            x1=Mathf.Clamp(Mathf.FloorToInt(r.xMax*width+.00001f),0,width);
+            y1=Mathf.Clamp(Mathf.FloorToInt(r.yMax*height+.00001f),0,height);
             if(x1<x0||y1<y0)throw new ArgumentException("Invalid pixel region.");
+        }
+        /// <summary>The UV rectangle <see cref="Blit"/> fills with content for <paramref name="region"/>
+        /// and <paramref name="padding"/> on a texture of <paramref name="width"/> × <paramref name="height"/>:
+        /// the region's whole pixels, inset by the padding on every side. A caller can use the same
+        /// rectangle elsewhere, for example to remap a mesh's UVs onto blitted content.</summary>
+        public static Rect ContentRegion(Rect region,int width,int height,int padding)
+        {
+            if(width<1)throw new ArgumentOutOfRangeException(nameof(width));
+            if(height<1)throw new ArgumentOutOfRangeException(nameof(height));
+            if(padding<0)throw new ArgumentOutOfRangeException(nameof(padding));
+            ValidateRect(region);
+            PixelBounds(region,width,height,out int x0,out int y0,out int x1,out int y1);
+            int innerW=x1-x0-2*padding,innerH=y1-y0-2*padding;
+            if(innerW<=0||innerH<=0)throw new ArgumentException("Region must contain at least one content pixel after padding.");
+            return new Rect((x0+padding)/(float)width,(y0+padding)/(float)height,innerW/(float)width,innerH/(float)height);
         }
         private static Vector2 MapUV(Vector2 local,Rect sourceRegion,Vector2 scale,Vector2 offset,float degrees)
         {

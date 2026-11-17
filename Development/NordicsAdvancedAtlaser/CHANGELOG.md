@@ -8,6 +8,18 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Auto Setup** lays out the assigned sources' UV regions by their base color textures'
+  sizes: in the smallest atlas that holds them at full size, or 4096 × 4096 with every region
+  scaled down alike, in whole percent, as little as fits; then the free space goes to the
+  scaled-down sources, each growing toward its full size as far as everything still fits.
+  When free space is still left, it asks whether to stretch the regions into it, so the whole
+  atlas is used, or keep the textures' proportions. The
+  regions tile the atlas and are exact decimals, such as 0.8 and 0.2. It sets the main texture
+  size to match and every feature to its default mode, asks before replacing edited regions,
+  logs what it did, and never adds or removes sources. One Undo step.
+- **Region padding is applied:** the map bake places each source's content inside its region,
+  half the padding from each edge, with the content's edge filling the ring, and the meshes
+  are remapped into the same rectangle. Before, the padding setting had no effect.
 - **Output shader pick:** a new output component picks its output shader once, when it's
   created: the shader family most of the Atlaser's unused source materials use, at the
   highest installed version (Pro before Toon at the same version). A build skips an output
