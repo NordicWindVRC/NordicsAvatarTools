@@ -33,7 +33,7 @@ namespace NordicWind.TextureWrapper
             if(width<=0 || height<=0 || (long)width*height>int.MaxValue) throw new ArgumentOutOfRangeException(nameof(width),"Dimensions must be positive and fit in an array.");
             Settings=(settings??new TextureSettings()).Clone(); Settings.Validate();
             Width=width;Height=height;IsReadOnly=readOnly;
-            _pixels=new Color[checked(width*height)];_usage=new byte[_pixels.Length];
+            PixelBuffers.Rent(checked(width*height),true,out _pixels,out _usage);
             _normalized=true;
         }
         /// <summary>Loads a texture as color or data. See the overload with a data type.</summary>
@@ -171,6 +171,28 @@ namespace NordicWind.TextureWrapper
         public void SetPixel(Vector2 uv,Color color)
         {
             Writable();ValidateUV(uv);int x=Address(Mathf.FloorToInt(uv.x*Width),Width,Settings.WrapMode);int y=Address(Mathf.FloorToInt(uv.y*Height),Height,Settings.WrapMode);SetPixel(x,y,color);
+        }
+        /// <summary>A copy of every pixel's raw value, row by row from the bottom (index y × Width + x).</summary>
+        public Color[] GetPixels(){Check();if(Normal)EnsureNormalized();return (Color[])_pixels.Clone();}
+        /// <summary>Copies every pixel's raw value into <paramref name="destination"/>, which needs one element per pixel.</summary>
+        public void GetPixels(Color[] destination)
+        {
+            Check();if(destination==null||destination.Length!=_pixels.Length)throw new ArgumentException("GetPixels needs one element per pixel.",nameof(destination));
+            if(Normal)EnsureNormalized();Array.Copy(_pixels,destination,_pixels.Length);
+        }
+        /// <summary>Frees the pixel buffers kept from disposed wrappers (see <see cref="TextureProcessingSettings.PooledBytes"/>).</summary>
+        public static void ReleasePooledBuffers()=>PixelBuffers.Clear();
+        /// <summary>Writes every pixel's value, row by row from the bottom, and marks every pixel used.</summary>
+        public void SetPixels(Color[] colors)
+        {
+            Writable();
+            if(colors==null||colors.Length!=_pixels.Length)throw new ArgumentException("SetPixels needs one color per pixel.",nameof(colors));
+            bool finite=true;
+            ForRows(Width,Height,y=>{int row=y*Width;for(int x=0;x<Width;x++)if(!MathUtil.Finite(colors[row+x]))finite=false;});
+            if(!finite)throw new ArgumentException("Color components must be finite.",nameof(colors));
+            Array.Copy(colors,_pixels,_pixels.Length);
+            for(int i=0;i<_usage.Length;i++)_usage[i]=1;
+            Changed();
         }
         public bool IsPixelUsed(int x,int y){Check();return _usage[Index(x,y)]!=0;}
         public bool IsPixelUsed(Vector2 uv){Check();ValidateUV(uv);return IsPixelUsed(Address(Mathf.FloorToInt(uv.x*Width),Width,Settings.WrapMode),Address(Mathf.FloorToInt(uv.y*Height),Height,Settings.WrapMode));}
@@ -331,8 +353,11 @@ namespace NordicWind.TextureWrapper
         {
             if(operations==null)return original;
             Color c=original;
-            foreach(var op in operations)
+            // An index loop: foreach over the interface would allocate an enumerator per pixel,
+            // and allocations in parallel loops serialize on the garbage collector.
+            for(int k=0;k<operations.Count;k++)
             {
+                var op=operations[k];
                 float influence=1f;
                 if(op.Mask!=null)
                 {
@@ -439,8 +464,16 @@ namespace NordicWind.TextureWrapper
             int p=padding??0;int innerW=x1-x0-2*p,innerH=y1-y0-2*p;
             if(innerW<=0||innerH<=0)throw new ArgumentException("Region must contain at least one content pixel after padding.");
             Rect inner=new Rect((x0+p)/(float)Width,(y0+p)/(float)Height,innerW/(float)Width,innerH/(float)Height);
-            using(var transformed=source.Resize(innerW,innerH,sourceRegion,scale,offset,rotation,sampling,wrap,operations))
+            // A same-size source copied without a transform is read as it is: resampling it at its
+            // own texel centers gives the same values, so the copy is skipped. Not for self-blits,
+            // normal maps (Resize renormalizes them), padding or the usage channel, which read
+            // Resize's sampled usage.
+            bool direct=!ReferenceEquals(source,this)&&!source.Normal&&source.Width==innerW&&source.Height==innerH&&sourceRegion==null&&
+                (scale??Vector2.one)==Vector2.one&&(offset??Vector2.zero)==Vector2.zero&&rotation==0f&&(operations==null||operations.Count==0)&&
+                !padding.HasValue&&sourceChannel!=TextureChannel.Usage&&destinationChannel!=TextureChannel.Usage;
+            using(var resized=direct?null:source.Resize(innerW,innerH,sourceRegion,scale,offset,rotation,sampling,wrap,operations))
             {
+                var transformed=resized??source;
                 if(mask!=null){mask.Check();if(ReferenceEquals(mask,this))throw new ArgumentException("A destination cannot be its own mask during mutation. Clone the mask first.");if(mask.Normal)mask.EnsureNormalized();}
                 if(NormalMode(blend))EnsureNormalized();
                 // Snapshotting source through Resize makes self-blits well defined.
@@ -1142,7 +1175,7 @@ namespace NordicWind.TextureWrapper
         }
         public void Dispose()
         {
-            if(_disposed)return;_disposed=true;_pixels=null;_usage=null;
+            if(_disposed)return;_disposed=true;PixelBuffers.Return(_pixels,_usage);_pixels=null;_usage=null;
             if(_ownsCache&&_cached!=null)
             {
 #if UNITY_EDITOR

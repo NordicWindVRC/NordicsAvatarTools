@@ -133,12 +133,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             using (var sampled = Sample(source.Surface.BaseColor.Map, texture, TextureDataType.Color, width, height))
                                 ChannelToRgb(result, sampled, TextureChannel.A);
                         Scale(result, colorAlpha);
+                        // Vertex alpha is part of the base color (2.1).
+                        AtlasVertexColors.MultiplyAlpha(result, source, width, height);
                         if (alpha.Mask != null && CanEvaluate(alpha.Mask, source))
                             using (var mask = Mask(alpha.Mask, width, height, source))
                                 Combine(result, mask, alpha.MaskBlend);
                         break;
                     case AtlasAlphaSource.BaseColorConstantAlpha:
                         Scale(result, colorAlpha);
+                        AtlasVertexColors.MultiplyAlpha(result, source, width, height);
                         break;
                     case AtlasAlphaSource.Mask:
                         if (alpha.Mask != null && CanEvaluate(alpha.Mask, source))
@@ -238,34 +241,47 @@ namespace NordicWind.AdvancedAtlaser.Editor
             else ChannelToRgb(target, sampled, Channels[(int)channel]);
         }
 
-        /// <summary>Whether a mask is in the bakeable subset: a texture channel on UV0 (or none)
-        /// with its levels, invert and strength, combined with a mask bus channel of
-        /// <paramref name="source"/> that AtlasMaskBusEvaluator can bake; without vertex colors.</summary>
+        /// <summary>Whether a mask is in the bakeable subset: a texture channel on UV0, a vertex
+        /// color channel, or none, with its levels, vertex color multiply, invert and strength,
+        /// combined with a mask bus channel of <paramref name="source"/> that AtlasMaskBusEvaluator
+        /// can bake. Vertex colors come from AtlasVertexColors (white without).</summary>
         public static bool CanEvaluate(AtlasMask mask, AtlasUnifiedMaterial source = null) =>
-            mask != null && !mask.VertexColor && !mask.TimesVertexColor &&
-            (mask.Map == null || (mask.Map.Texture is Texture2D && mask.Map.Space == AtlasTextureSpace.UV0)) &&
+            mask != null &&
+            (mask.VertexColor || mask.Map == null || (mask.Map.Texture is Texture2D && mask.Map.Space == AtlasTextureSpace.UV0)) &&
             (mask.Bus < 0 || AtlasMaskBusEvaluator.CanBake(source, mask.Bus));
 
-        // The mask's value in RGB: the channel through the levels, inverted, lerp(1, v, strength)
-        // (1 without a map), then combined with its bus channel.
+        // The mask's value in RGB: the channel (of the map or the vertex colors) through the
+        // levels, × a vertex color channel, inverted, lerp(1, v, strength) (1 without a source),
+        // then combined with its bus channel.
         private static NordicsTextureWrapper Mask(AtlasMask mask, int width, int height, AtlasUnifiedMaterial source)
         {
             var result = Constant(AtlasVirtualMap.Alpha, 1f, width, height);
             try
             {
-                if (mask.Map?.Texture is Texture2D texture)
+                bool vertex = mask.VertexColor;
+                if (vertex || mask.Map?.Texture is Texture2D)
                 {
-                    using (var sampled = Sample(mask.Map, texture, TextureDataType.LinearData, width, height))
+                    if (vertex)
                     {
-                        if (mask.Channel == AtlasChannel.Luminance)
-                        {
-                            // Saturation 0 leaves the luminance in every channel.
-                            sampled.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Saturation, Parameters = { Amount = 0f } });
-                            ChannelToRgb(result, sampled, TextureChannel.R);
-                        }
-                        else ChannelToRgb(result, sampled, Channels[(int)mask.Channel]);
+                        using (var channel = AtlasVertexColors.Channel(source, mask.Channel, false, width, height))
+                            if (channel != null) result.Blit(channel);
+                            else result.Fill(Color.white);
                     }
+                    else
+                        using (var sampled = Sample(mask.Map, (Texture2D)mask.Map.Texture, TextureDataType.LinearData, width, height))
+                        {
+                            if (mask.Channel == AtlasChannel.Luminance)
+                            {
+                                // Saturation 0 leaves the luminance in every channel.
+                                sampled.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Saturation, Parameters = { Amount = 0f } });
+                                ChannelToRgb(result, sampled, TextureChannel.R);
+                            }
+                            else ChannelToRgb(result, sampled, Channels[(int)mask.Channel]);
+                        }
                     if (mask.Levels != null) AtlasMaskBusEvaluator.Each(result, mask.Levels.Evaluate);
+                    if (mask.TimesVertexColor)
+                        using (var channel = AtlasVertexColors.Channel(source, mask.VertexChannel, false, width, height))
+                            if (channel != null) AtlasMaskBusEvaluator.Blend(result, channel, AtlasMaskBlend.Multiply);
                     if (mask.Invert) result.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Invert });
                     if (mask.Strength < 1f)
                     {
@@ -294,24 +310,39 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // A texture over the source's UV 0–1, with the reference's tiling, offset and rotation on UV0.
         private static NordicsTextureWrapper Sample(AtlasTextureReference reference, Texture2D texture, TextureDataType type, int width, int height)
         {
-            using (var loaded = new NordicsTextureWrapper(texture, type))
+            bool uv0 = reference.Space == AtlasTextureSpace.UV0;
+            var tiling = uv0 ? reference.Tiling : Vector2.one;
+            var offset = uv0 ? reference.Offset : Vector2.zero;
+            float rotation = uv0 ? reference.Rotation : 0f;
+            return AtlasEvaluationCache.Copy(("sample", texture, type, tiling, offset, rotation, width, height), () =>
             {
-                bool uv0 = reference.Space == AtlasTextureSpace.UV0;
-                var tiling = uv0 ? reference.Tiling : Vector2.one;
-                var offset = uv0 ? reference.Offset : Vector2.zero;
-                float rotation = uv0 ? reference.Rotation : 0f;
-                var result = loaded.Resize(width, height, scale: tiling, offset: offset + (tiling - Vector2.one) * 0.5f,
-                    rotation: rotation, sampling: TextureSamplingMode.Area);
-                result.Settings.WrapMode = TextureWrapMode.Clamp;
-                return result;
-            }
+                var loaded = Loaded(texture, type, out bool owned);
+                try
+                {
+                    var result = loaded.Resize(width, height, scale: tiling, offset: offset + (tiling - Vector2.one) * 0.5f,
+                        rotation: rotation, sampling: TextureSamplingMode.Area);
+                    result.Settings.WrapMode = TextureWrapMode.Clamp;
+                    return result;
+                }
+                finally
+                {
+                    if (owned) loaded.Dispose();
+                }
+            });
         }
 
-        private static void ChannelToRgb(NordicsTextureWrapper target, NordicsTextureWrapper source, TextureChannel channel)
-        {
-            foreach (var destination in new[] { TextureChannel.R, TextureChannel.G, TextureChannel.B })
-                target.Blit(source, sourceChannel: channel, destinationChannel: destination);
-        }
+        /// <summary>A texture loaded as the wrapper reads it, only to be read; shared within an
+        /// evaluation (AtlasEvaluationCache). <paramref name="owned"/>: the caller disposes it.</summary>
+        public static NordicsTextureWrapper Loaded(Texture2D texture, TextureDataType type, out bool owned) =>
+            AtlasEvaluationCache.Shared(("load", texture, type), () => new NordicsTextureWrapper(texture, type), out owned);
+
+        // One channel of a same-size map into the target's RGB, in one pass.
+        private static void ChannelToRgb(NordicsTextureWrapper target, NordicsTextureWrapper source, TextureChannel channel) =>
+            AtlasPixels.Map(target, source, (t, s) =>
+            {
+                float v = channel == TextureChannel.R ? s.r : channel == TextureChannel.G ? s.g : channel == TextureChannel.B ? s.b : s.a;
+                return new Color(v, v, v, t.a);
+            });
 
         private static void Combine(NordicsTextureWrapper alpha, NordicsTextureWrapper mask, AtlasAlphaMaskBlend blend)
         {

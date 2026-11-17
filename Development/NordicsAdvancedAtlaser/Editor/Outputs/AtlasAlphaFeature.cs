@@ -100,10 +100,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var materials = active.Select(i => context.Job.Sources[i].Material).ToList();
             if (materials.Any(m => m.Surface.Alpha.Modifiers.Count > 0))
                 context.Notes.Add("Alpha fades (distance, view angle, angle, audio) aren't merged yet; they're left out.");
-            if (materials.Any(m => m.Surface.VertexColor.MultiplyAlpha))
-                context.Notes.Add("Vertex alpha isn't baked yet; it's left out.");
             if (materials.Any(m => m.Surface.Alpha.Mask != null && !AtlasMapEvaluator.CanEvaluate(m.Surface.Alpha.Mask, m)))
-                context.Notes.Add("An alpha mask on another UV, vertex colors or a global mask written by vertex colors, layers or the second pass isn't baked yet; it counts as 1.");
+                context.Notes.Add("An alpha mask on another UV or a global mask written by layers or the second pass isn't baked yet; it counts as 1.");
             if (materials.Any(m => m.Surface.Alpha.Dithering || m.Surface.Alpha.DitherCutout))
                 context.Notes.Add("Alpha dithering isn't merged yet; it's left out.");
             if (materials.Any(m => m.Render.CutoffInTransparent))

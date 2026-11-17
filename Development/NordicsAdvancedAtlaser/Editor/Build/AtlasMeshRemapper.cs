@@ -11,6 +11,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public Rect Region;
         public Material Output;
+        // How the source's vertex colors are rewritten (Vertex colors, live); null: kept.
+        public Func<Color, Color> VertexColor;
     }
 
     public sealed class AtlasRemapResult
@@ -162,7 +164,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
             result.SetVertices(Expand(mesh.vertices, origin));
             if (mesh.HasVertexAttribute(VertexAttribute.Normal)) result.SetNormals(Expand(mesh.normals, origin));
             if (mesh.HasVertexAttribute(VertexAttribute.Tangent)) result.SetTangents(Expand(mesh.tangents, origin));
-            if (mesh.HasVertexAttribute(VertexAttribute.Color))
+            bool rewrite = false;
+            foreach (var target in submeshTargets) rewrite |= target?.VertexColor != null;
+            if (rewrite)
+            {
+                // A mesh without colors gives shaders white.
+                var original = mesh.HasVertexAttribute(VertexAttribute.Color) ? mesh.colors : null;
+                var colors = new Color[origin.Count];
+                for (int i = 0; i < origin.Count; i++)
+                {
+                    var color = original != null ? original[origin[i]] : Color.white;
+                    var convert = uses[i].Target?.VertexColor;
+                    colors[i] = convert != null ? convert(color) : color;
+                }
+                result.SetColors(colors);
+            }
+            else if (mesh.HasVertexAttribute(VertexAttribute.Color))
             {
                 if (mesh.GetVertexAttributeFormat(VertexAttribute.Color) == VertexAttributeFormat.UNorm8)
                     result.SetColors(Expand(mesh.colors32, origin));

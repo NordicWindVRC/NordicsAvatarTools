@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using NordicWind.TextureWrapper;
 using UnityEditor;
 using UnityEngine;
 
@@ -42,13 +43,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var plan = AtlasOutputPipeline.Resolve(job, shader.Capabilities);
             var maps = plan.Maps.Select(r => r.Map).Distinct().ToList();
             var uses = AtlasOutputOverview.TextureUses(config, shader.Capabilities, maps, Array.Empty<AtlasVirtualMap>());
+            var enabled = uses.Where(u => u.Enabled).ToList();
             try
             {
-                for (int i = 0; i < uses.Count; i++)
+                using (AtlasProgress.Begin(name, enabled.Count))
+                for (int i = 0; i < enabled.Count; i++)
                 {
-                    var use = uses[i];
-                    if (!use.Enabled) continue;
-                    EditorUtility.DisplayProgressBar("Bake to Assets", use.Texture.Label, (float)i / uses.Count);
+                    var use = enabled[i];
+                    AtlasProgress.Texture(i, use.Texture.Label);
                     Texture2D texture;
                     string label = $"{use.Texture.Id} ({use.Width}×{use.Height})";
                     var pack = new AtlasStageTimer("pack " + label, timings);
@@ -64,7 +66,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             finally
             {
-                EditorUtility.ClearProgressBar();
+                NordicsTextureWrapper.ReleasePooledBuffers();
+                AtlasPixels.Release();
             }
 
             var material = new Material(unityShader) { name = name };

@@ -9,8 +9,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // A source's mask bus (UNIFIED_MATERIAL_FEATURES.md, 1.5) baked over its UV 0–1: each channel
     // starts at 1 and runs its steps in order. Steps that change live are baked as the avatar is
     // normally seen (ATLAS_OUTPUT.md, "Masks"): front faces, outside mirrors and VRChat cameras,
-    // the camera far away, no blacklight near and no contact touching. Vertex colors, layer
-    // coverage and the second pass aren't baked yet; a channel with one of them isn't baked.
+    // the camera far away, no blacklight near and no contact touching. Vertex colors come from
+    // AtlasVertexColors. Layer coverage and the second pass aren't baked yet; a channel with one
+    // of them isn't baked.
     public static class AtlasMaskBusEvaluator
     {
         // Steps whose value changes while the avatar is seen.
@@ -22,7 +23,6 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             switch (step.Kind)
             {
-                case AtlasMaskBusStepKind.VertexColor:
                 case AtlasMaskBusStepKind.LayerCoverage:
                 case AtlasMaskBusStepKind.SecondPass:
                     return false;
@@ -45,7 +45,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         /// <summary>The channel's value in RGB, over the source's UV 0–1. Only for channels that
         /// CanBake.</summary>
-        public static NordicsTextureWrapper Channel(AtlasUnifiedMaterial source, int channel, int width, int height)
+        public static NordicsTextureWrapper Channel(AtlasUnifiedMaterial source, int channel, int width, int height) =>
+            AtlasEvaluationCache.Copy(("bus", source, channel, width, height), () => Compute(source, channel, width, height));
+
+        private static NordicsTextureWrapper Compute(AtlasUnifiedMaterial source, int channel, int width, int height)
         {
             var value = AtlasMapEvaluator.Constant(AtlasVirtualMap.Alpha, 1f, width, height);
             try
@@ -58,6 +61,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         var mask = AtlasMapEvaluator.ScaledMask(step.Mask, 1f, width, height);
                         value.Dispose();
                         value = mask;
+                    }
+                    else if (step.Kind == AtlasMaskBusStepKind.VertexColor)
+                    {
+                        // value = saturate(blend(value, vertex color channel)), sRGB decoded when linear
+                        using (var vertex = AtlasVertexColors.Channel(source, step.VertexChannel, step.VertexLinear, width, height))
+                            if (vertex != null) Blend(value, vertex, step.Blend);
+                            else Each(value, v => Blend(v, 1f, step.Blend));
                     }
                     else Apply(value, step);
                 }
@@ -131,27 +141,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         /// <summary>Combines a value map (in RGB) with a bus channel of the same size by the blend.</summary>
-        public static void Blend(NordicsTextureWrapper value, NordicsTextureWrapper channel, AtlasMaskBlend mode)
-        {
-            for (int y = 0; y < value.Height; y++)
-                for (int x = 0; x < value.Width; x++)
-                {
-                    var c = value.GetPixel(x, y);
-                    float v = Blend(c.r, channel.GetPixel(x, y).r, mode);
-                    value.SetPixel(x, y, new Color(v, v, v, c.a));
-                }
-        }
+        public static void Blend(NordicsTextureWrapper value, NordicsTextureWrapper channel, AtlasMaskBlend mode) =>
+            AtlasPixels.Map(value, channel, (c, b) =>
+            {
+                float v = Blend(c.r, b.r, mode);
+                return new Color(v, v, v, c.a);
+            });
 
         /// <summary>A function on every pixel's value, in RGB.</summary>
-        public static void Each(NordicsTextureWrapper value, Func<float, float> function)
-        {
-            for (int y = 0; y < value.Height; y++)
-                for (int x = 0; x < value.Width; x++)
-                {
-                    var c = value.GetPixel(x, y);
-                    float v = function(c.r);
-                    value.SetPixel(x, y, new Color(v, v, v, c.a));
-                }
-        }
+        public static void Each(NordicsTextureWrapper value, Func<float, float> function) =>
+            AtlasPixels.Map(value, c =>
+            {
+                float v = function(c.r);
+                return new Color(v, v, v, c.a);
+            });
     }
 }

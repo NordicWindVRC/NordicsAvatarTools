@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4a is done, 2.4b is next. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5a is implemented. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -191,16 +191,19 @@ In two steps; vertex colors move to 2.5, with the remapper's vertex color handli
 - Per-source control (turning a feature off per source, the reference source) is in place
   from 2.2 and the conflict controls.
 
-**2.4b Output masks**
-- The **mask allocator**: constants, shared masks, inverted masks, packed channels, mask bus
-  channels, and dropping or falling back when places run out.
-- Global masks on Poiyomi, keeping live steps live where the output's bus has them.
-- **Workable:** features limited to parts of the atlas stay where they were.
+**2.4b Output masks** moved to 2.7: the output's only masks so far are Poiyomi's reflection
+and specular masks, in fixed channels, so the allocator gets its first real users with the
+layers. Until then, live mask steps stay baked at their normal-view value and are listed.
+- **Workable:** features limited to parts of the atlas stay where they were (baked).
 
 ### 2.5 Remapper: UV channels and vertex colors
 
-- Vertex color baked into color (moved here from 2.3).
+**2.5a Vertex colors**
+- *Vertex colors*: live (each source's vertex colors rewritten by the remap for the output's
+  one setting; white for sources that don't use them), baked (painted in UV space into the
+  base color, alpha, masks and mask bus steps), or off. Hue shifts on vertex colors are listed.
 
+**2.5b UV channels**
 - The **UV channel allocator** and preserved UVs in UV1 to UV3, with per-source tiling for
   tiled layers. Tiled detail and normal layers can then keep maps of their own.
 - *Vertex colors*: live (white for sources that don't use them), baked, or off.
@@ -216,6 +219,15 @@ In two steps; vertex colors move to 2.5, with the remapper's vertex color handli
 
 ### 2.7 Layers
 
+- The **mask allocator** (from 2.4b): constants, shared masks, inverted masks, packed
+  channels, mask bus channels, and dropping or falling back when places run out; the
+  reflection and specular masks move onto it.
+- **Global masks on Poiyomi** (from 2.4b), keeping live steps live: a feature splits its mask
+  into its own mask (sources without live steps) and a global mask channel with the live
+  steps (sources with them), combined by *add*. Poiyomi 10 reads global masks for emission,
+  alpha, metallic, smoothness, reflection and specular strength and AO. Where a feature's
+  sources need different live steps, the user picks which stays live (*Decisions*: no result
+  left to chance); the others are baked at their normal-view value.
 - *Matcaps* (native, merged, single), *Rim lighting*, *Environmental rim*, *Backlight*,
   *Clear coat* (native and emulated).
 - **Workable:** matcaps and rims survive atlasing, as far as the output has slots for them.

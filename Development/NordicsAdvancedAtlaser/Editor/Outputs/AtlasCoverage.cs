@@ -11,6 +11,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public Vector2[] UV;
         public int[] Triangles;
+        // The mesh's vertex colors, as stored; null when it has none.
+        public Color[] Colors;
     }
 
     // Where a source's meshes use its texture. The map bake grows the UV islands over the rest,
@@ -29,11 +31,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (mesh == null) continue;
                 var materials = renderer.sharedMaterials;
                 Vector2[] uv = null;
+                Color[] colors = null;
                 for (int i = 0; i < Math.Min(mesh.subMeshCount, materials.Length); i++)
                 {
                     if (materials[i] != material) continue;
-                    uv = uv ?? mesh.uv;
-                    result.Add(new AtlasUVTriangles { UV = uv, Triangles = mesh.GetTriangles(i) });
+                    if (uv == null)
+                    {
+                        uv = mesh.uv;
+                        colors = mesh.colors;
+                        if (colors == null || colors.Length != uv.Length) colors = null;
+                    }
+                    result.Add(new AtlasUVTriangles { UV = uv, Triangles = mesh.GetTriangles(i), Colors = colors });
                 }
             }
             return result;

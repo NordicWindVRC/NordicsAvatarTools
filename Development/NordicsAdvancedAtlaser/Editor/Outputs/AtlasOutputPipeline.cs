@@ -13,6 +13,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly Dictionary<string, AtlasFeatureMode> Modes = new Dictionary<string, AtlasFeatureMode>();
         // What the features leave out, one line each.
         public readonly List<string> Notes = new List<string>();
+        // How the remap rewrites each source's vertex colors, by index into the job's sources;
+        // sources without an entry keep theirs.
+        public readonly Dictionary<int, System.Func<Color, Color>> VertexColors = new Dictionary<int, System.Func<Color, Color>>();
     }
 
     // Steps 1 and 2 of the output pipeline (ATLAS_OUTPUT.md, "Pipeline"): collect each
@@ -22,6 +25,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static AtlasOutputPlan Resolve(AtlasGeneratorJob job, AtlasOutputCapabilities capabilities)
         {
             var plan = new AtlasOutputPlan();
+            // What an earlier resolve attached to the same unified materials.
+            foreach (var source in job.Sources) AtlasVertexColors.Detach(source.Material);
             foreach (var feature in AtlasOutputFeatures.All)
                 Resolve(job, capabilities, feature, plan);
             if (job.Sources.Count > 0)
@@ -93,7 +98,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             feature.Resolve(new AtlasFeatureContext
             {
                 Job = job, Capabilities = capabilities, Mode = mode, Sources = sources,
-                Output = plan.Output, Maps = plan.Maps, Notes = plan.Notes
+                Output = plan.Output, Maps = plan.Maps, Notes = plan.Notes, VertexColors = plan.VertexColors
             });
         }
     }

@@ -69,7 +69,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     if (!(material.Layers[k] is AtlasSurfaceLayer layer) || !layer.Enabled) continue;
                     if (layer.Targets.Any(t => t.Target == AtlasSurfaceTarget.Emission) && !AtlasColorStack.CanBakeEmission(material, k, layer))
                     {
-                        context.Notes.Add("An emission that is live (blinking, scrolling, audio, light based), replaces the base color, follows transparency, or is masked by vertex colors or a global mask written by vertex colors, layers or the second pass isn't baked yet; it's left out.");
+                        context.Notes.Add("An emission that is live (blinking, scrolling, audio, light based), replaces the base color, follows transparency, or is masked by a global mask written by layers or the second pass isn't baked yet; it's left out.");
                         return;
                     }
                 }

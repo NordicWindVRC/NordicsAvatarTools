@@ -148,6 +148,48 @@ namespace NordicWind.TextureWrapper.Tests
                 Assert.AreEqual(TextureFormat.RGB24,tex.GetTexture2D().format);
             }
         }
+        [Test] public void GetAndSetPixels_RowByRowFromTheBottom()
+        {
+            using(var tex=new NordicsTextureWrapper(2,2,ColorSettings()))
+            {
+                tex.SetPixel(1,0,Color.red);
+                var pixels=tex.GetPixels();
+                Assert.AreEqual(Color.red,pixels[1]);
+                Assert.IsFalse(tex.IsPixelUsed(0,1));
+                pixels[2]=Color.blue;
+                tex.SetPixels(pixels);
+                Assert.AreEqual(Color.blue,tex.GetPixel(0,1));
+                Assert.IsTrue(tex.IsPixelUsed(0,1));
+                pixels[0]=new Color(float.NaN,0f,0f,1f);
+                Assert.Throws<ArgumentException>(()=>tex.SetPixels(pixels));
+                Assert.Throws<ArgumentException>(()=>tex.SetPixels(new Color[3]));
+            }
+        }
+        [Test] public void ReusedBuffers_StartEmpty()
+        {
+            using(var first=new NordicsTextureWrapper(3,3,ColorSettings()))first.Fill(Color.red);
+            using(var second=new NordicsTextureWrapper(3,3,ColorSettings()))
+            {
+                Assert.AreEqual(Color.clear,second.GetPixel(1,1));
+                Assert.IsFalse(second.IsPixelUsed(1,1));
+            }
+            NordicsTextureWrapper.ReleasePooledBuffers();
+        }
+        [Test] public void SameSizeBlit_CopiesExactly()
+        {
+            using(var destination=new NordicsTextureWrapper(4,4,ColorSettings()))
+            using(var source=new NordicsTextureWrapper(4,4,ColorSettings()))
+            using(var mask=new NordicsTextureWrapper(4,4,ColorSettings()))
+            {
+                destination.Fill(new Color(.5f,.5f,.5f,1f));
+                for(int y=0;y<4;y++)for(int x=0;x<4;x++)source.SetPixel(x,y,new Color(x/4f,y/4f,.25f,1f));
+                mask.Fill(new Color(.5f,.5f,.5f,1f));
+                destination.Blit(source,mask:mask,maskOptions:new TextureMaskOptions{Channel=TextureChannel.R},blend:TextureBlendMode.Multiply);
+                Color expected=Color.Lerp(new Color(.5f,.5f,.5f,1f),new Color(.5f*3/4f,.5f*2/4f,.125f,1f),.5f);
+                Color actual=destination.GetPixel(3,2);
+                Assert.AreEqual(expected.r,actual.r,1e-6f);Assert.AreEqual(expected.g,actual.g,1e-6f);Assert.AreEqual(expected.b,actual.b,1e-6f);
+            }
+        }
         [Test] public void OutputChannels_InvalidEnumRejected()
         {
             var settings=ColorSettings();

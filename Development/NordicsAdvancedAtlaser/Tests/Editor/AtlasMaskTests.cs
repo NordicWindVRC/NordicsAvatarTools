@@ -46,7 +46,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             steps.Add(new AtlasMaskBusStep { Channel = 5, Kind = AtlasMaskBusStepKind.Contact, Contact = new AtlasContact(), Blend = AtlasMaskBlend.Multiply });
             steps.Add(new AtlasMaskBusStep { Channel = 6, Kind = AtlasMaskBusStepKind.Contact, Contact = new AtlasContact { Invert = true }, Blend = AtlasMaskBlend.Multiply });
             steps.Add(new AtlasMaskBusStep { Channel = 7, Kind = AtlasMaskBusStepKind.Blacklight, Blend = AtlasMaskBlend.Replace });
-            steps.Add(new AtlasMaskBusStep { Channel = 8, Kind = AtlasMaskBusStepKind.VertexColor });
+            steps.Add(new AtlasMaskBusStep { Channel = 8, Kind = AtlasMaskBusStepKind.SecondPass });
             return source;
         }
 
@@ -63,7 +63,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(1f, Channel(source, 6), 1e-3f, "no touch, inverted");
             Assert.AreEqual(1f, Channel(source, 7), 1e-3f, "no blacklight: untouched");
             Assert.IsTrue(AtlasMaskBusEvaluator.CanBake(source, 0));
-            Assert.IsFalse(AtlasMaskBusEvaluator.CanBake(source, 8), "vertex colors aren't baked yet");
+            Assert.IsFalse(AtlasMaskBusEvaluator.CanBake(source, 8), "the second pass isn't baked yet");
             Assert.IsTrue(AtlasMaskBusEvaluator.CanBake(source, 15), "an empty channel is 1");
         }
 

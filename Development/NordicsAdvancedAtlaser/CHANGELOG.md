@@ -8,6 +8,17 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Vertex colors:** a *Vertex Colors* feature with three modes.
+  - *Kept on the mesh*: the output multiplies its base color and alpha by the vertex colors
+    with one setting, and the remap rewrites each source's vertex colors (`AtlasRemapTarget.VertexColor`)
+    so it gives what the source's own did; white for sources that don't use them. When the
+    sources disagree on sRGB decoding, *Vertex colors as sRGB* picks the output's.
+  - *Baked into the textures*: painted in UV space (`AtlasVertexColors`, overlaps averaged)
+    into the base color and alpha.
+  - *Off*.
+  - Masks and mask bus steps that read vertex colors are baked in the first two modes. Both
+    writers set their vertex color options (Poiyomi's amount, alpha and linear colors; Toon
+    Standard's `_VertexColor`). `AtlasUVTriangles` carries the meshes' vertex colors.
 - **Mask baking:** masks are baked with their levels, and the mask bus (Poiyomi's global
   masks) is baked per source by `AtlasMaskBusEvaluator`: texture, offset, remap and force
   steps exactly; back face, mirror, camera, distance, blacklight and contact steps as the
@@ -186,6 +197,15 @@ EditMode tests pass in Unity 2022.3.22.
   correction hit the 60° limit, which points to a mismatch between the meshes.
 
 ### Changed
+- **Faster source evaluation:** per-pixel work (mask levels and blends, global mask steps,
+  vertex colors, decals, the base color's brightest value) runs on every core through the
+  Texture Wrapper's new `GetPixels`/`SetPixels`, and within one source's evaluation each
+  texture is loaded and sampled once, and each global mask channel and vertex color map made
+  once (`AtlasEvaluationCache`), instead of once per layer or mask. A channel copied into RGB
+  is one pass instead of three blits, and the Texture Wrapper reuses pixel buffers and skips
+  the resampled copy in same-size blits. Evaluation steps of 100 ms or more get a timing line.
+- **Progress bar with Cancel** while an output bakes (build and *Bake to Assets*): the
+  texture, map and source being baked. Cancel stops the build and leaves the avatar as it was.
 - **Atlaser inspector:** *Geometry Baking* is a folding section right above the output
   components; the "configuration-only" note is gone. The output inspector drops its build
   note and the "all detected materials are assigned" line.

@@ -24,10 +24,24 @@ Newest first. Versions follow [SemVer](https://semver.org).
 - The `Mixed` blend mode is now `base + base × blend` instead of a copy of `Average`.
 
 ### Fixed
+- **Color operations ran close to single-threaded in Unity:** applying operations allocated an
+  enumerator per pixel, and masks without options allocated their default options per pixel.
+  Allocations in parallel loops serialize on the garbage collector, so `ApplyColor`,
+  `Resize` with operations and masked `Blit`s now allocate nothing per pixel.
 - **`Blit`'s `strength` for color blends:** it scales the influence, as documented; before, it
   only had an effect on normal blends.
 
 ### Added
+- **`GetPixels` and `SetPixels`:** read and write every pixel at once, for whole-texture
+  processing outside the wrapper without a call per pixel; `GetPixels(Color[])` fills an
+  array you reuse.
+- **Pixel buffer reuse:** disposed wrappers' pixel and usage arrays are kept (up to
+  `TextureProcessingSettings.PooledBytes`, 1 GiB by default) for the next wrapper of the same
+  size, instead of allocating hundreds of megabytes per operation on large textures.
+  `ReleasePooledBuffers` frees them.
+- **Faster same-size `Blit`:** a source of the region's size, copied without a transform,
+  operations, padding or the usage channel, is read directly instead of through a resampled
+  copy.
 - **`ContentRegion`:** the rectangle `Blit` fills with content for a region and padding on a
   texture of a given size, without blitting.
 - **`PaintTriangles`:** paints a batch of triangles (three corners each) with the same result as

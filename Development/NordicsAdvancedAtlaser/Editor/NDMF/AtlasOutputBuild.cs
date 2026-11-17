@@ -28,15 +28,21 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             output = AtlasOutputGenerator.Generate(job.GeneratorJob, job.Plan, job.Configuration, job.Shader, mobile);
                         outputs.Add(output);
                         context.Diagnostics.AddRange(output.Timings);
+                        // The generator job's sources are these, in this order (AtlasOutputProcessor).
+                        int index = 0;
                         foreach (var source in job.Sources)
                             if (source.Input?.Unified != null)
+                            {
+                                job.Plan.VertexColors.TryGetValue(index++, out var vertexColor);
                                 targets[source.Input.SourceMaterial] = new AtlasRemapTarget
                                 {
                                     // Into the part the content fills, inside the padding.
                                     Region = AtlasOutputLayout.ContentRegion(source.UVRegion, job.Configuration.mainTexture,
                                         AtlasOutputLayout.EffectivePadding(job.Configuration)),
-                                    Output = output.Material
+                                    Output = output.Material,
+                                    VertexColor = vertexColor
                                 };
+                            }
                         context.Diagnostics.Add($"{job.Configuration.outputName}: {output.Textures.Count} texture(s) for {job.Shader.DisplayName}, {(mobile ? "mobile" : "PC")} formats.");
                     }
                 if (targets.Count > 0)

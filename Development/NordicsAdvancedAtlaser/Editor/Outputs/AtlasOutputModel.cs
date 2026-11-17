@@ -92,6 +92,21 @@ namespace NordicWind.AdvancedAtlaser.Editor
         FollowsSmoothness
     }
 
+    // What the output shader does with the mesh's vertex colors on the base color.
+    [System.Flags]
+    public enum AtlasVertexColorSupport
+    {
+        None = 0,
+        // Multiplies the base color by the vertex color.
+        Color = 1,
+        // Multiplies the alpha by the vertex alpha.
+        Alpha = 2,
+        // Takes an amount: lerp(1, vertex color, amount).
+        Amount = 4,
+        // Can decode the vertex colors from sRGB.
+        Srgb = 8
+    }
+
     // What an output shader can express, in unified terms. Feature modes are offered only
     // when the capabilities they need are here. Grows with the features.
     public sealed class AtlasOutputCapabilities
@@ -105,6 +120,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // ones (Poiyomi's TransClipping).
         public bool BlendedDepthWrite;
         public AtlasReflectanceSupport Reflectance;
+        public AtlasVertexColorSupport VertexColors;
 
         public AtlasOutputTexture TextureFor(AtlasVirtualMap map) => Textures.Find(t => t.Provides(map));
 

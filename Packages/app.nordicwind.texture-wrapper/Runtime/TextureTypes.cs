@@ -49,6 +49,11 @@ namespace NordicWind.TextureWrapper
         private static int _minimumGpu = 512 * 512;
         public static int MinParallelPixels { get => _minimum; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _minimum = value; } }
         public static int MaxThreads { get => _threads; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _threads = value; } }
+        private static long _pooled = 1L << 30;
+        /// <summary>How many bytes of disposed wrappers' pixel buffers are kept for reuse by the
+        /// next wrapper of the same size (default 1 GiB; 0: none). Free them with
+        /// <see cref="NordicsTextureWrapper.ReleasePooledBuffers"/>.</summary>
+        public static long PooledBytes { get => _pooled; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _pooled = value; } }
         /// <summary>
         /// Lets operations that have a GPU version use it. Off: everything runs on the CPU. The
         /// results agree within each operation's documented tolerance.

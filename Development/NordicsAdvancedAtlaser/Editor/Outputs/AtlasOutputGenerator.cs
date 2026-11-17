@@ -30,23 +30,29 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var maps = plan.Maps.Select(r => r.Map).Distinct().ToList();
             var uses = AtlasOutputOverview.TextureUses(config, shader.Capabilities, maps, Array.Empty<AtlasVirtualMap>());
             var result = new AtlasGeneratedOutput();
+            var enabled = uses.Where(u => u.Enabled).ToList();
             try
             {
-                foreach (var use in uses)
+                using (AtlasProgress.Begin(config.outputName, enabled.Count))
                 {
-                    if (!use.Enabled) continue;
-                    Texture2D texture;
-                    string label = $"{config.outputName} {use.Texture.Id} ({use.Width}×{use.Height})";
-                    var pack = new AtlasStageTimer("pack " + label, result.Timings);
-                    using (var packed = AtlasTexturePacker.Pack(use, plan, job, result.Timings))
+                    for (int t = 0; t < enabled.Count; t++)
                     {
-                        pack.Dispose();
-                        using (new AtlasStageTimer("compress " + label, result.Timings))
-                            texture = Compress(packed, use, config, mobile, $"{config.outputName}_{use.Texture.Id}");
+                        var use = enabled[t];
+                        AtlasProgress.Texture(t, use.Texture.Label);
+                        Texture2D texture;
+                        string label = $"{config.outputName} {use.Texture.Id} ({use.Width}×{use.Height})";
+                        var pack = new AtlasStageTimer("pack " + label, result.Timings);
+                        using (var packed = AtlasTexturePacker.Pack(use, plan, job, result.Timings))
+                        {
+                            pack.Dispose();
+                            AtlasProgress.Step("compressing");
+                            using (new AtlasStageTimer("compress " + label, result.Timings))
+                                texture = Compress(packed, use, config, mobile, $"{config.outputName}_{use.Texture.Id}");
+                        }
+                        result.Textures.Add(texture);
+                        foreach (var request in plan.Maps)
+                            if (use.Maps.Contains(request.Map)) request.Reference.Texture = texture;
                     }
-                    result.Textures.Add(texture);
-                    foreach (var request in plan.Maps)
-                        if (use.Maps.Contains(request.Map)) request.Reference.Texture = texture;
                 }
                 result.Material = new Material(unityShader) { name = config.outputName };
                 shader.Write(plan.Output, result.Material);
@@ -57,6 +63,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 foreach (var texture in result.Textures) UnityEngine.Object.DestroyImmediate(texture);
                 if (result.Material != null) UnityEngine.Object.DestroyImmediate(result.Material);
                 throw;
+            }
+            finally
+            {
+                // The bake's reused buffers aren't needed until the next one.
+                NordicsTextureWrapper.ReleasePooledBuffers();
+                AtlasPixels.Release();
             }
         }
 

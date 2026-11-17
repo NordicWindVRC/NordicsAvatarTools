@@ -111,6 +111,10 @@ and `ATLAS_OUTPUT.md` for the output design.
        the material it comes from (*Automatic*: the one with the largest area).
      - **Ambient Occlusion**: each source's occlusion map, at its strength; sources without
        one stay unoccluded.
+     - **Vertex Colors**: *Kept on the mesh* (the atlas material multiplies by them as the
+       sources did; the build rewrites each material's vertex colors to match, white where a
+       material didn't use them), *Baked into the textures*, or *Off*. Masks that read vertex
+       colors are baked either way.
      - Masks, including Poiyomi's global masks, are baked into the features they limit.
        Global mask options that change live (back faces, mirrors, cameras, distance,
        contacts) are baked as the avatar is normally seen, and the build lists them.

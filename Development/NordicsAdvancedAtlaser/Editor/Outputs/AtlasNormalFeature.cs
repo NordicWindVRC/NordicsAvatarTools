@@ -62,7 +62,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
             var materials = active.Select(i => job.Sources[i].Material).ToList();
             if (materials.Any(m => NormalLayers(m).Any(l => !AtlasMapEvaluator.CanBakeNormalLayer(l, m))))
-                context.Notes.Add("A normal layer that is placed, masked by vertex colors or a global mask written by vertex colors, layers or the second pass, on another UV, or lerped isn't baked yet; it's left out.");
+                context.Notes.Add("A normal layer that is placed, masked by a global mask written by layers or the second pass, on another UV, or lerped isn't baked yet; it's left out.");
         }
 
         // The surface layers that change the normal.

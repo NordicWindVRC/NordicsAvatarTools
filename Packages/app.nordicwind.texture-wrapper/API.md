@@ -50,6 +50,10 @@ A texture held in memory as float RGBA plus a per-pixel *usage* flag.
 | `Color GetPixel(int x, int y)` | Raw linear value, which may be outside 0–1. Normal maps are normalized first. |
 | `Color GetPixel(Vector2 uv)` | Nearest-pixel value at a UV position. |
 | `void SetPixel(int x, int y, Color color)` / `SetPixel(Vector2 uv, Color color)` | Writes a value and marks the pixel used. |
+| `Color[] GetPixels()` | A copy of every pixel's raw value, row by row from the bottom (index `y × Width + x`). Normal maps are normalized first. For processing whole textures in your own (for example parallel) loops. |
+| `void SetPixels(Color[] colors)` | Writes every pixel's value in the same order and marks every pixel used. The array must have one finite color per pixel. |
+| `void GetPixels(Color[] destination)` | The same as `GetPixels()`, into an array you keep and reuse (one element per pixel). |
+| `static void ReleasePooledBuffers()` | Frees the pixel buffers kept from disposed wrappers for reuse (see `TextureProcessingSettings.PooledBytes`). |
 | `bool IsPixelUsed(int x, int y)` / `IsPixelUsed(Vector2 uv)` | Reads the usage flag. |
 | `void SetPixelUsed(int x, int y, bool used)` | Sets the usage flag without changing the color. |
 | `Color Sample(Vector2 uv, TextureSamplingMode sampling = Bilinear, TextureWrapMode? wrap = null)` | Filtered sample. `wrap` defaults to `Settings.WrapMode`. |

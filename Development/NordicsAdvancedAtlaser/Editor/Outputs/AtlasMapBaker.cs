@@ -18,15 +18,21 @@ namespace NordicWind.AdvancedAtlaser.Editor
             try
             {
                 var size = new AtlasTextureSize { width = width, height = height };
-                foreach (int index in request.Sources)
+                for (int k = 0; k < request.Sources.Count; k++)
                 {
+                    int index = request.Sources[k];
+                    AtlasProgress.Source(request.Map, k, request.Sources.Count);
                     var source = job.Sources[index];
                     var bake = AtlasOutputLayout.BakeSize(source.UVRegion, size);
                     string label = $"{request.Map} source {index} ({bake.x}×{bake.y})";
                     var evaluate = new AtlasStageTimer("evaluate " + label, timings);
-                    using (var content = request.Evaluate != null
-                        ? request.Evaluate(index, source.Material, bake.x, bake.y)
-                        : AtlasMapEvaluator.Evaluate(request.Map, source.Material, bake.x, bake.y))
+                    NordicsTextureWrapper evaluated;
+                    // What the source's parts share (textures, bus channels, vertex colors) is made once.
+                    using (AtlasEvaluationCache.Scope(timings, "evaluate " + label))
+                        evaluated = request.Evaluate != null
+                            ? request.Evaluate(index, source.Material, bake.x, bake.y)
+                            : AtlasMapEvaluator.Evaluate(request.Map, source.Material, bake.x, bake.y);
+                    using (var content = evaluated)
                     {
                         evaluate.Dispose();
                         NordicsTextureWrapper coverage;

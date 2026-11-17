@@ -60,17 +60,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // The brightest color channel in the map.
-        public static float Peak(NordicsTextureWrapper map)
-        {
-            float peak = 0f;
-            for (int y = 0; y < map.Height; y++)
-                for (int x = 0; x < map.Width; x++)
-                {
-                    var c = map.GetPixel(x, y);
-                    peak = Mathf.Max(peak, Mathf.Max(c.r, Mathf.Max(c.g, c.b)));
-                }
-            return peak;
-        }
+        public static float Peak(NordicsTextureWrapper map) =>
+            Mathf.Max(0f, AtlasPixels.Max(map, c => Mathf.Max(c.r, Mathf.Max(c.g, c.b))));
 
         private static bool Same(Color a, Color b) =>
             Mathf.Abs(a.r - b.r) < 1e-4f && Mathf.Abs(a.g - b.g) < 1e-4f && Mathf.Abs(a.b - b.b) < 1e-4f;

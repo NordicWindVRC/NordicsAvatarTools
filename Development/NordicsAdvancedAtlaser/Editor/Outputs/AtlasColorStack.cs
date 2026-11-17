@@ -18,17 +18,25 @@ namespace NordicWind.AdvancedAtlaser.Editor
         /// <paramref name="multiplyColor"/>.</summary>
         public static NordicsTextureWrapper Evaluate(AtlasUnifiedMaterial source, int width, int height, bool multiplyColor)
         {
-            var result = AtlasMapEvaluator.Evaluate(AtlasVirtualMap.BaseColor, source, width, height);
+            NordicsTextureWrapper result;
+            using (AtlasEvaluationCache.Step("base color texture"))
+                result = AtlasMapEvaluator.Evaluate(AtlasVirtualMap.BaseColor, source, width, height);
             try
             {
                 var color = source.Surface.BaseColor.Color;
                 if (multiplyColor) Tint(result, color);
-                Adjust(result, source, AtlasAdjustmentTarget.BaseColor, null, width, height);
+                // base = color input × vertex color (2.1), where the vertex colors are baked.
+                using (AtlasEvaluationCache.Step("vertex colors"))
+                    AtlasVertexColors.MultiplyColor(result, source, width, height);
+                using (AtlasEvaluationCache.Step("base color adjustments"))
+                    Adjust(result, source, AtlasAdjustmentTarget.BaseColor, null, width, height);
                 for (int i = 0; i < source.Layers.Count; i++)
                     if (source.Layers[i] is AtlasSurfaceLayer layer && CanBake(source, i, layer))
                         foreach (var target in layer.Targets.Where(t => t.Target == AtlasSurfaceTarget.BaseColor))
-                            Apply(result, source, layer, target, width, height);
-                Adjust(result, source, AtlasAdjustmentTarget.SurfaceColor, null, width, height);
+                            using (AtlasEvaluationCache.Step($"layer {i + 1} ({Describe(layer, target)})"))
+                                Apply(result, source, layer, target, width, height);
+                using (AtlasEvaluationCache.Step("surface color adjustments"))
+                    Adjust(result, source, AtlasAdjustmentTarget.SurfaceColor, null, width, height);
                 return result;
             }
             catch
@@ -107,6 +115,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 {
                     if (!(source.Layers[i] is AtlasSurfaceLayer layer) || !CanBakeEmission(source, i, layer)) continue;
                     foreach (var target in layer.Targets.Where(t => t.Target == AtlasSurfaceTarget.Emission))
+                        using (AtlasEvaluationCache.Step($"emission layer {i + 1} ({Describe(layer, target)})"))
                         using (var layerSource = Source(layer, width, height, out var coverage))
                         using (coverage)
                         {
@@ -176,7 +185,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (color && layer.Source.Map?.Decal != null && !CanPlace(layer.Source.Map))
                     notes.Add("A decal with symmetry, mirror sides, parallax depth, spin, a rotated texture or MSDF text isn't baked yet; it's left out.");
                 else if (color && !CanBake(source, i, layer))
-                    notes.Add("A color layer that is live (modulated, scrolling, animated), lit, on one side or in mirrors, or masked by vertex colors or a global mask written by vertex colors, layers or the second pass isn't baked yet; it's left out.");
+                    notes.Add("A color layer that is live (modulated, scrolling, animated), lit, on one side or in mirrors, or masked by a global mask written by layers or the second pass isn't baked yet; it's left out.");
                 if (layer.Targets.Any(t => t.Target == AtlasSurfaceTarget.Metallic || t.Target == AtlasSurfaceTarget.Roughness ||
                                             t.Target == AtlasSurfaceTarget.Occlusion || t.Target == AtlasSurfaceTarget.Alpha))
                     notes.Add("Layers targeting alpha, metallic, roughness or occlusion aren't baked yet; they're left out.");
@@ -187,11 +196,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (adjustment.Target == AtlasAdjustmentTarget.FinalColor)
                     notes.Add("Final color adjustments aren't merged yet; they're left out.");
                 else if (adjustment.Target != AtlasAdjustmentTarget.Emission && !CanBake(source, i, adjustment))
-                    notes.Add("A color adjustment that is live, masked by vertex colors or a global mask written by vertex colors, layers or the second pass, or an operation without a baked form yet (" +
+                    notes.Add("A color adjustment that is live, masked by a global mask written by layers or the second pass, or an operation without a baked form yet (" +
                         adjustment.Operation + ") isn't baked; it's left out.");
             }
-            if (source.Surface.VertexColor.MultiplyColor)
-                notes.Add("Vertex colors on the base color aren't baked yet; they're left out.");
             return notes.Distinct();
         }
 
@@ -236,6 +243,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     }
                 }
             }
+        }
+
+        // For timing lines: the layer's blend, source and mask.
+        private static string Describe(AtlasSurfaceLayer layer, AtlasLayerTarget target)
+        {
+            var parts = new List<string> { target.Blend.ToString() };
+            if (layer.Source.Map?.Decal != null) parts.Add("decal");
+            else if (layer.Source.Map?.Texture != null) parts.Add("texture");
+            var mask = layer.Mask;
+            if (mask != null)
+                parts.Add(mask.VertexColor ? "vertex color mask" : mask.Map != null ? (mask.Bus >= 0 ? "mask and global mask" : "mask") :
+                    mask.Bus >= 0 ? "global mask" : "mask");
+            if (mask?.Levels != null) parts.Add("levels");
+            return string.Join(", ", parts);
         }
 
         private static TextureBlendMode Blend(AtlasBlend blend)
@@ -302,18 +323,34 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 x0 = Mathf.Clamp(Mathf.FloorToInt(minU * width), 0, width); x1 = Mathf.Clamp(Mathf.CeilToInt(maxU * width), 0, width);
                 y0 = Mathf.Clamp(Mathf.FloorToInt(minV * height), 0, height); y1 = Mathf.Clamp(Mathf.CeilToInt(maxV * height), 0, height);
             }
-            var white = Color.white;
-            using (var loaded = new NordicsTextureWrapper(texture, TextureDataType.Color))
-                for (int y = y0; y < y1; y++)
+            var pixels = result.GetPixels();
+            var covered = coverage.GetPixels();
+            var loaded = AtlasMapEvaluator.Loaded(texture, TextureDataType.Color, out bool owned);
+            try
+            {
+                // Each row on its own core; the loaded texture is only read.
+                System.Threading.Tasks.Parallel.For(y0, y1, y =>
+                {
                     for (int x = x0; x < x1; x++)
                     {
                         var d = new Vector2((x + 0.5f) / width, (y + 0.5f) / height) - decal.Center;
                         var p = new Vector2((d.x * cs - d.y * sn) / decal.Scale.x + 0.5f, (d.x * sn + d.y * cs) / decal.Scale.y + 0.5f);
                         if (decal.ClipOutside && (p.x < 0f || p.x > 1f || p.y < 0f || p.y > 1f)) continue;
                         var sample = loaded.Sample(Vector2.Scale(p, map.Tiling) + map.Offset, TextureSamplingMode.Bilinear, TextureWrapMode.Repeat);
-                        result.SetPixel(x, y, layer.SourceMapIsMask ? new Color(color.r, color.g, color.b, color.a * sample.a) : color * sample);
-                        coverage.SetPixel(x, y, white);
+                        int i = y * width + x;
+                        pixels[i] = layer.SourceMapIsMask ? new Color(color.r, color.g, color.b, color.a * sample.a) : color * sample;
+                        covered[i] = Color.white;
                     }
+                });
+            }
+            finally
+            {
+                if (owned) loaded.Dispose();
+            }
+            coverage.SetPixels(covered);
+            result.SetPixels(pixels);
+            // Only where the decal is counts as used.
+            result.Blit(coverage, sourceChannel: TextureChannel.R, destinationChannel: TextureChannel.Usage);
             return result;
         }
 
@@ -330,8 +367,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (!alpha) return mask;
             using (var opacity = AtlasMapEvaluator.Constant(AtlasVirtualMap.Metallic, 1f, width, height))
             {
-                foreach (var channel in new[] { TextureChannel.R, TextureChannel.G, TextureChannel.B })
-                    opacity.Blit(source, sourceChannel: TextureChannel.A, destinationChannel: channel);
+                AtlasPixels.Map(opacity, source, (o, s) => new Color(s.a, s.a, s.a, o.a));
                 if (layer.SourceAlphaOffset != 0f)
                     opacity.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Add,
                         Parameters = { Color = new Color(layer.SourceAlphaOffset, layer.SourceAlphaOffset, layer.SourceAlphaOffset, 0f) } });
@@ -341,25 +377,52 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return mask;
         }
 
-        // The baked adjustments on one target, in the material's order.
+        // The baked adjustments on one target, in the material's order, in one pass; those that
+        // change nothing are skipped.
         private static void Adjust(NordicsTextureWrapper map, AtlasUnifiedMaterial source, AtlasAdjustmentTarget target, AtlasLayer layer,
             int width, int height)
         {
-            for (int i = 0; i < source.ColorAdjustments.Count; i++)
+            var operations = new List<ColorOperation>();
+            var masks = new List<NordicsTextureWrapper>();
+            try
             {
-                var adjustment = source.ColorAdjustments[i];
-                if (adjustment.Target != target || (target == AtlasAdjustmentTarget.Layer && adjustment.Layer != layer)) continue;
-                if (!CanBake(source, i, adjustment)) continue;
-                using (var mask = adjustment.Mask != null ? AtlasMapEvaluator.ScaledMask(adjustment.Mask, 1f, width, height, source) : null)
+                for (int i = 0; i < source.ColorAdjustments.Count; i++)
                 {
+                    var adjustment = source.ColorAdjustments[i];
+                    if (adjustment.Target != target || (target == AtlasAdjustmentTarget.Layer && adjustment.Layer != layer)) continue;
+                    if (!CanBake(source, i, adjustment) || IsIdentity(adjustment)) continue;
                     var operation = Operation(adjustment);
-                    if (mask != null)
+                    if (adjustment.Mask != null)
                     {
+                        var mask = AtlasMapEvaluator.ScaledMask(adjustment.Mask, 1f, width, height, source);
+                        masks.Add(mask);
                         operation.Mask = mask;
                         operation.MaskOptions = new TextureMaskOptions { Channel = TextureChannel.R };
                     }
-                    map.ApplyColor(operation);
+                    operations.Add(operation);
                 }
+                if (operations.Count > 0) map.ApplyColor(operations);
+            }
+            finally
+            {
+                foreach (var mask in masks) mask.Dispose();
+            }
+        }
+
+        // An adjustment that leaves every color as it is.
+        private static bool IsIdentity(AtlasColorAdjustment adjustment)
+        {
+            switch (adjustment.Operation)
+            {
+                case AtlasColorOperation.Hue: return !adjustment.HueSet && Mathf.Approximately(Mathf.Repeat(adjustment.Amount, 1f), 0f);
+                case AtlasColorOperation.Saturation:
+                case AtlasColorOperation.Contrast:
+                case AtlasColorOperation.Brightness:
+                case AtlasColorOperation.Power: return Mathf.Approximately(adjustment.Amount, 1f);
+                case AtlasColorOperation.Tint: return adjustment.Color.r == 1f && adjustment.Color.g == 1f && adjustment.Color.b == 1f;
+                case AtlasColorOperation.Lightness:
+                case AtlasColorOperation.Chromatize: return adjustment.Amount == 0f;
+                default: return false;
             }
         }
 

@@ -119,6 +119,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public List<AtlasMapRequest> Maps;
         // What the feature leaves out, one line each, for the build's diagnostics.
         public List<string> Notes;
+        // How the remap rewrites each source's vertex colors, by index into Job.Sources.
+        public Dictionary<int, Func<UnityEngine.Color, UnityEngine.Color>> VertexColors;
 
         public AtlasTextureReference RequestMap(AtlasVirtualMap map, AtlasTextureInterpretation interpretation)
         {

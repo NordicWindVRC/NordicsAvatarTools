@@ -49,7 +49,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             },
             SurfaceModes = { AtlasSurfaceMode.Cutout, AtlasSurfaceMode.Transparent, AtlasSurfaceMode.Fade },
             VRChatFallback = true,
-            BlendedDepthWrite = true
+            BlendedDepthWrite = true,
+            VertexColors = AtlasVertexColorSupport.Color | AtlasVertexColorSupport.Alpha | AtlasVertexColorSupport.Amount | AtlasVertexColorSupport.Srgb
         };
 
         // Poiyomi 10's rendering presets (_Mode), as its shader's on_value_actions set them, by
@@ -88,6 +89,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetTextureScale("_BumpMap", Vector2.one);
             material.SetTextureOffset("_BumpMap", Vector2.zero);
             material.SetFloat("_BumpMapUV", 0);
+            // Vertex colors: base × lerp(1, vertex RGB (sRGB decoded with Linear Colors), amount),
+            // alpha × lerp(1, vertex alpha, alpha amount).
+            var vertex = output.Surface.VertexColor;
+            bool vertexColors = vertex.MultiplyColor || vertex.MultiplyAlpha;
+            material.SetFloat("_MainVertexColoringEnabled", vertexColors ? 1 : 0);
+            material.SetFloat("_MainVertexColoring", vertex.MultiplyColor ? Mathf.Clamp01(vertex.Amount) : 0f);
+            material.SetFloat("_MainUseVertexColorAlpha", vertex.MultiplyAlpha ? Mathf.Clamp01(vertex.AlphaAmount) : 0f);
+            material.SetFloat("_MainVertexColoringLinearSpace", vertex.SrgbData ? 1 : 0);
             WriteSurfaceResponse(output.Surface.Response, material);
             WriteEmission(output, material);
             var render = output.Render;
@@ -233,7 +242,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.B, AtlasOutputTexture.Gray(1f)),
                 PoiyomiToon10OutputShader.EmissionTexture()
             },
-            Reflectance = AtlasReflectanceSupport.FollowsSmoothness
+            Reflectance = AtlasReflectanceSupport.FollowsSmoothness,
+            // _VertexColor: the base color × the vertex RGB as stored.
+            VertexColors = AtlasVertexColorSupport.Color
         };
 
         // Toon Standard: _Color (sRGB-authored) times _MainTex; the normal map, behind its
@@ -245,6 +256,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetTexture("_MainTex", baseColor.Map?.Texture);
             material.SetTextureScale("_MainTex", Vector2.one);
             material.SetTextureOffset("_MainTex", Vector2.zero);
+            material.SetFloat("_VertexColor", output.Surface.VertexColor.MultiplyColor ? 1 : 0);
             var normal = output.Surface.Normal;
             if (normal.Map?.Texture != null)
             {

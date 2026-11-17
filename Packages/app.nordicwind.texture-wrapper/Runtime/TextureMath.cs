@@ -34,9 +34,12 @@ namespace NordicWind.TextureWrapper
             }
             return Mathf.Clamp01(v);
         }
+        // Shared, so a mask without options allocates nothing per pixel.
+        private static readonly TextureMaskOptions DefaultMaskOptions = new TextureMaskOptions();
+
         internal static float EvaluateMask(Color sample, bool used, TextureMaskOptions options)
         {
-            if (options == null) options = new TextureMaskOptions();
+            if (options == null) options = DefaultMaskOptions;
             float v;
             if (options.UseChannelBlending)
             {
