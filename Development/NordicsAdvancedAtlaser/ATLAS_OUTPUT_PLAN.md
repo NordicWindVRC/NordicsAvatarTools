@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2a is done, 2.2b is next. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is next. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -144,7 +144,13 @@ In two steps, since each output shader stores these maps its own way.
 
 **2.2b Surface maps**
 - **Compound textures**: metallic and roughness through the virtual maps, with neutral values
-  for unused channels.
+  for unused channels; a channel can be stored inverted (smoothness for roughness). Poiyomi:
+  R metallic, G smoothness, B reflection mask, A specular mask, and its AO map; Toon Standard:
+  one texture of metallic, gloss and occlusion.
+- The bakeable subset of a scalar input: a constant, or a UV0 map's channel with its
+  constant, invert and combine; remaps and the mask bus are listed in the diagnostics.
+- Highlight and reflection settings other than their strengths and masks (tints, fresnel,
+  steps, anisotropy, cubemaps) follow later, as shared values from the reference source.
 - *Reflection and specular* (shared groups, spatial constants), *Ambient occlusion* (native
   map).
 - **Workable:** lit materials keep their surface response.

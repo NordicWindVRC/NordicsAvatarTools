@@ -96,6 +96,12 @@ and `ATLAS_OUTPUT.md` for the output design.
        pre-baked one; the build also includes a source whose mesh was reduced, for its
        correction. The output's normal strength is the largest of the
        sources'; the weaker ones are baked at their share of it, so each looks as before.
+     - **Reflection and Specular**: each source's metallic and roughness in maps, and how
+       strong its highlights and reflections are, in masks (Poiyomi; relative to the
+       strongest). Sources without them stay matte. Reflectance comes from the reference
+       source.
+     - **Ambient Occlusion**: each source's occlusion map, at its strength; sources without
+       one stay unoccluded.
      - **Surface Mode**: *Automatic* takes the most see-through mode among the sources that
        the output shader supports (Poiyomi: opaque, cutout, transparent, fade; Mobile Toon
        Standard: opaque). When transparent sources share the atlas with solid ones, it uses

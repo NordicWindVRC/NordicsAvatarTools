@@ -28,7 +28,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     {
                         // A normal map is its whole texture: its vectors are copied as they are.
                         if (texture.Normal) packed.Blit(map, padding: 0);
-                        else Copy(packed, map, channel.Channels);
+                        else
+                        {
+                            if (channel.Invert) map.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Invert });
+                            Copy(packed, map, channel.Channels);
+                        }
                     }
                 }
                 return packed;

@@ -8,6 +8,14 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Surface maps:** *Reflection and Specular* bakes each source's metallic and roughness, and
+  its highlight and reflection strengths into masks relative to the strongest; *Ambient
+  Occlusion* bakes each source's occlusion. Sources without them are matte and unoccluded.
+  Poiyomi Toon 10 gets its packed map (metallic, smoothness, reflection and specular masks)
+  and AO map, with their keywords; Toon Standard one texture of metallic, gloss and
+  occlusion. Layout channels can be stored inverted (smoothness). Remapped or bus-masked
+  inputs and the highlight and reflection settings beyond strength (tints, fresnel, steps,
+  anisotropy) are listed in the diagnostics.
 - **Normal maps:** each source's normals are combined into the output's normal map, in the
   established order (pre-baked map, the geometry bake's correction, the primary normal map,
   UV0 normal layers with their masks), by whiteout. The output's strength is the largest of

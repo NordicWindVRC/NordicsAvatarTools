@@ -180,7 +180,9 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var generated = AtlasOutputGenerator.Generate(job, plan, config, shader, mobile: false);
             Keep(generated.Material);
             foreach (var t in generated.Textures) Keep(t);
-            var atlas = generated.Textures.Single();
+            // A bare unified material has highlights on (the default), so it may get surface maps
+            // too; this checks the base color texture.
+            var atlas = generated.Textures.Single(x => x.name == "Test_BaseColor");
             Assert.AreEqual(64, atlas.width);
             Assert.IsFalse(atlas.isReadable, "No CPU copy is kept.");
             Assert.That(atlas.format, Is.EqualTo(TextureFormat.DXT1).Or.EqualTo(TextureFormat.DXT1Crunched));

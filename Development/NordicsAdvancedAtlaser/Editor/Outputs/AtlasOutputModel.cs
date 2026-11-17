@@ -12,7 +12,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The surface's alpha, after each source's conversion to the output's surface mode.
         Alpha,
         // The main tangent-space normal, every normal of a source combined.
-        Normal
+        Normal,
+        // One value each (2.4): metallic, perceptual roughness, the strength of reflections and of
+        // highlights (relative to the output's), and ambient occlusion.
+        Metallic,
+        Roughness,
+        ReflectionMask,
+        SpecularMask,
+        Occlusion
     }
 
     // Which channels of a texture a virtual map fills.
@@ -37,6 +44,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasVirtualMap Map;
         public AtlasTextureChannels Channels;
         public Color Neutral = Color.white;
+        // Stored as 1 − value, where the shader reads the inverse (roughness as smoothness).
+        // Neutral is the stored value.
+        public bool Invert;
     }
 
     // One texture of an output shader's texture layout.
@@ -56,11 +66,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         public AtlasOutputTexture(string id, string label) { Id = id; Label = label; }
 
-        public AtlasOutputTexture With(AtlasVirtualMap map, AtlasTextureChannels channels, Color? neutral = null)
+        public AtlasOutputTexture With(AtlasVirtualMap map, AtlasTextureChannels channels, Color? neutral = null, bool invert = false)
         {
-            Channels.Add(new AtlasTextureChannel { Map = map, Channels = channels, Neutral = neutral ?? Color.white });
+            Channels.Add(new AtlasTextureChannel { Map = map, Channels = channels, Neutral = neutral ?? Color.white, Invert = invert });
             return this;
         }
+
+        // A one-value neutral.
+        public static Color Gray(float value) => new Color(value, value, value, value);
 
         public bool Provides(AtlasVirtualMap map) => Channels.Exists(c => c.Map == map);
     }

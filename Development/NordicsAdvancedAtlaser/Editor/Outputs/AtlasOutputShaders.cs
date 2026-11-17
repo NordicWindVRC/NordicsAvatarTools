@@ -33,7 +33,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 new AtlasOutputTexture("BaseColor", "Base color") { SizeMode = AtlasTextureSizeMode.Main }
                     .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB)
                     .With(AtlasVirtualMap.Alpha, AtlasTextureChannels.A),
-                NormalTexture()
+                NormalTexture(),
+                // Poiyomi's packed maps (_MochieMetallicMaps): R metallic, G smoothness, B reflection
+                // mask, A specular mask, read as they are (multipliers 1).
+                new AtlasOutputTexture("Metallic", "Metallic and smoothness") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
+                    .With(AtlasVirtualMap.Metallic, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f))
+                    .With(AtlasVirtualMap.Roughness, AtlasTextureChannels.G, AtlasOutputTexture.Gray(0f), invert: true)
+                    .With(AtlasVirtualMap.ReflectionMask, AtlasTextureChannels.B, AtlasOutputTexture.Gray(0f))
+                    .With(AtlasVirtualMap.SpecularMask, AtlasTextureChannels.A, AtlasOutputTexture.Gray(0f)),
+                // _LightingAOMaps: occlusion in R.
+                new AtlasOutputTexture("Occlusion", "Ambient occlusion") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
+                    .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f))
             },
             SurfaceModes = { AtlasSurfaceMode.Cutout, AtlasSurfaceMode.Transparent, AtlasSurfaceMode.Fade },
             VRChatFallback = true,
@@ -76,6 +86,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetTextureScale("_BumpMap", Vector2.one);
             material.SetTextureOffset("_BumpMap", Vector2.zero);
             material.SetFloat("_BumpMapUV", 0);
+            WriteSurfaceResponse(output.Surface.Response, material);
             var render = output.Render;
             var preset = Array.Find(Presets, p => p.Mode == render.SurfaceMode &&
                 (p.Mode != AtlasSurfaceMode.Fade || (p.ZWrite == 1) == render.Pass.DepthWrite));
@@ -108,6 +119,52 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetOverrideTag("VRCFallback", Fallback(render));
         }
 
+        // Reflections & Specular (MOCHIE_PBR) from the packed map: metallic = R, smoothness = G,
+        // the reflection and specular masks B and A × their strengths; and the AO maps
+        // (PROP_LIGHTINGAOMAPS): occlusion = lerp(1, R, strength). Thry sets these keywords from
+        // its inspector; a written material sets them itself.
+        private static void WriteSurfaceResponse(AtlasSurfaceResponse response, Material material)
+        {
+            var packed = response.Metallic.Map?.Texture;
+            material.SetFloat("_MochieBRDF", packed != null ? 1 : 0);
+            if (packed != null)
+            {
+                material.EnableKeyword("MOCHIE_PBR");
+                material.SetTexture("_MochieMetallicMaps", packed);
+                material.SetTextureScale("_MochieMetallicMaps", Vector2.one);
+                material.SetTextureOffset("_MochieMetallicMaps", Vector2.zero);
+                material.SetFloat("_MochieMetallicMapsUV", 0);
+                material.SetFloat("_MochieMetallicMultiplier", 1);
+                material.SetFloat("_MochieRoughnessMultiplier", 1);
+                material.SetFloat("_MochieMetallicMapsMetallicChannel", 0);
+                material.SetFloat("_MochieMetallicMapsRoughnessChannel", 1);
+                material.SetFloat("_MochieMetallicMapsReflectionMaskChannel", response.Reflections.Mask != null ? 2 : 4);
+                material.SetFloat("_MochieMetallicMapsSpecularMaskChannel", response.Highlights.Mask != null ? 3 : 4);
+                material.SetFloat("_MochieMetallicMapInvert", 0);
+                material.SetFloat("_MochieRoughnessMapInvert", 0);
+                material.SetFloat("_MochieReflectionMaskInvert", 0);
+                material.SetFloat("_MochieSpecularMaskInvert", 0);
+                material.SetFloat("_MochieReflectionStrength", response.Reflections.Enabled ? Mathf.Clamp01(response.Reflections.Strength) : 0f);
+                material.SetFloat("_MochieSpecularStrength", response.Highlights.Enabled ? Mathf.Clamp(response.Highlights.Strength, 0f, 5f) : 0f);
+            }
+            else material.DisableKeyword("MOCHIE_PBR");
+
+            var occlusion = response.Occlusion.Map?.Texture;
+            material.SetTexture("_LightingAOMaps", occlusion);
+            if (occlusion != null)
+            {
+                material.EnableKeyword("PROP_LIGHTINGAOMAPS");
+                material.SetTextureScale("_LightingAOMaps", Vector2.one);
+                material.SetTextureOffset("_LightingAOMaps", Vector2.zero);
+                material.SetFloat("_LightingAOMapsUV", 0);
+                material.SetFloat("_LightDataAOStrengthR", Mathf.Clamp01(response.Occlusion.Constant));
+                material.SetFloat("_LightDataAOStrengthG", 0);
+                material.SetFloat("_LightDataAOStrengthB", 0);
+                material.SetFloat("_LightDataAOStrengthA", 0);
+            }
+            else material.DisableKeyword("PROP_LIGHTINGAOMAPS");
+        }
+
         // VRChat's fallback tag, as Thry's editor writes it: a shader type, the render type
         // (none for opaque) and DoubleSided when nothing is culled; or Hidden. A fade that writes
         // depth falls back to cutout, which keeps its solid parts solid.
@@ -135,7 +192,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 new AtlasOutputTexture("BaseColor", "Base color") { SizeMode = AtlasTextureSizeMode.Main }
                     .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB),
-                PoiyomiToon10OutputShader.NormalTexture()
+                PoiyomiToon10OutputShader.NormalTexture(),
+                // One texture for _MetallicMap (R), _GlossMap (G, smoothness) and _OcclusionMap (B).
+                new AtlasOutputTexture("Surface", "Metallic, gloss and occlusion") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
+                    .With(AtlasVirtualMap.Metallic, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f))
+                    .With(AtlasVirtualMap.Roughness, AtlasTextureChannels.G, AtlasOutputTexture.Gray(0f), invert: true)
+                    .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.B, AtlasOutputTexture.Gray(1f))
             }
         };
 
@@ -158,6 +220,32 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 material.SetTextureOffset("_BumpMap", Vector2.zero);
             }
             else material.DisableKeyword("USE_NORMAL_MAPS");
+
+            // USE_SPECULAR: metallic = _MetallicMap's channel × strength, smoothness = _GlossMap's ×
+            // strength, reflectance = gloss × _Reflectance. USE_OCCLUSION_MAP: lerp(1, channel, strength).
+            var response = output.Surface.Response;
+            var surface = response.Metallic.Map?.Texture;
+            if (surface != null)
+            {
+                material.EnableKeyword("USE_SPECULAR");
+                material.SetTexture("_MetallicMap", surface);
+                material.SetFloat("_MetallicMapChannel", 0);
+                material.SetFloat("_MetallicStrength", 1);
+                material.SetTexture("_GlossMap", response.Roughness.Map?.Texture ?? surface);
+                material.SetFloat("_GlossMapChannel", 1);
+                material.SetFloat("_GlossStrength", 1);
+                material.SetFloat("_Reflectance", Mathf.Clamp01(response.Reflectance.Constant));
+            }
+            else material.DisableKeyword("USE_SPECULAR");
+            var occlusion = response.Occlusion.Map?.Texture;
+            if (occlusion != null)
+            {
+                material.EnableKeyword("USE_OCCLUSION_MAP");
+                material.SetTexture("_OcclusionMap", occlusion);
+                material.SetFloat("_OcclusionMapChannel", 2);
+                material.SetFloat("_OcclusionStrength", Mathf.Clamp01(response.Occlusion.Constant));
+            }
+            else material.DisableKeyword("USE_OCCLUSION_MAP");
             material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
         }
     }
