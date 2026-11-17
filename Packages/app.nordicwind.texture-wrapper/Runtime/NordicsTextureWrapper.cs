@@ -474,6 +474,11 @@ namespace NordicWind.TextureWrapper
             // An empty coverage domain is not geometry. In particular, do not make
             // an empty normal map opaque or mark its pixels used.
             if(!any)return;
+            if(!all&&w==Width&&h==Height&&TextureGpu.ShouldUse((long)w*h))
+            {
+                DilateGpu();
+                return;
+            }
             if(all)
             {
                 if(normal)
@@ -591,43 +596,130 @@ namespace NordicWind.TextureWrapper
         public void PaintTriangle(Vector2 uv0,Vector2 uv1,Vector2 uv2,Color color0,Color color1,Color color2,TrianglePaintOptions options=null)
         {
             Writable();ValidateUV(uv0);ValidateUV(uv1);ValidateUV(uv2);ValidateColor(color0);ValidateColor(color1);ValidateColor(color2);
-            options=options??new TrianglePaintOptions();if(options.SamplesPerAxis<1||options.SamplesPerAxis>32)throw new ArgumentOutOfRangeException(nameof(options.SamplesPerAxis));
+            int samples=Samples(options);
+            if(!Setup(uv0,uv1,uv2,color0,color1,color2,out var t))return;
+            ForRows(t.X1-t.X0,t.Y1-t.Y0,dy=>PaintRow(t,t.Y0+dy,t.X0,t.X1,samples));
+            Changed();
+        }
+        /// <summary>Paints many triangles: <paramref name="uv"/> and <paramref name="color"/> hold
+        /// three corners per triangle. The result is the same as calling <see cref="PaintTriangle"/>
+        /// for each triangle in order. On the CPU, the texture is split into tiles painted on every
+        /// core; large batches on large textures may run on the GPU (see
+        /// <see cref="TextureProcessingSettings.UseGpu"/>), where a sample exactly on an edge two
+        /// triangles share may go to the other triangle.</summary>
+        public void PaintTriangles(IReadOnlyList<Vector2> uv,IReadOnlyList<Color> color,TrianglePaintOptions options=null)
+        {
+            Writable();
+            if(uv==null)throw new ArgumentNullException(nameof(uv));
+            if(color==null)throw new ArgumentNullException(nameof(color));
+            if(uv.Count!=color.Count||uv.Count%3!=0)throw new ArgumentException("Every triangle needs three UVs and three colors.");
+            int samples=Samples(options);
+            for(int i=0;i<uv.Count;i++){ValidateUV(uv[i]);ValidateColor(color[i]);}
+            int count=uv.Count/3;
+            if(count==0)return;
+            if(count>=TextureGpu.MinTriangles&&TextureGpu.ShouldUse((long)Width*Height)
+               &&(long)Width*samples<=SystemInfo.maxTextureSize&&(long)Height*samples<=SystemInfo.maxTextureSize
+               &&TextureGpu.PaintFlip!=0f)
+            {
+                PaintTrianglesGpu(uv,color,samples);
+                return;
+            }
+            PaintTrianglesTiled(uv,color,samples);
+        }
+        private static int Samples(TrianglePaintOptions options)
+        {
+            options=options??new TrianglePaintOptions();
+            if(options.SamplesPerAxis<1||options.SamplesPerAxis>32)throw new ArgumentOutOfRangeException(nameof(options.SamplesPerAxis));
+            return options.Mode==TriangleRasterizationMode.Fast?1:options.SamplesPerAxis;
+        }
+        /// <summary>One triangle in pixel space, with its fill-rule edges and pixel bounds.</summary>
+        private struct TriangleSetup
+        {
+            public Vector2 A,B,C;
+            public Color Color0,Color1,Color2;
+            public float Cross;
+            public FillEdge E0,E1,E2;
+            public int X0,X1,Y0,Y1;
+        }
+        private bool Setup(Vector2 uv0,Vector2 uv1,Vector2 uv2,Color color0,Color color1,Color color2,out TriangleSetup t)
+        {
+            t=default;
             Vector2 a=new Vector2(uv0.x*Width,uv0.y*Height),b=new Vector2(uv1.x*Width,uv1.y*Height),c=new Vector2(uv2.x*Width,uv2.y*Height);
-            float cross=(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);if(Mathf.Abs(cross)<1e-10f)return;
-            int x0=Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.x,Mathf.Min(b.x,c.x))),0,Width),x1=Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.x,Mathf.Max(b.x,c.x))),0,Width);
-            int y0=Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.y,Mathf.Min(b.y,c.y))),0,Height),y1=Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.y,Mathf.Max(b.y,c.y))),0,Height);
-            int samples=options.Mode==TriangleRasterizationMode.Fast?1:options.SamplesPerAxis;
+            float cross=(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);if(Mathf.Abs(cross)<1e-10f)return false;
             int orient=cross>0f?1:-1;
+            t.A=a;t.B=b;t.C=c;t.Color0=color0;t.Color1=color1;t.Color2=color2;t.Cross=cross;
             // The fill rule's edges are set up once per triangle; each sample then needs only a
             // few multiplications per edge.
-            FillEdge e0=new FillEdge(a,b,orient),e1=new FillEdge(b,c,orient),e2=new FillEdge(c,a,orient);
-            ForRows(x1-x0,y1-y0,dy=>
+            t.E0=new FillEdge(a,b,orient);t.E1=new FillEdge(b,c,orient);t.E2=new FillEdge(c,a,orient);
+            t.X0=Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.x,Mathf.Min(b.x,c.x))),0,Width);t.X1=Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.x,Mathf.Max(b.x,c.x))),0,Width);
+            t.Y0=Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.y,Mathf.Min(b.y,c.y))),0,Height);t.Y1=Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.y,Mathf.Max(b.y,c.y))),0,Height);
+            return t.X0<t.X1&&t.Y0<t.Y1;
+        }
+        /// <summary>Paints pixels x0–x1 of row y with one triangle's samples.</summary>
+        private void PaintRow(in TriangleSetup t,int y,int x0,int x1,int samples)
+        {
+            Vector2 a=t.A,b=t.B,c=t.C;
+            for(int x=x0;x<x1;x++)
             {
-                int y=y0+dy;
-                for(int x=x0;x<x1;x++)
+                Color sum=Color.clear;int hits=0;
+                for(int j=0;j<samples;j++)for(int i=0;i<samples;i++)
                 {
-                    Color sum=Color.clear;int hits=0;
-                    for(int j=0;j<samples;j++)for(int i=0;i<samples;i++)
-                    {
-                        Vector2 p=new Vector2(x+(i+.5f)/samples,y+(j+.5f)/samples);
-                        double px=p.x,py=p.y;
-                        double v0=(e0.Dx*(py-e0.Fy)-e0.Dy*(px-e0.Fx))*e0.Side;if(v0<0||(v0==0&&e0.Side<0))continue;
-                        double v1=(e1.Dx*(py-e1.Fy)-e1.Dy*(px-e1.Fx))*e1.Side;if(v1<0||(v1==0&&e1.Side<0))continue;
-                        double v2=(e2.Dx*(py-e2.Fy)-e2.Dy*(px-e2.Fx))*e2.Side;if(v2<0||(v2==0&&e2.Side<0))continue;
-                        float wb=((p.x-a.x)*(c.y-a.y)-(p.y-a.y)*(c.x-a.x))/cross;
-                        float wc=((b.x-a.x)*(p.y-a.y)-(b.y-a.y)*(p.x-a.x))/cross;
-                        float wa=1f-wb-wc;
-                        sum+=color0*wa+color1*wb+color2*wc;hits++;
-                    }
-                    if(hits==0)continue;
-                    int index=y*Width+x;Color existing=_pixels[index];Color add=sum*(1f/(samples*samples));
-                    // Preserve the complete floating-point accumulation. Clamping here
-                    // would lose information if later triangles/operations add to it.
-                    // The Unity output boundary clamps values for bounded formats.
-                    _pixels[index]=existing+add;
-                    _usage[index]=1;
+                    Vector2 p=new Vector2(x+(i+.5f)/samples,y+(j+.5f)/samples);
+                    double px=p.x,py=p.y;
+                    double v0=(t.E0.Dx*(py-t.E0.Fy)-t.E0.Dy*(px-t.E0.Fx))*t.E0.Side;if(v0<0||(v0==0&&t.E0.Side<0))continue;
+                    double v1=(t.E1.Dx*(py-t.E1.Fy)-t.E1.Dy*(px-t.E1.Fx))*t.E1.Side;if(v1<0||(v1==0&&t.E1.Side<0))continue;
+                    double v2=(t.E2.Dx*(py-t.E2.Fy)-t.E2.Dy*(px-t.E2.Fx))*t.E2.Side;if(v2<0||(v2==0&&t.E2.Side<0))continue;
+                    float wb=((p.x-a.x)*(c.y-a.y)-(p.y-a.y)*(c.x-a.x))/t.Cross;
+                    float wc=((b.x-a.x)*(p.y-a.y)-(b.y-a.y)*(p.x-a.x))/t.Cross;
+                    float wa=1f-wb-wc;
+                    sum+=t.Color0*wa+t.Color1*wb+t.Color2*wc;hits++;
                 }
-            });
+                if(hits==0)continue;
+                int index=y*Width+x;Color existing=_pixels[index];Color add=sum*(1f/(samples*samples));
+                // Preserve the complete floating-point accumulation. Clamping here
+                // would lose information if later triangles/operations add to it.
+                // The Unity output boundary clamps values for bounded formats.
+                _pixels[index]=existing+add;
+                _usage[index]=1;
+            }
+        }
+        // Tiles of this many pixels per side are painted in parallel; each tile paints its
+        // triangles in their order, so every pixel adds up exactly as with one call per triangle.
+        private const int PaintTile=64;
+        private void PaintTrianglesTiled(IReadOnlyList<Vector2> uv,IReadOnlyList<Color> color,int samples)
+        {
+            int count=uv.Count/3;
+            var setups=new TriangleSetup[count];var valid=new bool[count];
+            int tilesX=(Width+PaintTile-1)/PaintTile,tilesY=(Height+PaintTile-1)/PaintTile;
+            var tiles=new List<int>[tilesX*tilesY];
+            for(int k=0;k<count;k++)
+            {
+                if(!Setup(uv[3*k],uv[3*k+1],uv[3*k+2],color[3*k],color[3*k+1],color[3*k+2],out setups[k]))continue;
+                valid[k]=true;
+                var t=setups[k];
+                for(int ty=t.Y0/PaintTile;ty<=(t.Y1-1)/PaintTile;ty++)
+                    for(int tx=t.X0/PaintTile;tx<=(t.X1-1)/PaintTile;tx++)
+                        (tiles[ty*tilesX+tx]??(tiles[ty*tilesX+tx]=new List<int>())).Add(k);
+            }
+            void Tile(int index)
+            {
+                var list=tiles[index];if(list==null)return;
+                int tx=index%tilesX,ty=index/tilesX;
+                int x0=tx*PaintTile,x1=Math.Min(Width,x0+PaintTile),y0=ty*PaintTile,y1=Math.Min(Height,y0+PaintTile);
+                foreach(int k in list)
+                {
+                    var t=setups[k];
+                    int cx0=Math.Max(x0,t.X0),cx1=Math.Min(x1,t.X1),cy0=Math.Max(y0,t.Y0),cy1=Math.Min(y1,t.Y1);
+                    for(int y=cy0;y<cy1;y++)PaintRow(t,y,cx0,cx1,samples);
+                }
+            }
+            if((long)Width*Height<TextureProcessingSettings.MinParallelPixels||TextureProcessingSettings.MaxThreads==1)
+                for(int i=0;i<tiles.Length;i++)Tile(i);
+            else
+            {
+                int max=TextureProcessingSettings.MaxThreads==0?Environment.ProcessorCount:TextureProcessingSettings.MaxThreads;
+                Parallel.For(0,tiles.Length,new ParallelOptions{MaxDegreeOfParallelism=max},Tile);
+            }
             Changed();
         }
         /// <summary>Fill rule for one triangle edge p0→p1, for a triangle with orientation

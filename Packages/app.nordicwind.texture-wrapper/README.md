@@ -141,7 +141,9 @@ These are part of the API and covered by tests:
 - **`Dilate(region = null)`:** copies the nearest originally used pixel into every unused pixel
   and marks them used. Normal maps get alpha 1. Other data types keep the source alpha. An
   empty region is left unchanged. When two source pixels are equally near, the lower x wins,
-  then the lower y. Results don't depend on the number of threads.
+  then the lower y. Results don't depend on the number of threads. On the GPU (the whole
+  texture, from `TextureProcessingSettings.MinGpuPixels`), ties may go to another equally near
+  pixel, and very rarely a pixel takes a slightly farther one.
 
 ## Tests
 

@@ -12,6 +12,7 @@ namespace NordicWind.TextureWrapper.Tests
         {
             bool useGpu = TextureProcessingSettings.UseGpu;
             int minimum = TextureProcessingSettings.MinGpuPixels;
+            int triangles = TextureGpu.MinTriangles;
             try
             {
                 TextureProcessingSettings.UseGpu = false;
@@ -19,12 +20,14 @@ namespace NordicWind.TextureWrapper.Tests
                 if (!TextureProcessingSettings.GpuAvailable) return;
                 TextureProcessingSettings.UseGpu = true;
                 TextureProcessingSettings.MinGpuPixels = 0;
+                TextureGpu.MinTriangles = 0;
                 check("GPU");
             }
             finally
             {
                 TextureProcessingSettings.UseGpu = useGpu;
                 TextureProcessingSettings.MinGpuPixels = minimum;
+                TextureGpu.MinTriangles = triangles;
             }
         }
     }

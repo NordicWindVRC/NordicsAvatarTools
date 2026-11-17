@@ -24,6 +24,12 @@ Newest first. Versions follow [SemVer](https://semver.org).
 - The `Mixed` blend mode is now `base + base × blend` instead of a copy of `Average`.
 
 ### Added
+- **`PaintTriangles`:** paints a batch of triangles (three corners each) with the same result as
+  `PaintTriangle` per triangle in order. The CPU version paints tiles of the texture on every
+  core instead of one triangle at a time, which mostly ran on one core; large batches on large
+  textures run on the GPU, drawing the triangles in UV space.
+- **`Dilate` on the GPU** for whole textures from `MinGpuPixels` up, by jump flooding. Ties and,
+  very rarely, the nearest pixel may differ from the CPU's.
 - **GPU groundwork:** `TextureProcessingSettings.UseGpu`, `MinGpuPixels` and `GpuAvailable`,
   and internal helpers that move pixels and usage flags to float render textures and back
   without changing them. No operation uses the GPU yet; the plan is in `GPU_ACCELERATION.md`.

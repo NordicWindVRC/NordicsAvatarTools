@@ -297,6 +297,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
         private static readonly TrianglePaintOptions Quality = new TrianglePaintOptions { Mode=TriangleRasterizationMode.Quality,SamplesPerAxis=2 };
         private static readonly TrianglePaintOptions Fast = new TrianglePaintOptions { Mode=TriangleRasterizationMode.Fast };
+        // Each map gets its triangles in one batch (PaintTriangles), painted on every core or the
+        // GPU; the values are the same as painting one triangle at a time.
         private static void Rasterize(AtlasMeshSection section,NordicsTextureWrapper normals,NordicsTextureWrapper mask,
             NordicsTextureWrapper tangent,NordicsTextureWrapper bitangent,NordicsTextureWrapper basisNormal,
             NordicsTextureWrapper coverage=null,bool target=false)
@@ -305,6 +307,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
             int count=section.Vertices.Length;
             var nMat=section.LocalToWorld.inverse.transpose;
             float sign=section.LocalToWorld.determinant < 0f ? -1f : 1f;
+            bool frames=tangent!=null && bitangent!=null && basisNormal!=null;
+            var uvs=new List<Vector2>();
+            var normalValues=normals!=null||frames ? new List<Color>() : null;
+            var coverValues=coverage!=null ? new List<Color>() : null;
+            var tangentValues=frames ? new List<Color>() : null;
+            var bitangentValues=frames ? new List<Color>() : null;
             for(int i=0;i+2<section.Triangles.Length;i+=3)
             {
                 int a=section.Triangles[i], b=section.Triangles[i+1], c=section.Triangles[i+2];
@@ -315,21 +323,34 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Vector3 face=Vector3.Cross(section.Vertices[b]-section.Vertices[a],section.Vertices[c]-section.Vertices[a]);
                 if(face.sqrMagnitude<1e-12f) continue;
                 face.Normalize();
-                var n0=WorldNormal(section,a,nMat,face);var n1=WorldNormal(section,b,nMat,face);var n2=WorldNormal(section,c,nMat,face);
-                normals?.PaintTriangle(uv0,uv1,uv2,Pack(n0),Pack(n1),Pack(n2),Quality);
-                mask?.PaintTriangle(uv0,uv1,uv2,Color.white,Color.white,Color.white,Fast);
-                if(coverage!=null)
+                uvs.Add(uv0);uvs.Add(uv1);uvs.Add(uv2);
+                Vector3 n0=WorldNormal(section,a,nMat,face),n1=WorldNormal(section,b,nMat,face),n2=WorldNormal(section,c,nMat,face);
+                if(normalValues!=null){normalValues.Add(Pack(n0));normalValues.Add(Pack(n1));normalValues.Add(Pack(n2));}
+                if(coverValues!=null)
                 {
                     Color cover=NormalDifferenceOptions.CoverageColor(uv0,uv1,uv2,target);
-                    coverage.PaintTriangle(uv0,uv1,uv2,cover,cover,cover,Quality);
+                    coverValues.Add(cover);coverValues.Add(cover);coverValues.Add(cover);
                 }
-                if(tangent==null || bitangent==null || basisNormal==null) continue;
+                if(!frames) continue;
                 Vector3 t0=Tangent(section,a,n0,sign),t1=Tangent(section,b,n1,sign),t2=Tangent(section,c,n2,sign);
-                tangent.PaintTriangle(uv0,uv1,uv2,Pack(t0),Pack(t1),Pack(t2),Quality);
+                tangentValues.Add(Pack(t0));tangentValues.Add(Pack(t1));tangentValues.Add(Pack(t2));
                 // Reconstruct bitangent using original handedness (includes mirrored transforms).
-                bitangent.PaintTriangle(uv0,uv1,uv2,Pack(Bitangent(section,a,n0,t0,sign)),Pack(Bitangent(section,b,n1,t1,sign)),Pack(Bitangent(section,c,n2,t2,sign)),Quality);
-                basisNormal.PaintTriangle(uv0,uv1,uv2,Pack(n0),Pack(n1),Pack(n2),Quality);
+                bitangentValues.Add(Pack(Bitangent(section,a,n0,t0,sign)));
+                bitangentValues.Add(Pack(Bitangent(section,b,n1,t1,sign)));
+                bitangentValues.Add(Pack(Bitangent(section,c,n2,t2,sign)));
             }
+            normals?.PaintTriangles(uvs,normalValues,Quality);
+            if(mask!=null)
+            {
+                var white=new Color[uvs.Count];
+                for(int i=0;i<white.Length;i++) white[i]=Color.white;
+                mask.PaintTriangles(uvs,white,Fast);
+            }
+            coverage?.PaintTriangles(uvs,coverValues,Quality);
+            if(!frames) return;
+            tangent.PaintTriangles(uvs,tangentValues,Quality);
+            bitangent.PaintTriangles(uvs,bitangentValues,Quality);
+            basisNormal.PaintTriangles(uvs,normalValues,Quality);
         }
         private static bool Finite(Vector2 uv) => !float.IsNaN(uv.x) && !float.IsNaN(uv.y) && !float.IsInfinity(uv.x) && !float.IsInfinity(uv.y);
         private static Color Pack(Vector3 v) => new Color(v.x,v.y,v.z,1);

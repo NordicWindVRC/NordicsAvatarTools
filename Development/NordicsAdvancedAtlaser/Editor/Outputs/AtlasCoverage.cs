@@ -51,7 +51,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             });
             // A pixel counts when any part of a triangle covers it, so thin strips keep their texels.
             var paint = new TrianglePaintOptions { Mode = TriangleRasterizationMode.Quality, SamplesPerAxis = 2 };
-            bool any = false;
+            var corners = new List<Vector2>();
             foreach (var part in triangles)
             {
                 if (part?.UV == null || part.Triangles == null) continue;
@@ -63,11 +63,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     if (!Finite(uv0) || !Finite(uv1) || !Finite(uv2)) continue;
                     var centre = (uv0 + uv1 + uv2) / 3f;
                     var tile = new Vector2(Mathf.Floor(centre.x), Mathf.Floor(centre.y));
-                    mask.PaintTriangle(uv0 - tile, uv1 - tile, uv2 - tile, Color.white, Color.white, Color.white, paint);
-                    any = true;
+                    corners.Add(uv0 - tile);
+                    corners.Add(uv1 - tile);
+                    corners.Add(uv2 - tile);
                 }
             }
-            if (any && HasUsed(mask)) return mask;
+            if (corners.Count > 0)
+            {
+                // One batch: painted on every core, or on the GPU.
+                var white = new Color[corners.Count];
+                for (int i = 0; i < white.Length; i++) white[i] = Color.white;
+                mask.PaintTriangles(corners, white, paint);
+                if (HasUsed(mask)) return mask;
+            }
             mask.Dispose();
             return null;
         }

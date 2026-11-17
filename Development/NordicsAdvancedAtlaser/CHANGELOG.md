@@ -119,6 +119,9 @@ EditMode tests pass in Unity 2022.3.22.
   as an "[NDMF] Error Reported" warning, whatever its severity. The build summary and the
   diagnostics are added with that line filtered out, so the NDMF Console still lists them and
   Unity's console stays clean. Warnings are reported as they are.
+- **Faster painting from meshes:** the geometry bake and the coverage paint each map's triangles
+  in one batch (`PaintTriangles`), on every core or the GPU, instead of one triangle at a time.
+  Dilation runs on the GPU for large maps.
 - **Stage timings:** with *Verbose Logging*, the build lists how long each stage took
   (parsing, the geometry bake's steps, each map bake, packing, compression, the remap), and
   *Bake to Assets* logs its stages in one line, to measure where builds spend their time.
