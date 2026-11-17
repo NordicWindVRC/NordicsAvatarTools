@@ -137,9 +137,40 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 var c = packed.GetPixel(packed.Width / 4, packed.Height / 2);
                 Assert.AreEqual(0.6f, c.r, 0.01f, "metallic");
                 Assert.AreEqual(0.75f, c.g, 0.01f, "smoothness = 1 − roughness");
-                Assert.AreEqual(1f, c.b, 0.01f, "reflection mask");
-                Assert.AreEqual(1f, c.a, 0.01f, "specular mask");
+                // One strength everywhere: no masks, the channels keep their neutral value.
+                Assert.AreEqual(0f, c.b, 0.01f, "no reflection mask");
+                Assert.AreEqual(0f, c.a, 0.01f, "no specular mask");
             }
+            Assert.IsNull(plan.Output.Surface.Response.Reflections.Mask);
+            Assert.IsNull(plan.Output.Surface.Response.Highlights.Mask);
+        }
+
+        [Test]
+        public void ConstantMasksNeedNoMapAndAnEqualHighlightMaskSharesTheReflectionChannel()
+        {
+            // Half strength everywhere: folded into the strength.
+            var half = AtlasOutputPipeline.Resolve(Job(Lit(0.5f, 0.5f), Lit(0.5f, 0.5f)), Poiyomi);
+            Assert.AreEqual(0.5f, half.Output.Surface.Response.Highlights.Strength, 1e-5f);
+            Assert.IsFalse(half.Maps.Any(m => m.Map == AtlasVirtualMap.ReflectionMask || m.Map == AtlasVirtualMap.SpecularMask));
+
+            // The same mask for both: one map, read by both.
+            var mask = new AtlasMask { Map = new AtlasTextureReference { Texture = Solid(new Color(0.3f, 0.3f, 0.3f, 1f)) } };
+            var masked = Lit(1f, 1f);
+            masked.Surface.Response.Highlights.Mask = mask;
+            masked.Surface.Response.Reflections.Mask = mask;
+            var plan = AtlasOutputPipeline.Resolve(Job(masked, Lit(1f, 1f)), Poiyomi);
+            var response = plan.Output.Surface.Response;
+            Assert.AreSame(response.Reflections.Mask.Map, response.Highlights.Mask.Map);
+            Assert.IsFalse(plan.Maps.Any(m => m.Map == AtlasVirtualMap.SpecularMask));
+            var shader = AtlasShaderRegistry.Output("poiyomi10");
+            if (shader.FindShader() == null) return;
+            response.Metallic.Map = new AtlasTextureReference { Texture = Solid(Color.white) };
+            response.Reflections.Mask.Map.Texture = response.Metallic.Map.Texture;
+            var material = new Material(shader.FindShader());
+            created.Add(material);
+            shader.Write(plan.Output, material);
+            Assert.AreEqual(2f, material.GetFloat("_MochieMetallicMapsSpecularMaskChannel"));
+            Assert.AreEqual(2f, material.GetFloat("_MochieMetallicMapsReflectionMaskChannel"));
         }
 
         [Test]

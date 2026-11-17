@@ -56,6 +56,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             if (use.Maps.Contains(request.Map)) request.Reference.Texture = texture;
                     }
                 }
+                foreach (var generated in plan.GeneratedTextures)
+                {
+                    var texture = AtlasGeneratedTextures.Make(generated, config.outputName);
+                    result.Textures.Add(texture);
+                    generated.Reference.Texture = texture;
+                }
                 if (AtlasLightingFeature.NeedsGeneratedRamp(plan.Output, shader.Capabilities))
                 {
                     var ramp = AtlasRampTexture.Make(plan.Output.Lighting.Ramp.Keys, config.outputName + "_ShadowRamp");

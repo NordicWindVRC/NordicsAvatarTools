@@ -30,6 +30,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly HashSet<int> DisabledSources = new HashSet<int>();
         // The values the user set for the feature's conflict switches, by switch ID.
         public readonly Dictionary<string, bool> Switches = new Dictionary<string, bool>();
+        // Every value the user set for the feature, by ID (as stored, number and text included).
+        public readonly Dictionary<string, (float Number, string Text)> Values = new Dictionary<string, (float Number, string Text)>();
     }
     public sealed class AtlasGeneratorSource
     {

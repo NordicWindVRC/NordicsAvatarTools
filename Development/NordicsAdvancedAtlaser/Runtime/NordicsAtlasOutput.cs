@@ -62,6 +62,8 @@ namespace NordicWind.AdvancedAtlaser
         public float number;
         /// <summary>The value when it is a color.</summary>
         public Color color = Color.white;
+        /// <summary>The value when it names something, such as another item to combine with.</summary>
+        public string text = "";
     }
 
     /// <summary>A GPU texture format an output texture can be compressed to.</summary>

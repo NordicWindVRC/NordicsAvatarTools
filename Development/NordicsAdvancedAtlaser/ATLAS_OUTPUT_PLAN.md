@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is next. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7a is done; 2.7b is next. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -246,20 +246,38 @@ layers. Until then, live mask steps stay baked at their normal-view value and ar
 
 ### 2.7 Layers
 
-- **Tiled layers kept live** (from 2.5b): tiled detail and normal layers on a preserved UV
-  channel with each source's tiling (Poiyomi's detail texture and detail normal, Toon
-  Standard's detail normal), so they stay sharp instead of being baked at the region's size.
-- The **mask allocator** (from 2.4b): constants, shared masks, inverted masks, packed
-  channels, mask bus channels, and dropping or falling back when places run out; the
-  reflection and specular masks move onto it.
-- **Global masks on Poiyomi** (from 2.4b), keeping live steps live: a feature splits its mask
-  into its own mask (sources without live steps) and a global mask channel with the live
-  steps (sources with them), combined by *add*. Poiyomi 10 reads global masks for emission,
-  alpha, metallic, smoothness, reflection and specular strength and AO. Where a feature's
-  sources need different live steps, the user picks which stays live (*Decisions*: no result
-  left to chance); the others are baked at their normal-view value.
-- *Matcaps* (native, merged, single), *Rim lighting*, *Environmental rim*, *Backlight*,
-  *Clear coat* (native and emulated).
+**2.7a Mask allocator and matcaps**
+- The **mask allocator** (from 2.4b): a mask that is one value everywhere needs no texture;
+  equal masks share a place; a mask that is the inverse of a placed one reads it inverted
+  where the reader can; the rest are packed into the output's *Masks 1* and *Masks 2* RGBA
+  textures. The reflection and specular masks follow the same rules in their own channels:
+  a constant becomes the strength, and a highlight mask equal to the reflection mask reads
+  its channel.
+- *Matcaps*: one mode, *Matcap slots* (Poiyomi 4, Toon Standard 1). Matcaps that look the
+  same in several sources share a slot, each source's mask saying where it shows. Each
+  matcap is placed by the user (*Automatic*, its own slot, combined with another, off);
+  automatic combines matcaps on the same parts with the same lookup, gives the largest their
+  own slots and combines the rest into the most similar slot. A combined slot gets a
+  generated texture (matcaps on the same parts added for *add*, multiplied for *multiply*;
+  those on different parts averaged by area). Blends the output lacks are approximated
+  with add or multiply, and base color mix through the mask; both are listed.
+- **Workable:** matcaps survive atlasing, combined where the output has too few slots.
+
+**2.7b Rim lighting:** *Rim lighting* (native, or as a generated matcap where the output has
+matcap slots but no rim), *Environmental rim* (native only), *Backlight*.
+
+**2.7c Clear coat:** native only.
+
+**2.7d Global masks on Poiyomi** (from 2.4b), keeping live steps live: a feature splits its
+mask into its own mask (sources without live steps) and a global mask channel with the live
+steps (sources with them), combined by *add*. Poiyomi 10 reads global masks for emission,
+alpha, metallic, smoothness, reflection and specular strength and AO. Where a feature's
+sources need different live steps, the user picks which stays live (*Decisions*: no result
+left to chance); the others are baked at their normal-view value.
+
+**2.7e Tiled layers kept live** (from 2.5b): tiled detail and normal layers on a preserved UV
+channel with each source's tiling (Poiyomi's detail texture and detail normal, Toon
+Standard's detail normal), so they stay sharp instead of being baked at the region's size.
 - **Workable:** matcaps and rims survive atlasing, as far as the output has slots for them.
 
 ### 2.8 Baking toolkit

@@ -278,6 +278,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
             foreach (var conflictSwitch in state.Switches)
                 using (new EditorGUI.IndentLevelScope())
                     Switch(setting, conflictSwitch);
+            // With one item there is nothing to place: the mode and the per-material toggles decide.
+            if (state.Instances.Count > 1)
+                using (new EditorGUI.IndentLevelScope())
+                    foreach (var instance in state.Instances)
+                        Placement(setting, instance, state.Instances);
             if (open)
                 using (new EditorGUI.IndentLevelScope())
                     Sources(setting, state, materials);
@@ -321,8 +326,61 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 stored.FindPropertyRelative("id").stringValue = conflictSwitch.Id;
                 stored.FindPropertyRelative("number").floatValue = 0f;
                 stored.FindPropertyRelative("color").colorValue = Color.white;
+                stored.FindPropertyRelative("text").stringValue = "";
             }
             stored.FindPropertyRelative("toggle").boolValue = next == 0;
+        }
+
+        // Where one item goes: Automatic, its own slot, off, or combined with another item.
+        private static void Placement(SerializedProperty setting, AtlasFeatureInstance instance, List<AtlasFeatureInstance> instances)
+        {
+            var stored = StoredValue(setting, AtlasInstancePlacements.Id(instance.Key));
+            var others = instances.Where(i => i != instance).ToList();
+            var options = new List<string> { "Automatic", "Own slot", "Off" };
+            options.AddRange(others.Select(o => "Combine with " + o.Label));
+            int index = 0;
+            if (stored != null)
+            {
+                var mode = (AtlasInstancePlacement)Mathf.RoundToInt(stored.FindPropertyRelative("number").floatValue);
+                string target = stored.FindPropertyRelative("text").stringValue;
+                if (mode == AtlasInstancePlacement.Own) index = 1;
+                else if (mode == AtlasInstancePlacement.Off) index = 2;
+                // A target that is gone shows as automatic, as the build treats it.
+                else if (mode == AtlasInstancePlacement.Combined && others.FindIndex(o => o.Key == target) is int at && at >= 0) index = 3 + at;
+            }
+            var label = new GUIContent(instance.Label,
+                instance.Label + ". Automatic combines it with matcaps on the same parts, or gives it a slot while one is free, " +
+                "and otherwise combines it with the most similar one; the build log says which.");
+            int next = PopupRow(label, index, options.ToArray());
+            if (next == index) return;
+            if (stored == null) stored = AddValue(setting, AtlasInstancePlacements.Id(instance.Key));
+            var placement = next == 0 ? AtlasInstancePlacement.Automatic : next == 1 ? AtlasInstancePlacement.Own
+                : next == 2 ? AtlasInstancePlacement.Off : AtlasInstancePlacement.Combined;
+            stored.FindPropertyRelative("number").floatValue = (int)placement;
+            stored.FindPropertyRelative("text").stringValue = next >= 3 ? others[next - 3].Key : "";
+        }
+
+        private static SerializedProperty StoredValue(SerializedProperty setting, string id)
+        {
+            var values = setting.FindPropertyRelative("values");
+            for (int i = 0; i < values.arraySize; i++)
+                if (values.GetArrayElementAtIndex(i).FindPropertyRelative("id").stringValue == id)
+                    return values.GetArrayElementAtIndex(i);
+            return null;
+        }
+
+        private static SerializedProperty AddValue(SerializedProperty setting, string id)
+        {
+            var values = setting.FindPropertyRelative("values");
+            values.InsertArrayElementAtIndex(values.arraySize);
+            var stored = values.GetArrayElementAtIndex(values.arraySize - 1);
+            // A new array element copies the previous one, so every field is set explicitly.
+            stored.FindPropertyRelative("id").stringValue = id;
+            stored.FindPropertyRelative("toggle").boolValue = false;
+            stored.FindPropertyRelative("number").floatValue = 0f;
+            stored.FindPropertyRelative("color").colorValue = Color.white;
+            stored.FindPropertyRelative("text").stringValue = "";
+            return stored;
         }
 
         // A labeled drop-down whose field lines up with the feature rows' mode drop-downs.

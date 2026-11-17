@@ -84,6 +84,31 @@ namespace NordicWind.AdvancedAtlaser.Editor
         IEnumerable<AtlasConflictSwitch> ConflictingSwitches(AtlasGeneratorJob job, AtlasOutputCapabilities capabilities);
     }
 
+    // One item of a feature the user places one by one (a matcap): a key that stays the same
+    // between sessions, a label, and the sources it's on.
+    public sealed class AtlasFeatureInstance
+    {
+        public string Key;
+        public string Label;
+        public List<int> Sources = new List<int>();
+    }
+
+    // Where the user puts an item: Automatic (the feature's choice), its own place, combined
+    // with another item (the stored text names it), or off.
+    public enum AtlasInstancePlacement { Automatic = 0, Own = 1, Combined = 2, Off = 3 }
+
+    public static class AtlasInstancePlacements
+    {
+        // The stored value's ID for an item: its number the placement, its text the item combined with.
+        public static string Id(string key) => "instance:" + key;
+    }
+
+    // A feature whose items the user places one by one.
+    public interface IAtlasInstanceFeature : IAtlasOutputFeature
+    {
+        IReadOnlyList<AtlasFeatureInstance> Instances(AtlasGeneratorJob job, IReadOnlyList<int> sources);
+    }
+
     // A feature a source can have without its material having it, from what the build adds (the
     // geometry bake's correction) or the source's settings (a pre-baked normal map).
     public interface IAtlasSourceAwareFeature : IAtlasOutputFeature

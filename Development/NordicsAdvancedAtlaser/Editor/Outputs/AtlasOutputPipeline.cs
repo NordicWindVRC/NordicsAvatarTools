@@ -21,6 +21,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly Dictionary<int, AtlasSourceRemap> SourceRemaps = new Dictionary<int, AtlasSourceRemap>();
         // The UV channels after UV0 the features have taken (the UV channel allocator).
         public readonly HashSet<int> UVChannels = new HashSet<int>();
+        // The mask allocator's places: taken mask maps, and the placed masks by their per-source keys.
+        public readonly HashSet<AtlasVirtualMap> MaskPlaces = new HashSet<AtlasVirtualMap>();
+        public readonly Dictionary<string, AtlasMask> PlacedMasks = new Dictionary<string, AtlasMask>();
+        // Textures the build makes besides the atlas maps (combined matcaps), before writing.
+        public readonly List<AtlasGeneratedTexture> GeneratedTextures = new List<AtlasGeneratedTexture>();
 
         public AtlasSourceRemap Remap(int source)
         {
@@ -74,7 +79,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 };
                 if (setting.values != null)
                     foreach (var value in setting.values)
-                        if (value != null && !string.IsNullOrEmpty(value.id)) choice.Switches[value.id] = value.toggle;
+                        if (value != null && !string.IsNullOrEmpty(value.id))
+                        {
+                            choice.Switches[value.id] = value.toggle;
+                            choice.Values[value.id] = (value.number, value.text ?? "");
+                        }
                 if (setting.disabledSources != null)
                     foreach (var material in setting.disabledSources)
                     {

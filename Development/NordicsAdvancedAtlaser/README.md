@@ -106,7 +106,8 @@ and `ATLAS_OUTPUT.md` for the output design.
        sources'; the weaker ones are baked at their share of it, so each looks as before.
      - **Reflection and Specular**: each source's metallic and roughness in maps, and how
        strong its highlights and reflections are, in masks (Poiyomi; relative to the
-       strongest). Sources without them stay matte. Poiyomi's reflectance is fixed; on Toon
+       strongest; no mask where they're the same everywhere). Sources without them stay
+       matte. Poiyomi's reflectance is fixed; on Toon
        Standard, where the materials need different reflectance, *Reflectance from* picks
        the material it comes from (*Automatic*: the one with the largest area).
      - **Ambient Occlusion**: each source's occlusion map, at its strength; sources without
@@ -122,6 +123,16 @@ and `ATLAS_OUTPUT.md` for the output design.
      - **Shadow Colors** and **Skin Thickness** (Poiyomi): each material's band and shade
        textures, and its skin thickness, baked into their own textures. An SDF face keeps its
        texture, read through the face's own UVs on a spare UV channel.
+     - **Matcaps**: each material's matcaps in the output's matcap slots (Poiyomi 4, Mobile
+       Toon Standard 1). A matcap that looks the same in several materials uses one slot,
+       limited to where each material had it. With more than one matcap, a list under the
+       feature places each: *Automatic*, *Own slot*, *Off*, or *Combine with* another matcap,
+       which bakes both into one generated matcap texture. *Automatic* combines matcaps on the
+       same parts, then gives the largest their own slots and combines the rest into the most
+       similar slot. Blends the output shader lacks (Mobile Toon Standard only adds or
+       multiplies) are approximated with the nearest, and a matcap mixed with the base color
+       is limited by the base color's brightness. The build log lists what was combined,
+       approximated or left out.
      - **Hidden UV Tiles** (Poiyomi's UV tile discard): *Kept live* (the atlas material hides
        the same tiles, read from a spare UV channel the build writes), *Removed from the mesh*
        (any output shader; only tiles hidden on both sides), or *Off*.

@@ -31,7 +31,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         ShadowColor2,
         ShadowColor3,
         // One value (3.3): the pre-integrated skin's thickness.
-        SkinThickness
+        SkinThickness,
+        // The mask allocator's places: one value each, in the output's mask textures.
+        Mask1, Mask2, Mask3, Mask4, Mask5, Mask6, Mask7, Mask8
     }
 
     // Which channels of a texture a virtual map fills.
@@ -117,6 +119,21 @@ namespace NordicWind.AdvancedAtlaser.Editor
         Srgb = 8
     }
 
+    // The blends an output's matcap slot can take.
+    [System.Flags]
+    public enum AtlasMatcapBlends
+    {
+        None = 0,
+        Add = 1,
+        Multiply = 2,
+        Replace = 4,
+        Screen = 8,
+        Mixed = 16,
+        // Added after lighting.
+        AddToLight = 32,
+        All = Add | Multiply | Replace | Screen | Mixed | AddToLight
+    }
+
     // What an output shader can express, in unified terms. Feature modes are offered only
     // when the capabilities they need are here. Grows with the features.
     public sealed class AtlasOutputCapabilities
@@ -143,6 +160,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // source's texture stays live on its preserved UVs (an SDF is sampled mirrored, which an
         // atlas can't keep).
         public bool SdfFace;
+        // Matcaps: how many slots, the blends a slot can take, and whether its mask can be read
+        // inverted.
+        public int MatcapSlots;
+        public AtlasMatcapBlends MatcapBlends;
+        public bool MatcapMaskInvert;
+        // A slot tints its texture by a color; without, a tinted matcap gets a generated texture.
+        public bool MatcapColor;
+        // A slot can multiply its matcap by the base color; without, the base color's brightness
+        // goes into the slot's mask.
+        public bool MatcapBaseColorMix;
 
         public AtlasOutputTexture TextureFor(AtlasVirtualMap map) => Textures.Find(t => t.Provides(map));
 

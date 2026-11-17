@@ -8,6 +8,23 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Matcaps:** a *Matcaps* feature puts every source's matcaps (lookup layers with a 2D
+  texture) into the output's matcap slots: Poiyomi's four (texture, color and intensity,
+  lookup, mask, every blend weight, emission) and Toon Standard's one (`USE_MATCAP`, add or
+  multiply, strength, mask). Matcaps that look the same in several sources share a slot, each
+  source's mask saying where it shows. With more than one matcap, the inspector lists them,
+  each placed *Automatic*, *Own slot*, *Off* or *Combine with* another (stored in the
+  feature's values; `IAtlasInstanceFeature`). A combined slot gets a generated 512×512
+  texture (`AtlasGeneratedTextures`): matcaps on the same parts added or multiplied by
+  weight, those on different parts averaged by area. Blends the output lacks are
+  approximated with add or multiply; on an output without base color mix (Toon Standard),
+  the base color's luminance goes into the slot's mask. Combined, approximated and left-out
+  matcaps are listed.
+- **Mask allocator:** `AtlasMaskAllocator` gives each mask a feature needs over the atlas a
+  place: none for a constant, a shared channel for equal masks, the same channel read
+  inverted for an inverse, otherwise the next channel of the output's *Masks 1* and *Masks 2*
+  textures (Poiyomi; Toon Standard has *Masks 1*).
+- `AtlasSettingValue.text`, for stored values that name something.
 - **Lighting floors:** each writer sets its one floor from the unified floors, so an atlas
   stays visible in dark worlds whatever the source shader: Toon Standard's Min Brightness from
   the largest of the unified minimum brightness, minimum light and the floored light color's
@@ -231,6 +248,11 @@ EditMode tests pass in Unity 2022.3.22.
   correction hit the 60° limit, which points to a mismatch between the meshes.
 
 ### Changed
+- **Reflection and specular masks:** a reflection or highlight strength that is the same
+  everywhere goes into the strength instead of a mask, and a highlight mask equal to the
+  reflection mask reads the reflection mask's channel (Poiyomi's channel 4, white, or 2).
+- `AtlasFieldwise.Signature` describes assets by GUID and file ID, so keys stay the same
+  between sessions.
 - **Faster source evaluation:** per-pixel work (mask levels and blends, global mask steps,
   vertex colors, decals, the base color's brightest value) runs on every core through the
   Texture Wrapper's new `GetPixels`/`SetPixels`, and within one source's evaluation each

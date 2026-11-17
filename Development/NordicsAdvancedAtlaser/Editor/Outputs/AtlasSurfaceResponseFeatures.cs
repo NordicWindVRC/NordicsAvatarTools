@@ -105,18 +105,34 @@ namespace NordicWind.AdvancedAtlaser.Editor
             output.Metallic.Map = Request(context, AtlasVirtualMap.Metallic, active, 0f, (m, w, h) => AtlasMapEvaluator.Scalar(m.Surface.Response.Metallic, w, h, m));
             output.Roughness.Constant = 1f;
             output.Roughness.Map = Request(context, AtlasVirtualMap.Roughness, active, 1f, (m, w, h) => AtlasMapEvaluator.Scalar(m.Surface.Response.Roughness, w, h, m));
+            // The masks follow the mask allocator's rules within their own channels: one value
+            // everywhere needs no map (folded into the strength), and a highlight mask equal to the
+            // reflection mask reads the reflection mask's channel.
+            string[] reflectionKeys = null;
             if (context.Capabilities.Provides(AtlasVirtualMap.ReflectionMask) && reflections > 0f)
-                output.Reflections.Mask = new AtlasMask
-                {
-                    Map = Request(context, AtlasVirtualMap.ReflectionMask, active, 0f, (m, w, h) => Strength(m, m.Surface.Response.Reflections.Enabled,
-                        m.Surface.Response.Reflections.Mask, m.Surface.Response.Reflections.Strength / reflections, w, h))
-                };
+            {
+                reflectionKeys = Keys(context, active, r => r.Reflections.Enabled, r => r.Reflections.Mask, r => r.Reflections.Strength / reflections);
+                if (Constant(reflectionKeys, out float constant)) output.Reflections.Strength = reflections * constant;
+                else
+                    output.Reflections.Mask = new AtlasMask
+                    {
+                        Map = Request(context, AtlasVirtualMap.ReflectionMask, active, 0f, (m, w, h) => Strength(m, m.Surface.Response.Reflections.Enabled,
+                            m.Surface.Response.Reflections.Mask, m.Surface.Response.Reflections.Strength / reflections, w, h))
+                    };
+            }
             if (context.Capabilities.Provides(AtlasVirtualMap.SpecularMask) && highlights > 0f)
-                output.Highlights.Mask = new AtlasMask
-                {
-                    Map = Request(context, AtlasVirtualMap.SpecularMask, active, 0f, (m, w, h) => Strength(m, m.Surface.Response.Highlights.Enabled,
-                        m.Surface.Response.Highlights.Mask, m.Surface.Response.Highlights.Strength / highlights, w, h))
-                };
+            {
+                var keys = Keys(context, active, r => r.Highlights.Enabled, r => r.Highlights.Mask, r => r.Highlights.Strength / highlights);
+                if (Constant(keys, out float constant)) output.Highlights.Strength = highlights * constant;
+                else if (output.Reflections.Mask != null && keys.SequenceEqual(reflectionKeys))
+                    output.Highlights.Mask = new AtlasMask { Map = output.Reflections.Mask.Map };
+                else
+                    output.Highlights.Mask = new AtlasMask
+                    {
+                        Map = Request(context, AtlasVirtualMap.SpecularMask, active, 0f, (m, w, h) => Strength(m, m.Surface.Response.Highlights.Enabled,
+                            m.Surface.Response.Highlights.Mask, m.Surface.Response.Highlights.Strength / highlights, w, h))
+                    };
+            }
             Notes(context, active);
             ReflectanceNotes(context, reference);
             StrengthNotes(context, AtlasVirtualMap.SpecularMask, "highlight", r => r.Highlights.Enabled ? r.Highlights.Strength : 0f);
@@ -169,6 +185,28 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (choice != null && context.Sources.Contains(choice.ReferenceSource)) return choice.ReferenceSource;
             return context.Sources.OrderByDescending(i => context.Job.Sources[i].UVRegion.width * context.Job.Sources[i].UVRegion.height)
                 .ThenBy(i => i).First();
+        }
+
+        // Per source, the mask key of the feature's strength mask (scaled to the output strength).
+        private static string[] Keys(AtlasFeatureContext context, HashSet<int> active, System.Func<AtlasSurfaceResponse, bool> enabled,
+            System.Func<AtlasSurfaceResponse, AtlasMask> mask, System.Func<AtlasSurfaceResponse, float> strength)
+        {
+            var keys = new string[context.Job.Sources.Count];
+            for (int i = 0; i < keys.Length; i++)
+            {
+                var material = context.Job.Sources[i].Material;
+                var response = material.Surface.Response;
+                keys[i] = active.Contains(i) && enabled(response)
+                    ? AtlasMaskKeys.Of(mask(response), Mathf.Clamp01(strength(response)), material)
+                    : AtlasMaskKeys.Constant(0f);
+            }
+            return keys;
+        }
+
+        private static bool Constant(string[] keys, out float value)
+        {
+            value = 1f;
+            return keys.Length > 0 && keys.All(k => k == keys[0]) && AtlasMaskKeys.IsConstant(keys[0], out value);
         }
 
         private static NordicsTextureWrapper Strength(AtlasUnifiedMaterial material, bool enabled, AtlasMask mask, float strength, int width, int height) =>

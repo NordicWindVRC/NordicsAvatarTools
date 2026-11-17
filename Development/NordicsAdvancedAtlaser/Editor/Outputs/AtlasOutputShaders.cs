@@ -59,7 +59,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     .With(AtlasVirtualMap.ShadowColor3, AtlasTextureChannels.RGBA),
                 // _SkinThicknessMap reads R.
                 new AtlasOutputTexture("SkinThickness", "Skin thickness") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
-                    .With(AtlasVirtualMap.SkinThickness, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f))
+                    .With(AtlasVirtualMap.SkinThickness, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f)),
+                MaskTexture(1, AtlasVirtualMap.Mask1, AtlasVirtualMap.Mask2, AtlasVirtualMap.Mask3, AtlasVirtualMap.Mask4),
+                MaskTexture(2, AtlasVirtualMap.Mask5, AtlasVirtualMap.Mask6, AtlasVirtualMap.Mask7, AtlasVirtualMap.Mask8)
             },
             SurfaceModes = { AtlasSurfaceMode.Cutout, AtlasSurfaceMode.Transparent, AtlasSurfaceMode.Fade },
             VRChatFallback = true,
@@ -71,7 +73,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
             FaceTileDiscard = true,
             UVChannels = 3,
             // _SDFShadingTextureUV and _LightDataSDFMapUV pick the channel.
-            SdfFace = true
+            SdfFace = true,
+            // Matcap 0 to 3, every blend by weight; masks pick a channel and invert.
+            MatcapSlots = 4,
+            MatcapBlends = AtlasMatcapBlends.All,
+            MatcapMaskInvert = true,
+            MatcapColor = true,
+            MatcapBaseColorMix = true
         };
 
         // Poiyomi 10's rendering presets (_Mode), as its shader's on_value_actions set them, by
@@ -120,6 +128,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetFloat("_MainVertexColoringLinearSpace", vertex.SrgbData ? 1 : 0);
             WriteTileDiscard(output.Render.HiddenTiles, material);
             WriteLighting(output.Lighting, material);
+            WriteMatcaps(output, material);
             WriteSurfaceResponse(output.Surface.Response, material);
             WriteEmission(output, material);
             var render = output.Render;
@@ -155,6 +164,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // The emission map, sRGB, a size keeping the main texture's aspect.
+        // The mask allocator's places: four one-value masks in a linear texture.
+        public static AtlasOutputTexture MaskTexture(int number, params AtlasVirtualMap[] maps) =>
+            new AtlasOutputTexture("Masks" + number, "Masks " + number) { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
+                .With(maps[0], AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f))
+                .With(maps[1], AtlasTextureChannels.G, AtlasOutputTexture.Gray(0f))
+                .With(maps[2], AtlasTextureChannels.B, AtlasOutputTexture.Gray(0f))
+                .With(maps[3], AtlasTextureChannels.A, AtlasOutputTexture.Gray(0f));
+
         public static AtlasOutputTexture EmissionTexture() =>
             new AtlasOutputTexture("Emission", "Emission") { SizeMode = AtlasTextureSizeMode.MainAspect }
                 .With(AtlasVirtualMap.Emission, AtlasTextureChannels.RGB, new Color(0f, 0f, 0f, 1f));
@@ -304,6 +321,92 @@ namespace NordicWind.AdvancedAtlaser.Editor
             for (int k = 0; k < LightingKeywords.Length; k++)
                 if (k == type) m.EnableKeyword(LightingKeywords[k]);
                 else m.DisableKeyword(LightingKeywords[k]);
+        }
+
+        // Matcaps: the output's lookup layers by slot (consecutive layers sharing a mask object),
+        // each written as the Poiyomi parser reads a matcap (AtlasPoiyomiLookups).
+        private static readonly string[] MatcapKeywords = { "POI_MATCAP0", "COLOR_GRADING_HDR_3D", "POI_MATCAP2", "POI_MATCAP3" };
+        private static readonly AtlasLookupProjection[] MatcapProjections =
+        {
+            AtlasLookupProjection.ViewCorrected, AtlasLookupProjection.ViewStabilized, AtlasLookupProjection.ReflectionPlanar,
+            AtlasLookupProjection.Gradient, AtlasLookupProjection.LightHalfVector
+        };
+        private static readonly (string Property, AtlasBlend Blend, AtlasPlacement Placement)[] MatcapWeights =
+        {
+            ("Replace", AtlasBlend.Replace, AtlasPlacement.Surface), ("Multiply", AtlasBlend.Multiply, AtlasPlacement.Surface),
+            ("Add", AtlasBlend.Add, AtlasPlacement.Surface), ("Screen", AtlasBlend.Screen, AtlasPlacement.Surface),
+            ("AddToLight", AtlasBlend.Add, AtlasPlacement.Overlay), ("Mixed", AtlasBlend.Mixed, AtlasPlacement.Surface)
+        };
+
+        private static void WriteMatcaps(AtlasUnifiedMaterial output, Material m)
+        {
+            var slots = new List<List<AtlasLookupLayer>>();
+            foreach (var layer in output.Layers.OfType<AtlasLookupLayer>())
+            {
+                if (slots.Count > 0 && ReferenceEquals(slots[slots.Count - 1][0].Mask, layer.Mask)) slots[slots.Count - 1].Add(layer);
+                else slots.Add(new List<AtlasLookupLayer> { layer });
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                string p = i == 0 ? "_Matcap" : "_Matcap" + (i + 1);
+                bool on = i < slots.Count;
+                m.SetFloat(p + "Enable", on ? 1 : 0);
+                if (on) m.EnableKeyword(MatcapKeywords[i]);
+                else m.DisableKeyword(MatcapKeywords[i]);
+                if (on) WriteMatcap(m, i, p, slots[i]);
+            }
+        }
+
+        private static void WriteMatcap(Material m, int index, string p, List<AtlasLookupLayer> layers)
+        {
+            string ordinal = new[] { "", "2nd", "3rd", "4th" }[index];
+            string circle = index == 0 ? "_Matcap0" : p;
+            var first = layers[0];
+            var map = first.Source.Map;
+            m.SetTexture(p, map?.Texture);
+            m.SetTextureScale(p, Vector2.one);
+            m.SetTextureOffset(p, Vector2.zero);
+            m.SetVector(p + "Pan", (map?.Scroll ?? Vector2.zero) / 0.05f);
+            // The lookup's tiling is 2 × Border.
+            m.SetFloat(p + "Border", first.Tiling.x * 0.5f);
+            var color = first.Source.Color;
+            float intensity = Mathf.Max(1f, color.maxColorComponent);
+            var shown = new Color(color.r / intensity, color.g / intensity, color.b / intensity, color.a);
+            m.SetColor(p + "Color", shown.gamma);
+            m.SetFloat(p + "ColorThemeIndex", 0);
+            m.SetFloat(p + "Intensity", intensity);
+            m.SetFloat(p + "UVMode", Mathf.Max(0, Array.IndexOf(MatcapProjections, first.Projection)));
+            var mask = first.Mask;
+            m.SetTexture(p + "Mask", mask?.Map?.Texture);
+            m.SetTextureScale(p + "Mask", Vector2.one);
+            m.SetTextureOffset(p + "Mask", Vector2.zero);
+            m.SetFloat(p + "MaskUV", 0);
+            m.SetFloat(p + "MaskChannel", mask?.Map?.Texture != null ? Mathf.Clamp((int)mask.Channel, 0, 3) : 0);
+            m.SetFloat(p + "MaskInvert", mask?.Map?.Texture != null && mask.Invert ? 1 : 0);
+            m.SetFloat(p + "MaskGlobalMask", 0);
+            foreach (var weight in MatcapWeights)
+            {
+                var layer = layers.Find(l => l.Blend == weight.Blend && l.Placement == weight.Placement);
+                m.SetFloat(p + weight.Property, layer != null ? layer.Opacity : 0f);
+            }
+            m.SetFloat(p + "EmissionStrength", first.EmissionAmount);
+            m.SetFloat(p + "Rotation", first.LookupRotation / 180f);
+            m.SetVector(index == 0 ? "_MatCapBlendUV1" : "_MatCap" + ordinal + "BlendUV1", first.UVBlend);
+            m.SetFloat(p + "UVToBlend", Mathf.Clamp((int)(first.UVBlendSpace - AtlasTextureSpace.UV0), 0, 3));
+            m.SetFloat(index == 0 ? "_MatCapVRParallaxStrength" : "_MatCap" + ordinal + "VRParallaxStrength", first.CenterEye ? 0 : 1);
+            m.SetFloat(p + "Normal", first.SurfaceNormalAmount);
+            m.SetFloat(p + "BaseColorMix", first.BaseColorMix);
+            m.SetFloat(p + "LightColorMix", first.LightColorMix);
+            m.SetFloat(p + "HideWithReflProbe", first.HideWithReflectionProbes ? 1 : 0);
+            m.SetFloat(p + "ShowInOutline", first.OnOutlines ? 1 : 0);
+            m.SetFloat(p + "LightMask", first.HideInShadow);
+            m.SetFloat(circle + "CircleMaskEnabled", first.CircleMask ? 1 : 0);
+            m.SetFloat(circle + "CircleMaskBorder", first.CircleRadius);
+            m.SetFloat(circle + "CircleMaskBlur", first.CircleBlur);
+            m.SetFloat(p + "Smoothness", 1f - first.Blur);
+            m.SetFloat("_Matcap" + index + "CustomNormal", first.NormalMap != null ? 1 : 0);
+            m.SetTexture("_Matcap" + index + "NormalMap", first.NormalMap?.Texture);
+            m.SetFloat("_Matcap" + index + "NormalMapScale", first.NormalStrength);
         }
 
         // A texture slot set from a reference: its texture, tiling and offset, and its UV channel
@@ -506,7 +609,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 material.SetFloat("_MochieMetallicMapsMetallicChannel", 0);
                 material.SetFloat("_MochieMetallicMapsRoughnessChannel", 1);
                 material.SetFloat("_MochieMetallicMapsReflectionMaskChannel", response.Reflections.Mask != null ? 2 : 4);
-                material.SetFloat("_MochieMetallicMapsSpecularMaskChannel", response.Highlights.Mask != null ? 3 : 4);
+                // A highlight mask that reads the reflection mask's map shares its channel.
+                material.SetFloat("_MochieMetallicMapsSpecularMaskChannel", response.Highlights.Mask == null ? 4
+                    : response.Reflections.Mask != null && response.Highlights.Mask.Map == response.Reflections.Mask.Map ? 2 : 3);
                 material.SetFloat("_MochieMetallicMapInvert", 0);
                 material.SetFloat("_MochieRoughnessMapInvert", 0);
                 material.SetFloat("_MochieReflectionMaskInvert", 0);
@@ -565,13 +670,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     .With(AtlasVirtualMap.Metallic, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f))
                     .With(AtlasVirtualMap.Roughness, AtlasTextureChannels.G, AtlasOutputTexture.Gray(0f), invert: true)
                     .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.B, AtlasOutputTexture.Gray(1f)),
-                PoiyomiToon10OutputShader.EmissionTexture()
+                PoiyomiToon10OutputShader.EmissionTexture(),
+                PoiyomiToon10OutputShader.MaskTexture(1, AtlasVirtualMap.Mask1, AtlasVirtualMap.Mask2, AtlasVirtualMap.Mask3, AtlasVirtualMap.Mask4)
             },
             Reflectance = AtlasReflectanceSupport.FollowsSmoothness,
             // _VertexColor: the base color × the vertex RGB as stored.
             VertexColors = AtlasVertexColorSupport.Color,
             // _Ramp is its only shading control.
-            GeneratedRamp = true
+            GeneratedRamp = true,
+            // One matcap, added or multiplied; its mask picks a channel.
+            MatcapSlots = 1,
+            MatcapBlends = AtlasMatcapBlends.Add | AtlasMatcapBlends.Multiply
         };
 
         // Lighting: Toon Standard's one model, base × (lerp(base × Shadow Tint, 1, min(1, ramp(N·L
@@ -632,6 +741,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetTextureOffset("_MainTex", Vector2.zero);
             material.SetFloat("_VertexColor", output.Surface.VertexColor.MultiplyColor ? 1 : 0);
             WriteLighting(output.Lighting, material);
+            // Its one matcap: added or multiplied into the albedo, a mask by channel.
+            var matcap = output.Layers.OfType<AtlasLookupLayer>().FirstOrDefault();
+            if (matcap != null) material.EnableKeyword("USE_MATCAP");
+            else material.DisableKeyword("USE_MATCAP");
+            material.SetTexture("_Matcap", matcap?.Source.Map?.Texture);
+            material.SetTexture("_MatcapMask", matcap?.Mask?.Map?.Texture);
+            material.SetFloat("_MatcapMaskChannel", matcap?.Mask?.Map?.Texture != null ? Mathf.Clamp((int)matcap.Mask.Channel, 0, 3) : 0);
+            material.SetFloat("_MatcapType", matcap != null && matcap.Blend == AtlasBlend.Multiply ? 1 : 0);
+            material.SetFloat("_MatcapStrength", matcap != null ? Mathf.Clamp01(matcap.Opacity) : 1f);
             var normal = output.Surface.Normal;
             if (normal.Map?.Texture != null)
             {

@@ -36,6 +36,48 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
         }
 
+        /// <summary>A text describing the object's public fields, equal for objects that compare
+        /// equal (floats to 4 decimals, assets by GUID, other Unity objects by instance). <paramref name="skip"/> leaves
+        /// out top-level fields by name.</summary>
+        public static string Signature(object value, params string[] skip)
+        {
+            var text = new System.Text.StringBuilder();
+            Write(value, text, skip, true);
+            return text.ToString();
+        }
+
+        private static void Write(object value, System.Text.StringBuilder text, string[] skip, bool top)
+        {
+            if (value == null) { text.Append('∅'); return; }
+            var type = value.GetType();
+            if (value is float f) { text.Append(f.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)); return; }
+            if (value is UnityEngine.Object o)
+            {
+                // Assets by GUID and file ID, so the text stays the same between sessions.
+                if (o != null && UnityEditor.AssetDatabase.TryGetGUIDAndLocalFileIdentifier(o, out string guid, out long file))
+                    text.Append('#').Append(guid).Append(':').Append(file);
+                else text.Append('#').Append(o != null ? o.GetInstanceID() : 0);
+                return;
+            }
+            if (type.IsPrimitive || type.IsEnum || value is string) { text.Append(value); return; }
+            if (value is IList list)
+            {
+                text.Append('[');
+                foreach (var item in list) { Write(item, text, skip, false); text.Append(','); }
+                text.Append(']');
+                return;
+            }
+            text.Append('{');
+            foreach (var field in type.GetFields(Fields))
+            {
+                if (top && Array.IndexOf(skip, field.Name) >= 0) continue;
+                text.Append(field.Name).Append('=');
+                Write(field.GetValue(value), text, skip, false);
+                text.Append(';');
+            }
+            text.Append('}');
+        }
+
         /// <summary>The paths of the fields that differ (floats within <paramref name="tolerance"/>).</summary>
         public static List<string> Differences(object a, object b, float tolerance = 1e-3f)
         {
