@@ -19,6 +19,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The active sources need different values for the feature's shared value
         // (IAtlasSharedValueFeature), so the user can pick the source it is taken from.
         public bool SharedValuesDiffer;
+        // The feature's switches whose sources disagree (IAtlasConflictSwitchFeature).
+        public readonly List<AtlasConflictSwitch> Switches = new List<AtlasConflictSwitch>();
     }
 
     // One output texture the chosen modes use, with its size and memory.
@@ -50,13 +52,26 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var overview = new AtlasOutputOverview();
             if (capabilities == null) return overview;
+            AtlasGeneratorJob probe = null;
             foreach (var feature in AtlasOutputFeatures.All)
             {
                 var state = State(feature, config, capabilities, materials, unified);
-                if (state != null) overview.Features.Add(state);
+                if (state == null) continue;
+                if (feature is IAtlasConflictSwitchFeature switches && state.Present.Count > 1)
+                    state.Switches.AddRange(switches.ConflictingSwitches(probe ?? (probe = Probe(config, materials, unified)), capabilities));
+                overview.Features.Add(state);
             }
             overview.AddTextures(config, capabilities);
             return overview;
+        }
+
+        // The sources and choices as a job, for what depends on more than one feature.
+        private static AtlasGeneratorJob Probe(AtlasOutputConfiguration config, IReadOnlyList<Material> materials, IReadOnlyList<AtlasUnifiedMaterial> unified)
+        {
+            var job = new AtlasGeneratorJob();
+            foreach (var material in unified) job.Sources.Add(new AtlasGeneratorSource { Material = material });
+            AtlasOutputPipeline.AddChoices(config, materials, job);
+            return job;
         }
 
         public static AtlasFeatureState State(IAtlasOutputFeature feature, AtlasOutputConfiguration config,

@@ -18,9 +18,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // transparent ones keep their alpha. An output that can't do that has no stand-in: the
     // transparent sources are drawn solid. The user can choose another mode. The queue follows
     // the mode (the writer's queue for it).
-    public sealed class AtlasSurfaceModeFeature : IAtlasAlwaysOnFeature
+    public sealed class AtlasSurfaceModeFeature : IAtlasAlwaysOnFeature, IAtlasConflictSwitchFeature
     {
         public const string FeatureId = "surface-mode";
+
+        // Alpha to coverage: one setting for every cutout part.
+        public static readonly AtlasConflictSwitch AlphaToCoverage = new AtlasConflictSwitch
+        {
+            Id = "alpha-to-coverage", Label = "Alpha to coverage", Default = true,
+            Tooltip = "Some cutout materials use alpha to coverage (smoother cutout edges with MSAA) and some don't. " +
+                      "The atlas material has one setting for all of them."
+        };
         // The output's shared cutoff: each cutout source's alpha is remapped so its own cutoff
         // lands here (AtlasAlphaFeature).
         public const float SharedCutoff = 0.5f;
@@ -66,8 +74,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // doesn't hide what lies behind it.
             render.CutoffInTransparent = Blended(mode) && surface.DepthWrite;
             render.Cutoff = SharedCutoff;
-            render.AlphaToCoverage = mode == AtlasSurfaceMode.Cutout && context.Job.Sources.Any(s =>
-                s.Material?.Render.SurfaceMode == AtlasSurfaceMode.Cutout && s.Material.Render.AlphaToCoverage);
+            var coverage = CoverageValues(context.Job, context.Capabilities).Distinct().ToList();
+            render.AlphaToCoverage = coverage.Count == 1 ? coverage[0]
+                : coverage.Count > 1 && AtlasOutputFeatures.Switch(context.Job, FeatureId, AlphaToCoverage);
+            if (coverage.Count > 1)
+                context.Notes.Add($"The cutout materials disagree on alpha to coverage; it's {(render.AlphaToCoverage ? "on" : "off")} for all of them.");
             foreach (var source in context.Job.Sources)
                 if (source.Material != null && Rank(source.Material.Render.SurfaceMode) < 0)
                 {
@@ -82,6 +93,26 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             if (solid > 0)
                 context.Notes.Add($"{solid} transparent source(s) are drawn solid: the output shader can't keep them transparent next to solid ones.");
+        }
+
+        public IEnumerable<AtlasConflictSwitch> ConflictingSwitches(AtlasGeneratorJob job, AtlasOutputCapabilities capabilities)
+        {
+            if (CoverageValues(job, capabilities).Distinct().Count() > 1) yield return AlphaToCoverage;
+        }
+
+        // The alpha-to-coverage settings of the cutout sources whose alpha is kept, when the
+        // output is cutout.
+        private static List<bool> CoverageValues(AtlasGeneratorJob job, AtlasOutputCapabilities capabilities)
+        {
+            var values = new List<bool>();
+            if (Choose(job, capabilities).Mode != AtlasSurfaceMode.Cutout) return values;
+            for (int i = 0; i < job.Sources.Count; i++)
+            {
+                var source = job.Sources[i].Material;
+                if (source != null && source.Render.SurfaceMode == AtlasSurfaceMode.Cutout && AtlasAlphaFeature.Kept(job, capabilities, i))
+                    values.Add(source.Render.AlphaToCoverage);
+            }
+            return values;
         }
 
         public static int Rank(AtlasSurfaceMode mode) => System.Array.IndexOf(SeeThrough, mode);

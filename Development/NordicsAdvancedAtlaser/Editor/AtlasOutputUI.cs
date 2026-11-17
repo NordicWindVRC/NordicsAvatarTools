@@ -275,6 +275,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (state.SharedValuesDiffer)
                 using (new EditorGUI.IndentLevelScope())
                     SharedValue(setting, state, materials);
+            foreach (var conflictSwitch in state.Switches)
+                using (new EditorGUI.IndentLevelScope())
+                    Switch(setting, conflictSwitch);
             if (open)
                 using (new EditorGUI.IndentLevelScope())
                     Sources(setting, state, materials);
@@ -294,14 +297,42 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var label = new GUIContent(feature.SharedValueName + " from",
                 "The materials' " + feature.SharedValueName.ToLowerInvariant() + " differs, and the atlas material has one. " +
                 "Automatic takes it from the material with the largest area in the atlas.");
+            int next = PopupRow(label, index, options.ToArray());
+            if (next != index) reference.objectReferenceValue = next == 0 ? null : choices[next - 1];
+        }
+
+        // A setting the materials disagree on, which the atlas material has once: on or off.
+        private static void Switch(SerializedProperty setting, AtlasConflictSwitch conflictSwitch)
+        {
+            var values = setting.FindPropertyRelative("values");
+            SerializedProperty stored = null;
+            for (int i = 0; i < values.arraySize && stored == null; i++)
+                if (values.GetArrayElementAtIndex(i).FindPropertyRelative("id").stringValue == conflictSwitch.Id)
+                    stored = values.GetArrayElementAtIndex(i);
+            bool on = stored != null ? stored.FindPropertyRelative("toggle").boolValue : conflictSwitch.Default;
+            int index = on ? 0 : 1;
+            int next = PopupRow(new GUIContent(conflictSwitch.Label, conflictSwitch.Tooltip), index, new[] { "On", "Off" });
+            if (next == index) return;
+            if (stored == null)
+            {
+                values.InsertArrayElementAtIndex(values.arraySize);
+                stored = values.GetArrayElementAtIndex(values.arraySize - 1);
+                // A new array element copies the previous one, so every field is set explicitly.
+                stored.FindPropertyRelative("id").stringValue = conflictSwitch.Id;
+                stored.FindPropertyRelative("number").floatValue = 0f;
+                stored.FindPropertyRelative("color").colorValue = Color.white;
+            }
+            stored.FindPropertyRelative("toggle").boolValue = next == 0;
+        }
+
+        // A labeled drop-down whose field lines up with the feature rows' mode drop-downs.
+        private static int PopupRow(GUIContent label, int index, string[] options)
+        {
             var row = EditorGUILayout.GetControlRect();
             EditorGUI.LabelField(new Rect(row.x, row.y, EditorGUIUtility.labelWidth, row.height), label);
             var fieldRect = new Rect(row.x + EditorGUIUtility.labelWidth, row.y, row.width - EditorGUIUtility.labelWidth, row.height);
             using (new IndentReset())
-            {
-                int next = EditorGUI.Popup(fieldRect, index, options.ToArray());
-                if (next != index) reference.objectReferenceValue = next == 0 ? null : choices[next - 1];
-            }
+                return EditorGUI.Popup(fieldRect, index, options);
         }
 
         private static bool FoldAt(Rect rect, string key, GUIContent label)

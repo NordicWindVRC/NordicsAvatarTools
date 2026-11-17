@@ -65,6 +65,25 @@ namespace NordicWind.AdvancedAtlaser.Editor
         bool SharedValuesDiffer(IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasOutputCapabilities capabilities);
     }
 
+    // An on/off setting the output has once, which the user sets where the sources disagree.
+    public sealed class AtlasConflictSwitch
+    {
+        // Stable: stored in the feature's settings values.
+        public string Id;
+        public string Label;
+        public string Tooltip;
+        // The value until the user sets one.
+        public bool Default;
+    }
+
+    // A feature with on/off settings the sources can disagree on while the output has one value
+    // each. A switch shows in the inspector only while its sources disagree; when they agree,
+    // their value is used.
+    public interface IAtlasConflictSwitchFeature : IAtlasOutputFeature
+    {
+        IEnumerable<AtlasConflictSwitch> ConflictingSwitches(AtlasGeneratorJob job, AtlasOutputCapabilities capabilities);
+    }
+
     // A feature a source can have without its material having it, from what the build adds (the
     // geometry bake's correction) or the source's settings (a pre-baked normal map).
     public interface IAtlasSourceAwareFeature : IAtlasOutputFeature
@@ -83,6 +102,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // How one source's map is evaluated (source index, its material, width, height), when
         // the feature converts it for the output; null: AtlasMapEvaluator.Evaluate.
         public Func<int, AtlasUnifiedMaterial, int, int, NordicsTextureWrapper> Evaluate;
+        // Run on the whole baked map before it is packed; null: nothing.
+        public Action<NordicsTextureWrapper> Finish;
     }
 
     // What a feature's Resolve works with.
@@ -147,6 +168,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // The mode in use: the stored one when the output shader supports it, otherwise the
         // default. Null when the feature isn't offered.
+        public static bool Switch(AtlasGeneratorJob job, string featureId, AtlasConflictSwitch conflictSwitch)
+        {
+            var choice = job.Features.Find(f => f.FeatureId == featureId);
+            return choice != null && choice.Switches.TryGetValue(conflictSwitch.Id, out bool value) ? value : conflictSwitch.Default;
+        }
+
         public static AtlasFeatureMode Effective(IAtlasOutputFeature feature, string storedMode, AtlasOutputCapabilities capabilities)
         {
             var modes = Available(feature, capabilities);

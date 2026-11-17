@@ -24,6 +24,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var plan = new AtlasOutputPlan();
             foreach (var feature in AtlasOutputFeatures.All)
                 Resolve(job, capabilities, feature, plan);
+            if (job.Sources.Count > 0)
+                plan.Notes.Add("Lighting (shading, shadows, light volumes) isn't merged yet; the output shader's default lighting is used.");
             return plan;
         }
 
@@ -41,6 +43,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     ModeId = setting.mode ?? "",
                     ReferenceSource = IndexOf(materials, setting.referenceSource)
                 };
+                if (setting.values != null)
+                    foreach (var value in setting.values)
+                        if (value != null && !string.IsNullOrEmpty(value.id)) choice.Switches[value.id] = value.toggle;
                 if (setting.disabledSources != null)
                     foreach (var material in setting.disabledSources)
                     {

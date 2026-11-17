@@ -119,6 +119,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 };
             Notes(context, active);
             ReflectanceNotes(context, reference);
+            StrengthNotes(context, AtlasVirtualMap.SpecularMask, "highlight", r => r.Highlights.Enabled ? r.Highlights.Strength : 0f);
+            StrengthNotes(context, AtlasVirtualMap.ReflectionMask, "reflection", r => r.Reflections.Enabled ? r.Reflections.Strength : 0f);
+        }
+
+        // Without a mask, the output can't keep different strengths: one line naming the weaker sources.
+        private static void StrengthNotes(AtlasFeatureContext context, AtlasVirtualMap mask, string name, System.Func<AtlasSurfaceResponse, float> strength)
+        {
+            if (context.Capabilities.Provides(mask)) return;
+            var strengths = context.Sources.Select(i => (index: i, value: strength(context.Job.Sources[i].Material.Surface.Response))).ToList();
+            float strongest = strengths.Max(s => s.value);
+            var weaker = strengths.Where(s => s.value < strongest - 0.005f).Select(s => s.index).ToList();
+            if (weaker.Count > 0)
+                context.Notes.Add($"The output shader has no {name} strength or mask; the weaker {name}s of {Numbers(weaker)} aren't kept.");
         }
 
         // Sources whose reflectance the output doesn't keep, by source number.

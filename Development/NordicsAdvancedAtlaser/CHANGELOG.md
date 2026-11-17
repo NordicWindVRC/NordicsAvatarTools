@@ -8,6 +8,17 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Conflicts decided by the user or reported:** where the output can't give every material
+  what it had, the user decides or the build log says so.
+  - *Alpha to coverage* (On or Off) under *Surface Mode*, shown only when the cutout
+    materials disagree (`IAtlasConflictSwitchFeature`, stored in the feature's values).
+    Before, one cutout material with it turned it on for all of them.
+  - Base colors above 1 are kept when the materials' colors differ: the baked base color map
+    is divided by its brightest value, which becomes the material's color. Before, they were
+    cut off at 1.
+  - The build log lists materials whose weaker highlights or reflections an output without
+    strengths or masks (Toon Standard) can't keep, and that lighting isn't merged yet.
+  - `AtlasMapRequest.Finish` runs on the whole baked map before packing.
 - **Reflectance from:** a drop-down under *Reflection and Specular*, shown only when the
   materials need different reflectance on the output: *Automatic* (the material with the
   largest area) or a chosen material. It replaces the clipped *Reference* checkboxes in the

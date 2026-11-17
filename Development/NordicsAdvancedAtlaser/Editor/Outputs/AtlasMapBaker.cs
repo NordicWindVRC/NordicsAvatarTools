@@ -46,6 +46,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
                 using (new AtlasStageTimer($"fill between regions (dilate) {request.Map} ({width}×{height})", timings))
                     atlas.Dilate();
+                request.Finish?.Invoke(atlas);
                 return atlas;
             }
             catch

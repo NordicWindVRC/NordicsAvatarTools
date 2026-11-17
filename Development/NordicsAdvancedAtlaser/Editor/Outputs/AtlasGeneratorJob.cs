@@ -28,6 +28,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // -1: the source with the largest region.
         public int ReferenceSource = -1;
         public readonly HashSet<int> DisabledSources = new HashSet<int>();
+        // The values the user set for the feature's conflict switches, by switch ID.
+        public readonly Dictionary<string, bool> Switches = new Dictionary<string, bool>();
     }
     public sealed class AtlasGeneratorSource
     {

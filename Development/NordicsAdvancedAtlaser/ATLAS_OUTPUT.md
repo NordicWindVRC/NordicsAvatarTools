@@ -194,7 +194,10 @@ Every feature with more than one source has a foldout listing the sources that u
 Where the sources need different values for a shared value, a drop-down under the feature
 picks the reference source: *Automatic* or one of the sources (`IAtlasSharedValueFeature`).
 It isn't shown when the values agree, or when the output shader has no setting for the value
-(Poiyomi's Reflections & Specular has a fixed reflectance).
+(Poiyomi's Reflections & Specular has a fixed reflectance). On/off settings the output has once
+work the same way, as a switch under the feature shown only while the sources disagree
+(`IAtlasConflictSwitchFeature`), stored in the feature's values by switch ID. Alpha to
+coverage is one: on or off for every cutout part.
 
 ---
 
@@ -866,7 +869,8 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
 - **No result left to chance:** where the output can't give every source what it had (a
   shared value the sources disagree on, a source the output can't reproduce), the user
   gets a control that decides it, shown in the feature's row only while the conflict
-  exists, such as the reference source drop-down. A silent rule the user can't change
+  exists, such as the reference source drop-down or an on/off switch
+  (`IAtlasConflictSwitchFeature`: alpha to coverage). A silent rule the user can't change
   isn't enough: the avatar could look wrong with nothing the user can do about it. The
   automatic choice stays the default, and the build log says what it chose. Parts that
   aren't merged yet are listed in the diagnostics until they are.

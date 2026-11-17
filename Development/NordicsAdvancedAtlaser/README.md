@@ -87,8 +87,9 @@ and `ATLAS_OUTPUT.md` for the output design.
      - **Color**: each source's base color: its texture and color, its color layers (details,
        decals, recolor regions, plain colors, with their masks) and its static color
        adjustments, baked together. When every source has the same color and nothing is
-       layered on it, the color stays a shared setting. Live (animated) layers and vertex
-       colors follow later; the build lists them.
+       layered on it, the color stays a shared setting. Otherwise colors brighter than 1 are
+       kept: the map is scaled down and the material's color makes up for it. Live (animated)
+       layers and vertex colors follow later; the build lists them.
      - **Emission**: each source's emission in one emission map, relative to the strongest
        source's, which the output glows at. Sources without emission stay dark. Blinking,
        scrolling, audio or light-based emission follows later.
@@ -115,7 +116,8 @@ and `ATLAS_OUTPUT.md` for the output design.
        Standard: opaque). When transparent sources share the atlas with solid ones, it uses
        *Fade with Depth* (Poiyomi's TransClipping): the transparent parts keep their alpha,
        and the solid parts still sort like opaque ones. You can also choose a mode. The render
-       queue follows it.
+       queue follows it. When some cutout materials use alpha to coverage and others don't,
+       *Alpha to coverage* (On or Off) sets it for all of them.
      - **Fallback Shader** (Poiyomi): what viewers with the shader blocked see. *Automatic*
        follows the surface mode, such as *Toon Cutout*; or choose Toon, Unlit, Standard or
        Hidden.
