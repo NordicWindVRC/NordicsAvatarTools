@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is next. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2a is done, 2.2b is next. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -131,13 +131,23 @@ Each phase adds features to both writers, with their modes, maps and fallbacks.
 
 ### 2.2 Normals and surface maps
 
+In two steps, since each output shader stores these maps its own way.
+
+**2.2a Normal maps**
 - *Normal maps*: the main normal in the established order (pre-baked normal, the build's
   correction, the primary normal, normal layers), strengths normalized to the largest.
+- The feature counts a source that has only a pre-baked map or a geometry-bake correction,
+  so a decimated avatar without normal maps still gets its correction.
+- Normal maps are generated and exported as normal maps.
+- **Workable:** lit materials keep their normals, and the build's normal correction reaches
+  the avatar.
+
+**2.2b Surface maps**
 - **Compound textures**: metallic and roughness through the virtual maps, with neutral values
   for unused channels.
 - *Reflection and specular* (shared groups, spatial constants), *Ambient occlusion* (native
   map).
-- **Workable:** lit materials keep their normals and surface response.
+- **Workable:** lit materials keep their surface response.
 
 ### 2.3 Color stack and emission
 

@@ -90,6 +90,10 @@ and `ATLAS_OUTPUT.md` for the output design.
        Opaque sources stay solid. A transparent source stays transparent only where the
        output shader can show it so (Poiyomi); otherwise, or when you turn it off for that
        material, it's drawn solid.
+     - **Normal Maps**: each source's normals in one normal map: its pre-baked normal map,
+       the geometry bake's correction, its own normal map and its normal layers (details on
+       UV0), combined in that order. The output's normal strength is the largest of the
+       sources'; the weaker ones are baked at their share of it, so each looks as before.
      - **Surface Mode**: *Automatic* takes the most see-through mode among the sources that
        the output shader supports (Poiyomi: opaque, cutout, transparent, fade; Mobile Toon
        Standard: opaque). When transparent sources share the atlas with solid ones, it uses

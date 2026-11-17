@@ -25,7 +25,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     var request = plan.Maps.FirstOrDefault(r => r.Map == channel.Map);
                     if (request == null) continue;
                     using (var map = AtlasMapBaker.Bake(request, job, use.Width, use.Height, timings))
-                        Copy(packed, map, channel.Channels);
+                    {
+                        // A normal map is its whole texture: its vectors are copied as they are.
+                        if (texture.Normal) packed.Blit(map, padding: 0);
+                        else Copy(packed, map, channel.Channels);
+                    }
                 }
                 return packed;
             }
@@ -39,7 +43,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Color textures sRGB, data linear; alpha only when a virtual map uses it.
         public static TextureSettings Settings(AtlasTextureUse use) => new TextureSettings
         {
-            DataType = use.Texture.Srgb ? TextureDataType.Color : TextureDataType.LinearData,
+            DataType = use.Texture.Normal ? TextureDataType.NormalTangent
+                : use.Texture.Srgb ? TextureDataType.Color : TextureDataType.LinearData,
             SRGB = use.Texture.Srgb,
             Mipmaps = true,
             StreamingMipmaps = true,

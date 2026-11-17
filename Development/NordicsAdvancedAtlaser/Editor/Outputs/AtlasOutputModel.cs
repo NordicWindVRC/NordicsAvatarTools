@@ -10,7 +10,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         BaseColor,
         // The surface's alpha, after each source's conversion to the output's surface mode.
-        Alpha
+        Alpha,
+        // The main tangent-space normal, every normal of a source combined.
+        Normal
     }
 
     // Which channels of a texture a virtual map fills.

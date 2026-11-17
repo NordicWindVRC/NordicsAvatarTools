@@ -8,6 +8,14 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Normal maps:** each source's normals are combined into the output's normal map, in the
+  established order (pre-baked map, the geometry bake's correction, the primary normal map,
+  UV0 normal layers with their masks), by whiteout. The output's strength is the largest of
+  the sources', and each source is baked at its share of it. A source with only a pre-baked
+  map or a correction counts too, so the geometry bake's correction reaches the avatar. Both
+  writers set the normal map; the build generates it as a normal-map texture. Layers on
+  other UV channels, placed, lerped or masked by the mask bus or vertex colors are listed in
+  the diagnostics.
 - **Alpha, surface mode and fallback:** each source's alpha is baked into the base color
   texture's alpha (its source, mask, offset and strength), converted to the output's surface
   mode: a cutout source's cutoff is moved to the shared cutoff 0.5, or becomes a hard edge

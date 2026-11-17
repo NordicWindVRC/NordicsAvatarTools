@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using NordicWind.TextureWrapper;
 using UnityEngine;
 
@@ -15,6 +16,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 case AtlasVirtualMap.BaseColor: return BaseColor(source, width, height);
                 case AtlasVirtualMap.Alpha: return Alpha(source, width, height, default);
+                case AtlasVirtualMap.Normal:
+                    var single = new AtlasGeneratorSource { Material = source };
+                    return Normal(single, width, height, Mathf.Max(1e-4f, AtlasNormalFeature.LargestStrength(single)));
                 default: throw new ArgumentOutOfRangeException(nameof(map), map, "[Nordic's Advanced Atlaser] No evaluator for this virtual map.");
             }
         }
@@ -23,10 +27,77 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // atlas edges.
         public static TextureSettings Settings(AtlasVirtualMap map) => new TextureSettings
         {
-            DataType = map == AtlasVirtualMap.BaseColor ? TextureDataType.Color : TextureDataType.LinearData,
+            DataType = map == AtlasVirtualMap.BaseColor ? TextureDataType.Color
+                : map == AtlasVirtualMap.Normal ? TextureDataType.NormalTangent : TextureDataType.LinearData,
             SRGB = map == AtlasVirtualMap.BaseColor, WrapMode = TextureWrapMode.Clamp,
             OutputChannels = TextureOutputChannels.Auto
         };
+
+        // A flat tangent-space normal everywhere.
+        public static NordicsTextureWrapper Flat(int width, int height)
+        {
+            var result = new NordicsTextureWrapper(width, height, Settings(AtlasVirtualMap.Normal));
+            result.Fill(new Color(0f, 0f, 1f, 1f));
+            return result;
+        }
+
+        /// <summary>
+        /// A source's normals combined by whiteout, in order: its pre-baked normal map and the
+        /// build's correction (each at strength 1), the primary normal map at its strength, then
+        /// the surface layers targeting the normal at their opacity, each masked. Every strength is
+        /// divided by <paramref name="outputStrength"/>, the strength the output's normal map is
+        /// drawn at. Layers outside CanBakeNormalLayer are left out (the feature reports them).
+        /// </summary>
+        public static NordicsTextureWrapper Normal(AtlasGeneratorSource source, int width, int height, float outputStrength)
+        {
+            var result = Flat(width, height);
+            try
+            {
+                float scale = 1f / Mathf.Max(outputStrength, 1e-4f);
+                if (source.PrebakedNormalMap != null)
+                    using (var prebaked = new NordicsTextureWrapper(source.PrebakedNormalMap, TextureDataType.NormalTangent))
+                        result.Blit(prebaked, blend: TextureBlendMode.NormalWhiteout, strength: scale, sampling: TextureSamplingMode.Area);
+                var correction = Correction(source);
+                if (correction != null)
+                    result.Blit(correction, blend: TextureBlendMode.NormalWhiteout, strength: scale, sampling: TextureSamplingMode.Area);
+                var material = source.Material;
+                var primary = material?.Surface.Normal;
+                if (primary?.Map?.Texture is Texture2D texture)
+                    using (var sampled = Sample(primary.Map, texture, TextureDataType.NormalTangent, width, height))
+                        result.Blit(sampled, blend: TextureBlendMode.NormalWhiteout, strength: primary.Strength * scale);
+                foreach (var layer in AtlasNormalFeature.NormalLayers(material).Where(CanBakeNormalLayer))
+                    foreach (var target in layer.Targets.Where(t => t.Target == AtlasSurfaceTarget.Normal))
+                        using (var sampled = Sample(layer.Source.Map, (Texture2D)layer.Source.Map.Texture, TextureDataType.NormalTangent, width, height))
+                        {
+                            if (layer.Mask == null)
+                                result.Blit(sampled, blend: TextureBlendMode.NormalWhiteout, strength: target.Opacity * scale);
+                            else
+                                using (var mask = Mask(layer.Mask, width, height))
+                                    result.Blit(sampled, mask: mask, maskOptions: new TextureMaskOptions { Channel = TextureChannel.R },
+                                        blend: TextureBlendMode.NormalWhiteout, strength: target.Opacity * scale);
+                        }
+                return result;
+            }
+            catch
+            {
+                result.Dispose();
+                throw;
+            }
+        }
+
+        /// <summary>The build's normal correction for a source; null when it has none or it's flat.</summary>
+        public static NordicsTextureWrapper Correction(AtlasGeneratorSource source) =>
+            source?.Bakes?.Submeshes.FirstOrDefault(s => !s.CurrentSubmeshMissing && !s.CorrectionIsFlat && s.TangentNormalCorrection != null)
+                ?.TangentNormalCorrection;
+
+        /// <summary>Whether a normal layer is in the bakeable subset: a texture on UV0, tiled over
+        /// the surface, on both faces and in every view, whiteout (not lerped), with a mask that
+        /// CanEvaluate or none.</summary>
+        public static bool CanBakeNormalLayer(AtlasSurfaceLayer layer) =>
+            layer != null && layer.Source.Map?.Texture is Texture2D && layer.Source.Map.Space == AtlasTextureSpace.UV0 &&
+            layer.Source.Map.Decal == null && layer.Placement == AtlasPlacement.Surface && layer.Faces == AtlasFaces.Both &&
+            layer.Mirror == AtlasMirrorVisibility.Both && (layer.Mask == null || CanEvaluate(layer.Mask)) &&
+            layer.Targets.Where(t => t.Target == AtlasSurfaceTarget.Normal).All(t => !t.ReplaceNormal);
 
         // One value everywhere; a one-value map holds it in RGB.
         public static NordicsTextureWrapper Constant(AtlasVirtualMap map, float value, int width, int height)

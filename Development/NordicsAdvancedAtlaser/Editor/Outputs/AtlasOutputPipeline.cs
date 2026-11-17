@@ -67,9 +67,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (mode == null) return;
             var sources = new List<int>();
             for (int i = 0; i < job.Sources.Count; i++)
-                if (feature.IsPresent(job.Sources[i].Material) &&
+            {
+                bool present = feature is IAtlasSourceAwareFeature aware
+                    ? aware.IsPresent(job.Sources[i]) : feature.IsPresent(job.Sources[i].Material);
+                if (present &&
                     (choice == null || feature is IAtlasAlwaysOnFeature || !choice.DisabledSources.Contains(i)))
                     sources.Add(i);
+            }
             if (sources.Count == 0) return;
             plan.Modes[feature.Id] = mode;
             // Off adds nothing: the output unified material starts without any feature.

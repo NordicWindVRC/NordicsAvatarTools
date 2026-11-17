@@ -82,9 +82,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // format, Kaiser mipmaps, streaming mipmaps. `readable` keeps a CPU copy.
         public static Texture2D Generate(NordicsTextureWrapper packed, bool alpha, TextureImporterFormat format, string platform, bool readable, string name)
         {
-            var settings = new TextureGenerationSettings(TextureImporterType.Default);
+            bool normal = packed.Settings.IsNormal;
+            var settings = new TextureGenerationSettings(normal ? TextureImporterType.NormalMap : TextureImporterType.Default);
             var importer = settings.textureImporterSettings;
-            importer.sRGBTexture = packed.Settings.SRGB;
+            importer.textureType = normal ? TextureImporterType.NormalMap : TextureImporterType.Default;
+            importer.sRGBTexture = packed.Settings.SRGB && !normal;
             importer.mipmapEnabled = packed.Settings.Mipmaps;
             importer.mipmapFilter = TextureImporterMipFilter.KaiserFilter;
             importer.streamingMipmaps = true;

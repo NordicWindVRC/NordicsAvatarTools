@@ -32,7 +32,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 new AtlasOutputTexture("BaseColor", "Base color") { SizeMode = AtlasTextureSizeMode.Main }
                     .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB)
-                    .With(AtlasVirtualMap.Alpha, AtlasTextureChannels.A)
+                    .With(AtlasVirtualMap.Alpha, AtlasTextureChannels.A),
+                NormalTexture()
             },
             SurfaceModes = { AtlasSurfaceMode.Cutout, AtlasSurfaceMode.Transparent, AtlasSurfaceMode.Fade },
             VRChatFallback = true,
@@ -54,9 +55,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             (AtlasSurfaceMode.Transparent, 3, 3000, "Transparent", 0, 0f, 1, 10, 1, 0, 1, 1, 10, 1)
         };
 
+        // The main normal map: linear, a size keeping the main texture's aspect.
+        public static AtlasOutputTexture NormalTexture() =>
+            new AtlasOutputTexture("Normal", "Normal map") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false, Normal = true }
+                .With(AtlasVirtualMap.Normal, AtlasTextureChannels.RGB, new Color(0f, 0f, 1f, 1f));
+
         // Poiyomi 10's main section: _Color (sRGB-authored, so set from the linear color's
-        // gamma value) times _MainTex, whose alpha holds the baked alpha; then the rendering
-        // preset of the surface mode, and VRChat's fallback.
+        // gamma value) times _MainTex, whose alpha holds the baked alpha; the normal map at the
+        // output's strength; then the rendering preset of the surface mode, and VRChat's fallback.
         public void Write(AtlasUnifiedMaterial output, Material material)
         {
             var baseColor = output.Surface.BaseColor;
@@ -64,6 +70,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetTexture("_MainTex", baseColor.Map?.Texture);
             material.SetTextureScale("_MainTex", Vector2.one);
             material.SetTextureOffset("_MainTex", Vector2.zero);
+            var normal = output.Surface.Normal;
+            material.SetTexture("_BumpMap", normal.Map?.Texture);
+            material.SetFloat("_BumpScale", normal.Map?.Texture != null ? normal.Strength : 1f);
+            material.SetTextureScale("_BumpMap", Vector2.one);
+            material.SetTextureOffset("_BumpMap", Vector2.zero);
+            material.SetFloat("_BumpMapUV", 0);
             var render = output.Render;
             var preset = Array.Find(Presets, p => p.Mode == render.SurfaceMode &&
                 (p.Mode != AtlasSurfaceMode.Fade || (p.ZWrite == 1) == render.Pass.DepthWrite));
@@ -122,12 +134,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
             Textures =
             {
                 new AtlasOutputTexture("BaseColor", "Base color") { SizeMode = AtlasTextureSizeMode.Main }
-                    .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB)
+                    .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB),
+                PoiyomiToon10OutputShader.NormalTexture()
             }
         };
 
-        // Toon Standard: _Color (sRGB-authored) times _MainTex. It's opaque only, and a VRChat
-        // shader, so it needs no fallback.
+        // Toon Standard: _Color (sRGB-authored) times _MainTex; the normal map, behind its
+        // USE_NORMAL_MAPS keyword. It's opaque only, and a VRChat shader, so it needs no fallback.
         public void Write(AtlasUnifiedMaterial output, Material material)
         {
             var baseColor = output.Surface.BaseColor;
@@ -135,6 +148,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetTexture("_MainTex", baseColor.Map?.Texture);
             material.SetTextureScale("_MainTex", Vector2.one);
             material.SetTextureOffset("_MainTex", Vector2.zero);
+            var normal = output.Surface.Normal;
+            if (normal.Map?.Texture != null)
+            {
+                material.EnableKeyword("USE_NORMAL_MAPS");
+                material.SetTexture("_BumpMap", normal.Map.Texture);
+                material.SetFloat("_BumpScale", normal.Strength);
+                material.SetTextureScale("_BumpMap", Vector2.one);
+                material.SetTextureOffset("_BumpMap", Vector2.zero);
+            }
+            else material.DisableKeyword("USE_NORMAL_MAPS");
             material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
         }
     }

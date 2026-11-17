@@ -56,6 +56,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // the surface mode, the fallback shader.
     public interface IAtlasAlwaysOnFeature : IAtlasOutputFeature { }
 
+    // A feature a source can have without its material having it, from what the build adds (the
+    // geometry bake's correction) or the source's settings (a pre-baked normal map).
+    public interface IAtlasSourceAwareFeature : IAtlasOutputFeature
+    {
+        bool IsPresent(AtlasGeneratorSource source);
+    }
+
     // A virtual map the output needs, the sources that contribute to it, and the texture
     // reference in the output unified material that points at it once it is packed.
     public sealed class AtlasMapRequest
