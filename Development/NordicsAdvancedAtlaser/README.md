@@ -56,8 +56,10 @@ and `ATLAS_OUTPUT.md` for the output design.
      **Threshold** is the minimum vertex movement that counts, in mesh units (default 0.001).
      **Selection mode** is *Any Vertex* or *All Vertices* of a triangle. The avatar mesh and its
      animations are never changed.
-3. Add one **Nordic's Atlas Output** per output material on the same GameObject. Choose the
-   output shader and the main texture size (default 4096 × 4096), and assign source materials
+3. Add one **Nordic's Atlas Output** per output material on the same GameObject. A new
+   output picks its output shader from the source materials: the shader family most of them
+   use (Poiyomi or VRChat), at the highest installed version. You can change it; the pick
+   only happens when the output is created. Choose the main texture size (default 4096 × 4096), and assign source materials
    with their UV rectangles; each source is listed with its material's name, such as
    *Source 1 (Body)*. **Region Padding** (default 4 px) separates the sources' regions,
    so it's only used with two or more source materials. **Auto Setup** picks the largest base

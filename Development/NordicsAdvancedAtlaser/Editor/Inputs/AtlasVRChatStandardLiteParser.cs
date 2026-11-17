@@ -10,6 +10,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public sealed class AtlasVRChatStandardLiteParser : AtlasParserBase
     {
         public override string ParserId => "vrc-mobile-standardlite";
+        public override string Family => AtlasShaderFamilies.VRChat;
         public override string DisplayName => "VRChat Mobile Standard Lite";
         public override bool CanParse(Material m) => Name(m) == "VRChat/Mobile/Standard Lite";
 

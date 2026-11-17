@@ -10,6 +10,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public sealed class AtlasVRChatToonStandardParser : AtlasParserBase
     {
         public override string ParserId => "vrc-mobile-toonstandard";
+        public override string Family => AtlasShaderFamilies.VRChat;
         public override string DisplayName => "VRChat Mobile Toon Standard";
         public override bool CanParse(Material m) =>
             Name(m) == "VRChat/Mobile/Toon Standard" || Name(m) == "VRChat/Mobile/Toon Standard (Outline)";

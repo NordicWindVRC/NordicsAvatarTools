@@ -8,6 +8,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     /// </summary>
     public abstract class AtlasPoiyomiParser : AtlasParserBase
     {
+        public override string Family => AtlasShaderFamilies.Poiyomi;
         public override int Priority => 100;
         protected abstract int Major { get; }
         // Toon and Pro read the same way: Pro's extra sections are read where their properties

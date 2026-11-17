@@ -11,6 +11,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public string ShaderId => "poiyomi10";
         public string DisplayName => "Poiyomi Toon 10";
+        public string Family => AtlasShaderFamilies.Poiyomi;
+        public int Rank => 100;
         // Poiyomi 11 keeps 10's shader name; with Poiyomi Pro installed, 10 lives under Old Versions.
         public Shader FindShader()
         {
@@ -49,6 +51,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public string ShaderId => "mobiletoon";
         public string DisplayName => "VRChat Mobile Toon Standard";
+        public string Family => AtlasShaderFamilies.VRChat;
+        public int Rank => 10;
         public Shader FindShader() => Shader.Find("VRChat/Mobile/Toon Standard");
         public AtlasOutputCapabilities Capabilities { get; } = new AtlasOutputCapabilities
         {

@@ -29,7 +29,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
                 if (output.configuration.regionPadding < 0) warnings.Add(output.configuration.outputName + ": padding must not be negative.");
                 var outputShader = AtlasShaderRegistry.Output(output.configuration.shaderId);
-                if (outputShader == null)
+                if (string.IsNullOrEmpty(output.configuration.shaderId))
+                    warnings.Add(output.configuration.outputName + ": no output shader is chosen, so this output won't be built.");
+                else if (outputShader == null)
                     warnings.Add(output.configuration.outputName + ": output shader ID is not registered: " + output.configuration.shaderId);
                 else if (!AtlasShaderRegistry.IsInstalled(outputShader))
                     warnings.Add(output.configuration.outputName + ": " + outputShader.DisplayName +

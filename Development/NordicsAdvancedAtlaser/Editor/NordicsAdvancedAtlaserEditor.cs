@@ -50,7 +50,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     EditorGUILayout.LabelField(string.IsNullOrEmpty(output.configuration.outputName) ? "(Unnamed)" : output.configuration.outputName);
                 }
             }
-            if (GUILayout.Button("Add Atlas Output")) Undo.AddComponent<NordicsAtlasOutput>(owner);
+            if (GUILayout.Button("Add Atlas Output"))
+                AtlasOutputShaderPick.ApplyIfUnset(Undo.AddComponent<NordicsAtlasOutput>(owner));
             foreach (var warning in AtlasConfigurationValidator.Validate(owner, discovery)) EditorGUILayout.HelpBox(warning, MessageType.Warning);
             if (discovery.Materials.Count == 0 && string.IsNullOrEmpty(discovery.Warning))
                 EditorGUILayout.HelpBox("No source materials detected.", MessageType.Info);

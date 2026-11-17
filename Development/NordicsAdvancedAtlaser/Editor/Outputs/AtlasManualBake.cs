@@ -24,7 +24,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var shader = AtlasShaderRegistry.Output(config.shaderId);
             var unityShader = shader?.FindShader();
             if (unityShader == null)
-                throw new InvalidOperationException($"[Nordic's Advanced Atlaser] {output.name}: the output shader '{config.shaderId}' isn't installed.");
+                throw new InvalidOperationException(string.IsNullOrEmpty(config.shaderId)
+                    ? $"[Nordic's Advanced Atlaser] {output.name}: no output shader is chosen."
+                    : $"[Nordic's Advanced Atlaser] {output.name}: the output shader '{config.shaderId}' isn't installed.");
             string folder = Path.GetDirectoryName(materialPath)?.Replace('\\', '/');
             string name = Path.GetFileNameWithoutExtension(materialPath);
             if (string.IsNullOrEmpty(folder) || !(folder == "Assets" || folder.StartsWith("Assets/", StringComparison.Ordinal)))

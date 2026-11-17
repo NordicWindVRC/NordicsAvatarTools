@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); 2.1 is next. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); A1 is done, A2 is next, then 2.1. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -224,6 +224,41 @@ another along the average normal there are left out, so geometry hidden inside t
 without setting up *Excluded Blend Shapes*. Mirrored halves (opposite UV winding) never hide
 each other. The wrapper's `GPU_ACCELERATION.md` explains why it compares along the normal
 instead of using a bone distance.
+
+## Auto setup (before 2.1)
+
+The design's *Auto setup*, in two phases.
+
+### A1 Output shader pick
+
+- Families on the parsers and output shaders (Poiyomi; VRChat Mobile), and a rank within
+  the family on the output shaders: the version, with Pro before Toon at the same version.
+- A new output component starts without a shader. When one appears without a shader, the
+  editor picks one by the sources' families, once: from *Add Atlas Output*, the *Add
+  Component* menu, or the inspector's first look at it.
+- A build skips an output without a shader, with an error naming it; the inspector and the
+  manual bake say that no output shader is chosen.
+- **Tests:** the vote (most common family, ties, materials of other outputs, no family), the
+  highest installed version, Pro before Toon, nothing installed, and an existing choice left
+  alone.
+
+**Workable:** a new output gets the shader that fits its avatar's materials.
+
+### A2 Auto Setup
+
+- The button sets up the assigned sources only (it never adds or removes one): it lays out
+  their UV regions and sets the main texture size, the feature modes and the optional
+  textures, as the design describes, in one Undo step.
+- The regions: base color texture sizes, packed largest first with the padding, the
+  smallest atlas up to 4096, halved until they fit.
+- The dialog before replacing edited regions, and the summary line.
+- **Tests:** the packer (no overlaps, padding kept, proportions kept when halved, the
+  smallest atlas), the sources left as they were, edited regions kept on *Keep*, and a full
+  setup on synthetic materials.
+
+**Workable:** one click sets up an output that builds.
+
+---
 
 ## Later
 

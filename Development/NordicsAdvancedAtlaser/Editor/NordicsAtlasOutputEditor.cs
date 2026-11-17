@@ -17,6 +17,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public override void OnInspectorGUI()
         {
             var output = (NordicsAtlasOutput)target;
+            // An output that appeared without a shader gets one picked, once.
+            AtlasOutputShaderPick.ApplyIfUnset(output);
             serializedObject.Update();
             var config = serializedObject.FindProperty("configuration");
             var owner = output.gameObject;
@@ -264,7 +266,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var labels = options.Select(o => o.DisplayName).ToArray();
             int index = -1;
             for (int i = 0; i < options.Count; ++i) if (options[i].ShaderId == id.stringValue) index = i;
-            if (index < 0)
+            if (string.IsNullOrEmpty(id.stringValue))
+                EditorGUILayout.HelpBox("Choose the output shader.", MessageType.Warning);
+            else if (index < 0)
             {
                 var configured = AtlasShaderRegistry.Output(id.stringValue);
                 EditorGUILayout.HelpBox(configured != null

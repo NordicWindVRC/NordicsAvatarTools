@@ -52,6 +52,7 @@ What exists today, which this design builds on:
 | Generator boundary | `Editor/Outputs/AtlasGeneratorJob.cs` | The unified materials, UV regions, bakes and feature choices; no `Material` or `Shader` crosses it |
 | Bake sizing | `Editor/Outputs/AtlasOutputLayout.cs` | Each source is baked at 1.5× its island size, at most 4096 |
 | Geometry bake | `Editor/Build/AtlasSubmeshBaker.cs` | Per source: the current mesh's coverage mask and the tangent-space normal correction. The world-space normal and tangent frame maps exist only during the bake |
+| Output shader pick | `Editor/Outputs/AtlasOutputShaderPick.cs` | A new output's shader, once: the family most unused sources use, at its highest installed rank (see [*Auto setup*](#auto-setup)) |
 | Inspector | `Editor/NordicsAtlasOutputEditor.cs`, `Editor/AtlasOutputUI.cs` | Sources, UV regions, auto setup, the *Textures* section (sizes, memory, formats), the feature sections with modes and per-source switches, UV preview |
 | Source analysis cache | `Editor/AtlasSourceAnalysisCache.cs` | Each source's parse, kept until the material, its shader or an imported texture or shader changes |
 | Overview | `Editor/Outputs/AtlasOutputOverview.cs`, `AtlasTextureMemory.cs` | What an output uses: features with their modes and sources, the textures they need with sizes and memory |
@@ -368,7 +369,7 @@ The *Textures* section lists the textures in use, required ones first:
 - Each row shows its memory for PC and for Android, and the section shows the totals for
   both (see [*Memory*](#memory)).
 
-The main texture size and auto setup work as today.
+The main texture size is chosen in the section, or by auto setup (see [*Auto setup*](#auto-setup)).
 
 ### Optional maps and fallbacks
 
@@ -651,7 +652,7 @@ An output shader keeps only what is specific to it:
 
 | Part | Content |
 |---|---|
-| Identity | ID, display name, `FindShader` (as today) |
+| Identity | ID, display name, `FindShader` (as today); its family and its rank within the family, for picking the output shader (see [*Auto setup*](#auto-setup)) |
 | Capabilities | In unified terms: the lighting families and modes it maps, slot counts per layer type (lookup, angle, surface, pattern kinds), per-feature masks and whether they pick a channel, mask bus channels and steps, external lighting, render modes, AudioLink per feature, modulators |
 | Texture layout | Its textures, the virtual maps each provides in which channels, and each channel's neutral value |
 | Writer | One unified material → shader properties, keywords, render queue, fallback, lock and animation tags |
@@ -747,6 +748,44 @@ Output name, output shader, sources ("Source 1 (Body)") and UV regions
   inspector.
 - Auto setup chooses a default mode per feature: native when supported, the cheapest
   emulation when not, off when neither.
+
+### Auto setup
+
+**Picking the output shader** happens once, when an output component is created (from the
+Atlaser's *Add Atlas Output* button, the *Add Component* menu, or any other way it appears
+without a shader chosen). It never changes a shader chosen before.
+- Every parser and output shader belongs to a **family**: Poiyomi (Toon and Pro, every
+  version) and VRChat Mobile. Input shaders without an output of their own (Unity Standard,
+  Mochie Uber until it gets a writer, the fallback) belong to none.
+- The materials the Atlaser found that no other output uses vote for their family (all the
+  materials it found, when every one is already used). The family with the most votes and an
+  installed output shader wins; a tie goes to the family whose ID comes first alphabetically
+  (Poiyomi before VRChat).
+- Within the family, the installed output shader of the **highest version** is chosen. At the
+  same version, Pro comes before Toon: it is a superset, and it's only installed where the
+  user has it.
+- Without a winning family, the installed output shader of the alphabetically first family,
+  at its highest version, is chosen; without any, none is, and the inspector says that no
+  supported output shader is installed.
+- The rank is the major version × 10, plus 1 for Pro: Poiyomi Toon 10 is 100, Pro 11 is 111.
+
+**The Auto Setup button** sets up the output for the sources already assigned to it, in one
+Undo step. It never adds or removes sources, and never runs by itself: a new output has no
+sources, and running it whenever a source is added would overwrite choices made since.
+1. **UV regions:** each source gets a region the size of its base color texture (keeping
+   its aspect; a source without one gets the smallest size), so texture detail stays even.
+   The regions are packed largest first, with the region padding, into the smallest atlas
+   that holds them at full size, up to 4096 per side; when they don't fit at 4096, every
+   region is halved until they do, which keeps their sizes in the same proportions.
+2. **Main texture size:** the packed atlas's size.
+3. **Feature modes:** each feature's default mode, as before: native when supported, the
+   cheapest emulation when not, off when neither.
+4. **Optional textures:** on only where a source uses what they hold, sized from the
+   sources' own textures.
+
+When a source's UV region was edited (any region other than the whole texture), a dialog
+asks first: replace the regions, keep them (the rest is still set up), or cancel. Afterward,
+a short line under the button says what changed, until the next edit.
 
 ---
 

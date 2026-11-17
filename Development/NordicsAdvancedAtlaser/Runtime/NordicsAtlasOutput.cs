@@ -124,7 +124,9 @@ namespace NordicWind.AdvancedAtlaser
     public sealed class AtlasOutputConfiguration
     {
         public string outputName = "New Atlas";
-        public string shaderId = "poiyomi10"; // stable output shader ID
+        // Stable output shader ID. Empty until the editor picks one for a new output
+        // (ATLAS_OUTPUT.md, "Auto setup") or the user chooses one.
+        public string shaderId = "";
         // Space between source regions in the atlas, in pixels. Only used with two or more sources.
         [Min(0)] public int regionPadding = 4;
         public List<AtlasSourceEntry> sources = new List<AtlasSourceEntry>();

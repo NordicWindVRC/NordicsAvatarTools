@@ -7,6 +7,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public abstract string ParserId { get; }
         public abstract string DisplayName { get; }
+        public virtual string Family => null;
         public virtual int Priority => 50;
         public abstract bool CanParse(Material material);
         protected static string Name(Material m) => AtlasMaterialReader.ShaderName(m);

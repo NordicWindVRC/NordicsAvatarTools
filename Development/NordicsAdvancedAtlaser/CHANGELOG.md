@@ -8,6 +8,10 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Output shader pick:** a new output component picks its output shader once, when it's
+  created: the shader family most of the Atlaser's unused source materials use, at the
+  highest installed version (Pro before Toon at the same version). A build skips an output
+  without a shader, with an error.
 - **Unified material.** Each source material is parsed into a shader-independent, typed
   description in `Editor/Unified/`, specified in `UNIFIED_MATERIAL_FEATURES.md`: building
   blocks (texture references, scalar and color inputs, masks and the mask bus, blends,

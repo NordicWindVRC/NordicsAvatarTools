@@ -53,7 +53,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 var config=output.configuration;
                 var job=new AtlasOutputJob {
                     Component=output, Configuration=config, Shader=AtlasShaderRegistry.Output(config.shaderId) };
-                if(job.Shader==null)
+                if(string.IsNullOrEmpty(config.shaderId))
+                    context.Diagnostics.Add("[Error] "+output.name+": no output shader is chosen, so this output is skipped. Choose one in its inspector.");
+                else if(job.Shader==null)
                     context.Diagnostics.Add(output.name+": unregistered output shader "+config.shaderId);
                 else if(!AtlasShaderRegistry.IsInstalled(job.Shader))
                 {

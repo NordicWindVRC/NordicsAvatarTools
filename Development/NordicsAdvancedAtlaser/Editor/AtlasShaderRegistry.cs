@@ -10,6 +10,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         string ParserId { get; }
         string DisplayName { get; }
+        // The output shader family its materials vote for when a new output picks its shader
+        // (ATLAS_OUTPUT.md, "Auto setup"); null when no output shader belongs to it.
+        string Family { get; }
         int Priority { get; }
         bool CanParse(Material material);
         AtlasUnifiedMaterial Parse(Material material);
@@ -21,6 +24,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         string ShaderId { get; }
         string DisplayName { get; }
+        // Its family (as on the parsers) and its rank within the family: the major version × 10,
+        // plus 1 for Pro, so the highest version wins and Pro comes before Toon at the same one.
+        string Family { get; }
+        int Rank { get; }
         // The installed Unity shader the new materials are made with, or null when it isn't
         // installed. Output shaders are only offered, and only built, when it's installed.
         Shader FindShader();
