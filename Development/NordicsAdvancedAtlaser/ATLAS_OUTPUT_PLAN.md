@@ -272,9 +272,9 @@ layers. Until then, live mask steps stay baked at their normal-view value and ar
 
 ## Texture Wrapper GPU work (before 2.1)
 
-The Texture Wrapper's GPU acceleration (its `GPU_ACCELERATION.md`) comes first: G1 is done;
-G2 (dilation) and G3 (batch triangle painting) are done, and the Atlaser's painting uses the
-batch. The geometry bake has the toggle **Exclude hidden geometry (depth test)**, on by
+The Texture Wrapper's GPU acceleration (its `GPU_ACCELERATION.md`) came first: dilation and
+batch triangle painting run on the GPU for large textures, and the Atlaser's painting uses
+the batch. The geometry bake has the toggle **Exclude hidden geometry (depth test)**, on by
 default: where surfaces share UVs, the ones more than 2 mm plus one texel's size behind
 another along the average normal there are left out, so geometry hidden inside the avatar doesn't affect the bake
 without setting up *Excluded Blend Shapes*. Mirrored halves (opposite UV winding) never hide
