@@ -92,7 +92,9 @@ and `ATLAS_OUTPUT.md` for the output design.
        material, it's drawn solid.
      - **Normal Maps**: each source's normals in one normal map: its pre-baked normal map,
        the geometry bake's correction, its own normal map and its normal layers (details on
-       UV0), combined in that order. The output's normal strength is the largest of the
+       UV0), combined in that order. The inspector lists the sources with a normal map or a
+       pre-baked one; the build also includes a source whose mesh was reduced, for its
+       correction. The output's normal strength is the largest of the
        sources'; the weaker ones are baked at their share of it, so each looks as before.
      - **Surface Mode**: *Automatic* takes the most see-through mode among the sources that
        the output shader supports (Poiyomi: opaque, cutout, transparent, fade; Mobile Toon

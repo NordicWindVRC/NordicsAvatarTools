@@ -32,8 +32,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool IsPresent(AtlasUnifiedMaterial source) =>
             source != null && (source.Surface.Normal.Map?.Texture != null || NormalLayers(source).Any());
 
+        // A geometry-bake correction counts only where it bends the normal: a flat one (the mesh
+        // wasn't reduced) adds nothing. Before the build there is none, so the inspector lists
+        // the sources with a normal map or a pre-baked one.
         public bool IsPresent(AtlasGeneratorSource source) =>
-            source != null && (IsPresent(source.Material) || source.PrebakedNormalMap != null || source.GeometryBakingAvailable);
+            source != null && (IsPresent(source.Material) || source.PrebakedNormalMap != null || AtlasMapEvaluator.Correction(source) != null);
 
         public void Resolve(AtlasFeatureContext context)
         {

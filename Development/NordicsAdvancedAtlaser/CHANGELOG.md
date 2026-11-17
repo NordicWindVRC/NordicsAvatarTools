@@ -12,7 +12,8 @@ EditMode tests pass in Unity 2022.3.22.
   established order (pre-baked map, the geometry bake's correction, the primary normal map,
   UV0 normal layers with their masks), by whiteout. The output's strength is the largest of
   the sources', and each source is baked at its share of it. A source with only a pre-baked
-  map or a correction counts too, so the geometry bake's correction reaches the avatar. Both
+  map or a correction that bends the normal (its mesh was reduced) counts too, so the geometry
+  bake's correction reaches the avatar; a flat correction adds nothing. Both
   writers set the normal map; the build generates it as a normal-map texture. Layers on
   other UV channels, placed, lerped or masked by the mask bus or vertex colors are listed in
   the diagnostics.
@@ -59,7 +60,7 @@ EditMode tests pass in Unity 2022.3.22.
   *Color*, the base color map. Output settings are stored by feature ID, so changing the
   output shader keeps every choice the new one supports. Nothing is baked or written yet.
 - **Output inspector:** a *Textures* section with a table of the textures the chosen modes
-  need, their sizes, and GPU memory estimates for PC and Android with totals, following
+  need, their sizes (a drop-down each for width and height, locked where the size is fixed), and GPU memory estimates for PC and Android with totals, following
   per-platform *GPU Compression Formats*; a *Material Features* section with one row per
   feature (its name and mode) that folds open to per-material switches. Sources are listed
   with their material's name. Sources are read through a cache, rebuilt only when a material, its

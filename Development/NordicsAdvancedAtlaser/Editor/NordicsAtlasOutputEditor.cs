@@ -174,7 +174,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var materials = SourceMaterials(output.configuration);
             var analyses = materials.Select(AtlasSourceAnalysisCache.Get).ToList();
             var overview = AtlasOutputOverview.Build(output.configuration, shader?.Capabilities, materials,
-                analyses.Select(a => a?.Unified).ToList(), main != null && main.enableGeometryBaking);
+                analyses.Select(a => a?.Unified).ToList());
             AtlasOutputUI.Textures(config, overview);
             AtlasOutputUI.Features(config, overview, materials);
             for (int i = 0; i < materials.Count; i++)

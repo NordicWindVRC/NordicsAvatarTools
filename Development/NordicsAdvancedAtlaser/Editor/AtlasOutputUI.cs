@@ -143,25 +143,28 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static void Size(Rect rect, SerializedProperty textures, AtlasTextureUse use, int mainWidth, int mainHeight)
         {
             var mode = use.Texture.SizeMode;
+            SplitPair(rect, out var first, out var times, out var second);
             if (mode == AtlasTextureSizeMode.Main)
             {
-                EditorGUI.LabelField(rect, new GUIContent($"{use.Width} × {use.Height}", "Always the main texture's size."));
+                // Always the main texture's size: both locked.
+                Locked(first, use.Width, "Always the main texture's size.");
+                EditorGUI.LabelField(times, "×", Centered);
+                Locked(second, use.Height, "Always the main texture's size.");
                 return;
             }
             int width = use.Width, height = use.Height;
             EditorGUI.BeginChangeCheck();
-            SplitPair(rect, out var first, out var times, out var second);
             if (mode == AtlasTextureSizeMode.MainAspect)
             {
                 width = SizePopup(first, width, AtlasTextureSizes.MainAspectWidths(mainWidth, mainHeight));
                 EditorGUI.LabelField(times, "×", Centered);
-                EditorGUI.LabelField(second, AtlasTextureSizes.HeightAt(width, mainWidth, mainHeight).ToString());
+                Locked(second, AtlasTextureSizes.HeightAt(width, mainWidth, mainHeight), "Follows the width, keeping the main texture's aspect.");
             }
             else if (mode == AtlasTextureSizeMode.Square)
             {
                 width = SizePopup(first, width, AtlasTextureSizes.All);
                 EditorGUI.LabelField(times, "×", Centered);
-                EditorGUI.LabelField(second, width.ToString());
+                Locked(second, width, "Square: follows the width.");
             }
             else
             {
@@ -174,6 +177,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var setting = FindOrAddTexture(textures, use);
             setting.FindPropertyRelative("width").intValue = width;
             setting.FindPropertyRelative("height").intValue = height;
+        }
+
+        // A size that can't be changed, as a drop-down with that one value, so it lines up with
+        // the sizes that can.
+        private static void Locked(Rect rect, int value, string tooltip)
+        {
+            using (new EditorGUI.DisabledScope(true))
+                EditorGUI.Popup(rect, GUIContent.none, 0, new[] { new GUIContent(value.ToString(), tooltip) });
         }
 
         // Two sizes side by side with a "×" between them.

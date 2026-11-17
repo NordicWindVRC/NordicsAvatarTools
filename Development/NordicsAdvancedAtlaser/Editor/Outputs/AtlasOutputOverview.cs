@@ -42,16 +42,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public long PcBytes, AndroidBytes;
 
         // `unified` holds each source's unified material, null where it couldn't be read.
-        // `geometryBaking`: the Atlaser bakes the normal correction, so sources that have it on
-        // can get one.
         public static AtlasOutputOverview Build(AtlasOutputConfiguration config, AtlasOutputCapabilities capabilities,
-            IReadOnlyList<Material> materials, IReadOnlyList<AtlasUnifiedMaterial> unified, bool geometryBaking = false)
+            IReadOnlyList<Material> materials, IReadOnlyList<AtlasUnifiedMaterial> unified)
         {
             var overview = new AtlasOutputOverview();
             if (capabilities == null) return overview;
             foreach (var feature in AtlasOutputFeatures.All)
             {
-                var state = State(feature, config, capabilities, materials, unified, geometryBaking);
+                var state = State(feature, config, capabilities, materials, unified);
                 if (state != null) overview.Features.Add(state);
             }
             overview.AddTextures(config, capabilities);
@@ -59,8 +57,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         public static AtlasFeatureState State(IAtlasOutputFeature feature, AtlasOutputConfiguration config,
-            AtlasOutputCapabilities capabilities, IReadOnlyList<Material> materials, IReadOnlyList<AtlasUnifiedMaterial> unified,
-            bool geometryBaking = false)
+            AtlasOutputCapabilities capabilities, IReadOnlyList<Material> materials, IReadOnlyList<AtlasUnifiedMaterial> unified)
         {
             var modes = AtlasOutputFeatures.Available(feature, capabilities);
             if (modes.Count == 0) return null;
@@ -75,13 +72,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (unified[i] == null) continue;
                 if (feature is IAtlasSourceAwareFeature aware)
                 {
-                    // What the build would add: the source's pre-baked map and correction setting.
+                    // What the source's settings add (a pre-baked map); the build's own additions
+                    // don't exist yet.
                     var entry = config.sources?.Find(e => e != null && e.material == materials[i]);
-                    var probe = new AtlasGeneratorSource
-                    {
-                        Material = unified[i], PrebakedNormalMap = entry?.prebakedNormalMap,
-                        GeometryBakingAvailable = geometryBaking && (entry?.normalCorrection ?? true)
-                    };
+                    var probe = new AtlasGeneratorSource { Material = unified[i], PrebakedNormalMap = entry?.prebakedNormalMap };
                     if (!aware.IsPresent(probe)) continue;
                 }
                 else if (!feature.IsPresent(unified[i])) continue;

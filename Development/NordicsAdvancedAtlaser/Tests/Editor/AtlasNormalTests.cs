@@ -71,14 +71,22 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
-        public void ASourceHasNormalsFromItsMapAPreBakedMapOrTheGeometryBake()
+        public void ASourceHasNormalsFromItsMapAPreBakedMapOrACorrectionThatBendsThem()
         {
             var feature = new AtlasNormalFeature();
             Assert.IsTrue(feature.IsPresent(new AtlasGeneratorSource { Material = WithNormal(Vector3.forward, 1f) }));
             Assert.IsFalse(feature.IsPresent(new AtlasGeneratorSource { Material = new AtlasUnifiedMaterial() }));
             Assert.IsTrue(feature.IsPresent(new AtlasGeneratorSource
                 { Material = new AtlasUnifiedMaterial(), PrebakedNormalMap = NormalTexture(Vector3.forward) }));
-            Assert.IsTrue(feature.IsPresent(new AtlasGeneratorSource { Material = new AtlasUnifiedMaterial(), GeometryBakingAvailable = true }));
+
+            var correction = new NordicsTextureWrapper(4, 4, AtlasMapEvaluator.Settings(AtlasVirtualMap.Normal));
+            disposables.Add(correction);
+            var bakes = new AtlasBakedInputSet { Width = 4, Height = 4 };
+            bakes.Submeshes.Add(new AtlasSubmeshBake { TangentNormalCorrection = correction, CorrectionIsFlat = true });
+            var source = new AtlasGeneratorSource { Material = new AtlasUnifiedMaterial(), Bakes = bakes, GeometryBakingAvailable = true };
+            Assert.IsFalse(feature.IsPresent(source), "a flat correction (the mesh wasn't reduced) adds nothing");
+            bakes.Submeshes[0].CorrectionIsFlat = false;
+            Assert.IsTrue(feature.IsPresent(source), "a correction that bends the normal");
         }
 
         [Test]
