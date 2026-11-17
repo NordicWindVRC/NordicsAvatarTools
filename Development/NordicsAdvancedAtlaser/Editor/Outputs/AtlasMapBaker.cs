@@ -24,7 +24,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     var bake = AtlasOutputLayout.BakeSize(source.UVRegion, size);
                     string label = $"{request.Map} source {index} ({bake.x}×{bake.y})";
                     var evaluate = new AtlasStageTimer("evaluate " + label, timings);
-                    using (var content = AtlasMapEvaluator.Evaluate(request.Map, source.Material, bake.x, bake.y))
+                    using (var content = request.Evaluate != null
+                        ? request.Evaluate(index, source.Material, bake.x, bake.y)
+                        : AtlasMapEvaluator.Evaluate(request.Map, source.Material, bake.x, bake.y))
                     {
                         evaluate.Dispose();
                         NordicsTextureWrapper coverage;

@@ -1360,8 +1360,9 @@ flip their normal, so they light like front faces). Also:
   alpha, or its own alpha; its alpha is `pow(alpha, power)` (1 when opaque or forced opaque),
   and pixels where it (or `1 − it`, inverted) is below its cutoff are discarded in every mode.
   Mask bus steps of kind *second pass* (1.5) let features differ between the passes.
-- **Fallback shader** (what viewers with blocked shaders see) isn't typed: writers choose
-  their own.
+- **Fallback shader** (what viewers with blocked shaders see) isn't read from source
+  materials. An output sets `Render.Fallback` (automatic, toon, unlit, standard, hidden), and
+  its writer turns it into its shader's form; automatic is the writer's own choice.
 
 ---
 

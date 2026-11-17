@@ -31,6 +31,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     public enum AtlasMirrorVisibility { Both, MirrorOnly, NotInMirror }
 
+    // VRChat's fallback shader, what viewers with the shader blocked see. Not read from source
+    // materials (6: not typed); an output sets it, and its writer turns it into its shader's
+    // form. Automatic: the writer's own choice.
+    public enum AtlasFallbackShader { Automatic, Toon, Unlit, Standard, Hidden }
+
     // Where the material is drawn, by view. A camera is a VRChat photo or stream camera; generic
     // mirror detection (outside VRChat) treats cameras as normal views.
     public sealed class AtlasVisibility
@@ -155,5 +160,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly AtlasSecondPass SecondPass = new AtlasSecondPass();
         // A depth-only pass first, so a see-through surface shows only its nearest layer.
         public bool DepthPrepass;
+        // Outputs only (see AtlasFallbackShader).
+        public AtlasFallbackShader Fallback = AtlasFallbackShader.Automatic;
     }
 }

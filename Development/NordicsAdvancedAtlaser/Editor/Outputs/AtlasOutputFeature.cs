@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using NordicWind.TextureWrapper;
 using UnityEditor;
 
 namespace NordicWind.AdvancedAtlaser.Editor
@@ -51,6 +52,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         void Resolve(AtlasFeatureContext context);
     }
 
+    // A feature that is part of every output and can't be turned off, as a whole or per source:
+    // the surface mode, the fallback shader.
+    public interface IAtlasAlwaysOnFeature : IAtlasOutputFeature { }
+
     // A virtual map the output needs, the sources that contribute to it, and the texture
     // reference in the output unified material that points at it once it is packed.
     public sealed class AtlasMapRequest
@@ -59,6 +64,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasTextureReference Reference;
         // Indices into AtlasGeneratorJob.Sources.
         public readonly List<int> Sources = new List<int>();
+        // How one source's map is evaluated (source index, its material, width, height), when
+        // the feature converts it for the output; null: AtlasMapEvaluator.Evaluate.
+        public Func<int, AtlasUnifiedMaterial, int, int, NordicsTextureWrapper> Evaluate;
     }
 
     // What a feature's Resolve works with.
@@ -72,6 +80,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The merged material being built.
         public AtlasUnifiedMaterial Output;
         public List<AtlasMapRequest> Maps;
+        // What the feature leaves out, one line each, for the build's diagnostics.
+        public List<string> Notes;
 
         public AtlasTextureReference RequestMap(AtlasVirtualMap map, AtlasTextureInterpretation interpretation)
         {
@@ -115,7 +125,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var modes = feature.Modes.Where(m => m.IsSupported(capabilities)).ToList();
             if (!modes.Any(m => m.Kind != AtlasFeatureModeKind.Off)) return Array.Empty<AtlasFeatureMode>();
-            if (!modes.Contains(AtlasFeatureMode.Off)) modes.Add(AtlasFeatureMode.Off);
+            if (!(feature is IAtlasAlwaysOnFeature) && !modes.Contains(AtlasFeatureMode.Off)) modes.Add(AtlasFeatureMode.Off);
             return modes;
         }
 

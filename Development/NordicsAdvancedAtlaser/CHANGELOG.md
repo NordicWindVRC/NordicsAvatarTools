@@ -8,6 +8,18 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Alpha, surface mode and fallback:** each source's alpha is baked into the base color
+  texture's alpha (its source, mask, offset and strength), converted to the output's surface
+  mode: a cutout source's cutoff is moved to the shared cutoff 0.5, or becomes a hard edge
+  under a blended mode; opaque sources stay solid. *Surface Mode* picks the most see-through
+  mode among the sources that the output supports, or the one chosen; transparent sources
+  among solid ones get a fade that writes depth (Poiyomi's TransClipping), so they stay
+  see-through and the solid parts sort like opaque ones; where the output can't, they're
+  drawn solid (no cutout or dither stand-ins); the Poiyomi Toon 10
+  writer sets that mode's rendering preset (queue, render type, blending, depth write, cutoff)
+  and the `VRCFallback` tag, which *Fallback Shader* can override. What isn't merged yet
+  (fades, vertex alpha, dithering, some masks, additive and multiplicative blends) is listed
+  in the build's diagnostics and the manual bake's log line.
 - **Auto Setup** lays out the assigned sources' UV regions by their base color textures'
   sizes: in the smallest atlas that holds them at full size, or 4096 × 4096 with every region
   scaled down alike, in whole percent, as little as fits; then the free space goes to the

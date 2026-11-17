@@ -71,7 +71,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             shader.Write(plan.Output, material);
             var saved = Save(material, materialPath);
             total.Dispose();
-            Debug.Log($"[Nordic's Advanced Atlaser] Bake to Assets: {materialPath}. " + string.Join("; ", timings).Replace("[Time] ", ""), saved);
+            Debug.Log($"[Nordic's Advanced Atlaser] Bake to Assets: {materialPath}. " + string.Join("; ", timings).Replace("[Time] ", "") +
+                (plan.Notes.Count > 0 ? " Left out: " + string.Join(" ", plan.Notes) : ""), saved);
             return saved;
         }
 

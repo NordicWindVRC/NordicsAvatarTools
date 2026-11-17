@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) is done; 2.1 is next. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is next. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -123,6 +123,10 @@ Each phase adds features to both writers, with their modes, maps and fallbacks.
 
 - *Alpha* (native, baked into base alpha; cutoffs remapped to one shared cutoff), the surface
   mode and render queue, the fallback shader.
+- The bakeable subset of alpha: its four sources, a mask that is a UV0 texture channel (with
+  invert and strength), the mask blend, offset and strength. Fades, vertex alpha, dithering and
+  other masks are listed in the build's diagnostics.
+- Later: a queue override; merging additive and multiplicative sources.
 - **Workable:** cutout and transparent sources atlas correctly.
 
 ### 2.2 Normals and surface maps

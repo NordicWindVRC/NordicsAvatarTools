@@ -240,7 +240,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var feature = state.Feature;
             var setting = FindOrAddFeature(features, feature.Id);
             var stored = setting.FindPropertyRelative("mode");
-            bool several = state.Present.Count > 1;
+            // A feature that is always on has nothing to turn off per material.
+            bool several = state.Present.Count > 1 && !(feature is IAtlasAlwaysOnFeature);
             // Collapsed, the name says when the feature is off for some of the materials.
             string name = feature.DisplayName;
             if (several && state.Active.Count < state.Present.Count)

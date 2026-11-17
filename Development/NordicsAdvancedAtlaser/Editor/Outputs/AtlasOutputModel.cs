@@ -8,7 +8,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // "Virtual maps and textures").
     public enum AtlasVirtualMap
     {
-        BaseColor
+        BaseColor,
+        // The surface's alpha, after each source's conversion to the output's surface mode.
+        Alpha
     }
 
     // Which channels of a texture a virtual map fills.
@@ -66,6 +68,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public sealed class AtlasOutputCapabilities
     {
         public readonly List<AtlasOutputTexture> Textures = new List<AtlasOutputTexture>();
+        // The surface modes the writer can set.
+        public readonly HashSet<AtlasSurfaceMode> SurfaceModes = new HashSet<AtlasSurfaceMode> { AtlasSurfaceMode.Opaque };
+        // The writer sets VRChat's fallback shader (what viewers with the shader blocked see).
+        public bool VRChatFallback;
+        // The writer can fade by alpha while writing depth, so parts at alpha 1 sort like opaque
+        // ones (Poiyomi's TransClipping).
+        public bool BlendedDepthWrite;
 
         public AtlasOutputTexture TextureFor(AtlasVirtualMap map) => Textures.Find(t => t.Provides(map));
 

@@ -11,6 +11,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly List<AtlasMapRequest> Maps = new List<AtlasMapRequest>();
         // The feature IDs in the plan, with the mode each is produced in.
         public readonly Dictionary<string, AtlasFeatureMode> Modes = new Dictionary<string, AtlasFeatureMode>();
+        // What the features leave out, one line each.
+        public readonly List<string> Notes = new List<string>();
     }
 
     // Steps 1 and 2 of the output pipeline (ATLAS_OUTPUT.md, "Pipeline"): collect each
@@ -65,7 +67,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (mode == null) return;
             var sources = new List<int>();
             for (int i = 0; i < job.Sources.Count; i++)
-                if (feature.IsPresent(job.Sources[i].Material) && (choice == null || !choice.DisabledSources.Contains(i)))
+                if (feature.IsPresent(job.Sources[i].Material) &&
+                    (choice == null || feature is IAtlasAlwaysOnFeature || !choice.DisabledSources.Contains(i)))
                     sources.Add(i);
             if (sources.Count == 0) return;
             plan.Modes[feature.Id] = mode;
@@ -74,7 +77,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             feature.Resolve(new AtlasFeatureContext
             {
                 Job = job, Capabilities = capabilities, Mode = mode, Sources = sources,
-                Output = plan.Output, Maps = plan.Maps
+                Output = plan.Output, Maps = plan.Maps, Notes = plan.Notes
             });
         }
     }

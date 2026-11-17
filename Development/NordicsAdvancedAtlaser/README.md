@@ -83,7 +83,22 @@ and `ATLAS_OUTPUT.md` for the output design.
      supports, with its mode. Where two or more sources have the feature, the row folds open
      to turn it off for single materials, and its name then says how many still use it. Once
      there are features from several groups (Surface, Lighting, Layers, Effects, Render), each
-     group gets a small heading.
+     group gets a small heading. So far:
+     - **Color**: the base color textures.
+     - **Alpha**: each source's alpha, in the base color texture's alpha. A cutout source keeps
+       its cutoff (moved to the shared one); under a transparent mode its edges stay hard.
+       Opaque sources stay solid. A transparent source stays transparent only where the
+       output shader can show it so (Poiyomi); otherwise, or when you turn it off for that
+       material, it's drawn solid.
+     - **Surface Mode**: *Automatic* takes the most see-through mode among the sources that
+       the output shader supports (Poiyomi: opaque, cutout, transparent, fade; Mobile Toon
+       Standard: opaque). When transparent sources share the atlas with solid ones, it uses
+       *Fade with Depth* (Poiyomi's TransClipping): the transparent parts keep their alpha,
+       and the solid parts still sort like opaque ones. You can also choose a mode. The render
+       queue follows it.
+     - **Fallback Shader** (Poiyomi): what viewers with the shader blocked see. *Automatic*
+       follows the surface mode, such as *Toon Cutout*; or choose Toon, Unlit, Standard or
+       Hidden.
    Turn off **Normal Correction** on a source to skip its normal-correction bake, for example
    when that material's mesh isn't reduced.
 
