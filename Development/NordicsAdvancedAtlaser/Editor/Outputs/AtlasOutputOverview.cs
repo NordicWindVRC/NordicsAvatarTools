@@ -23,6 +23,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly List<AtlasConflictSwitch> Switches = new List<AtlasConflictSwitch>();
         // The items the user places one by one (IAtlasInstanceFeature), when its mode isn't off.
         public readonly List<AtlasFeatureInstance> Instances = new List<AtlasFeatureInstance>();
+        // Whether an item can also be placed in a matcap slot.
+        public bool InstancesAsMatcap;
     }
 
     // One output texture the chosen modes use, with its size and memory.
@@ -62,7 +64,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (feature is IAtlasConflictSwitchFeature switches && state.Present.Count > 1)
                     state.Switches.AddRange(switches.ConflictingSwitches(probe ?? (probe = Probe(config, materials, unified)), capabilities));
                 if (feature is IAtlasInstanceFeature items && state.Mode != null && state.Mode.Kind != AtlasFeatureModeKind.Off && state.Active.Count > 0)
+                {
                     state.Instances.AddRange(items.Instances(probe ?? (probe = Probe(config, materials, unified)), state.Active));
+                    state.InstancesAsMatcap = items.CanPlaceAsMatcap(capabilities);
+                }
                 overview.Features.Add(state);
             }
             overview.AddTextures(config, capabilities);

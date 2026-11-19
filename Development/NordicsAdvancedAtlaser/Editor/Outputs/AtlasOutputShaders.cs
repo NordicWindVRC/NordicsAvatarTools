@@ -61,7 +61,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 new AtlasOutputTexture("SkinThickness", "Skin thickness") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
                     .With(AtlasVirtualMap.SkinThickness, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f)),
                 MaskTexture(1, AtlasVirtualMap.Mask1, AtlasVirtualMap.Mask2, AtlasVirtualMap.Mask3, AtlasVirtualMap.Mask4),
-                MaskTexture(2, AtlasVirtualMap.Mask5, AtlasVirtualMap.Mask6, AtlasVirtualMap.Mask7, AtlasVirtualMap.Mask8)
+                MaskTexture(2, AtlasVirtualMap.Mask5, AtlasVirtualMap.Mask6, AtlasVirtualMap.Mask7, AtlasVirtualMap.Mask8),
+                // _BacklightColorTex: the backlight's color, black where a source has none.
+                new AtlasOutputTexture("Backlight", "Backlight color") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
+                    .With(AtlasVirtualMap.BacklightColor, AtlasTextureChannels.RGB, Color.black)
             },
             SurfaceModes = { AtlasSurfaceMode.Cutout, AtlasSurfaceMode.Transparent, AtlasSurfaceMode.Fade },
             VRChatFallback = true,
@@ -79,7 +82,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
             MatcapBlends = AtlasMatcapBlends.All,
             MatcapMaskInvert = true,
             MatcapColor = true,
-            MatcapBaseColorMix = true
+            MatcapBaseColorMix = true,
+            // Rim Lighting 0 and 1, each with a mask (by channel, inverted); the environmental rim
+            // with a mask (by channel); Backlight 0 with its color texture.
+            RimSlots = 2,
+            RimMask = true,
+            EnvironmentalRim = true,
+            Backlight = true
         };
 
         // Poiyomi 10's rendering presets (_Mode), as its shader's on_value_actions set them, by
@@ -129,6 +138,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             WriteTileDiscard(output.Render.HiddenTiles, material);
             WriteLighting(output.Lighting, material);
             WriteMatcaps(output, material);
+            WriteRims(output, material);
+            WriteEnvironmentalRim(output, material);
+            WriteBacklight(output, material);
             WriteSurfaceResponse(output.Surface.Response, material);
             WriteEmission(output, material);
             var render = output.Render;
@@ -409,6 +421,253 @@ namespace NordicWind.AdvancedAtlaser.Editor
             m.SetFloat("_Matcap" + index + "NormalMapScale", first.NormalStrength);
         }
 
+        // Rims: the output's view-angle rims by slot (a rim and the unlit-side rim after it share a
+        // mask object), each in the style that holds it as the Poiyomi parser reads it
+        // (AtlasPoiyomiRims); a rim no style holds is fitted to the Poiyomi style.
+        private static bool IsRim(AtlasAngleLayer layer) =>
+            layer.Source == AtlasAngleSource.ViewAngle && layer.ColorSource == AtlasAngleColorSource.Color;
+
+        private static void WriteRims(AtlasUnifiedMaterial output, Material m)
+        {
+            var slots = new List<List<AtlasAngleLayer>>();
+            foreach (var layer in output.Layers.OfType<AtlasAngleLayer>().Where(IsRim))
+            {
+                if (slots.Count > 0 && slots[slots.Count - 1].Count == 1 && ReferenceEquals(slots[slots.Count - 1][0].Mask, layer.Mask) &&
+                    layer.LightSide.Invert && layer.LightSide.Mode != AtlasLightSideMode.None)
+                    slots[slots.Count - 1].Add(layer);
+                else slots.Add(new List<AtlasAngleLayer> { layer });
+            }
+            for (int i = 0; i < 2; i++)
+            {
+                int index = i;
+                string N(string rim0, string rim1) => index == 0 ? rim0 : rim1;
+                bool on = i < slots.Count;
+                m.SetFloat(N("_EnableRimLighting", "_EnableRim2Lighting"), on ? 1 : 0);
+                string keyword = N("_GLOSSYREFLECTIONS_OFF", "POI_RIM2");
+                if (on) m.EnableKeyword(keyword);
+                else m.DisableKeyword(keyword);
+                if (on) WriteRim(m, slots[i], N);
+            }
+        }
+
+        private delegate string RimName(string rim0, string rim1);
+
+        private static void WriteRim(Material m, List<AtlasAngleLayer> slot, RimName n)
+        {
+            var rim = slot[0];
+            var dark = slot.Count > 1 ? slot[1] : null;
+            var maskTexture = rim.Mask?.Map?.Texture;
+            bool step = rim.Profile == AtlasAngleProfile.Step && !rim.Smooth;
+            bool edgeRising = step && rim.StepBase == AtlasAngleBase.Edge && !rim.Falling && !rim.LinearAngle;
+            int style;
+            if (step && rim.Falling && rim.Placement == AtlasPlacement.Surface && dark == null &&
+                (rim.LightSide.Mode == AtlasLightSideMode.None || (rim.LightSide.Mode == AtlasLightSideMode.Mask && rim.LightSide.Smooth && !rim.LightSide.BeforeStep)))
+                style = 0;
+            else if (edgeRising && rim.Placement == AtlasPlacement.Surface && rim.Blend == AtlasBlend.Add && (rim.High <= rim.Low || rim.High >= 1f) &&
+                     (rim.Mask == null || !rim.Mask.Invert) &&
+                     (rim.LightSide.Mode == AtlasLightSideMode.None || rim.LightSide.Mode == AtlasLightSideMode.Subtract) &&
+                     (dark == null || dark.LightSide.Mode == AtlasLightSideMode.Subtract))
+                style = 1;
+            else if (edgeRising && rim.Blend != AtlasBlend.Mixed &&
+                     (maskTexture == null || (rim.Mask.Channel == AtlasChannel.Red && !rim.Mask.Invert)) &&
+                     (rim.LightSide.Mode == AtlasLightSideMode.None || (rim.LightSide.Mode == AtlasLightSideMode.Mask && rim.LightSide.BeforeStep)) &&
+                     (dark == null || dark.LightSide.Mode == AtlasLightSideMode.Scale))
+                style = 2;
+            // Another rim (a band, a smooth step, a lit rim without a lilToon place): fitted.
+            else style = 3;
+
+            string[] keywords = { n("_RIMSTYLE_POIYOMI", "_RIM2STYLE_POIYOMI"), n("_RIMSTYLE_UTS2", "_RIM2STYLE_UTS2"), n("_RIMSTYLE_LILTOON", "_RIM2STYLE_LILTOON") };
+            int keywordIndex = style == 3 ? 0 : style;
+            for (int k = 0; k < 3; k++)
+                if (k == keywordIndex) m.EnableKeyword(keywords[k]);
+                else m.DisableKeyword(keywords[k]);
+            m.SetFloat(n("_RimStyle", "_Rim2Style"), style == 3 ? 0 : style);
+            m.SetFloat(n("_RimHueShiftEnabled", "_Rim2HueShiftEnabled"), 0);
+            m.SetFloat(n("_RimApplyAlpha", "_Rim2ApplyAlpha"), 0);
+            m.SetFloat(n("_RimGlobalMask", "_Rim2GlobalMask"), 0);
+            m.SetFloat(n("_RimApplyGlobalMaskIndex", "_Rim2ApplyGlobalMaskIndex"), 0);
+            switch (style)
+            {
+                case 1: WriteUts2Rim(m, rim, dark, n); break;
+                case 2: WriteLilRim(m, rim, dark, n); break;
+                default: WritePoiyomiRim(m, rim, style == 3, n); break;
+            }
+        }
+
+        private static void WritePoiyomiRim(Material m, AtlasAngleLayer rim, bool fit, RimName n)
+        {
+            float low = rim.Low, high = rim.High, power = rim.Power, peak = 1f;
+            bool edge = rim.StepBase == AtlasAngleBase.Edge, linear = rim.LinearAngle;
+            if (fit)
+            {
+                // A band in 1 − facing: a falling step in facing around 1 − its midpoint.
+                AtlasRimCurve.FitBand(rim, out float range, out float softness, out peak);
+                low = Mathf.Clamp01(range - softness);
+                high = Mathf.Clamp01(range + softness);
+                power = 1f;
+                edge = linear = false;
+            }
+            m.SetFloat(n("_RimWidth", "_Rim2Width"), Mathf.Clamp01((high + 0.05f) / 1.05f));
+            m.SetFloat(n("_RimBlur", "_Rim2Blur"), Mathf.Clamp01(high - low));
+            m.SetFloat(n("_RimLightingInvert", "_Rim2LightingInvert"), edge ? 1 : 0);
+            m.SetFloat(n("_RimLinear", "_Rim2Linear"), linear ? 1 : 0);
+            m.SetFloat(n("_RimPower", "_Rim2Power"), power);
+            m.SetFloat(n("_Is_NormalMapToRimLight", "_Is_NormalMapToRim2Light"), rim.SurfaceNormalAmount);
+            m.SetFloat(n("_RimBaseColorMix", "_Rim2BaseColorMix"), rim.BaseColorMix);
+            m.SetFloat(n("_RimBlendStrength", "_Rim2BlendStrength"), rim.Opacity * peak);
+            m.SetFloat(n("_RimStrength", "_Rim2Strength"), rim.EmissionAmount);
+            int blend = rim.Blend == AtlasBlend.Replace ? 1 : rim.Blend == AtlasBlend.Multiply ? 2 : rim.Blend == AtlasBlend.Mixed ? 3
+                : rim.Blend == AtlasBlend.Screen ? 4 : 0;
+            m.SetFloat(n("_RimPoiBlendMode", "_RimPoi2BlendMode"), blend);
+            var color = rim.Color.Color;
+            float brightness = Mathf.Max(1f, color.maxColorComponent);
+            m.SetColor(n("_RimLightColor", "_Rim2LightColor"), new Color(color.r / brightness, color.g / brightness, color.b / brightness, color.a).gamma);
+            m.SetFloat(n("_RimLightColorThemeIndex", "_Rim2LightColorThemeIndex"), 0);
+            m.SetFloat(n("_RimBrightness", "_Rim2Brightness"), brightness);
+            m.SetTexture(n("_RimTex", "_Rim2Tex"), null);
+            WriteMaskSlot(m, n("_RimMask", "_Rim2Mask"), rim.Mask);
+            m.SetFloat(n("_RimMaskChannel", "_Rim2MaskChannel"), MaskChannel(rim.Mask));
+            m.SetFloat(n("_RimMaskInvert", "_Rim2MaskInvert"), rim.Mask?.Map?.Texture != null && rim.Mask.Invert ? 1 : 0);
+            m.SetFloat(n("_RimBiasIntensity", "_Rim2BiasIntensity"), 0);
+            var side = rim.LightSide;
+            bool shadow = rim.HideInShadow > 0f || side.Mode == AtlasLightSideMode.Mask || side.ShrinkInShadow > 0f;
+            m.SetFloat(n("_RimShadowToggle", "_Rim2ShadowToggle"), shadow ? 1 : 0);
+            if (side.Mode == AtlasLightSideMode.Mask)
+            {
+                m.SetFloat(n("_RimShadowMaskRampType", "_Rim2ShadowMaskRampType"), 1);
+                m.SetVector(n("_RimShadowAlpha", "_Rim2ShadowAlpha"), new Vector4(side.Low, side.High, 0f, 1f));
+                m.SetFloat(n("_RimShadowMaskInvert", "_Rim2ShadowMaskInvert"), side.Invert ? 1 : 0);
+                m.SetFloat(n("_RimShadowMaskStrength", "_Rim2ShadowMaskStrength"), side.Strength);
+            }
+            else
+            {
+                m.SetFloat(n("_RimShadowMaskRampType", "_Rim2ShadowMaskRampType"), 0);
+                m.SetFloat(n("_RimShadowMaskInvert", "_Rim2ShadowMaskInvert"), 0);
+                m.SetFloat(n("_RimShadowMaskStrength", "_Rim2ShadowMaskStrength"), rim.HideInShadow);
+            }
+            m.SetFloat(n("_RimShadowWidth", "_Rim2ShadowWidth"), side.ShrinkInShadow);
+        }
+
+        private static void WriteUts2Rim(Material m, AtlasAngleLayer rim, AtlasAngleLayer dark, RimName n)
+        {
+            // Power = 2^(3 − 3 × p).
+            float P(AtlasAngleLayer l) => (3f - Mathf.Log(Mathf.Max(1e-4f, l.Power), 2f)) / 3f;
+            m.SetFloat(n("_RimLight_Power", "_Rim2Light_Power"), P(rim));
+            m.SetFloat(n("_RimLight_InsideMask", "_Rim2Light_InsideMask"), rim.Low);
+            m.SetFloat(n("_RimLight_FeatherOff", "_Rim2Light_FeatherOff"), rim.High <= rim.Low ? 1 : 0);
+            m.SetFloat(n("_Is_NormalMapToRimLight", "_Is_NormalMapToRim2Light"), rim.SurfaceNormalAmount);
+            m.SetFloat(n("_Is_LightColor_RimLight", "_Is_LightColor_Rim2Light"), rim.LightColorMix);
+            var color = rim.Color.Color * rim.Opacity;
+            m.SetColor(n("_RimLightColor", "_Rim2LightColor"), new Color(color.r, color.g, color.b, 1f).gamma);
+            m.SetFloat(n("_RimLightColorThemeIndex", "_Rim2LightColorThemeIndex"), 0);
+            WriteMaskSlot(m, n("_Set_RimLightMask", "_Set_Rim2LightMask"), rim.Mask);
+            m.SetFloat(n("_Set_RimLightMaskChannel", "_Set_Rim2LightMaskChannel"), rim.Mask?.Map?.Texture != null ? MaskChannel(rim.Mask) : 1);
+            m.SetFloat(n("_Tweak_RimLightMaskLevel", "_Tweak_Rim2LightMaskLevel"), 0);
+            bool direction = rim.LightSide.Mode == AtlasLightSideMode.Subtract;
+            m.SetFloat(n("_LightDirection_MaskOn", "_LightDirection_MaskOn2"), direction ? 1 : 0);
+            m.SetFloat(n("_Tweak_LightDirection_MaskLevel", "_Tweak_LightDirection_MaskLevel2"),
+                direction ? rim.LightSide.Level : dark != null ? dark.LightSide.Level : 0f);
+            m.SetFloat(n("_Add_Antipodean_RimLight", "_Add_Antipodean_Rim2Light"), dark != null ? 1 : 0);
+            if (dark == null) return;
+            m.SetFloat(n("_Ap_RimLight_Power", "_Ap_Rim2Light_Power"), P(dark));
+            m.SetFloat(n("_Ap_RimLight_FeatherOff", "_Ap_Rim2Light_FeatherOff"), dark.High <= dark.Low ? 1 : 0);
+            m.SetFloat(n("_Is_LightColor_Ap_RimLight", "_Is_LightColor_Ap_Rim2Light"), dark.LightColorMix);
+            var apColor = dark.Color.Color * dark.Opacity;
+            m.SetColor(n("_Ap_RimLightColor", "_Ap_Rim2LightColor"), new Color(apColor.r, apColor.g, apColor.b, 1f).gamma);
+            m.SetFloat(n("_RimApColorThemeIndex", "_Rim2ApColorThemeIndex"), 0);
+        }
+
+        private static void WriteLilRim(Material m, AtlasAngleLayer rim, AtlasAngleLayer dark, RimName n)
+        {
+            m.SetFloat(n("_RimBorder", "_Rim2Border"), (rim.Low + rim.High) * 0.5f);
+            m.SetFloat(n("_RimBlur", "_Rim2Blur"), rim.High - rim.Low);
+            m.SetFloat(n("_RimFresnelPower", "_Rim2FresnelPower"), rim.Power);
+            int blend = rim.Blend == AtlasBlend.Replace ? 0 : rim.Blend == AtlasBlend.Screen ? 2 : rim.Blend == AtlasBlend.Multiply ? 3 : 1;
+            m.SetFloat(n("_RimBlendMode", "_Rim2BlendMode"), blend);
+            m.SetFloat(n("_RimEnableLighting", "_Rim2EnableLighting"), rim.LightResponse == AtlasLightResponse.IgnoreLight ? 0 : 1);
+            m.SetFloat(n("_RimVRParallaxStrength", "_Rim2VRParallaxStrength"), rim.PerEye ? 1 : 0);
+            m.SetFloat(n("_RimAAStrength", "_Rim2AAStrength"), rim.AntiAliasing);
+            m.SetFloat(n("_RimApplyTransparency", "_Rim2ApplyTransparency"), rim.TimesAlpha ? 1 : 0);
+            m.SetFloat(n("_RimNormalStrength", "_Rim2NormalStrength"), rim.SurfaceNormalAmount);
+            m.SetFloat(n("_RimMainStrength", "_Rim2MainStrength"), rim.BaseColorMix);
+            m.SetFloat(n("_RimShadowMask", "_Rim2ShadowMask"), rim.HideInShadow);
+            m.SetFloat(n("_RimBackfaceMask", "_Rim2BackfaceMask"), rim.Faces == AtlasFaces.Front ? 1 : 0);
+            var color = rim.Color.Color;
+            m.SetColor(n("_RimColor", "_Rim2Color"), new Color(color.r, color.g, color.b, Mathf.Clamp01(color.a * rim.Opacity)).gamma);
+            m.SetFloat(n("_RimLightColorThemeIndex", "_Rim2LightColorThemeIndex"), 0);
+            // A mask goes in the color texture as a mask (its red).
+            var mask = rim.Mask?.Map?.Texture;
+            m.SetTexture(n("_RimColorTex", "_Rim2ColorTex"), mask);
+            m.SetTextureScale(n("_RimColorTex", "_Rim2ColorTex"), Vector2.one);
+            m.SetTextureOffset(n("_RimColorTex", "_Rim2ColorTex"), Vector2.zero);
+            m.SetFloat(n("_RimMaskOnlyMask", "_Rim2MaskOnlyMask"), mask != null ? 1 : 0);
+            m.SetFloat(n("_RimUseMainTexUV", "_Rim2UseMainTexUV"), 0);
+            bool direction = rim.LightSide.Mode == AtlasLightSideMode.Mask && dark != null;
+            m.SetFloat(n("_RimDirStrength", "_Rim2DirStrength"), direction ? rim.LightSide.Strength : 0f);
+            if (!direction) return;
+            m.SetFloat(n("_RimDirRange", "_Rim2DirRange"), -rim.LightSide.Low);
+            m.SetFloat(n("_RimIndirRange", "_Rim2IndirRange"), -dark.LightSide.Low);
+            m.SetFloat(n("_RimIndirBorder", "_Rim2IndirBorder"), (dark.Low + dark.High) * 0.5f);
+            m.SetFloat(n("_RimIndirBlur", "_Rim2IndirBlur"), dark.High - dark.Low);
+            m.SetColor(n("_RimIndirColor", "_Rim2IndirColor"), dark.Color.Color.gamma);
+        }
+
+        // A mask texture slot read on UV0 as it is.
+        private static void WriteMaskSlot(Material m, string property, AtlasMask mask)
+        {
+            m.SetTexture(property, mask?.Map?.Texture);
+            m.SetTextureScale(property, Vector2.one);
+            m.SetTextureOffset(property, Vector2.zero);
+            m.SetFloat(property + "UV", 0);
+        }
+
+        private static int MaskChannel(AtlasMask mask) => mask?.Map?.Texture != null ? Mathf.Clamp((int)mask.Channel, 0, 3) : 0;
+
+        // The environmental rim, as the Poiyomi parser reads it (AtlasPoiyomiEdgeLight).
+        private static void WriteEnvironmentalRim(AtlasUnifiedMaterial output, Material m)
+        {
+            var rim = AtlasEnvironmentalRimFeature.Layer(output);
+            m.SetFloat("_EnableEnvironmentalRim", rim != null ? 1 : 0);
+            if (rim != null) m.EnableKeyword("POI_ENVIRORIM");
+            else m.DisableKeyword("POI_ENVIRORIM");
+            if (rim == null) return;
+            m.SetFloat("_RimEnviroWidth", rim.High);
+            m.SetFloat("_RimEnviroSharpness", rim.Low);
+            m.SetFloat("_RimEnviroBlur", rim.EnvironmentRoughness);
+            m.SetFloat("_RimEnviroMinBrightness", rim.EnvironmentThreshold);
+            m.SetFloat("_RimEnviroExposureOcclusion", rim.ExposureOcclusion);
+            m.SetFloat("_RimEnviroIntensity", Mathf.Clamp01(rim.Opacity));
+            WriteMaskSlot(m, "_RimEnviroMask", rim.Mask);
+            m.SetFloat("_RimEnviroChannel", MaskChannel(rim.Mask));
+        }
+
+        // The backlight, as the Poiyomi parser reads it (AtlasPoiyomiEdgeLight); Poiyomi 11's
+        // second one stays off.
+        private static void WriteBacklight(AtlasUnifiedMaterial output, Material m)
+        {
+            var light = AtlasBacklightFeature.Layer(output);
+            m.SetFloat("_BacklightEnabled", light != null ? 1 : 0);
+            if (light != null) m.EnableKeyword("POI_BACKLIGHT");
+            else m.DisableKeyword("POI_BACKLIGHT");
+            if (light == null) return;
+            m.SetFloat("_BacklightBorder", (light.Low + light.High) * 0.5f);
+            m.SetFloat("_BacklightBlur", light.High - light.Low);
+            m.SetFloat("_BacklightDirectivity", light.Directivity);
+            m.SetFloat("_BacklightViewStrength", light.ViewStrength);
+            m.SetFloat("_BacklightReceiveShadow", light.ReceiveShadows ? 1 : 0);
+            m.SetFloat("_BacklightNormalStrength", light.SurfaceNormalAmount);
+            m.SetFloat("_BacklightMainStrength", light.BaseColorMix);
+            m.SetFloat("_BacklightBackfaceMask", light.Faces == AtlasFaces.Front ? 1 : 0);
+            m.SetFloat("_BacklightApplyToOutlines", light.OnOutlines ? 1 : 0);
+            m.SetColor("_BacklightColor", light.Color.Color.gamma);
+            m.SetTexture("_BacklightColorTex", light.Color.Map?.Texture);
+            m.SetTextureScale("_BacklightColorTex", Vector2.one);
+            m.SetTextureOffset("_BacklightColorTex", Vector2.zero);
+            m.SetFloat("_BacklightColorTexUV", 0);
+            m.SetFloat("_BacklightGlobalMask", 0);
+            m.SetFloat("_BacklightApplyGlobalMaskIndex", 0);
+        }
+
         // A texture slot set from a reference: its texture, tiling and offset, and its UV channel
         // (UV0 to UV3); no texture without one.
         private static void TextureOn(Material m, string property, AtlasTextureReference map)
@@ -680,8 +939,33 @@ namespace NordicWind.AdvancedAtlaser.Editor
             GeneratedRamp = true,
             // One matcap, added or multiplied; its mask picks a channel.
             MatcapSlots = 1,
-            MatcapBlends = AtlasMatcapBlends.Add | AtlasMatcapBlends.Multiply
+            MatcapBlends = AtlasMatcapBlends.Add | AtlasMatcapBlends.Multiply,
+            // One band rim without a mask, added after lighting.
+            RimSlots = 1,
+            RimBandOnly = true
         };
+
+        // Its one rim: a band, added after lighting (× the scene's light when Environmental). A
+        // rim of another shape is fitted to the band (AtlasRimCurve.FitBand); its strength and
+        // a color above 1 go into the intensity.
+        private static void WriteRim(AtlasUnifiedMaterial output, Material material)
+        {
+            var rim = output.Layers.OfType<AtlasAngleLayer>()
+                .FirstOrDefault(l => l.Source == AtlasAngleSource.ViewAngle && l.ColorSource == AtlasAngleColorSource.Color);
+            float range = 0f, softness = 0f, peak = 0f;
+            bool on = rim != null && AtlasRimCurve.FitBand(rim, out range, out softness, out peak);
+            if (on) material.EnableKeyword("USE_RIMLIGHT");
+            else material.DisableKeyword("USE_RIMLIGHT");
+            if (!on) return;
+            var color = rim.Color.Color;
+            float brightness = Mathf.Max(1f, color.maxColorComponent);
+            material.SetColor("_RimColor", new Color(color.r / brightness, color.g / brightness, color.b / brightness, 1f).gamma);
+            material.SetFloat("_RimIntensity", Mathf.Clamp01(rim.Opacity * peak * brightness * color.a));
+            material.SetFloat("_RimRange", range);
+            material.SetFloat("_RimSharpness", softness);
+            material.SetFloat("_RimAlbedoTint", rim.BaseColorMix);
+            material.SetFloat("_RimEnvironmental", rim.LightResponse == AtlasLightResponse.IgnoreLight ? 0 : 1);
+        }
 
         // Lighting: Toon Standard's one model, base × (lerp(base × Shadow Tint, 1, min(1, ramp(N·L
         // × 0.5 + 0.5) + Shadow Boost)) × direct + ambient). The ramp is the source's texture, or
@@ -750,6 +1034,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetFloat("_MatcapMaskChannel", matcap?.Mask?.Map?.Texture != null ? Mathf.Clamp((int)matcap.Mask.Channel, 0, 3) : 0);
             material.SetFloat("_MatcapType", matcap != null && matcap.Blend == AtlasBlend.Multiply ? 1 : 0);
             material.SetFloat("_MatcapStrength", matcap != null ? Mathf.Clamp01(matcap.Opacity) : 1f);
+            WriteRim(output, material);
             var normal = output.Surface.Normal;
             if (normal.Map?.Texture != null)
             {

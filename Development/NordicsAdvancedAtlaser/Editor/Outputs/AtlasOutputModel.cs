@@ -33,7 +33,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // One value (3.3): the pre-integrated skin's thickness.
         SkinThickness,
         // The mask allocator's places: one value each, in the output's mask textures.
-        Mask1, Mask2, Mask3, Mask4, Mask5, Mask6, Mask7, Mask8
+        Mask1, Mask2, Mask3, Mask4, Mask5, Mask6, Mask7, Mask8,
+        // RGB (4.4): the backlight's color over the atlas, black where a source has none.
+        BacklightColor
     }
 
     // Which channels of a texture a virtual map fills.
@@ -173,6 +175,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // A slot can multiply its matcap by the base color; without, the base color's brightness
         // goes into the slot's mask.
         public bool MatcapBaseColorMix;
+        // Rims (4.4): how many view-angle rim slots; whether a slot has a mask; whether a slot only
+        // has the band profile (others are fitted to it).
+        public int RimSlots;
+        public bool RimMask;
+        public bool RimBandOnly;
+        // One environmental rim (the probe's color at the edge), with a mask.
+        public bool EnvironmentalRim;
+        // One backlight, its color from a texture (BacklightColor).
+        public bool Backlight;
 
         public AtlasOutputTexture TextureFor(AtlasVirtualMap map) => Textures.Find(t => t.Provides(map));
 

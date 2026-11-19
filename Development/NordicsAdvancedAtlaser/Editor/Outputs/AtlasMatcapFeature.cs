@@ -160,6 +160,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 return string.Concat(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(text)).Take(6).Select(b => b.ToString("x2")));
         }
 
+        public bool CanPlaceAsMatcap(AtlasOutputCapabilities capabilities) => false;
+
         public IReadOnlyList<AtlasFeatureInstance> Instances(AtlasGeneratorJob job, IReadOnlyList<int> sources) =>
             Groups(job, sources, null).Select(g => new AtlasFeatureInstance
             {
@@ -215,6 +217,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
 
             var approximated = new List<string>();
+            context.Plan.MatcapSlotsUsed = slots.Count;
             for (int k = 0; k < slots.Count; k++)
                 Place(context, slots[k], k, approximated);
             if (off.Count > 0)

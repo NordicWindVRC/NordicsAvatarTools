@@ -133,6 +133,16 @@ and `ATLAS_OUTPUT.md` for the output design.
        multiplies) are approximated with the nearest, and a matcap mixed with the base color
        is limited by the base color's brightness. The build log lists what was combined,
        approximated or left out.
+     - **Rim Lighting**: each material's rims in the output's rim slots (Poiyomi 2, Mobile
+       Toon Standard 1), placed like matcaps, with *As matcap* added: the rim drawn into a
+       generated matcap in a free matcap slot, which keeps it to its own parts. Mobile Toon
+       Standard's rim has no mask, so *Automatic* draws a rim only some materials have into
+       the matcap slot when it's free, and otherwise shows it on every part (the build log
+       says so). Its rim is a simple band; other rim shapes are fitted to it.
+     - **Environmental Rim** and **Backlight** (Poiyomi): one setup for the atlas, from one
+       material (*Environmental Rim from*, *Backlight from*: *Automatic* takes the one with
+       the largest area); each material's strength, or backlight color, is kept per part.
+     - Features the output shader has nothing for are listed in the build log.
      - **Hidden UV Tiles** (Poiyomi's UV tile discard): *Kept live* (the atlas material hides
        the same tiles, read from a spare UV channel the build writes), *Removed from the mesh*
        (any output shader; only tiles hidden on both sides), or *Off*.

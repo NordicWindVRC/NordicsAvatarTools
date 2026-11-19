@@ -95,7 +95,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     // Where the user puts an item: Automatic (the feature's choice), its own place, combined
     // with another item (the stored text names it), or off.
-    public enum AtlasInstancePlacement { Automatic = 0, Own = 1, Combined = 2, Off = 3 }
+    public enum AtlasInstancePlacement { Automatic = 0, Own = 1, Combined = 2, Off = 3, AsMatcap = 4 }
 
     public static class AtlasInstancePlacements
     {
@@ -107,6 +107,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public interface IAtlasInstanceFeature : IAtlasOutputFeature
     {
         IReadOnlyList<AtlasFeatureInstance> Instances(AtlasGeneratorJob job, IReadOnlyList<int> sources);
+        // Whether an item can also go into a matcap slot as a generated matcap.
+        bool CanPlaceAsMatcap(AtlasOutputCapabilities capabilities);
     }
 
     // A feature a source can have without its material having it, from what the build adds (the

@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7a is done; 2.7b is next. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7a and 2.7b are done; 2.7c is next. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -263,8 +263,21 @@ layers. Until then, live mask steps stay baked at their normal-view value and ar
   with add or multiply, and base color mix through the mask; both are listed.
 - **Workable:** matcaps survive atlasing, combined where the output has too few slots.
 
-**2.7b Rim lighting:** *Rim lighting* (native, or as a generated matcap where the output has
-matcap slots but no rim), *Environmental rim* (native only), *Backlight*.
+**2.7b Rim lighting**
+- *Rim Lighting*: one mode, *Rim slots* (Poiyomi 2 with masks, Toon Standard 1 without).
+  Rims that look the same share a slot. Each rim is placed by the user (*Automatic*, its own
+  slot, as a matcap, combined with another, off); automatic gives it a rim slot while one is
+  free (without a rim mask, only when the rim is the same everywhere), then a free matcap
+  slot (the rim drawn into a generated matcap, exactly when it depends only on the view
+  angle), then a rim slot anyway, shown on every part and listed. Poiyomi writes each slot in
+  the style that holds it (Poiyomi, UTS2 with its unlit-side rim, lilToon); Toon Standard's
+  band takes other rims fitted (same midpoint and rise).
+- *Environmental Rim*: Poiyomi only; one setup from the reference source, the strength per
+  part in an allocated mask.
+- *Backlight*: Poiyomi only; one setup from the reference source, the color per part in a
+  backlight color texture.
+- What the output shader has nothing for is listed, for every feature.
+- Rim color textures are listed; depth rims moved to *Later*.
 
 **2.7c Clear coat:** native only.
 
@@ -383,6 +396,9 @@ Not planned in detail yet, in rough order:
 - half-precision buffers or GPU baking, if the memory budget is too tight;
 - a typed-in value for shared values, next to *Automatic* and the sources in the reference
   source drop-down;
+- **depth rims** (from 2.7b): Poiyomi's depth rim lighting natively, one setup from the
+  reference source;
+- **rim color textures** (from 2.7b): a rim's texture on UV0 baked into a color map;
 - **cloth lighting** (from 2.6c): Poiyomi's cloth type, with every source's metallic, cloth
   mask, reflectance and smoothness baked into its packed map;
 - **bake speed**, measured on a 5-material avatar (11 s per output, 2.7 s of it Unity's

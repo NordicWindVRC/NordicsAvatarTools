@@ -8,6 +8,18 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Rim lighting:** a *Rim Lighting* feature puts every source's view-angle rims into the
+  output's rim slots: Poiyomi's two (each written in the style that holds it: Poiyomi, UTS2
+  with its antipodean rim, or lilToon with its indirect rim; other rims fitted to the Poiyomi
+  style) and Toon Standard's one band rim (`USE_RIMLIGHT`; other rims fitted to the band by
+  `AtlasRimCurve.FitBand`). Rims are placed like matcaps, with *As matcap*: a rim that
+  depends only on the view angle drawn into a generated matcap in a free matcap slot. On Toon
+  Standard, whose rim has no mask, *Automatic* draws a partial rim into the free matcap slot,
+  otherwise shows it everywhere and lists it.
+- **Environmental rim and backlight** (Poiyomi): one setup each from the reference source
+  (*Environmental Rim from*, *Backlight from*); the environmental rim's strength per part in
+  an allocated mask, the backlight's color per part in a *Backlight color* texture.
+- Features the output shader doesn't offer are listed in the build log with their sources.
 - **Matcaps:** a *Matcaps* feature puts every source's matcaps (lookup layers with a 2D
   texture) into the output's matcap slots: Poiyomi's four (texture, color and intensity,
   lookup, mask, every blend weight, emission) and Toon Standard's one (`USE_MATCAP`, add or

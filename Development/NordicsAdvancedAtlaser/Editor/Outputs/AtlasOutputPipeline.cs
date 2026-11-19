@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
@@ -26,6 +27,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly Dictionary<string, AtlasMask> PlacedMasks = new Dictionary<string, AtlasMask>();
         // Textures the build makes besides the atlas maps (combined matcaps), before writing.
         public readonly List<AtlasGeneratedTexture> GeneratedTextures = new List<AtlasGeneratedTexture>();
+        // The output's matcap slots the matcaps took; later features (rims) use the rest.
+        public int MatcapSlotsUsed;
 
         public AtlasSourceRemap Remap(int source)
         {
@@ -107,7 +110,6 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var choice = job.Features.Find(f => f.FeatureId == feature.Id);
             var mode = AtlasOutputFeatures.Effective(feature, choice?.ModeId, capabilities);
-            if (mode == null) return;
             var sources = new List<int>();
             for (int i = 0; i < job.Sources.Count; i++)
             {
@@ -118,6 +120,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     sources.Add(i);
             }
             if (sources.Count == 0) return;
+            if (mode == null)
+            {
+                // Not offered: the output shader has nothing for it.
+                plan.Notes.Add($"The output shader has no {feature.DisplayName.ToLowerInvariant()}; it's left out (" +
+                    (sources.Count == 1 ? "source " : "sources ") + string.Join(", ", sources.Select(i => i + 1)) + ").");
+                return;
+            }
             plan.Modes[feature.Id] = mode;
             // Off adds nothing: the output unified material starts without any feature.
             if (mode.Kind == AtlasFeatureModeKind.Off) return;
