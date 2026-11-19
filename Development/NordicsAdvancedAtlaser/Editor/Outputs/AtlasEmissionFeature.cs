@@ -234,7 +234,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     if (layer.Targets.Any(t => t.Target == AtlasSurfaceTarget.Emission) && !AtlasColorStack.CanBakeEmission(material, k, layer) &&
                         !(audioOnly && AtlasColorStack.CanBakeEmission(material, k, layer, anyModulators: true)))
                     {
-                        context.Notes.Add("An emission that is live (blinking, scrolling, audio, light based), replaces the base color, follows transparency, or is masked by a global mask written by layers or the second pass isn't baked yet; it's left out.");
+                        context.Notes.Add("An emission that is live (blinking, scrolling, audio, light based), follows transparency, or is masked by a global mask written by layers or the second pass isn't baked yet; it's left out.");
                         return;
                     }
                 }

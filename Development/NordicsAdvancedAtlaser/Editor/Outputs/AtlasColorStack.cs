@@ -16,7 +16,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         /// <summary>The source's base color, with its color multiplied in when
         /// <paramref name="multiplyColor"/>.</summary>
-        public static NordicsTextureWrapper Evaluate(AtlasUnifiedMaterial source, int width, int height, bool multiplyColor)
+        public static NordicsTextureWrapper Evaluate(AtlasUnifiedMaterial source, int width, int height, bool multiplyColor,
+            bool emissionOverride = true)
         {
             NordicsTextureWrapper result;
             using (AtlasEvaluationCache.Step("base color texture"))
@@ -38,6 +39,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                                 Apply(result, source, layer, target, width, height);
                 using (AtlasEvaluationCache.Step("surface color adjustments"))
                     Adjust(result, source, AtlasAdjustmentTarget.SurfaceColor, null, width, height);
+                if (emissionOverride) Override(result, source, color, multiplyColor, width, height);
                 return result;
             }
             catch
@@ -60,7 +62,42 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if ((adjustment.Target == AtlasAdjustmentTarget.BaseColor || adjustment.Target == AtlasAdjustmentTarget.SurfaceColor) &&
                     CanBake(source, i, adjustment)) return true;
             }
-            return false;
+            return Overriding(source) != null;
+        }
+
+        // The baked emission layers that also replace the base color (OverridesBaseColor).
+        private static List<AtlasLayer> Overriding(AtlasUnifiedMaterial source)
+        {
+            List<AtlasLayer> result = null;
+            for (int i = 0; i < source.Layers.Count; i++)
+                if (source.Layers[i] is AtlasSurfaceLayer layer && layer.OverridesBaseColor &&
+                    layer.Targets.Any(t => t.Target == AtlasSurfaceTarget.Emission) && CanBakeEmission(source, i, layer))
+                    (result ?? (result = new List<AtlasLayer>())).Add(layer);
+            return result;
+        }
+
+        // The last step on the base color b: lerp(b, saturate(e), max(e)) with e the emission of
+        // the layers that replace it (unclamped, as Poiyomi has it). A map without the base
+        // color's color is replaced as b × color, then divided by it again.
+        private static void Override(NordicsTextureWrapper result, AtlasUnifiedMaterial source, Color color, bool multiplied, int width, int height)
+        {
+            var layers = Overriding(source);
+            if (layers == null) return;
+            using (AtlasEvaluationCache.Step("emission replacing the base color"))
+            using (var emission = EvaluateEmission(source, width, height, 1f, layers, clamp: false))
+                AtlasPixels.Map(result, emission, (b, e) =>
+                {
+                    float amount = Mathf.Max(e.r, Mathf.Max(e.g, e.b));
+                    if (amount <= 0f) return b;
+                    var replaced = b;
+                    for (int c = 0; c < 3; c++)
+                    {
+                        float tint = multiplied ? 1f : color[c];
+                        float value = Mathf.LerpUnclamped(b[c] * tint, Mathf.Clamp01(e[c]), amount);
+                        replaced[c] = multiplied ? value : tint > 1e-5f ? value / tint : b[c];
+                    }
+                    return replaced;
+                });
         }
 
         // A path no modulator drives: "layers[3]", "colorAdjustments[0]".
@@ -102,7 +139,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             layer.Enabled && (layer.Placement == AtlasPlacement.Surface || (emission && layer.Placement == AtlasPlacement.Emission)) &&
             layer.Faces == AtlasFaces.Both && layer.Mirror == AtlasMirrorVisibility.Both && layer.HideInShadow <= 0f && layer.Screen == null &&
             (emission || !layer.SourceTimesBaseColor) && !layer.SourceIntensityIsAlpha && layer.Source.AudioTheme < 0 &&
-            (!emission || (!layer.OverridesBaseColor && !layer.EmissionTimesAlpha)) &&
+            (!emission || !layer.EmissionTimesAlpha) &&
             (layer.Source.Map == null || StillOnUV0(layer.Source.Map)) &&
             (layer.Mask == null || AtlasMapEvaluator.CanEvaluate(layer.Mask, source)) &&
             (anyModulators || IsStatic(source, "layers[" + index + "]"));
@@ -129,8 +166,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         using (coverage)
                         {
                             Adjust(layerSource, source, AtlasAdjustmentTarget.Layer, layer, width, height);
+                            // The base color as it is before emissions replace it.
                             if (layer.SourceTimesBaseColor)
-                                using (var baseColor = Evaluate(source, width, height, multiplyColor: true))
+                                using (var baseColor = Evaluate(source, width, height, multiplyColor: true, emissionOverride: false))
                                     layerSource.Blit(baseColor, blend: TextureBlendMode.Multiply);
                             using (var mask = Mask(layer, source, layerSource, coverage, width, height))
                                 // Unit strength: the emission's color, map and mask alone (an emission

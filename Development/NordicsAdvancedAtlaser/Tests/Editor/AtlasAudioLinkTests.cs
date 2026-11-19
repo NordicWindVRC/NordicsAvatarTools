@@ -119,6 +119,33 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsTrue(plan.Maps.Any(m => m.Map == AtlasVirtualMap.EmissionCycle2));
         }
 
+        // Poiyomi's Override Base Color: the emission glows and also replaces the base color,
+        // lerp(b, saturate(e), max(e)).
+        [Test]
+        public void AnEmissionThatOverridesTheBaseColorIsBakedIntoBoth()
+        {
+            var material = new AtlasUnifiedMaterial();
+            material.Surface.BaseColor.Color = new Color(0.5f, 0.5f, 0.5f, 1f);
+            var layer = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission, OverridesBaseColor = true };
+            layer.Source.Color = new Color(0.8f, 0f, 0f, 1f);
+            layer.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Emission, AtlasBlend.Add, 0.5f));
+            material.Layers.Add(layer);
+            var job = Job(material);
+            foreach (var capabilities in new[] { ToonStandard, Poiyomi })
+            {
+                var plan = AtlasOutputPipeline.Resolve(job, capabilities);
+                Assert.IsTrue(plan.Maps.Any(m => m.Map == AtlasVirtualMap.Emission), Notes(plan));
+                Assert.IsFalse(plan.Notes.Any(n => n.Contains("isn't baked yet")), Notes(plan));
+                using (var baseColor = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Evaluate(0, material, 4, 4))
+                {
+                    var pixel = baseColor.GetPixel(1, 1) * plan.Output.Surface.BaseColor.Color;
+                    // e = (0.4, 0, 0), max(e) = 0.4.
+                    Assert.AreEqual(Mathf.Lerp(0.5f, 0.4f, 0.4f), pixel.r, 1e-3f);
+                    Assert.AreEqual(0.5f * 0.6f, pixel.g, 1e-3f);
+                }
+            }
+        }
+
         [Test]
         public void TheTextureListShowsTheEmissionTexturesTheBuildMakes()
         {

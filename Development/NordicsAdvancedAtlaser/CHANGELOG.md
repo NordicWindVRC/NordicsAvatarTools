@@ -388,6 +388,10 @@ EditMode tests pass in Unity 2022.3.22.
   avatar shader, Uber, replaces it. Mochie Standard materials go to the fallback parser.
 
 ### Fixed
+- **Emissions with Override Base Color were left out** (Poiyomi's *Override Base Color*): no
+  emission map, nothing in the output material. They are baked into the emission map like any
+  other, and into the base color map as its last step, `lerp(b, saturate(e), max(e))`
+  (`AtlasColorStack`).
 - **Mobile builds with VRCFury baked nothing:** on Android and iOS, VRCFury removes every
   material without a `VRChat/Mobile/` shader from the renderers (with its *Invalid Mobile
   Materials* dialog), and AAO then removes those submeshes. For outputs with a mobile shader
