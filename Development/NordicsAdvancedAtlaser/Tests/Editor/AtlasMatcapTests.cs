@@ -244,6 +244,31 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
+        public void TheOverviewListsGeneratedAndReusedTexturesWithTheirMemory()
+        {
+            var materials = new List<Material> { null, null };
+            var unified = new List<AtlasUnifiedMaterial>
+            {
+                WithMatcap(Solid(Color.white, "shine"), null, Color.white, (AtlasBlend.Add, 1f)),
+                WithMatcap(Solid(Color.red, "red"), null, Color.white, (AtlasBlend.Add, 1f))
+            };
+            var config = new AtlasOutputConfiguration { mainTexture = { width = 1024, height = 1024 } };
+            // Toon Standard's one slot: the two combined into a generated texture.
+            var overview = AtlasOutputOverview.Build(config, ToonStandard, materials, unified);
+            var generated = overview.Textures.Single(t => t.Generated && t.Texture.Id == "Matcap1");
+            Assert.AreEqual((512, 512), (generated.Width, generated.Height));
+            Assert.AreEqual(AtlasTextureMemory.Bytes(512, 512, AtlasTextureMemory.Format(config.pcFormats, AtlasTextureKind.Color)), generated.PcBytes);
+            Assert.AreEqual(overview.Textures.Sum(t => t.Enabled ? t.PcBytes : 0), overview.PcBytes, "in the total");
+
+            // Poiyomi: each in a slot of its own, the materials' textures used as they are.
+            overview = AtlasOutputOverview.Build(config, Poiyomi, materials, unified);
+            var reused = overview.Textures.Where(t => t.Source != null).ToList();
+            CollectionAssert.AreEquivalent(new[] { "shine", "red" }, reused.Select(t => t.Source.name).ToArray());
+            Assert.Greater(reused[0].PcBytes, 0);
+            Assert.IsFalse(overview.Textures.Any(t => t.Generated && t.Texture.Id.StartsWith("Matcap")));
+        }
+
+        [Test]
         public void MaskTexturesStartAtHalfTheMainSize()
         {
             var config = new AtlasOutputConfiguration { mainTexture = { width = 4096, height = 2048 } };

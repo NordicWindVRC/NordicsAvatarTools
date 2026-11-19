@@ -56,9 +56,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             if (use.Maps.Contains(request.Map)) request.Reference.Texture = texture;
                     }
                 }
+                // Generated textures, compressed like the atlas maps with the formats for their kind.
                 foreach (var generated in plan.GeneratedTextures)
                 {
-                    var texture = AtlasGeneratedTextures.Make(generated, config.outputName);
+                    Texture2D texture;
+                    using (var wrapper = AtlasGeneratedTextures.Wrapper(generated))
+                        texture = Compress(wrapper, AtlasGeneratedTextures.Use(generated, config), config, mobile, $"{config.outputName}_{generated.Name}");
                     result.Textures.Add(texture);
                     generated.Reference.Texture = texture;
                 }

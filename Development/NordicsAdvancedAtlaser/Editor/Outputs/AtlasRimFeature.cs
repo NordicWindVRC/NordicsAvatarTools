@@ -340,6 +340,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             context.Plan.GeneratedTextures.Add(new AtlasGeneratedTexture
             {
                 Reference = reference, Name = "RimMatcap" + (index + 1), Width = MatcapSize, Height = MatcapSize,
+                // Alone in a slot that reads alpha as opacity, the rim's strength is in alpha (Draw).
+                Alpha = capabilities.MatcapColor && parts.Count == 1 && parts[0].Group.Members[0].Layers.Count == 1,
                 Pixels = () => Draw(parts, blend, scale, capabilities.MatcapColor, MatcapSize)
             });
             var layer = new AtlasLookupLayer

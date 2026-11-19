@@ -8,6 +8,9 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Generated and reused textures in the Textures list:** combined matcaps, rims drawn into
+  matcaps and the generated shadow ramp, and the sources' textures the atlas material uses as
+  they are (matcaps, ramps, cubemaps), each with its size and memory, counted in the totals.
 - **Live global masks** (Poiyomi): a mask whose global mask channel ends in live steps (back
   face, mirror, camera; distance and blacklight by multiply) and that's read by multiply or
   replace stays live. The feature keeps its value with the channel at 0, and the rest in an
@@ -354,6 +357,9 @@ EditMode tests pass in Unity 2022.3.22.
   avatar shader, Uber, replaces it. Mochie Standard materials go to the fallback parser.
 
 ### Fixed
+- **Generated textures were uncompressed:** combined matcaps and rims drawn into matcaps were
+  RGBA32 in the build and imported with defaults by *Bake to Assets*. They're now compressed
+  and imported like the atlas maps, with the output's formats for their kind.
 - **Poiyomi's alpha global mask** was read as the alpha mask's global mask, but Poiyomi applies
   it to the alpha itself, after Alpha Mod. The unified alpha now has its own global mask
   (`AtlasAlpha.Bus`, `BusBlend`), applied after the offset and before the modifiers; the

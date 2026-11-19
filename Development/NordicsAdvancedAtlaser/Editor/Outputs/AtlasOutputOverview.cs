@@ -41,6 +41,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasTextureKind Kind;
         public int Width, Height;
         public long PcBytes, AndroidBytes;
+        // Made by the build besides the atlas maps (a combined matcap, a shadow ramp): fixed size.
+        public bool Generated;
+        // A source's own texture the output uses as it is (a matcap, a ramp, a cubemap).
+        public Texture Source;
     }
 
     // What an output uses: its features with their modes and sources, and the textures those
@@ -72,16 +76,123 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
                 overview.Features.Add(state);
             }
-            // Live global mask setups the user picks between: from a resolve of the sources.
-            if (capabilities.GlobalMasks && unified.All(u => u != null) &&
-                unified.Any(u => u.MaskBus.Steps.Any(s => AtlasMaskBusEvaluator.IsLive(s.Kind))))
-            {
-                var plan = AtlasOutputPipeline.Resolve(probe ?? (probe = Probe(config, materials, unified)), capabilities);
+            // What only a resolve knows: the live global mask setups the user picks between, the
+            // textures the build makes and the sources' textures it uses as they are.
+            var plan = unified.Count > 0 && unified.All(u => u != null) ? Resolved(config, capabilities, materials, unified) : null;
+            if (plan != null)
                 foreach (var state in overview.Features)
                     if (plan.LiveSetups.TryGetValue(state.Feature.Id, out var setups)) state.LiveSetups.AddRange(setups);
-            }
             overview.AddTextures(config, capabilities);
+            if (plan != null) overview.AddOtherTextures(plan, config, capabilities);
             return overview;
+        }
+
+        // The last resolve, kept while the settings, output shader and sources stay the same (the
+        // inspector rebuilds the overview on every repaint).
+        private static string resolvedKey;
+        private static AtlasOutputPlan resolvedPlan;
+
+        private static AtlasOutputPlan Resolved(AtlasOutputConfiguration config, AtlasOutputCapabilities capabilities,
+            IReadOnlyList<Material> materials, IReadOnlyList<AtlasUnifiedMaterial> unified)
+        {
+            string key = JsonUtility.ToJson(config) + "|" + System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(capabilities) + "|" +
+                         string.Join(",", unified.Select(u => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(u)));
+            if (key == resolvedKey) return resolvedPlan;
+            AtlasOutputPlan plan;
+            try { plan = AtlasOutputPipeline.Resolve(Probe(config, materials, unified), capabilities); }
+            catch (System.Exception e)
+            {
+                Debug.LogException(e);
+                plan = null;
+            }
+            resolvedKey = key;
+            resolvedPlan = plan;
+            return plan;
+        }
+
+        // The generated textures, the generated shadow ramp, and the sources' textures the output
+        // material uses as they are, with their memory (a source texture's: as imported, and its
+        // Android override, or the output's Android format for its kind).
+        private void AddOtherTextures(AtlasOutputPlan plan, AtlasOutputConfiguration config, AtlasOutputCapabilities capabilities)
+        {
+            var other = plan.GeneratedTextures.Select(g => AtlasGeneratedTextures.Use(g, config)).ToList();
+            if (AtlasLightingFeature.NeedsGeneratedRamp(plan.Output, capabilities))
+            {
+                long bytes = AtlasTextureMemory.Bytes(AtlasRampTexture.Width, 4, AtlasTextureFormat.RGBA32, mipmaps: false);
+                other.Add(new AtlasTextureUse
+                {
+                    Texture = new AtlasOutputTexture("ShadowRamp", "Shadow ramp") { SizeMode = AtlasTextureSizeMode.Custom },
+                    Required = true, Enabled = true, Generated = true, Kind = AtlasTextureKind.Color,
+                    Width = AtlasRampTexture.Width, Height = 4, PcBytes = bytes, AndroidBytes = bytes
+                });
+            }
+            var found = new List<Texture>();
+            Collect(plan.Output, new HashSet<object>(), found);
+            other.AddRange(found.Select(t => SourceUse(t, config)));
+            foreach (var use in other)
+            {
+                Textures.Add(use);
+                PcBytes += use.PcBytes;
+                AndroidBytes += use.AndroidBytes;
+            }
+        }
+
+        // Every texture reference in the output unified material that already has a texture: the
+        // atlas maps and generated textures get theirs when the build makes them.
+        private static void Collect(object value, HashSet<object> seen, List<Texture> found)
+        {
+            if (value == null || value is UnityEngine.Object || value is string) return;
+            var type = value.GetType();
+            if (type.IsPrimitive || type.IsEnum || type.IsValueType) return;
+            if (!seen.Add(value)) return;
+            if (value is AtlasTextureReference reference)
+            {
+                if (reference.Texture != null && !found.Contains(reference.Texture)) found.Add(reference.Texture);
+                return;
+            }
+            if (value is System.Collections.IEnumerable items)
+            {
+                foreach (var item in items) Collect(item, seen, found);
+                return;
+            }
+            if (type.Namespace != typeof(AtlasUnifiedMaterial).Namespace) return;
+            foreach (var field in type.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+                Collect(field.GetValue(value), seen, found);
+        }
+
+        private static AtlasTextureUse SourceUse(Texture texture, AtlasOutputConfiguration config)
+        {
+            bool alpha = UnityEngine.Experimental.Rendering.GraphicsFormatUtility.HasAlphaChannel(texture.graphicsFormat);
+            var kind = alpha ? AtlasTextureKind.ColorAlpha : AtlasTextureKind.Color;
+            long android;
+            var importer = UnityEditor.AssetImporter.GetAtPath(UnityEditor.AssetDatabase.GetAssetPath(texture)) as UnityEditor.TextureImporter;
+            var settings = importer?.GetPlatformTextureSettings("Android");
+            var format = settings != null && settings.overridden && settings.format > 0
+                ? UnityEngine.Experimental.Rendering.GraphicsFormatUtility.GetGraphicsFormat((TextureFormat)(int)settings.format, importer.sRGBTexture)
+                : UnityEngine.Experimental.Rendering.GraphicsFormat.None;
+            if (format != UnityEngine.Experimental.Rendering.GraphicsFormat.None)
+            {
+                float scale = Mathf.Min(1f, settings.maxTextureSize / (float)Mathf.Max(texture.width, texture.height));
+                android = SourceBytes(texture, Mathf.Max(1, Mathf.RoundToInt(texture.width * scale)), Mathf.Max(1, Mathf.RoundToInt(texture.height * scale)), format);
+            }
+            else
+                android = AtlasTextureMemory.Bytes(texture.width, texture.height, AtlasTextureMemory.Format(config.androidFormats, kind)) * (texture is Cubemap ? 6 : 1);
+            return new AtlasTextureUse
+            {
+                Texture = new AtlasOutputTexture("Source:" + texture.name, texture.name),
+                Required = true, Enabled = true, Source = texture, Kind = kind, Alpha = alpha,
+                Width = texture.width, Height = texture.height,
+                PcBytes = SourceBytes(texture, texture.width, texture.height, texture.graphicsFormat), AndroidBytes = android
+            };
+        }
+
+        private static long SourceBytes(Texture texture, int width, int height, UnityEngine.Experimental.Rendering.GraphicsFormat format)
+        {
+            long total = 0;
+            int mips = Mathf.Max(1, texture.mipmapCount);
+            for (int m = 0; m < mips; m++)
+                total += UnityEngine.Experimental.Rendering.GraphicsFormatUtility.ComputeMipmapSize(Mathf.Max(1, width >> m), Mathf.Max(1, height >> m), format);
+            return texture is Cubemap ? total * 6 : total;
         }
 
         // The sources and choices as a job, for what depends on more than one feature.

@@ -120,6 +120,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static void TextureRow(SerializedProperty textures, AtlasTextureUse use, int mainWidth, int mainHeight)
         {
             var texture = use.Texture;
+            if (use.Generated || use.Source != null)
+            {
+                OtherTextureRow(use);
+                return;
+            }
             string holds = string.Join(", ", use.Maps.Select(m => ObjectNames.NicifyVariableName(m.ToString()).ToLowerInvariant()));
             var label = new GUIContent(texture.Label, "Holds: " + holds + (use.Required ? ". Required by the chosen modes." : ". Optional."));
             Columns(out var name, out var size, out var pc, out var android);
@@ -181,6 +186,26 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // A size that can't be changed, as a drop-down with that one value, so it lines up with
         // the sizes that can.
+        // A texture the build makes at a fixed size, or a source's texture used as it is.
+        private static void OtherTextureRow(AtlasTextureUse use)
+        {
+            string tooltip = use.Source != null
+                ? "A material's own texture, which the atlas material uses as it is. Its memory is as imported; on Android, " +
+                  "its Android override, or otherwise the Android format for its kind."
+                : "Made by the build at this size, compressed with the format for its kind.";
+            Columns(out var name, out var size, out var pc, out var android);
+            using (new IndentReset())
+            {
+                EditorGUI.LabelField(name, new GUIContent(use.Texture.Label, tooltip));
+                SplitPair(size, out var first, out var times, out var second);
+                Locked(first, use.Width, tooltip);
+                EditorGUI.LabelField(times, "×", Centered);
+                Locked(second, use.Height, tooltip);
+                EditorGUI.LabelField(pc, AtlasTextureMemory.Label(use.PcBytes), RightMini);
+                EditorGUI.LabelField(android, AtlasTextureMemory.Label(use.AndroidBytes), RightMini);
+            }
+        }
+
         private static void Locked(Rect rect, int value, string tooltip)
         {
             using (new EditorGUI.DisabledScope(true))

@@ -71,7 +71,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
 
             foreach (var generated in plan.GeneratedTextures)
-                generated.Reference.Texture = AtlasGeneratedTextures.SavePng(generated, folder, name);
+                using (var wrapper = AtlasGeneratedTextures.Wrapper(generated))
+                    generated.Reference.Texture = AtlasTextureExport.Png(wrapper, folder, name + "_" + generated.Name,
+                        AtlasGeneratedTextures.Use(generated, config), config);
             if (AtlasLightingFeature.NeedsGeneratedRamp(plan.Output, shader.Capabilities))
                 plan.Output.Lighting.Ramp.Ramp = new AtlasTextureReference
                 {

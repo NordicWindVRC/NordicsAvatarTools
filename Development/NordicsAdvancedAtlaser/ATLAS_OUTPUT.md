@@ -400,6 +400,12 @@ The *Textures* section lists the textures in use, required ones first:
   - **custom** (ramps and other lookups).
 - Each row shows its memory for PC and for Android, and the section shows the totals for
   both (see [*Memory*](#memory)).
+- After the atlas textures come the textures the build **generates** at a fixed size (combined
+  matcaps, rims drawn into matcaps, a generated shadow ramp), compressed with the formats for
+  their kind, and the sources' textures the output material **uses as they are** (a matcap in
+  its own slot, a ramp, a cubemap): their memory as imported, and on Android their Android
+  override or the Android format for their kind. Both count in the totals. The overview knows
+  them from a resolve of the sources, kept while the settings and sources stay the same.
 
 The main texture size is chosen in the section, or by auto setup (see [*Auto setup*](#auto-setup)).
 
