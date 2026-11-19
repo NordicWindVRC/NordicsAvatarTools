@@ -263,7 +263,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public string Id => "occlusion";
         public string DisplayName => "Ambient Occlusion";
         public AtlasFeatureSection Section => AtlasFeatureSection.Surface;
-        public int Order => 4;
+        public int Order => 5;
         public IReadOnlyList<AtlasFeatureMode> Modes => ModeList;
 
         public bool IsPresent(AtlasUnifiedMaterial source) => source?.Surface.Response.Occlusion.Map?.Texture != null;

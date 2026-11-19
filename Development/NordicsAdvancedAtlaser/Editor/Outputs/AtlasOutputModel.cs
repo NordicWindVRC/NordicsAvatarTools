@@ -35,7 +35,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The mask allocator's places: one value each, in the output's mask textures.
         Mask1, Mask2, Mask3, Mask4, Mask5, Mask6, Mask7, Mask8,
         // RGB (4.4): the backlight's color over the atlas, black where a source has none.
-        BacklightColor
+        BacklightColor,
+        // One value each (2.4): the clear coat's strength (0 without one), its roughness, and its
+        // reflection and highlight strengths relative to the strongest.
+        ClearCoatStrength, ClearCoatRoughness, ClearCoatReflectionMask, ClearCoatSpecularMask
     }
 
     // Which channels of a texture a virtual map fills.

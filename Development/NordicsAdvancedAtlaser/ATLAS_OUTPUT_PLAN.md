@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7a and 2.7b are done; 2.7c is next. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7a, 2.7b and 2.7c are done; 2.7d is next. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -279,7 +279,10 @@ layers. Until then, live mask steps stay baked at their normal-view value and ar
 - What the output shader has nothing for is listed, for every feature.
 - Rim color textures are listed; depth rims moved to *Later*.
 
-**2.7c Clear coat:** native only.
+**2.7c Clear coat:** native only (Poiyomi). Each source's coat strength and roughness in the
+*Clear coat maps* texture (no coat: strength 0), its reflection and highlight strengths in
+its masks relative to the strongest, under the allocator's rules; tints, fresnel, cubemaps,
+the normal map amount and anti-aliasing from the reference source (*Clear Coat from*).
 
 **2.7d Global masks on Poiyomi** (from 2.4b), keeping live steps live: a feature splits its
 mask into its own mask (sources without live steps) and a global mask channel with the live

@@ -62,6 +62,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     .With(AtlasVirtualMap.SkinThickness, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f)),
                 MaskTexture(1, AtlasVirtualMap.Mask1, AtlasVirtualMap.Mask2, AtlasVirtualMap.Mask3, AtlasVirtualMap.Mask4),
                 MaskTexture(2, AtlasVirtualMap.Mask5, AtlasVirtualMap.Mask6, AtlasVirtualMap.Mask7, AtlasVirtualMap.Mask8),
+                // _ClearCoatMaps: R strength, G smoothness, B reflection mask, A specular mask.
+                new AtlasOutputTexture("ClearCoat", "Clear coat maps") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
+                    .With(AtlasVirtualMap.ClearCoatStrength, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f))
+                    .With(AtlasVirtualMap.ClearCoatRoughness, AtlasTextureChannels.G, AtlasOutputTexture.Gray(0f), invert: true)
+                    .With(AtlasVirtualMap.ClearCoatReflectionMask, AtlasTextureChannels.B, AtlasOutputTexture.Gray(0f))
+                    .With(AtlasVirtualMap.ClearCoatSpecularMask, AtlasTextureChannels.A, AtlasOutputTexture.Gray(0f)),
                 // _BacklightColorTex: the backlight's color, black where a source has none.
                 new AtlasOutputTexture("Backlight", "Backlight color") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
                     .With(AtlasVirtualMap.BacklightColor, AtlasTextureChannels.RGB, Color.black)
@@ -142,6 +148,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             WriteEnvironmentalRim(output, material);
             WriteBacklight(output, material);
             WriteSurfaceResponse(output.Surface.Response, material);
+            WriteClearCoat(output.Surface.Response.ClearCoat, material);
             WriteEmission(output, material);
             var render = output.Render;
             var preset = Array.Find(Presets, p => p.Mode == render.SurfaceMode &&
@@ -622,6 +629,59 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         private static int MaskChannel(AtlasMask mask) => mask?.Map?.Texture != null ? Mathf.Clamp((int)mask.Channel, 0, 3) : 0;
+
+        // The clear coat, as the Poiyomi parser reads it (AtlasPoiyomiSpecular): strength and
+        // smoothness from the packed map (or their constants), the masks in B and A, or none
+        // (channel 4: white), the highlight mask sharing B when it reads the reflection mask's map.
+        private static void WriteClearCoat(AtlasClearCoat coat, Material m)
+        {
+            m.SetFloat("_ClearCoatBRDF", coat != null ? 1 : 0);
+            if (coat != null) m.EnableKeyword("POI_CLEARCOAT");
+            else m.DisableKeyword("POI_CLEARCOAT");
+            if (coat == null) return;
+            var packed = coat.Strength.Map?.Texture ?? coat.Roughness.Map?.Texture ?? coat.Reflections.Mask?.Map?.Texture ?? coat.Highlights.Mask?.Map?.Texture;
+            m.SetTexture("_ClearCoatMaps", packed);
+            m.SetTextureScale("_ClearCoatMaps", Vector2.one);
+            m.SetTextureOffset("_ClearCoatMaps", Vector2.zero);
+            m.SetFloat("_ClearCoatMapsUV", 0);
+            bool strengthMap = coat.Strength.Map != null, roughnessMap = coat.Roughness.Map != null;
+            m.SetFloat("_ClearCoatMapsClearCoatMaskChannel", strengthMap ? 0 : 4);
+            m.SetFloat("_ClearCoatStrength", coat.Strength.Constant);
+            m.SetFloat("_ClearCoatMaskInvert", 0);
+            m.SetFloat("_ClearCoatMapsRoughnessChannel", roughnessMap ? 1 : 4);
+            // Stored as smoothness × 1; without a map, the smoothness constant.
+            m.SetFloat("_ClearCoatSmoothness", roughnessMap ? 1f : 1f - coat.Roughness.Constant);
+            m.SetFloat("_ClearCoatSmoothnessMapInvert", 0);
+            var reflections = coat.Reflections;
+            var highlights = coat.Highlights;
+            m.SetFloat("_ClearCoatMapsReflectionMaskChannel", reflections.Mask != null ? 2 : 4);
+            m.SetFloat("_ClearCoatMapsSpecularMaskChannel", highlights.Mask == null ? 4
+                : reflections.Mask != null && highlights.Mask.Map == reflections.Mask.Map ? 2 : 3);
+            m.SetFloat("_ClearCoatReflectionMaskInvert", 0);
+            m.SetFloat("_ClearCoatSpecularMaskInvert", 0);
+            m.SetFloat("_ClearCoatReflectionStrength", reflections.Enabled ? Mathf.Clamp01(reflections.Strength) : 0f);
+            m.SetFloat("_ClearCoatSpecularStrength", highlights.Enabled ? highlights.Strength : 0f);
+            m.SetColor("_ClearCoatReflectionTint", reflections.Tint.gamma);
+            m.SetFloat("_ClearCoatReflectionTintThemeIndex", 0);
+            m.SetColor("_ClearCoatSpecularTint", highlights.Tint.gamma);
+            m.SetFloat("_ClearCoatSpecularTintThemeIndex", 0);
+            m.SetFloat("_ClearcoatFresnelStrength", reflections.FresnelStrength);
+            m.SetFloat("_ClearcoatExposureOcclusion", reflections.ExposureOcclusion);
+            bool forced = reflections.Source == AtlasReflectionSource.Cubemap && reflections.Cubemap != null;
+            m.SetTexture("_ClearCoatFallback", forced ? reflections.Cubemap.Texture : reflections.FallbackCubemap?.Texture);
+            m.SetFloat("_ClearCoatForceFallback", forced ? 1 : 0);
+            m.SetFloat("_ClearCoatLitFallback", reflections.CubemapLit ? 1 : 0);
+            m.SetFloat("_CCIgnoreCastedShadows", highlights.IgnoreShadows ? 1 : 0);
+            m.SetFloat("_ClearCoatNormalSelect", coat.NormalMapAmount);
+            m.SetFloat("_ClearCoatGSAAEnabled", coat.SpecularAntiAliasing.Enabled ? 1 : 0);
+            m.SetFloat("_ClearCoatGSAAVariance", coat.SpecularAntiAliasing.Variance);
+            m.SetFloat("_ClearCoatGSAAThreshold", coat.SpecularAntiAliasing.Threshold);
+            m.SetFloat("_ClearCoatGlobalMask", 0);
+            m.SetFloat("_ClearCoatSmoothnessGlobalMask", 0);
+            m.SetFloat("_ClearCoatReflectionStrengthGlobalMask", 0);
+            m.SetFloat("_ClearCoatSpecularStrengthGlobalMask", 0);
+            m.SetFloat("_ClearCoatTPSDepthMaskEnabled", 0);
+        }
 
         // The environmental rim, as the Poiyomi parser reads it (AtlasPoiyomiEdgeLight).
         private static void WriteEnvironmentalRim(AtlasUnifiedMaterial output, Material m)

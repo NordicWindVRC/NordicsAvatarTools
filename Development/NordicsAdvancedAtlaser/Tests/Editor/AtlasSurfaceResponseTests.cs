@@ -108,6 +108,90 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 toon.Maps.Select(m => m.Map).Where(m => m != AtlasVirtualMap.BaseColor).ToArray());
         }
 
+        private static AtlasUnifiedMaterial Coated(float strength, float roughness, Color tint)
+        {
+            var material = Lit(1f, 1f);
+            var coat = material.Surface.Response.ClearCoat = new AtlasClearCoat();
+            coat.Strength.Constant = strength;
+            coat.Roughness.Constant = roughness;
+            coat.Reflections.Tint = tint;
+            return material;
+        }
+
+        [Test]
+        public void ClearCoatStrengthAndRoughnessAreBakedPerSourceWithOneSetup()
+        {
+            var job = Job(Coated(0.8f, 0.2f, Color.red), Coated(1f, 0.6f, Color.white), Lit(1f, 1f));
+            Assert.IsTrue(new AtlasClearCoatFeature().SharedValuesDiffer(job.Sources.Select(s => s.Material).ToList(), Poiyomi));
+            var plan = AtlasOutputPipeline.Resolve(job, Poiyomi);
+            var coat = plan.Output.Surface.Response.ClearCoat;
+            Assert.IsNotNull(coat);
+            Assert.AreEqual(0.8f, Evaluate(plan, AtlasVirtualMap.ClearCoatStrength, job, 0), 1e-4f);
+            Assert.AreEqual(0f, Evaluate(plan, AtlasVirtualMap.ClearCoatStrength, job, 2), 1e-4f, "no coat");
+            Assert.AreEqual(0.6f, Evaluate(plan, AtlasVirtualMap.ClearCoatRoughness, job, 1), 1e-4f);
+            // Reflections everywhere a coat is, nowhere else: one mask, read by the highlights too.
+            Assert.AreEqual(1f, Evaluate(plan, AtlasVirtualMap.ClearCoatReflectionMask, job, 0), 1e-4f);
+            Assert.AreEqual(0f, Evaluate(plan, AtlasVirtualMap.ClearCoatReflectionMask, job, 2), 1e-4f);
+            Assert.AreSame(coat.Reflections.Mask.Map, coat.Highlights.Mask.Map);
+            Assert.IsFalse(plan.Maps.Any(m => m.Map == AtlasVirtualMap.ClearCoatSpecularMask));
+            Assert.AreEqual(Color.red, coat.Reflections.Tint, "from the largest region");
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("clear coat is taken from source 1")), string.Join(" | ", plan.Notes));
+
+            var toon = AtlasOutputPipeline.Resolve(job, AtlasShaderRegistry.Output("mobiletoon").Capabilities);
+            Assert.IsNull(toon.Output.Surface.Response.ClearCoat);
+            Assert.IsTrue(toon.Notes.Any(n => n.Contains("has no clear coat")), string.Join(" | ", toon.Notes));
+        }
+
+        [Test]
+        public void TheWriterSetsTheClearCoatTheParserReadsBack()
+        {
+            var shader = AtlasShaderRegistry.Output("poiyomi10");
+            if (shader.FindShader() == null) return;
+            var packed = Solid(new Color(0.5f, 0.5f, 0.5f, 0.5f));
+            var unified = new AtlasUnifiedMaterial();
+            var coat = unified.Surface.Response.ClearCoat = new AtlasClearCoat();
+            coat.Strength.Map = new AtlasTextureReference { Texture = packed };
+            coat.Roughness.Map = new AtlasTextureReference { Texture = packed };
+            coat.Reflections.Mask = new AtlasMask { Map = coat.Strength.Map };
+            coat.Highlights.Mask = new AtlasMask { Map = coat.Strength.Map };
+            coat.Reflections.Strength = 0.7f;
+            coat.Reflections.Tint = new Color(1f, 0.5f, 0.25f, 1f);
+            coat.Highlights.Strength = 2f;
+            coat.NormalMapAmount = 0.4f;
+            var material = new Material(shader.FindShader());
+            created.Add(material);
+            shader.Write(unified, material);
+            var parsed = AtlasShaderRegistry.Detect(material).Parse(material).Surface.Response.ClearCoat;
+            Assert.IsNotNull(parsed);
+            Assert.AreSame(packed, parsed.Strength.Map?.Texture);
+            Assert.AreEqual(AtlasChannel.Red, parsed.Strength.Channel);
+            Assert.AreSame(packed, parsed.Roughness.Map?.Texture);
+            Assert.AreEqual(AtlasChannel.Green, parsed.Roughness.Channel);
+            Assert.IsTrue(parsed.Roughness.InvertResult, "stored as smoothness");
+            Assert.AreEqual(AtlasChannel.Blue, parsed.Reflections.Mask.Channel);
+            Assert.AreEqual(AtlasChannel.Blue, parsed.Highlights.Mask.Channel, "shared with the reflection mask");
+            Assert.AreEqual(0.7f, parsed.Reflections.Strength, 1e-4f);
+            Assert.AreEqual(2f, parsed.Highlights.Strength, 1e-4f);
+            Assert.AreEqual(0.25f, parsed.Reflections.Tint.b, 1e-3f);
+            Assert.AreEqual(0.4f, parsed.NormalMapAmount, 1e-4f);
+
+            // Constants without a map.
+            coat.Strength.Map = coat.Roughness.Map = null;
+            coat.Reflections.Mask = coat.Highlights.Mask = null;
+            coat.Strength.Constant = 0.5f;
+            coat.Roughness.Constant = 0.3f;
+            shader.Write(unified, material);
+            parsed = AtlasShaderRegistry.Detect(material).Parse(material).Surface.Response.ClearCoat;
+            Assert.IsNull(parsed.Strength.Map);
+            Assert.AreEqual(0.5f, parsed.Strength.Constant, 1e-4f);
+            Assert.IsNull(parsed.Roughness.Map);
+            Assert.AreEqual(0.3f, parsed.Roughness.InvertResult ? 1f - parsed.Roughness.Constant : parsed.Roughness.Constant, 1e-4f);
+            Assert.IsNull(parsed.Reflections.Mask);
+
+            shader.Write(new AtlasUnifiedMaterial(), material);
+            Assert.IsNull(AtlasShaderRegistry.Detect(material).Parse(material).Surface.Response.ClearCoat, "none");
+        }
+
         [Test]
         public void OcclusionIsBakedAndSourcesWithoutItAreUnoccluded()
         {
