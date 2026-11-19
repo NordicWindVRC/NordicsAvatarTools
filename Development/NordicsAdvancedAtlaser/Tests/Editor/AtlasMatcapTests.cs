@@ -150,12 +150,15 @@ namespace NordicWind.AdvancedAtlaser.Tests
         public void ToonStandardApproximatesBlendsItLacksWithTheHeaviestOfAddAndMultiply()
         {
             var material = WithMatcap(Solid(Color.white), null, Color.white, (AtlasBlend.Screen, 0.6f), (AtlasBlend.Replace, 0.3f));
-            var plan = AtlasOutputPipeline.Resolve(Job(material), ToonStandard);
+            var job = Job(material);
+            var plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
             var layer = Lookups(plan).Single();
             Assert.AreEqual(AtlasBlend.Add, layer.Blend, "screen brightens: added");
-            Assert.AreEqual(0.6f, layer.Opacity, 1e-5f);
+            Assert.AreEqual(1f, layer.Opacity, 1e-5f, "fitted: the strength is in the mask");
             Assert.IsTrue(plan.Notes.Any(n => n.Contains("approximated")), string.Join("\n", plan.Notes));
-            Assert.IsFalse(plan.Maps.Any(m => m.Map == AtlasVirtualMap.Mask1), "one source, everywhere: no mask map");
+            // On white: replace 0.3 leaves 0.7 with a black matcap, and a white one gives 1.
+            Assert.AreEqual(0.3f, Evaluate(plan, AtlasVirtualMap.Mask1, job, 0), 1e-3f);
+            Assert.AreEqual(0.7f, Evaluate(plan, AtlasVirtualMap.BaseColor, job, 0), 1e-3f);
         }
 
         [Test]
@@ -282,8 +285,29 @@ namespace NordicWind.AdvancedAtlaser.Tests
             float full = plan.GeneratedTextures.Single(t => t.Name == "Matcap1").Pixels()[0].r;
             float none = (1f - 0.8f) * (1f - 0.6f);
             Assert.AreEqual(gray * none, baseColor * Mathf.Lerp(1f, none, strength), 1e-3f, "black matcaps");
-            Assert.AreEqual(gray * (1f - 0.8f + 0.8f * 0.5f * gray) * (1f - 0.6f + 0.6f * 0.9f * gray),
-                baseColor * Mathf.Lerp(1f, full, strength), 1e-3f, "white matcaps");
+            // The second matcap mixes in the base color as the first left it.
+            float first = gray * (1f - 0.8f + 0.8f * 0.5f * gray);
+            Assert.AreEqual(first * (1f - 0.6f + 0.6f * 0.9f * first), baseColor * Mathf.Lerp(1f, full, strength), 1e-3f, "white matcaps");
+        }
+
+        // Multiply and screen both rise with the matcap: one multiplied matcap over a brighter
+        // base color shows both, exact where the matcap is black or white.
+        [Test]
+        public void AScreenTheSlotLacksGoesIntoABrighterBaseColor()
+        {
+            const float gray = 0.5f;
+            var material = WithMatcap(Solid(Color.white), null, Color.white, (AtlasBlend.Multiply, 0.8f), (AtlasBlend.Screen, 0.4f));
+            material.Surface.BaseColor.Color = new Color(gray, gray, gray, 1f);
+            var job = Job(material);
+            var plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
+            var layer = Lookups(plan).Single();
+            Assert.AreEqual(AtlasBlend.Multiply, layer.Blend);
+            float strength = layer.Opacity * Evaluate(plan, AtlasVirtualMap.Mask1, job, 0);
+            float baseColor = Evaluate(plan, AtlasVirtualMap.BaseColor, job, 0) * plan.Output.Surface.BaseColor.Color.r;
+            Assert.Greater(baseColor, gray, "brighter than the source's");
+            float multiplied = gray * (1f - 0.8f);
+            Assert.AreEqual(multiplied, baseColor * Mathf.Lerp(1f, 0f, strength), 1e-3f, "black matcap");
+            Assert.AreEqual(Mathf.Lerp(gray, 1f, 0.4f), baseColor * Mathf.Lerp(1f, 1f, strength), 1e-3f, "white matcap");
         }
 
         [Test]

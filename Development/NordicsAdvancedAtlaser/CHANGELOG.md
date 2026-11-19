@@ -396,12 +396,15 @@ EditMode tests pass in Unity 2022.3.22.
   VRCFury neither removes them nor warns about them. Sources of other outputs keep the warning.
   The placeholders that NDMF saves with the build's assets are left to it instead of being
   destroyed, which failed with "Destroying assets is not permitted".
-- **Multiplied matcaps with base color mix came out far too bright on Toon Standard.** Poiyomi
-  multiplies the matcap by the base color before multiplying it in, so a darker base color
-  darkens more. Folding the base color's luminance into the mask did the opposite and weakened
-  the darkening. A multiplying slot now fits it per texel with its mask and the base color map
-  (`AtlasMatcapFeature.MultiplyFit`): exact for one matcap on a gray base, approximated for
-  colored bases and stacked matcaps. Adding slots keep the mask fold.
+- **Matcaps with base color mix or blends the slot lacks came out wrong on Toon Standard.**
+  Multiplied matcaps with base color mix came out far too bright: Poiyomi multiplies the matcap
+  by the base color first, so a darker base color darkens more, while folding its luminance
+  into the mask weakened the darkening. Screens and other blends the slot lacks were converted
+  to its add or multiply. A slot that can't show a source's matcaps as they are is now fitted
+  per texel to Poiyomi's whole chain (every blend in order, each matcap mixing in the base
+  color as the previous ones left it): its strength goes into the mask and the rest into the
+  base color map, which can come out brighter than the source's (`AtlasMatcapFeature.SlotFit`).
+  Exact for a single layer on a gray base, exact with the matcaps black or white otherwise.
 - **Source materials swapped by another tool during the build** (VRCFury copies materials whose
   textures don't stream their mipmaps) weren't found on any renderer, so their bakes came out
   empty. The early capture now records the renderer slots holding each source material, and a
