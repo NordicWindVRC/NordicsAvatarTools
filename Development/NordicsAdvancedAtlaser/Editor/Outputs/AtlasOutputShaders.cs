@@ -47,15 +47,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f)),
                 EmissionTexture(),
                 // _EmissionMap2 and 3: emissions whose hue cycles.
-                new AtlasOutputTexture("EmissionCycle1", "Cycling emission 1") { SizeMode = AtlasTextureSizeMode.MainAspect }
+                new AtlasOutputTexture("EmissionCycle1", "Cycling emission 1") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
                     .With(AtlasVirtualMap.EmissionCycle1, AtlasTextureChannels.RGB, new Color(0f, 0f, 0f, 1f)),
-                new AtlasOutputTexture("EmissionCycle2", "Cycling emission 2") { SizeMode = AtlasTextureSizeMode.MainAspect }
+                new AtlasOutputTexture("EmissionCycle2", "Cycling emission 2") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
                     .With(AtlasVirtualMap.EmissionCycle2, AtlasTextureChannels.RGB, new Color(0f, 0f, 0f, 1f)),
                 // _MainColorAdjustTexture: R where the base color's hue cycles.
                 new AtlasOutputTexture("ColorAdjust", "Hue cycling mask") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false, MainDivisor = 2 }
                     .With(AtlasVirtualMap.HueCyclingMask, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f)),
                 // _EmissionMap1: emission shown through a live global mask channel.
-                new AtlasOutputTexture("EmissionLive", "Live emission") { SizeMode = AtlasTextureSizeMode.MainAspect }
+                new AtlasOutputTexture("EmissionLive", "Live emission") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
                     .With(AtlasVirtualMap.EmissionLive, AtlasTextureChannels.RGB, new Color(0f, 0f, 0f, 1f)),
                 // _LightingShadowMasks reads R, _LightingDetailShadowMaps G (by their channel strengths).
                 new AtlasOutputTexture("LightingMasks", "Shadow and detail masks") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
@@ -122,6 +122,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             ProximityColor = true,
             HueCycling = true,
             EmissionSlots = 4,
+            AudioLinkPerSection = true,
             DetailUVChannels = 3,
             DetailTextureBlends = { AtlasBlend.MultiplyDouble },
             DetailStrength = true,
@@ -193,6 +194,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             WriteProximityColor(output, material);
             WriteHueCycling(output, material);
             WriteCyclingEmission(output, material);
+            WriteAudioLinkGlobals(output, material);
             WriteEmission(output, material);
             WriteLiveEmission(output, material);
             var render = output.Render;
@@ -237,7 +239,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 .With(maps[3], AtlasTextureChannels.A, AtlasOutputTexture.Gray(0f));
 
         public static AtlasOutputTexture EmissionTexture() =>
-            new AtlasOutputTexture("Emission", "Emission") { SizeMode = AtlasTextureSizeMode.MainAspect }
+            new AtlasOutputTexture("Emission", "Emission") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
                 .With(AtlasVirtualMap.Emission, AtlasTextureChannels.RGB, new Color(0f, 0f, 0f, 1f));
 
         // Emission 0 (_EnableEmission with its _EMISSION keyword): _EmissionColor (HDR, set from
@@ -419,6 +421,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 else m.DisableKeyword(MatcapKeywords[i]);
                 if (on) WriteMatcap(m, i, p, slots[i]);
                 WriteLayerHue(m, p + "HueShift", p + "HueSelectOrShift", output, on ? slots[i][0] : null);
+                WriteMatcapAudio(m, output, i, p, on ? slots[i] : null);
             }
         }
 
@@ -502,6 +505,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 else m.DisableKeyword(keyword);
                 if (on) WriteRim(m, slots[i], N);
                 WriteLayerHue(m, N("_RimHueShift", "_Rim2HueShift"), N("_RimHueSelectOrShift", "_Rim2HueSelectOrShift"), output, on ? slots[i][0] : null);
+                if (on) WriteRimAudio(m, output, slots[i][0], N);
             }
         }
 
@@ -773,19 +777,139 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (map == null) continue;
                 float total = emission.Targets.First(t => t.Target == AtlasSurfaceTarget.Emission).Opacity;
                 float strength = Mathf.Min(total, 20f);
-                float rest = total / Mathf.Max(strength, 1e-4f);
+                // What's above 20 goes into the color (none at strength 0: AudioLink adds it).
+                float rest = total > 20f ? total / 20f : 1f;
                 m.SetTexture("_EmissionMap" + s, map);
                 m.SetTextureScale("_EmissionMap" + s, Vector2.one);
                 m.SetTextureOffset("_EmissionMap" + s, Vector2.zero);
                 m.SetFloat("_EmissionMap" + s + "UV", 0);
-                m.SetColor("_EmissionColor" + s, new Color(rest, rest, rest, 1f).gamma);
+                // The slot's color (an AudioLink emission's brightest color) × what's above 20.
+                var tint = emission.Source.Color * rest;
+                m.SetColor("_EmissionColor" + s, new Color(tint.r, tint.g, tint.b, 1f).gamma);
                 m.SetFloat("_EmissionColor" + s + "ThemeIndex", 0);
                 m.SetFloat("_EmissionStrength" + s, strength);
                 m.SetTexture("_EmissionMask" + s, null);
                 m.SetFloat("_EmissionReplace" + s, 0);
                 m.SetFloat("_EmissionBaseColorAsMap" + s, 0);
                 WriteLayerHue(m, "_EmissionHueShift", "_EmissionHueSelectOrShift" + s, output, emission, s);
+                WriteEmissionAudio(m, output, emission, s);
             }
+        }
+
+        // ---- AudioLink, as the Poiyomi parser reads it (AtlasPoiyomiAudioLink) ----
+
+        private static readonly string[] AudioSmoothing =
+            { "_AudioLinkSmoothingBass", "_AudioLinkSmoothingLowMid", "_AudioLinkSmoothingHighMid", "_AudioLinkSmoothingTreble" };
+
+        // The section (POI_AUDIOLINK) and each band's smoothing, from the modulators.
+        private static void WriteAudioLinkGlobals(AtlasUnifiedMaterial output, Material m)
+        {
+            var audio = output.Modulators.Where(AtlasAudio.IsAudio).ToList();
+            m.SetFloat("_EnableAudioLink", audio.Count > 0 ? 1 : 0);
+            if (audio.Count > 0) m.EnableKeyword("POI_AUDIOLINK");
+            else m.DisableKeyword("POI_AUDIOLINK");
+            if (audio.Count == 0) return;
+            m.SetFloat("_AudioLinkAnimToggle", 1);
+            for (int band = 0; band < 4; band++)
+            {
+                var first = audio.FirstOrDefault(a => (int)a.Audio.Band == band && a.Audio.Spread == AtlasAudioSpread.None);
+                if (first != null) m.SetFloat(AudioSmoothing[band], first.Audio.Smoothing);
+            }
+        }
+
+        // target mode lerp(range.x, range.y, band): the range (neutral without) and the band.
+        private static void WriteAudioRange(Material m, AtlasUnifiedMaterial output, AtlasLayer layer, string part, AtlasModulatorMode mode,
+            string band, string range)
+        {
+            var modulator = layer != null ? AtlasAudio.Find(output, layer, part, mode) : null;
+            float neutral = mode == AtlasModulatorMode.Multiply ? 1f : 0f;
+            m.SetVector(range, modulator != null ? new Vector4(modulator.Min, modulator.Max, 0f, 0f) : new Vector4(neutral, neutral, 0f, 0f));
+            if (modulator != null) m.SetFloat(band, (int)modulator.Audio.Band);
+        }
+
+        // The color override: prefix + Enabled, Band, ThemeIndex and Ramp, each + suffix; the color.
+        private static void WriteAudioColor(Material m, AtlasUnifiedMaterial output, AtlasLayer layer, string part, string prefix, string suffix = "")
+        {
+            var modulator = layer != null ? AtlasAudio.Find(output, layer, part, AtlasModulatorMode.BlendToColor) : null;
+            m.SetFloat(prefix + "Enabled" + suffix, modulator != null ? 1 : 0);
+            if (modulator == null) return;
+            m.SetFloat(prefix + "Band" + suffix, (int)modulator.Audio.Band);
+            m.SetColor(prefix + suffix, modulator.Color.gamma);
+            m.SetFloat(prefix + "ThemeIndex" + suffix, 0);
+            m.SetVector(prefix + "Ramp" + suffix, modulator.Curve);
+        }
+
+        // Chronotensity × speed added to the part.
+        private static void WriteAudioChrono(Material m, AtlasUnifiedMaterial output, AtlasLayer layer, string part, string band, string motion, string speed)
+        {
+            var modulator = layer != null ? AtlasAudio.Find(output, layer, part, AtlasModulatorMode.Add, AtlasAudioSpread.Chrono) : null;
+            m.SetFloat(speed, modulator != null ? modulator.Max : 0f);
+            if (modulator == null) return;
+            m.SetFloat(band, (int)modulator.Audio.Band);
+            m.SetFloat(motion, modulator.Audio.ChronoMotion);
+        }
+
+        // A × (1 + add / base) modulator written back as Poiyomi's add to a base value.
+        private static void WriteAudioAdd(Material m, AtlasUnifiedMaterial output, AtlasLayer layer, string part, string band, string range, float baseValue)
+        {
+            var modulator = layer != null ? AtlasAudio.Find(output, layer, part, AtlasModulatorMode.Multiply) : null;
+            m.SetVector(range, modulator != null ? new Vector4((modulator.Min - 1f) * baseValue, (modulator.Max - 1f) * baseValue, 0f, 0f) : Vector4.zero);
+            if (modulator != null) m.SetFloat(band, (int)modulator.Audio.Band);
+        }
+
+        private static void WriteEmissionAudio(Material m, AtlasUnifiedMaterial output, AtlasSurfaceLayer emission, string s)
+        {
+            string a = "_EmissionAL" + s;
+            bool any = AtlasAudio.HasAudio(output, emission);
+            m.SetFloat(a + "Enabled", any ? 1 : 0);
+            if (!any) return;
+            WriteAudioRange(m, output, emission, ".targets[0].opacity", AtlasModulatorMode.Add, a + "StrengthBand", a + "StrengthMod");
+            WriteAudioRange(m, output, emission, ".targets[0].opacity", AtlasModulatorMode.Multiply, a + "MultipliersBand", a + "Multipliers");
+            var centerOut = AtlasAudio.Find(output, emission, ".targets[0].opacity", AtlasModulatorMode.Add, AtlasAudioSpread.History);
+            string c = "_AudioLinkEmission" + s + "CenterOut";
+            m.SetVector(c, centerOut != null ? new Vector4(centerOut.Min, centerOut.Max, 0f, 0f) : Vector4.zero);
+            if (centerOut != null)
+            {
+                m.SetFloat(c + "Band", (int)centerOut.Audio.Band);
+                m.SetFloat(c + "Duration", centerOut.Audio.HistoryLength / 128f);
+                m.SetFloat(c + "Size", centerOut.Audio.Threshold);
+            }
+            WriteAudioColor(m, output, emission, ".source.color", a + "ColorOverride");
+        }
+
+        private static void WriteMatcapAudio(Material m, AtlasUnifiedMaterial output, int index, string p, List<AtlasLookupLayer> layers)
+        {
+            string a = "_Matcap" + index + "AL";
+            var first = layers?.FirstOrDefault();
+            bool any = layers != null && layers.Any(l => AtlasAudio.HasAudio(output, l));
+            m.SetFloat(a + "Enabled", any ? 1 : 0);
+            if (!any) return;
+            WriteAudioRange(m, output, first, ".source.color.a", AtlasModulatorMode.Add, a + "AlphaAddBand", a + "AlphaAdd");
+            WriteAudioRange(m, output, first, ".emissionAmount", AtlasModulatorMode.Add, a + "EmissionAddBand", a + "EmissionAdd");
+            WriteAudioAdd(m, output, first, ".source.color", a + "IntensityAddBand", a + "IntensityAdd", m.GetFloat(p + "Intensity"));
+            WriteAudioColor(m, output, first, ".source.color", a + "ColorOverride");
+        }
+
+        private static void WriteRimAudio(Material m, AtlasUnifiedMaterial output, AtlasAngleLayer rim, RimName n)
+        {
+            string a = n("_AudioLinkRim", "_AudioLinkRim2");
+            WriteAudioRange(m, output, rim, ".high", AtlasModulatorMode.Add, a + "WidthBand", a + "WidthAdd");
+            WriteAudioRange(m, output, rim, ".emissionAmount", AtlasModulatorMode.Add, a + "EmissionBand", a + "EmissionAdd");
+            WriteAudioAdd(m, output, rim, ".color.color", a + "BrightnessBand", a + "BrightnessAdd", m.GetFloat(n("_RimBrightness", "_Rim2Brightness")));
+            WriteAudioColor(m, output, rim, ".color.color", a + "ColorOverride");
+        }
+
+        private static void WriteGlitterAudio(Material m, AtlasUnifiedMaterial output, AtlasPatternLayer layer)
+        {
+            bool any = AtlasAudio.HasAudio(output, layer);
+            m.SetFloat("_GlitterALEnabled", any ? 1 : 0);
+            if (!any) return;
+            WriteAudioRange(m, output, layer, ".opacity", AtlasModulatorMode.Add, "_GlitterALAlphaAddBand", "_GlitterALAlphaAdd");
+            WriteAudioRange(m, output, layer, ".glitter.maxBrightness", AtlasModulatorMode.Add, "_GlitterALMaxBrightnessBand", "_GlitterALMaxBrightnessAdd");
+            WriteAudioRange(m, output, layer, ".glitter.size", AtlasModulatorMode.Add, "_GlitterALSizeAddBand", "_GlitterALSizeAdd");
+            WriteAudioChrono(m, output, layer, ".glitter.sparkleOffset", "_GlitterALChronoSparkleSpeedBand", "_GlitterALChronoSparkleSpeedType", "_GlitterALChronoSparkleSpeed");
+            WriteAudioChrono(m, output, layer, ".glitter.rotationOffset", "_GlitterALChronoRotationSpeedBand", "_GlitterALChronoRotationSpeedType", "_GlitterALChronoRotationSpeed");
+            WriteAudioColor(m, output, layer, ".color", "_GlitterALColorOverride");
         }
 
         // Subsurface scattering (POI_SUBSURFACESCATTERING), as the Poiyomi parser reads it
@@ -911,7 +1035,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             Consumer(m, "_GlitterMaskGlobalMask", layer.Mask?.Bus ?? -1, layer.Mask?.BusBlend ?? AtlasMaskBlend.Add);
             m.SetFloat("_GlitterHideInShadow", layer.HideInShadow);
             WriteLayerHue(m, "_GlitterHueShift", "_GlitterHueSelectOrShift", output, layer);
-            m.SetFloat("_GlitterALEnabled", 0);
+            WriteGlitterAudio(m, output, layer);
         }
 
         // The detail texture and detail normal kept live (FINALPASS), as the Poiyomi parser reads
@@ -1407,7 +1531,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     .With(AtlasVirtualMap.Roughness, AtlasTextureChannels.G, AtlasOutputTexture.Gray(0f), invert: true)
                     .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.B, AtlasOutputTexture.Gray(1f)),
                 PoiyomiToon10OutputShader.EmissionTexture(),
-                PoiyomiToon10OutputShader.MaskTexture(1, AtlasVirtualMap.Mask1, AtlasVirtualMap.Mask2, AtlasVirtualMap.Mask3, AtlasVirtualMap.Mask4)
+                PoiyomiToon10OutputShader.MaskTexture(1, AtlasVirtualMap.Mask1, AtlasVirtualMap.Mask2, AtlasVirtualMap.Mask3, AtlasVirtualMap.Mask4),
+                // _AudioLinkMask: the AudioLink emission's color per part, black without.
+                new AtlasOutputTexture("AudioLink", "AudioLink color") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
+                    .With(AtlasVirtualMap.AudioLinkColor, AtlasTextureChannels.RGB, Color.black)
             },
             Reflectance = AtlasReflectanceSupport.FollowsSmoothness,
             // _VertexColor: the base color × the vertex RGB as stored.
@@ -1424,8 +1551,46 @@ namespace NordicWind.AdvancedAtlaser.Editor
             DetailUVChannels = 1,
             DetailTextureBlends = { AtlasBlend.Replace, AtlasBlend.Add, AtlasBlend.Multiply, AtlasBlend.MultiplyDouble },
             DetailNormal = true,
-            DetailMaskByChannel = true
+            DetailMaskByChannel = true,
+            // One AudioLink emission (USE_AUDIOLINK) with a mask texture.
         };
+
+        // AudioLink (USE_AUDIOLINK), as the Toon Standard parser reads it: one emission, its color
+        // and mask in _AudioLinkMask (RGB, not masked by the emission), the tint white × the
+        // intensity, the band, mode (pulse, scroll, bar) and blend.
+        private static readonly AtlasBlend[] AudioBlends = { AtlasBlend.Replace, AtlasBlend.Add, AtlasBlend.Multiply };
+
+        private static void WriteAudioLink(AtlasUnifiedMaterial output, Material material)
+        {
+            var layer = AtlasAudioLinkFeature.Of(output);
+            if (layer == null)
+            {
+                material.DisableKeyword("USE_AUDIOLINK");
+                return;
+            }
+            material.EnableKeyword("USE_AUDIOLINK");
+            var modulator = AtlasAudio.Of(output, layer).First();
+            var audio = modulator.Audio;
+            material.SetFloat("_AudioLinkMode", audio.Spread == AtlasAudioSpread.History ? 1 : audio.Spread == AtlasAudioSpread.Fill ? 2 : 0);
+            material.SetFloat("_ALBlendMode", Mathf.Max(0, Array.IndexOf(AudioBlends, layer.Targets[0].Blend)));
+            material.SetTexture("_AudioLinkMask", layer.Source.Map?.Texture);
+            material.SetFloat("_ALMaskUVChannel", 0);
+            material.SetFloat("_ALMaskByEmission", 0);
+            material.SetFloat("_ALMaskChannel", 0);
+            material.SetColor("_ALTint", Color.white);
+            material.SetFloat("_ALIntensity", Mathf.Clamp(layer.Source.Color.maxColorComponent, 0f, 12f));
+            material.SetFloat("_ALBand", Mathf.Clamp((int)audio.Band, 0, 3));
+            material.SetFloat("_ALSmoothing", Mathf.Clamp(Mathf.Round(audio.Smoothing * 15f), 0f, 15f));
+            material.SetFloat("_ALEnableFallback", audio.FallbackBeat ? 1 : 0);
+            material.SetFloat("_ALFallbackSpeed", audio.FallbackSpeed);
+            material.SetFloat("_ALEffectUVChannel", 0);
+            material.SetFloat("_ALEffectUseMask", 0);
+            material.SetFloat("_ALRimMaskStrength", 0);
+            bool centerOut = audio.Coordinate == AtlasSpreadCoordinate.ViewAngle;
+            material.SetFloat("_ALScrollCenterOut", centerOut ? 1 : 0);
+            material.SetFloat("_ALScrollScale", audio.HistoryLength / (centerOut ? 64f : 128f));
+            material.SetFloat("_ALBarSmoothing", audio.FillSoftness);
+        }
 
         // The detail maps kept live (USE_DETAIL_MAPS) on UV1: the albedo by mode, the normal at its
         // scale (normal maps on), one mask by channel for both.
@@ -1555,6 +1720,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             else material.DisableKeyword("USE_NORMAL_MAPS");
             // After the normal map: a live detail normal turns normal maps on.
             WriteDetails(output, material);
+            WriteAudioLink(output, material);
 
             // USE_SPECULAR: metallic = _MetallicMap's channel × strength, smoothness = _GlossMap's ×
             // strength, reflectance = gloss × _Reflectance. USE_OCCLUSION_MAP: lerp(1, channel, strength).

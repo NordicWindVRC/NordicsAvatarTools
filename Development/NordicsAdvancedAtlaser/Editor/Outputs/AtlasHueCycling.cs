@@ -17,7 +17,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (material == null || index < 0 || index >= material.ColorAdjustments.Count) return null;
             if (material.ColorAdjustments[index].Operation != AtlasColorOperation.Hue) return null;
             string path = "colorAdjustments[" + index + "]";
-            var modulators = material.Modulators.Where(m => m.Target != null && (m.Target == path || m.Target.StartsWith(path + ".") || m.Target.StartsWith(path + "["))).ToList();
+            // Audio modulators at rest don't count: the cycling is kept, the music part rests.
+            var modulators = material.Modulators.Where(m => m.Target != null && !AtlasAudio.AtRest(m) &&
+                (m.Target == path || m.Target.StartsWith(path + ".") || m.Target.StartsWith(path + "["))).ToList();
             if (modulators.Count != 1) return null;
             var turn = modulators[0];
             bool saw = turn.Time.Waveform == AtlasWaveform.Saw || turn.Time.Waveform == AtlasWaveform.ReverseSaw;

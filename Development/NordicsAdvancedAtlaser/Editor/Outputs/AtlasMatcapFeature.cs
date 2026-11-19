@@ -354,6 +354,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         output.Add(copy);
                         // Its hue shift (and hue cycling) goes with it.
                         AtlasHueCycling.CopyLayerHue(context.Output, context.Job.Sources[slot[0].Members[0].Source].Material, layer, copy);
+                        AtlasAudio.CopyLayerAudio(context.Output, context.Job.Sources[slot[0].Members[0].Source].Material, layer, copy);
                     }
                     return;
                 }
@@ -363,6 +364,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 var single = Copy(template[0], slotMask, blend, AtlasPlacement.Surface, opacity * scale, template[0].Source.Map, template[0].Source.Color);
                 output.Add(single);
                 AtlasHueCycling.CopyLayerHue(context.Output, context.Job.Sources[slot[0].Members[0].Source].Material, template[0], single);
+                AtlasAudio.CopyLayerAudio(context.Output, context.Job.Sources[slot[0].Members[0].Source].Material, template[0], single);
                 return;
             }
 

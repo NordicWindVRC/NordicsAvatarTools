@@ -64,8 +64,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // A path no modulator drives: "layers[3]", "colorAdjustments[0]".
+        // Audio modulators that leave their target as it is without music count as static: the
+        // part is baked at rest (AtlasAudio).
         public static bool IsStatic(AtlasUnifiedMaterial source, string path) =>
-            !source.Modulators.Any(m => m.Target != null && (m.Target == path || m.Target.StartsWith(path + ".") || m.Target.StartsWith(path + "[")));
+            !source.Modulators.Any(m => m.Target != null && !AtlasAudio.AtRest(m) &&
+                                        (m.Target == path || m.Target.StartsWith(path + ".") || m.Target.StartsWith(path + "[")));
 
         // A texture that stays still on UV0: tiled over the surface, or placed as a decal that
         // CanPlace bakes.
@@ -92,22 +95,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         /// <summary>The same for a layer's emission targets, which may also take the base color as
         /// their source's multiplier.</summary>
-        public static bool CanBakeEmission(AtlasUnifiedMaterial source, int index, AtlasSurfaceLayer layer) =>
-            Bakeable(source, index, layer, emission: true);
+        public static bool CanBakeEmission(AtlasUnifiedMaterial source, int index, AtlasSurfaceLayer layer, bool anyModulators = false) =>
+            Bakeable(source, index, layer, emission: true, anyModulators);
 
-        private static bool Bakeable(AtlasUnifiedMaterial source, int index, AtlasSurfaceLayer layer, bool emission) =>
+        private static bool Bakeable(AtlasUnifiedMaterial source, int index, AtlasSurfaceLayer layer, bool emission, bool anyModulators = false) =>
             layer.Enabled && (layer.Placement == AtlasPlacement.Surface || (emission && layer.Placement == AtlasPlacement.Emission)) &&
             layer.Faces == AtlasFaces.Both && layer.Mirror == AtlasMirrorVisibility.Both && layer.HideInShadow <= 0f && layer.Screen == null &&
             (emission || !layer.SourceTimesBaseColor) && !layer.SourceIntensityIsAlpha && layer.Source.AudioTheme < 0 &&
             (!emission || (!layer.OverridesBaseColor && !layer.EmissionTimesAlpha)) &&
             (layer.Source.Map == null || StillOnUV0(layer.Source.Map)) &&
             (layer.Mask == null || AtlasMapEvaluator.CanEvaluate(layer.Mask, source)) &&
-            IsStatic(source, "layers[" + index + "]");
+            (anyModulators || IsStatic(source, "layers[" + index + "]"));
 
         /// <summary>A source's emission: its baked emission layers added up, divided by
         /// <paramref name="outputStrength"/>, the strength the output's emission is drawn at.</summary>
         public static NordicsTextureWrapper EvaluateEmission(AtlasUnifiedMaterial source, int width, int height, float outputStrength,
-            ICollection<AtlasLayer> only = null)
+            ICollection<AtlasLayer> only = null, bool anyModulators = false, bool clamp = true, bool unitStrength = false)
         {
             var result = new NordicsTextureWrapper(width, height, AtlasMapEvaluator.Settings(AtlasVirtualMap.BaseColor));
             result.Fill(new Color(0f, 0f, 0f, 1f));
@@ -115,7 +118,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 for (int i = 0; i < source.Layers.Count; i++)
                 {
-                    if (!(source.Layers[i] is AtlasSurfaceLayer layer) || !CanBakeEmission(source, i, layer)) continue;
+                    // Modulated layers too where asked (an AudioLink emission's own map).
+                    if (!(source.Layers[i] is AtlasSurfaceLayer layer) ||
+                        !CanBakeEmission(source, i, layer, anyModulators && only != null && only.Contains(layer))) continue;
                     // Only the given layers; otherwise every one not kept elsewhere.
                     if (only != null ? !only.Contains(layer) : AtlasLiveLayers.Skipped(source, layer)) continue;
                     foreach (var target in layer.Targets.Where(t => t.Target == AtlasSurfaceTarget.Emission))
@@ -128,13 +133,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
                                 using (var baseColor = Evaluate(source, width, height, multiplyColor: true))
                                     layerSource.Blit(baseColor, blend: TextureBlendMode.Multiply);
                             using (var mask = Mask(layer, source, layerSource, coverage, width, height))
+                                // Unit strength: the emission's color, map and mask alone (an emission
+                                // AudioLink gives its strength).
                                 result.Blit(layerSource, mask: mask, maskOptions: mask != null ? new TextureMaskOptions { Channel = TextureChannel.R } : null,
-                                    blend: TextureBlendMode.Add, strength: Mathf.Max(0f, target.Opacity));
+                                    blend: TextureBlendMode.Add, strength: unitStrength ? 1f : Mathf.Max(0f, target.Opacity));
                         }
                 }
                 float scale = 1f / Mathf.Max(outputStrength, 1e-4f);
                 result.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Tint, Parameters = { Color = new Color(scale, scale, scale, 1f) } });
-                result.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Clamp, Parameters = { Amount = 0f, Amount2 = 1f } });
+                if (clamp) result.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Clamp, Parameters = { Amount = 0f, Amount2 = 1f } });
                 return result;
             }
             catch

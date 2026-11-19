@@ -86,7 +86,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (plan != null)
                 foreach (var state in overview.Features)
                     if (plan.LiveSetups.TryGetValue(state.Feature.Id, out var setups)) state.LiveSetups.AddRange(setups);
-            overview.AddTextures(config, capabilities);
+            overview.AddTextures(config, capabilities, plan);
             if (plan != null) overview.AddOtherTextures(plan, config, capabilities);
             return overview;
         }
@@ -241,7 +241,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return state;
         }
 
-        private void AddTextures(AtlasOutputConfiguration config, AtlasOutputCapabilities capabilities)
+        // The atlas textures: with a resolve, the maps the build makes (optional where a mode
+        // declares them optional); without one, the maps the modes declare.
+        private void AddTextures(AtlasOutputConfiguration config, AtlasOutputCapabilities capabilities, AtlasOutputPlan plan)
         {
             var required = new HashSet<AtlasVirtualMap>();
             var optional = new HashSet<AtlasVirtualMap>();
@@ -250,6 +252,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (state.Active.Count == 0 || state.Mode.Kind == AtlasFeatureModeKind.Off) continue;
                 required.UnionWith(state.Mode.RequiredMaps);
                 optional.UnionWith(state.Mode.OptionalMaps.Where(capabilities.Provides));
+            }
+            if (plan != null)
+            {
+                var made = new HashSet<AtlasVirtualMap>(plan.Maps.Select(r => r.Map));
+                optional.IntersectWith(made);
+                made.ExceptWith(optional);
+                required = made;
             }
             Textures.AddRange(TextureUses(config, capabilities, required, optional));
             foreach (var use in Textures)

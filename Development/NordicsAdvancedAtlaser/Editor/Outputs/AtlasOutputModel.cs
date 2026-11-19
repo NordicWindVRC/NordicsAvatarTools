@@ -50,7 +50,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // One value: where the base color's hue cycles (its hue mask, 0 where it doesn't).
         HueCyclingMask,
         // RGB: emissions whose hue cycles, each in an emission slot of its own.
-        EmissionCycle1, EmissionCycle2
+        EmissionCycle1, EmissionCycle2,
+        // RGB: the AudioLink emission's color × gain per source, black without (Toon Standard).
+        AudioLinkColor
     }
 
     // Which channels of a texture a virtual map fills.
@@ -218,6 +220,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Emission slots: the first holds the baked emission, the second the live global mask
         // emission, the rest emissions whose hue cycles.
         public int EmissionSlots = 1;
+        // AudioLink: each section has its own (Poiyomi), or one AudioLink emission (Toon Standard).
+        public bool AudioLinkPerSection;
         // Global masks (1.5): the mask textures double as the first global mask textures (Mask1
         // to Mask8 are channels 0–7), and these steps run live on a channel.
         public bool GlobalMasks;

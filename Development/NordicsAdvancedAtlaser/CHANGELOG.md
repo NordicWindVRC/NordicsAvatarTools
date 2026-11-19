@@ -8,6 +8,11 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **AudioLink:** parts that AudioLink drives are baked at rest instead of being left out,
+  where their modulators leave them as they are without music (`AtlasAudio`). Poiyomi keeps
+  matcap, rim and glitter AudioLink on their slots and gives an audio-driven emission an
+  emission slot of its own; Toon Standard gets one AudioLink emission (`USE_AUDIOLINK`) from
+  the reference source (*AudioLink from*) with its color in an *AudioLink color* texture.
 - **Hue cycling:** a cycling hue (a hue shift with a speed) is now baked at its start instead
   of being left out (`AtlasHueCycling`). *Hue Cycling* (Poiyomi) keeps the base color's
   cycling live (Color Adjust, its mask in a *Hue cycling mask* texture) and the final color's
@@ -307,6 +312,8 @@ EditMode tests pass in Unity 2022.3.22.
   correction hit the 60° limit, which points to a mismatch between the meshes.
 
 ### Changed
+- **Emission textures** (*Emission*, *Live emission*, *Cycling emission 1* and *2*) start at
+  half the main texture's size, like the mask textures.
 - **Reflection and specular masks:** a reflection or highlight strength that is the same
   everywhere goes into the strength instead of a mask, and a highlight mask equal to the
   reflection mask reads the reflection mask's channel (Poiyomi's channel 4, white, or 2).
@@ -381,6 +388,17 @@ EditMode tests pass in Unity 2022.3.22.
   avatar shader, Uber, replaces it. Mochie Standard materials go to the fallback parser.
 
 ### Fixed
+- **The Textures list** showed the textures the active feature modes can use, so it listed an
+  *Emission* texture the build didn't make (Toon Standard, with an emission that only glows
+  with music) and left out the cycling emission textures. With the sources readable, it now
+  lists the textures the build makes.
+- **Poiyomi emission slots with the same map** (emissions that differ only in their AudioLink
+  band) each baked an identical texture. Slots whose maps come out the same now share one.
+- **Emissions that only glow with music** (strength 0, AudioLink adding to it) came out black
+  in Toon Standard's AudioLink color and weren't kept on Poiyomi at all. They now count as
+  emission; an AudioLink emission slot holds the emission at unit strength with its own
+  strength for AudioLink to add to, and Toon Standard's AudioLink color is the emission ×
+  how bright the music makes it at most ((strength + added) × multipliers).
 - **Generated textures were uncompressed:** combined matcaps and rims drawn into matcaps were
   RGBA32 in the build and imported with defaults by *Bake to Assets*. They're now compressed
   and imported like the atlas maps, with the output's formats for their kind.

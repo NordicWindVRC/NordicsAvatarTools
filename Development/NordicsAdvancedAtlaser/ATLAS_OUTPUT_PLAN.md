@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is done; 2.9 is next (2.9a to 2.9c done, 2.9d next), before 2.8 (both outputs light and have the maps 2.8's bakes stand in for, so 2.8 matters first where the user turns maps off). It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is done; 2.9 is next (2.9a to 2.9d done, 2.9e next), then 2.8, which completes milestone 2 (done after 2.9: both outputs light and have the maps 2.8's bakes stand in for, so 2.8 matters first where the user turns maps off). It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -322,7 +322,9 @@ normal bakes skip what's kept live (`AtlasLiveLayers`); *off* leaves it out of t
   added later that are unlit or have no normal maps. Bake-ins that freeze a view- or
   light-dependent effect into the color (rims, matcaps, backlight) stay out unless they keep
   the artist's intent better than leaving the effect out.
-- **Workable:** VRChat Mobile Toon Standard keeps much more of the look through baking.
+- Built after 2.9.
+- **Workable — M2 reached:** every initial feature, on both writers; VRChat Mobile Toon
+  Standard keeps much more of the look through baking.
 
 ### 2.9 Effects
 
@@ -349,11 +351,19 @@ Sources at another rate stay at their start. Matcap, rim and glitter slots copy 
 layer's hue shift and cycling; an emission whose hue cycles takes an emission slot of its own
 (Emission 2 and 3). Toon Standard keeps every cycling hue at its start, listed.
 
-**2.9d** *AudioLink* (native per feature).
+**2.9d AudioLink.** Audio modulators that leave their target as it is without music (as
+Poiyomi's do) count as static: the bakes take the part at rest instead of leaving it out
+(`AtlasAudio`). Slots keep their layer's AudioLink live (matcaps, rims, glitter); an
+audio-driven emission takes an emission slot of its own (Emission 2 and 3, shared with
+cycling hues). Toon Standard has one AudioLink emission: the reference source's (*AudioLink
+from*), each kept source's emission × its audio gain in an *AudioLink color* texture; the
+others aren't kept, listed. AudioLink on parts without a slot (decals, patterns, colors,
+alpha) is shown at rest, listed.
 
 **2.9e** *World AO blocker*: typed in the unified material, read by the Poiyomi parser,
 written as one switch.
-- **Workable — M2 reached:** every initial feature, on both writers.
+- **Workable:** every initial feature but the baking toolkit, on both writers (2.8 follows
+  and completes milestone 2).
 
 ---
 

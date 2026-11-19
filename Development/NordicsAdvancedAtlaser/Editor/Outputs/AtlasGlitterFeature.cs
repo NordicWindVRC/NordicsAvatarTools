@@ -180,6 +180,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             context.Output.Layers.Add(output);
             AtlasHueCycling.CopyLayerHue(context.Output, job.Sources[reference.Index].Material, reference.Layer, output);
+            AtlasAudio.CopyLayerAudio(context.Output, job.Sources[reference.Index].Material, reference.Layer, output);
         }
 
         // ---- Emulated ----

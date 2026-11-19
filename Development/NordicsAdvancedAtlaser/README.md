@@ -204,6 +204,10 @@ its UV space. For the details, see `UNIFIED_MATERIAL.md` (the description of a m
        for the atlas (*Hue Cycling from*), only where they did. Matcaps, rims, glitter and
        emission keep their own cycling. Mobile Toon Standard can't cycle, so those colors
        stay at their starting hue.
+     - **AudioLink**: parts that react to music are baked as they look without music, and
+       keep reacting where the atlas has a place for them: on Poiyomi, matcaps, rims, glitter
+       and emission keep their AudioLink; on Mobile Toon Standard, one material's AudioLink
+       emission (*AudioLink from*). The build log lists AudioLink that isn't kept.
      - **Hidden UV Tiles** (Poiyomi's UV tile discard): *Kept live* (the atlas material hides
        the same tiles, read from a spare UV channel the build writes), *Removed from the mesh*
        (any output shader; only tiles hidden on both sides), or *Off*.

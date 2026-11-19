@@ -397,7 +397,9 @@ shader's packing, and the writer never computes a map.
 
 ### Texture settings
 
-The *Textures* section lists the textures in use, required ones first:
+The *Textures* section lists the textures in use, required ones first. With every source
+readable, these are the textures the build makes (from a resolve of the sources); otherwise the
+ones the active feature modes can use:
 - Each row names the texture and the virtual maps it carries in this configuration, for
   example *Metallic map: metallic, roughness, occlusion*.
 - **Required** textures are always on.
@@ -406,7 +408,8 @@ The *Textures* section lists the textures in use, required ones first:
 - **Sizes** follow a size mode per texture:
   - **main aspect** (UV-space maps: color, normal, masks, surface maps), a size from the
     sizes that keep the main texture's aspect. A new one starts at the main size, or at half
-    of it for the mask allocator's *Masks* textures, which need less detail;
+    of it for textures that need less detail (the mask allocator's *Masks* textures, the
+    emission textures, and other masks and effect colors);
   - **square** (matcaps, generated rim matcaps);
   - **custom** (ramps and other lookups).
 - Each row shows its memory for PC and for Android, and the section shows the totals for
@@ -666,7 +669,7 @@ allocator (see [*Masks*](#masks)). *Merge* uses the strategies above.
 | Feature | Unified | Modes | Maps | Merge and notes |
 |---|---|---|---|---|
 | **Proximity color** | 1.9 a modulator with source *camera distance*, driving a color adjustment | 1. Native<br>2. Off | — | Shared value from the reference source (*Proximity Color from*). Poiyomi's has no mask, so it covers the whole atlas; when some sources don't have it, that's listed and *Off* is the choice |
-| **AudioLink** | 1.3 AudioLink themes<br>1.9 audio modulators<br>4.6 audio patterns | 1. Native, per feature<br>2. Off (the feature keeps its rest value) | Per feature | Each feature that AudioLink drives keeps it only where the output supports AudioLink for that feature. AudioLink modes keyed to UV tiles read a preserved UV channel (see [*UV channels*](#uv-channels)) |
+| **AudioLink** | 1.3 AudioLink themes<br>1.9 audio modulators<br>4.6 audio patterns | 1. Per feature (outputs whose sections have AudioLink)<br>2. AudioLink emission (outputs with one)<br>3. Off (the feature keeps its rest value) | AudioLink color, for an AudioLink emission | A modulator that leaves its target as it is without music is baked at rest (`AtlasAudio`). Per feature: slots copy their layer's modulators (matcaps, rims, glitter), an audio-driven emission takes an emission slot of its own (slots whose maps come out the same, such as emissions that differ only in their band, share one map); parts without a slot stay at rest, listed. AudioLink emission: the reference source's (*AudioLink from*), each kept source's emission × its audio gain in the AudioLink color map, normalized to its brightest value; scroll and bar run along the atlas's UVs (listed). AudioLink modes keyed to UV tiles read a preserved UV channel (see [*UV channels*](#uv-channels)) |
 | **Surface mode and render queue** | 6 | 1. Automatic: the most see-through mode among the sources that the output supports (opaque, cutout, dithered, transparent, fade, in that order). When transparent or fade sources mix with others, a **fade with depth writes** (Poiyomi's TransClipping): the solid parts, at alpha 1, sort like opaque ones and the transparent sources keep their alpha; a plain blended mode would make the whole avatar sort wrongly. An output that can't do that gets the most see-through of the other sources' modes, and the transparent sources are drawn solid (alpha 1), never cut or dithered. A source whose alpha is turned off counts as opaque<br>2. A chosen mode, including *Fade with Depth* | — | Always on. The queue follows the mode (the writer's queue for it); a queue override isn't there yet. Additive, multiplicative and custom blends aren't merged yet: their sources count as opaque |
 | **Fallback shader** | 6 (not typed) | 1. Automatic: the writer's choice<br>2. Toon, Unlit, Standard or Hidden | — | Always on, where the writer sets one. The writer follows the surface mode and culling (Poiyomi: `VRCFallback`, such as `ToonCutout` or `ToonFadeDoubleSided`) |
 | **Hidden UV tiles** | 6 tile discard | 1. Live<br>2. Removed from the mesh<br>3. Off | a preserved UV channel, live | *Live*: each source's UVs (in its tiles' channel) go into a UV channel the allocator gives, moved by whole tiles where the output would hide them differently; a tile keeps its number where the sources agree, so animated tile toggles keep their meaning there. Sources without hidden tiles get UVs outside the 4 × 4 grid. One side can be hidden live where the output has it (Poiyomi's Face Discard); a second side is listed. *Removed*: the remap leaves out the triangles with a vertex in a tile hidden on both sides, on any output; one-sided tiles are listed. *Off*: shown |
