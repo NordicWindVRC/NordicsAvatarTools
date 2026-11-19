@@ -279,7 +279,11 @@ layers. Until then, live mask steps stay baked at their normal-view value and ar
 - What the output shader has nothing for is listed, for every feature.
 - Rim color textures are listed; depth rims moved to *Later*.
 
-**2.7c Clear coat:** native only (Poiyomi). Each source's coat strength and roughness in the
+**2.7c Clear coat:** native on Poiyomi; on Toon Standard *Into the gloss map*: in coated parts
+the gloss is raised toward the coat's, `lerp(base, max(base, coat), coat strength × coat
+reflection strength)`, so they get real, sharper highlights and reflections on its one layer
+(the surface under the coat becomes as glossy as the coat there; tints and the normal map
+amount aren't kept, listed). On Poiyomi: each source's coat strength and roughness in the
 *Clear coat maps* texture (no coat: strength 0), its reflection and highlight strengths in
 its masks relative to the strongest, under the allocator's rules; tints, fresnel, cubemaps,
 the normal map amount and anti-aliasing from the reference source (*Clear Coat from*).

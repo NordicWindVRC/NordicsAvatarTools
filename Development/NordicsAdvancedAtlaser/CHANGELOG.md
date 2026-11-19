@@ -12,7 +12,10 @@ EditMode tests pass in Unity 2022.3.22.
   roughness into a *Clear coat maps* texture (`_ClearCoatMaps`: R strength, G smoothness),
   its reflection and highlight strengths into B and A relative to the strongest (none where
   one value fits, A sharing B where equal), and takes the rest of the coat from the reference
-  source (*Clear Coat from*). Toon Standard has no coat, which the build log lists.
+  source (*Clear Coat from*). Toon Standard has no coat: its *Into the gloss map* mode raises
+  the gloss in the coated parts toward the coat's (by coat strength × reflection strength,
+  never lowering it), creating the metallic and gloss maps when no source has highlights; the
+  build log lists what that doesn't keep.
 - **Rim lighting:** a *Rim Lighting* feature puts every source's view-angle rims into the
   output's rim slots: Poiyomi's two (each written in the style that holds it: Poiyomi, UTS2
   with its antipodean rim, or lilToon with its indirect rim; other rims fitted to the Poiyomi

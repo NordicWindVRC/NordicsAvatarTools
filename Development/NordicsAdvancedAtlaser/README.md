@@ -110,10 +110,12 @@ and `ATLAS_OUTPUT.md` for the output design.
        matte. Poiyomi's reflectance is fixed; on Toon
        Standard, where the materials need different reflectance, *Reflectance from* picks
        the material it comes from (*Automatic*: the one with the largest area).
-     - **Clear Coat** (Poiyomi): each material's coat strength and smoothness in a *Clear
+     - **Clear Coat**: on Poiyomi, each material's coat strength and smoothness in a *Clear
        coat maps* texture, and how strong its reflections and highlights are, relative to the
        strongest; materials without a coat have none. Where the coats' other settings (tints,
-       fresnel, cubemaps) differ, *Clear Coat from* picks the material they come from.
+       fresnel, cubemaps) differ, *Clear Coat from* picks the material they come from. Mobile
+       Toon Standard has no coat; *Into the gloss map* makes the coated parts as glossy as
+       their coat instead, so they keep its sharp highlights and reflections.
      - **Ambient Occlusion**: each source's occlusion map, at its strength; sources without
        one stay unoccluded.
      - **Lighting**: one lighting setup for the atlas, taken from one material. Where the

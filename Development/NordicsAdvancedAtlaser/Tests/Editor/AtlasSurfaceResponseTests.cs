@@ -143,6 +143,34 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
+        public void WithoutACoatTheOutputTakesItIntoTheGloss()
+        {
+            var toonStandard = AtlasShaderRegistry.Output("mobiletoon").Capabilities;
+            // Base roughness 0.5 (gloss 0.5) under a coat of roughness 0.1 (gloss 0.9).
+            var job = Job(Coated(1f, 0.1f, Color.white), Lit(1f, 1f), Coated(0.5f, 0.1f, Color.white));
+            var plan = AtlasOutputPipeline.Resolve(job, toonStandard);
+            Assert.AreEqual("gloss", plan.Modes[AtlasClearCoatFeature.FeatureId].Id);
+            Assert.AreEqual(0.1f, Evaluate(plan, AtlasVirtualMap.Roughness, job, 0), 1e-4f, "fully coated: the coat's gloss");
+            Assert.AreEqual(0.5f, Evaluate(plan, AtlasVirtualMap.Roughness, job, 1), 1e-4f, "no coat: unchanged");
+            Assert.AreEqual(0.3f, Evaluate(plan, AtlasVirtualMap.Roughness, job, 2), 1e-4f, "half coated: halfway, gloss 0.7");
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("raises the gloss")), string.Join(" | ", plan.Notes));
+
+            // A coat on a material without highlights of its own: the coat brings the surface maps.
+            var coatOnly = Lit(0f, 0f);
+            coatOnly.Surface.Response.ClearCoat = new AtlasClearCoat();
+            coatOnly.Surface.Response.ClearCoat.Roughness.Constant = 0.2f;
+            job = Job(coatOnly, Lit(0f, 0f));
+            plan = AtlasOutputPipeline.Resolve(job, toonStandard);
+            Assert.IsTrue(plan.Maps.Any(m => m.Map == AtlasVirtualMap.Metallic));
+            Assert.AreEqual(0.2f, Evaluate(plan, AtlasVirtualMap.Roughness, job, 0), 1e-4f);
+            Assert.AreEqual(1f, Evaluate(plan, AtlasVirtualMap.Roughness, job, 1), 1e-4f);
+            Assert.AreEqual(0f, Evaluate(plan, AtlasVirtualMap.Metallic, job, 0), 1e-4f);
+            Assert.IsTrue(plan.Output.Surface.Response.Highlights.Enabled);
+
+            Assert.AreEqual("native", AtlasOutputPipeline.Resolve(job, Poiyomi).Modes[AtlasClearCoatFeature.FeatureId].Id, "Poiyomi keeps its coat");
+        }
+
+        [Test]
         public void TheWriterSetsTheClearCoatTheParserReadsBack()
         {
             var shader = AtlasShaderRegistry.Output("poiyomi10");

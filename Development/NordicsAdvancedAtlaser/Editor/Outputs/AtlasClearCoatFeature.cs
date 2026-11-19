@@ -10,6 +10,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // allocator's rules (one value everywhere: no mask; a highlight mask equal to the reflection
     // mask reads its channel). The rest of the coat (tints, fresnel, cubemaps, the normal map
     // amount, anti-aliasing) is one setup from the reference source.
+    // An output without a coat but with a gloss map takes it into the gloss instead: in coated
+    // parts, gloss = lerp(base, max(base, coat), coat strength × coat reflection strength), so
+    // they get the coat's sharper highlights and reflections on the one layer it has.
     public sealed class AtlasClearCoatFeature : IAtlasSharedValueFeature
     {
         public const string FeatureId = "clearcoat";
@@ -21,6 +24,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Id = "native", Label = "Clear coat maps", Kind = AtlasFeatureModeKind.Native,
                 RequiredMaps = new[] { AtlasVirtualMap.ClearCoatStrength, AtlasVirtualMap.ClearCoatRoughness },
                 OptionalMaps = new[] { AtlasVirtualMap.ClearCoatReflectionMask, AtlasVirtualMap.ClearCoatSpecularMask }
+            },
+            new AtlasFeatureMode
+            {
+                Id = "gloss", Label = "Into the gloss map", Kind = AtlasFeatureModeKind.Emulated,
+                RequiredMaps = new[] { AtlasVirtualMap.Metallic, AtlasVirtualMap.Roughness },
+                Requires = c => !c.Provides(AtlasVirtualMap.ClearCoatStrength)
             },
             AtlasFeatureMode.Off
         };
@@ -54,6 +63,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         public void Resolve(AtlasFeatureContext context)
         {
+            if (context.Mode.Kind == AtlasFeatureModeKind.Emulated)
+            {
+                IntoGloss(context);
+                return;
+            }
             var job = context.Job;
             var active = new HashSet<int>(context.Sources);
             int reference = Reference(context);
@@ -107,6 +121,63 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (differ.Count > 0)
                 context.Notes.Add($"The clear coat is taken from source {reference + 1}; the clear coat of " +
                                   (differ.Count == 1 ? "source " : "sources ") + string.Join(", ", differ) + " differs.");
+            var materials = context.Sources.Select(i => job.Sources[i].Material).ToList();
+            if (materials.Any(m => !AtlasMapEvaluator.CanEvaluate(Coat(m).Strength, m) || !AtlasMapEvaluator.CanEvaluate(Coat(m).Roughness, m)))
+                context.Notes.Add("A clear coat map on another UV, remapped or on a global mask written by layers or the second pass isn't baked yet; its slider value is used.");
+        }
+
+        // The coat in the surface's roughness map: each coated source's roughness lowered toward
+        // the coat's where it's coated. Without a roughness map (no source has highlights), the
+        // feature asks for the surface maps itself: no metallic, rough wherever there's no coat.
+        private static void IntoGloss(AtlasFeatureContext context)
+        {
+            var job = context.Job;
+            var active = new HashSet<int>(context.Sources);
+            if (context.Plan.Modes.TryGetValue("specular", out var specularMode) && specularMode.Kind == AtlasFeatureModeKind.Off)
+            {
+                context.Notes.Add("Reflection and Specular is off, so the clear coat has no gloss to go into; it's left out.");
+                return;
+            }
+            var response = context.Output.Surface.Response;
+            var request = context.Maps.Find(m => m.Map == AtlasVirtualMap.Roughness);
+            if (request == null)
+            {
+                var none = new HashSet<int>();
+                response.Metallic.Constant = 1f;
+                response.Metallic.Map = AtlasSpecularFeature.Request(context, AtlasVirtualMap.Metallic, none, 0f, null);
+                response.Roughness.Constant = 1f;
+                response.Roughness.Map = AtlasSpecularFeature.Request(context, AtlasVirtualMap.Roughness, none, 1f, null);
+                request = context.Maps.Find(m => m.Map == AtlasVirtualMap.Roughness);
+            }
+            response.Highlights.Enabled = response.Reflections.Enabled = true;
+            if (response.Highlights.Strength <= 0f) response.Highlights.Strength = 1f;
+            if (response.Reflections.Strength <= 0f) response.Reflections.Strength = 1f;
+            var inner = request.Evaluate;
+            request.Evaluate = (index, material, width, height) =>
+            {
+                var result = inner != null ? inner(index, material, width, height)
+                    : AtlasMapEvaluator.Evaluate(AtlasVirtualMap.Roughness, material, width, height);
+                var coat = Coat(material);
+                if (!active.Contains(index) || coat == null) return result;
+                using (var coatRoughness = AtlasMapEvaluator.Scalar(coat.Roughness, width, height, material))
+                using (var amount = AtlasMapEvaluator.Scalar(coat.Strength, width, height, material))
+                using (var reflections = AtlasMapEvaluator.ScaledMask(coat.Reflections.Mask, Mathf.Clamp01(coat.Reflections.Strength), width, height, material))
+                {
+                    // The amount, strength × reflection strength, rides along in the coat's green.
+                    AtlasPixels.Map(amount, reflections, (a, r) => new Color(Mathf.Clamp01(a.r * r.r), 0f, 0f, 1f));
+                    AtlasPixels.Map(coatRoughness, amount, (c, a) => new Color(c.r, a.r, 0f, 1f));
+                    AtlasPixels.Map(result, coatRoughness, (b, c) =>
+                    {
+                        float baseGloss = 1f - b.r, coatGloss = 1f - c.r;
+                        float gloss = Mathf.Lerp(baseGloss, Mathf.Max(baseGloss, coatGloss), c.g);
+                        float roughness = 1f - gloss;
+                        return new Color(roughness, roughness, roughness, b.a);
+                    });
+                }
+                return result;
+            };
+            context.Notes.Add("The output shader has no clear coat; it raises the gloss in the coated parts instead " +
+                              "(a surface under the coat is as glossy as the coat there; the coat's tints and normal map amount aren't kept).");
             var materials = context.Sources.Select(i => job.Sources[i].Material).ToList();
             if (materials.Any(m => !AtlasMapEvaluator.CanEvaluate(Coat(m).Strength, m) || !AtlasMapEvaluator.CanEvaluate(Coat(m).Roughness, m)))
                 context.Notes.Add("A clear coat map on another UV, remapped or on a global mask written by layers or the second pass isn't baked yet; its slider value is used.");

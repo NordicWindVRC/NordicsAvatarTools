@@ -213,7 +213,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             enabled ? AtlasMapEvaluator.ScaledMask(mask, Mathf.Clamp01(strength), width, height, material)
                 : AtlasMapEvaluator.Constant(AtlasVirtualMap.SpecularMask, 0f, width, height);
 
-        // A one-value map for every source: the active ones evaluated, the others at `neutral`.
+        // A one-value map for every source: the active ones evaluated, the others (and every
+        // source without `evaluate`) at `neutral`.
         internal static AtlasTextureReference Request(AtlasFeatureContext context, AtlasVirtualMap map, HashSet<int> active, float neutral,
             System.Func<AtlasUnifiedMaterial, int, int, NordicsTextureWrapper> evaluate)
         {
@@ -221,7 +222,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 Map = map,
                 Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Data },
-                Evaluate = (index, material, width, height) => active.Contains(index)
+                Evaluate = (index, material, width, height) => active.Contains(index) && evaluate != null
                     ? evaluate(material, width, height)
                     : AtlasMapEvaluator.Constant(map, neutral, width, height)
             };
