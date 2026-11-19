@@ -76,6 +76,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool Normal;
         // The size a new texture of mode Square or Custom starts at.
         public int DefaultSize = 512;
+        // A new texture of mode MainAspect starts at the main size divided by this (masks need
+        // less detail than colors).
+        public int MainDivisor = 1;
         public readonly List<AtlasTextureChannel> Channels = new List<AtlasTextureChannel>();
 
         public AtlasOutputTexture(string id, string label) { Id = id; Label = label; }

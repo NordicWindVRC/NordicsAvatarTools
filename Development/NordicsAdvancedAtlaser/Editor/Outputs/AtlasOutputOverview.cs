@@ -164,8 +164,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     width = height = texture.DefaultSize;
                 else
                 {
-                    width = main.width;
-                    height = main.height;
+                    int divisor = texture.SizeMode == AtlasTextureSizeMode.MainAspect ? Mathf.Max(1, texture.MainDivisor) : 1;
+                    width = main.width / divisor;
+                    height = main.height / divisor;
                 }
                 AtlasTextureSizes.Normalize(texture.SizeMode, main.width, main.height, ref width, ref height);
                 use.Width = width;

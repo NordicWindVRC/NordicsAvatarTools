@@ -166,7 +166,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The emission map, sRGB, a size keeping the main texture's aspect.
         // The mask allocator's places: four one-value masks in a linear texture.
         public static AtlasOutputTexture MaskTexture(int number, params AtlasVirtualMap[] maps) =>
-            new AtlasOutputTexture("Masks" + number, "Masks " + number) { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
+            new AtlasOutputTexture("Masks" + number, "Masks " + number) { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false, MainDivisor = 2 }
                 .With(maps[0], AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f))
                 .With(maps[1], AtlasTextureChannels.G, AtlasOutputTexture.Gray(0f))
                 .With(maps[2], AtlasTextureChannels.B, AtlasOutputTexture.Gray(0f))

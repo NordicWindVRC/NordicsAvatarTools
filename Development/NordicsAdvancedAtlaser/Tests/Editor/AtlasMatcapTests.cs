@@ -244,6 +244,19 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
+        public void MaskTexturesStartAtHalfTheMainSize()
+        {
+            var config = new AtlasOutputConfiguration { mainTexture = { width = 4096, height = 2048 } };
+            var use = AtlasOutputOverview.TextureUses(config, Poiyomi, new[] { AtlasVirtualMap.Mask1 }, new AtlasVirtualMap[0]).Single();
+            Assert.AreEqual("Masks1", use.Texture.Id);
+            Assert.AreEqual(2048, use.Width);
+            Assert.AreEqual(1024, use.Height, "at the main texture's aspect");
+            config.textures.Add(new AtlasTextureSetting { textureId = "Masks1", enabled = true, width = 4096, height = 2048 });
+            Assert.AreEqual(4096, AtlasOutputOverview.TextureUses(config, Poiyomi, new[] { AtlasVirtualMap.Mask1 }, new AtlasVirtualMap[0]).Single().Width,
+                "a chosen size stays");
+        }
+
+        [Test]
         public void CombineAddsOrMultipliesTheWeightedParts()
         {
             var parts = new List<(AtlasTextureReference Map, Color Color, float Weight)>

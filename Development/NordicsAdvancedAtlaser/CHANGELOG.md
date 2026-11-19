@@ -23,7 +23,8 @@ EditMode tests pass in Unity 2022.3.22.
 - **Mask allocator:** `AtlasMaskAllocator` gives each mask a feature needs over the atlas a
   place: none for a constant, a shared channel for equal masks, the same channel read
   inverted for an inverse, otherwise the next channel of the output's *Masks 1* and *Masks 2*
-  textures (Poiyomi; Toon Standard has *Masks 1*).
+  textures (Poiyomi; Toon Standard has *Masks 1*), which start at half the main texture's
+  size (`AtlasOutputTexture.MainDivisor`).
 - `AtlasSettingValue.text`, for stored values that name something.
 - **Lighting floors:** each writer sets its one floor from the unified floors, so an atlas
   stays visible in dark worlds whatever the source shader: Toon Standard's Min Brightness from

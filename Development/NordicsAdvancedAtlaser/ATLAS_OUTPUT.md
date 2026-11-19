@@ -380,7 +380,8 @@ The *Textures* section lists the textures in use, required ones first:
   map it carries (below).
 - **Sizes** follow a size mode per texture:
   - **main aspect** (UV-space maps: color, normal, masks, surface maps), a size from the
-    sizes that keep the main texture's aspect;
+    sizes that keep the main texture's aspect. A new one starts at the main size, or at half
+    of it for the mask allocator's *Masks* textures, which need less detail;
   - **square** (matcaps, generated rim matcaps);
   - **custom** (ramps and other lookups).
 - Each row shows its memory for PC and for Android, and the section shows the totals for
