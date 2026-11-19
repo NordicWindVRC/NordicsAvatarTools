@@ -8,6 +8,12 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Glitter:** a *Glitter* feature. Poiyomi: one setup from the reference source (*Glitter
+  from*) on a preserved UV channel scaled by each source's density, opacity × mask in an
+  allocated mask, written as the reverse of the parser. Toon Standard: *Points in the maps*
+  draws the cells as still points (`AtlasGlitterPattern`) into the emission, the metallic and
+  gloss, and the base color, with strengths set in the inspector (*Glow*, *Shine*, *Color*:
+  feature options, `IAtlasOptionFeature`).
 - **Tiled layers kept live:** *Detail Texture* and *Detail Normal* keep a source's tiled
   detail live on a preserved UV channel holding its UV0 × tiling + offset (Poiyomi's
   `_DetailTex` and `_DetailNormalMap` on any channel with the new *Detail mask* texture; Toon

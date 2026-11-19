@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is done; 2.8 is next. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is done; 2.9 is next (2.9a done, 2.9b next), before 2.8 (both outputs light and have the maps 2.8's bakes stand in for, so 2.8 matters first where the user turns maps off). It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -317,15 +317,29 @@ normal bakes skip what's kept live (`AtlasLiveLayers`); *off* leaves it out of t
   overlapping UVs (symmetric rig, averaging).
 - Bake-ins: full light and form shading, normal-map shading, occlusion maps into color,
   matcaps and rims into color or emission, rims emulated as matcaps.
+- Where it applies on Poiyomi and Toon Standard: a map the user turns off to save memory
+  (normal maps → normal-map shading, the occlusion map → occlusion into color), and outputs
+  added later that are unlit or have no normal maps. Bake-ins that freeze a view- or
+  light-dependent effect into the color (rims, matcaps, backlight) stay out unless they keep
+  the artist's intent better than leaving the effect out.
 - **Workable:** VRChat Mobile Toon Standard keeps much more of the look through baking.
 
 ### 2.9 Effects
 
-- *Glitter and sparkle* (native, emulated into emission, metallic and roughness, and color),
-  *Proximity color*, *Subsurface scattering* (native), *AudioLink* (native per feature).
-- *World AO blocker*: typed in the unified material, read by the Poiyomi parser, written as
-  one switch.
-- *Color adjustments* (native live), with the output's modulators.
+**2.9a Glitter:** native on Poiyomi, one setup from the reference source (*Glitter from*), on
+a preserved UV channel holding each source's UV × (its density ÷ the output's) so every
+source keeps its particle size, opacity × mask in an allocated mask. Toon Standard: *Points in
+the maps*, the cells drawn as still points into the emission (*Glow*), the metallic and gloss
+(*Shine*) and the base color (*Color*), each with its own strength (feature options,
+`IAtlasOptionFeature`); they don't twinkle, which the build log says.
+
+**2.9b** *Subsurface scattering* (native), *Proximity color*.
+
+**2.9c** *Color adjustments* (native live), with the output's modulators; *AudioLink* (native
+per feature).
+
+**2.9d** *World AO blocker*: typed in the unified material, read by the Poiyomi parser,
+written as one switch.
 - **Workable — M2 reached:** every initial feature, on both writers.
 
 ---

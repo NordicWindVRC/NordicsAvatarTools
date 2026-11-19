@@ -155,6 +155,11 @@ and `ATLAS_OUTPUT.md` for the output design.
        material (*Environmental Rim from*, *Backlight from*: *Automatic* takes the one with
        the largest area); each material's strength, or backlight color, is kept per part.
      - Features the output shader has nothing for are listed in the build log.
+     - **Glitter**: on Poiyomi, one glitter setup for the atlas (*Glitter from*), each
+       material keeping its own particle size and strength. Mobile Toon Standard has no
+       glitter: its particles are drawn as still points that glow (*Glow*), shine in the
+       light and reflections (*Shine*) and take the glitter's color (*Color*), each with its
+       own strength; they don't twinkle.
      - **Hidden UV Tiles** (Poiyomi's UV tile discard): *Kept live* (the atlas material hides
        the same tiles, read from a spare UV channel the build writes), *Removed from the mesh*
        (any output shader; only tiles hidden on both sides), or *Off*.

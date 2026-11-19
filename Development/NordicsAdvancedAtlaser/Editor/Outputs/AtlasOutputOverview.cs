@@ -27,6 +27,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool InstancesAsMatcap;
         // Sources with different live global mask setups for the feature, one of each (Live from).
         public readonly List<int> LiveSetups = new List<int>();
+        // The feature's own settings in its mode (IAtlasOptionFeature).
+        public readonly List<AtlasFeatureOption> Options = new List<AtlasFeatureOption>();
     }
 
     // One output texture the chosen modes use, with its size and memory.
@@ -67,6 +69,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 var state = State(feature, config, capabilities, materials, unified);
                 if (state == null) continue;
+                if (feature is IAtlasOptionFeature withOptions && state.Mode != null && state.Mode.Kind != AtlasFeatureModeKind.Off && state.Active.Count > 0)
+                    state.Options.AddRange(withOptions.Options(state.Mode));
                 if (feature is IAtlasConflictSwitchFeature switches && state.Present.Count > 1)
                     state.Switches.AddRange(switches.ConflictingSwitches(probe ?? (probe = Probe(config, materials, unified)), capabilities));
                 if (feature is IAtlasInstanceFeature items && state.Mode != null && state.Mode.Kind != AtlasFeatureModeKind.Off && state.Active.Count > 0)

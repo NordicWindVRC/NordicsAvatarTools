@@ -106,6 +106,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // camera, distance and blacklight modifiers (contacts are Poiyomi 11's).
             // Detail texture (× 2 in gamma, tinted, with an intensity) and detail normal, on any
             // UV channel; the detail mask's R and G.
+            Glitter = true,
             DetailUVChannels = 3,
             DetailTextureBlends = { AtlasBlend.MultiplyDouble },
             DetailStrength = true,
@@ -172,6 +173,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             WriteClearCoat(output.Surface.Response.ClearCoat, material);
             WriteGlobalMasks(output, material);
             WriteDetails(output, material);
+            WriteGlitter(output, material);
             WriteEmission(output, material);
             WriteLiveEmission(output, material);
             var render = output.Render;
@@ -678,6 +680,80 @@ namespace NordicWind.AdvancedAtlaser.Editor
             m.SetFloat("_EmissionReplace1", 0);
             m.SetFloat("_EmissionBaseColorAsMap1", 0);
             Consumer(m, "_EmissionMask1GlobalMask", emission.Mask.Bus, emission.Mask.BusBlend);
+        }
+
+        // Glitter (_SUNDISK_SIMPLE), as the Poiyomi parser reads it (AtlasPoiyomiPatterns).
+        private static void WriteGlitter(AtlasUnifiedMaterial output, Material m)
+        {
+            var layer = output.Layers.OfType<AtlasPatternLayer>().FirstOrDefault(l => l.Kind == AtlasPatternKind.Glitter && l.Glitter != null);
+            m.SetFloat("_GlitterEnable", layer != null ? 1 : 0);
+            if (layer != null) m.EnableKeyword("_SUNDISK_SIMPLE");
+            else m.DisableKeyword("_SUNDISK_SIMPLE");
+            if (layer == null) return;
+            var g = layer.Glitter;
+            bool linear = g.Mode == AtlasGlitterMode.Linear;
+            m.SetFloat("_GlitterMode", (int)g.Mode);
+            m.SetFloat("_GlitterShape", g.Shape == AtlasGlitterShape.Square ? 1 : 0);
+            m.SetFloat("_GlitterUV", Mathf.Clamp(g.Space - AtlasTextureSpace.UV0, 0, 3));
+            m.SetVector("_GlitterUVPanning", new Vector4(g.Scroll.x / 0.05f, g.Scroll.y / 0.05f, 0f, 0f));
+            m.SetFloat("_GlitterFrequency", g.Density);
+            m.SetFloat("_GlitterLayers", g.Layers);
+            m.SetFloat("_GlitterRandomLocation", g.RandomPosition);
+            m.SetFloat("_GlitterFullCoverage", g.Overlap ? 1 : 0);
+            m.SetFloat("_GlitterSize", g.Size);
+            m.SetFloat("_GlitterRandomSize", g.RandomSize ? 1 : 0);
+            m.SetVector("_GlitterMinMaxSize", new Vector4(g.SizeRange.x, g.SizeRange.y, 0f, 1f));
+            m.SetFloat("_GlitterUseNormals", g.NormalAmount);
+            m.SetFloat(linear ? "_GlitterLinearMinBrightness" : "_GlitterMinBrightness", g.MinBrightness);
+            m.SetFloat(linear ? "_GlitterLinearBrightness" : "_GlitterBrightness", g.MaxBrightness);
+            m.SetFloat(linear ? "_GlitterLinearSpeed" : "_GlitterSpeed", g.Speed);
+            m.SetFloat(linear ? "_GlitterLinearDistanceLOD" : "_GlitterDistanceLOD", g.DistanceLOD ? 1 : 0);
+            m.SetFloat("_GlitterAngleRange", g.AngleRange);
+            m.SetFloat("_GlitterBias", g.Bias);
+            m.SetFloat("_GlitterAngleOffset", g.AngleOffset);
+            m.SetFloat("_GlitterContrast", g.Contrast);
+            m.SetFloat("_GlitterJaggyFix", g.JaggyFix);
+            m.SetFloat("_GlitterLinearSensitivity", g.LinearSensitivity);
+            m.SetFloat("_GlitterLinearContrast", g.LinearContrast);
+            m.SetFloat("_GlitterLinearPostContrast", g.LinearPostContrast);
+            m.SetFloat("_GlitterLinearAngle", g.LinearAngleLimit);
+            m.SetFloat("_GlitterLinearLightDirection", g.LinearLightDirection);
+            m.SetFloat("_GlitterLinearVRParallax", g.LinearVRParallax);
+            m.SetTexture("_GlitterColorMap", g.ColorMap?.Texture);
+            m.SetFloat("_GlitterColorMapUV", 0);
+            m.SetFloat("_GlitterUseSurfaceColor", g.BaseColorMix);
+            m.SetFloat("_GlitterRandomColors", g.RandomColors ? 1 : 0);
+            m.SetVector("_GlitterMinMaxSaturation", new Vector4(g.SaturationRange.x, g.SaturationRange.y, 0f, 1f));
+            m.SetVector("_GlitterMinMaxBrightness", new Vector4(g.BrightnessRange.x, g.BrightnessRange.y, 0f, 1f));
+            m.SetFloat("_GlitterRandomRotation", g.RandomRotation ? 1 : 0);
+            m.SetFloat("_GlitterRandomRotationDirection", g.RandomDirection ? 1 : 0);
+            m.SetFloat("_GlitterTextureRotation", g.RotationSpeed);
+            m.SetVector("_GlitterRandomRotationSpeed", new Vector4(g.RandomRotationSpeed.x, g.RandomRotationSpeed.y, 0f, 0f));
+            m.SetFloat("_GlitterScaleWithLighting", g.LightScale);
+            m.SetTexture("_GlitterTexture", g.Texture?.Texture);
+            m.SetFloat("_GlitterTexturePixelMode", g.Texture != null && g.Texture.Sampling == AtlasTextureSampling.Pixel ? 1 : 0);
+            var frames = g.Texture?.Frames;
+            m.SetFloat("_GlitterSpriteSheetEnabled", frames != null ? 1 : 0);
+            if (frames != null)
+            {
+                m.SetFloat("_GlitterSpriteSheetColumns", frames.Columns);
+                m.SetFloat("_GlitterSpriteSheetRows", frames.Rows);
+                m.SetFloat("_GlitterSpriteSheetFPS", frames.Rate);
+                m.SetFloat("_GlitterSpriteSheetTotalFrames", frames.Count);
+                m.SetFloat("_GlitterSpriteSheetFrameSelection", g.RandomFrame ? 0 : 1);
+                m.SetFloat("_GlitterSpriteSheetRandomStart", g.RandomStartFrame ? 1 : 0);
+            }
+            m.SetFloat("_GlitterBlendType", layer.Blend == AtlasBlend.Replace ? 1 : 0);
+            var color = layer.Color;
+            m.SetColor("_GlitterColor", new Color(color.r, color.g, color.b, Mathf.Clamp01(layer.Opacity)).gamma);
+            m.SetFloat("_GlitterColorThemeIndex", 0);
+            WriteMaskSlot(m, "_GlitterMask", layer.Mask);
+            m.SetFloat("_GlitterMaskChannel", MaskChannel(layer.Mask));
+            m.SetFloat("_GlitterMaskInvert", layer.Mask?.Map?.Texture != null && layer.Mask.Invert ? 1 : 0);
+            Consumer(m, "_GlitterMaskGlobalMask", layer.Mask?.Bus ?? -1, layer.Mask?.BusBlend ?? AtlasMaskBlend.Add);
+            m.SetFloat("_GlitterHideInShadow", layer.HideInShadow);
+            m.SetFloat("_GlitterHueShiftEnabled", 0);
+            m.SetFloat("_GlitterALEnabled", 0);
         }
 
         // The detail texture and detail normal kept live (FINALPASS), as the Poiyomi parser reads

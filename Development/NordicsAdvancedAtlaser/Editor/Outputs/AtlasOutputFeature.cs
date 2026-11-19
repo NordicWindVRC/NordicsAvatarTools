@@ -111,6 +111,25 @@ namespace NordicWind.AdvancedAtlaser.Editor
         bool CanPlaceAsMatcap(AtlasOutputCapabilities capabilities);
     }
 
+    // A setting a feature offers in some of its modes (a strength, 0–1 by default), stored in its
+    // values under ValueId.
+    public sealed class AtlasFeatureOption
+    {
+        public string Id;
+        public string Label;
+        public string Tooltip;
+        public float Default;
+        public float Min, Max = 1f;
+
+        public static string ValueId(string id) => "option:" + id;
+    }
+
+    // A feature with settings of its own in some modes.
+    public interface IAtlasOptionFeature : IAtlasOutputFeature
+    {
+        IReadOnlyList<AtlasFeatureOption> Options(AtlasFeatureMode mode);
+    }
+
     // A feature whose parts another feature bakes unless it's told they're left out: called with
     // the sources that have it but have it off (all of them when its mode is off).
     public interface IAtlasLeftOutFeature : IAtlasOutputFeature

@@ -303,6 +303,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (state.LiveSetups.Count > 1)
                 using (new EditorGUI.IndentLevelScope())
                     LiveFrom(setting, state, materials);
+            foreach (var option in state.Options)
+                using (new EditorGUI.IndentLevelScope())
+                    OptionRow(setting, option);
             foreach (var conflictSwitch in state.Switches)
                 using (new EditorGUI.IndentLevelScope())
                     Switch(setting, conflictSwitch);
@@ -350,6 +353,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (next == index) return;
             if (stored == null) stored = AddValue(setting, AtlasLiveMasks.LiveFromId);
             stored.FindPropertyRelative("number").floatValue = next == 0 ? 0 : state.LiveSetups[next - 1] + 1;
+        }
+
+        // A feature's own setting: a slider lined up with the mode drop-downs.
+        private static void OptionRow(SerializedProperty setting, AtlasFeatureOption option)
+        {
+            var stored = StoredValue(setting, AtlasFeatureOption.ValueId(option.Id));
+            float value = stored != null ? stored.FindPropertyRelative("number").floatValue : option.Default;
+            var row = EditorGUILayout.GetControlRect();
+            EditorGUI.LabelField(new Rect(row.x, row.y, EditorGUIUtility.labelWidth, row.height), new GUIContent(option.Label, option.Tooltip));
+            var fieldRect = new Rect(row.x + EditorGUIUtility.labelWidth, row.y, row.width - EditorGUIUtility.labelWidth, row.height);
+            float next;
+            using (new IndentReset())
+                next = EditorGUI.Slider(fieldRect, value, option.Min, option.Max);
+            if (Mathf.Approximately(next, value)) return;
+            if (stored == null) stored = AddValue(setting, AtlasFeatureOption.ValueId(option.Id));
+            stored.FindPropertyRelative("number").floatValue = next;
         }
 
         // A setting the materials disagree on, which the atlas material has once: on or off.

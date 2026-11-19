@@ -201,6 +201,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool DetailStrength;
         public bool DetailNormal;
         public bool DetailMaskByChannel;
+        // Glitter (4.6): the glitter pattern, its mask by channel and its UV channel.
+        public bool Glitter;
         // Global masks (1.5): the mask textures double as the first global mask textures (Mask1
         // to Mask8 are channels 0–7), and these steps run live on a channel.
         public bool GlobalMasks;
