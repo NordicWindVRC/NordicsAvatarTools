@@ -71,7 +71,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
             }
             alpha.Offset = Float(m, "_AlphaMod", 0f);
-            alpha.Mask = BusMask(m, alpha.Mask, "_AlphaGlobalMask");
+            // The global mask acts on the alpha after Alpha Mod, not on the alpha mask.
+            int global = Int(m, "_AlphaGlobalMask", 0);
+            if (global > 0)
+            {
+                alpha.Bus = Mathf.Min(global, BusChannels) - 1;
+                alpha.BusBlend = BusBlend(Int(m, "_AlphaGlobalMaskBlendType", 2));
+            }
             if (On(m, "_AlphaDistanceFade") || (major <= 7 && DistanceFade7(m)))
             {
                 alpha.Modifiers.Add(new AtlasAlphaModifier { Kind = AtlasAlphaModifierKind.DistanceFade,

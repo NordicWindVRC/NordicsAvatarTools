@@ -752,10 +752,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             Consumer(m, "_ClearCoatSmoothnessGlobalMask", coat?.Roughness.Bus ?? -1, coat?.Roughness.BusBlend ?? AtlasMaskBlend.Add);
             Consumer(m, "_ClearCoatReflectionStrengthGlobalMask", coat?.Reflections.Mask?.Bus ?? -1, coat?.Reflections.Mask?.BusBlend ?? AtlasMaskBlend.Add);
             Consumer(m, "_ClearCoatSpecularStrengthGlobalMask", coat?.Highlights.Mask?.Bus ?? -1, coat?.Highlights.Mask?.BusBlend ?? AtlasMaskBlend.Add);
-            // Alpha: saturate(alpha + the channel), a mask without a map adding the channel.
+            // Alpha: the channel combined with the alpha after Alpha Mod.
             var alpha = output.Surface.Alpha;
-            bool alphaChannel = alpha.Mask != null && alpha.Mask.Map == null && alpha.Mask.Bus >= 0 && alpha.MaskBlend == AtlasAlphaMaskBlend.Add;
-            Consumer(m, "_AlphaGlobalMask", alphaChannel ? alpha.Mask.Bus : -1, AtlasMaskBlend.Add);
+            Consumer(m, "_AlphaGlobalMask", alpha.Bus, alpha.BusBlend);
         }
 
         private static void Consumer(Material m, string property, int bus, AtlasMaskBlend blend, string blendProperty = null, bool custom = false)

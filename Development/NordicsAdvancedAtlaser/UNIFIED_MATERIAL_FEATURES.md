@@ -381,6 +381,7 @@ list. Static adjustments on anything but the final color are bakeable.
 | mask multiplier | float | 1 | source *mask*: the mask × this |
 | mask blend | replace, multiply, add, subtract | replace | source *base color alpha* with a mask: how the mask combines with it (saturated) |
 | offset | −1–1 | 0 | `saturate(alpha + offset)`, before the modifiers |
+| global mask | 1.5 channel and blend | none | the channel combined with the alpha after the offset (saturated), before the modifiers |
 | modifiers | list | none | in order, each multiplies alpha: *distance fade* (object or pixel position; distances, alphas: `lerp(min alpha, max alpha, smoothstep(min, max, distance))`); *view-angle fade* (intensity, sharpness, width, invert: `saturate(1 − smoothstep(min(sharpness, width), width, N·V))`); *angle fade* (camera faces model, model faces camera, or both; camera and model angle ranges in degrees, the model's forward direction, minimum alpha); *add* (an amount added, saturated; for audio modulators) |
 | sharpened coverage | bool, mip scale | off, 0.25 | alpha-to-coverage edges sharpened and kept across mip levels |
 | dithering | off, or gradient and bias | off | an 8×8 ordered dither lowers alpha where it's partial |

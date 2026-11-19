@@ -3226,6 +3226,17 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
+        public void TheAlphaGlobalMaskActsOnTheAlphaNotItsMask()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_AlphaGlobalMask", 3f);
+            AtlasTestMaterials.AddSavedFloat(material, "_AlphaGlobalMaskBlendType", 7f);
+            var alpha = ParseSaved().Surface.Alpha;
+            Assert.IsNull(alpha.Mask);
+            Assert.AreEqual(2, alpha.Bus, "1B");
+            Assert.AreEqual(AtlasMaskBlend.Add, alpha.BusBlend);
+        }
+
+        [Test]
         public void ToonEightOldBlendModesAreApproximatedAndReported()
         {
             AtlasTestMaterials.AddSavedFloat(material, "_DecalEnabled", 1f);

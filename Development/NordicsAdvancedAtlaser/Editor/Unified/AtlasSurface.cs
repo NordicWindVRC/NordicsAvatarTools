@@ -59,6 +59,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasAlphaMaskBlend MaskBlend = AtlasAlphaMaskBlend.Replace;
         // saturate(alpha + offset), before the modifiers.
         public float Offset;
+        // A mask bus channel (1.5) combined with the alpha after the offset by BusBlend
+        // (saturated), before the modifiers; −1: none.
+        public int Bus = -1;
+        public AtlasMaskBlend BusBlend = AtlasMaskBlend.Multiply;
         // In order, each multiplies alpha.
         public readonly System.Collections.Generic.List<AtlasAlphaModifier> Modifiers = new System.Collections.Generic.List<AtlasAlphaModifier>();
         // Alpha-to-coverage edges sharpened and kept across mip levels.

@@ -354,6 +354,10 @@ EditMode tests pass in Unity 2022.3.22.
   avatar shader, Uber, replaces it. Mochie Standard materials go to the fallback parser.
 
 ### Fixed
+- **Poiyomi's alpha global mask** was read as the alpha mask's global mask, but Poiyomi applies
+  it to the alpha itself, after Alpha Mod. The unified alpha now has its own global mask
+  (`AtlasAlpha.Bus`, `BusBlend`), applied after the offset and before the modifiers; the
+  parser, the alpha bake, the live split and the Poiyomi writer use it.
 - **Mochie Uber's texture rotation** (main and detail) was taken over as it is, but Uber turns
   the UV clockwise around its origin after the tiling. It's now converted to the unified
   rotation, which is defined as counterclockwise around the center, before the tiling.- With *Export Intermediate Maps* on, the tangent-frame maps were exported (which normalizes

@@ -115,7 +115,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         /// <summary>
         /// A source's alpha (2.2) in RGB, converted for the output: the source (base color alpha:
         /// the color's alpha × the texture's; the color's alpha alone; a mask × its multiplier;
-        /// none: 1), a mask combined by its blend, the offset and the strength. Vertex alpha,
+        /// none: 1), a mask combined by its blend, the offset, its bus channel and the strength. Vertex alpha,
         /// the fades, dithering and masks outside CanEvaluate are left out (the alpha feature
         /// reports them).
         /// </summary>
@@ -152,6 +152,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
                 if (alpha.Offset != 0f) Add(result, alpha.Offset);
                 Clamp(result);
+                if (alpha.Bus >= 0 && AtlasMaskBusEvaluator.CanBake(source, alpha.Bus))
+                    using (var channel = AtlasMaskBusEvaluator.Channel(source, alpha.Bus, width, height))
+                        AtlasMaskBusEvaluator.Blend(result, channel, alpha.BusBlend);
                 if (alpha.Strength < 1f)
                 {
                     Scale(result, Mathf.Clamp01(alpha.Strength));

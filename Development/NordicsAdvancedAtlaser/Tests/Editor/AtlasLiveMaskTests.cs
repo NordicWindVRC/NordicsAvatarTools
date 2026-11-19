@@ -137,6 +137,28 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
+        public void AlphaReadsItsGlobalMaskAfterTheOffsetAndKeepsItLive()
+        {
+            var material = OnBackFaces();
+            material.Surface.BaseColor.Color = new Color(1f, 1f, 1f, 0.6f);
+            material.Surface.Alpha.Offset = 0.2f;
+            material.Surface.Alpha.Bus = 0;
+            material.Render.SurfaceMode = AtlasSurfaceMode.Fade;
+            using (AtlasMaskBusEvaluator.View(material, new[] { 0 }, AtlasBusView.Prefix))
+                Assert.AreEqual(0.4f, Value(AtlasMapEvaluator.Alpha(material, 4, 4, new AtlasAlphaConversion())), 1e-4f, "(0.6 + 0.2) × 0.5");
+
+            var job = Job(material, new AtlasUnifiedMaterial());
+            var plan = AtlasOutputPipeline.Resolve(job, Poiyomi);
+            var alpha = plan.Output.Surface.Alpha;
+            Assert.GreaterOrEqual(alpha.Bus, 0, string.Join(" | ", plan.Notes));
+            Assert.AreEqual(AtlasMaskBlend.Add, alpha.BusBlend);
+            var own = plan.Maps.Single(m => m.Map == AtlasVirtualMap.Alpha);
+            Assert.AreEqual(0f, Evaluate(own, job, 0), 1e-4f, "the channel at 0");
+            Assert.AreEqual(1f, Evaluate(own, job, 1), 1e-4f);
+            Assert.AreEqual(0.4f, Evaluate(plan.Maps.Single(m => m.Map == AtlasMaskAllocator.Places[alpha.Bus]), job, 0), 1e-4f);
+        }
+
+        [Test]
         public void LiveEmissionGoesIntoASecondEmissionShownThroughItsChannel()
         {
             var material = OnBackFaces(AtlasMaskBusStepKind.Mirror);

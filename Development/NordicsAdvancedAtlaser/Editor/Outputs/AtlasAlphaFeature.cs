@@ -68,20 +68,21 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // Every source, so the ones without alpha are solid rather than filled from a neighbor.
             for (int i = 0; i < context.Job.Sources.Count; i++) request.Sources.Add(i);
             context.Maps.Add(request);
-            // Live global masks (AtlasLiveMasks), where alpha is the source's as it is and its mask
-            // multiplies or replaces it: alpha = the own part + the channel.
+            // Live global masks (AtlasLiveMasks), where alpha is the source's as it is (its alpha
+            // mask's channel and the alpha's own): alpha = the own part + the channel.
             int live = AtlasLiveMasks.Split(context, Id, "alpha", request, i =>
             {
                 var alpha = context.Job.Sources[i].Material.Surface.Alpha;
-                bool affine = conversions[i].Kind == AtlasAlphaConversionKind.None &&
-                              (alpha.Source == AtlasAlphaSource.Mask || alpha.MaskBlend == AtlasAlphaMaskBlend.Multiply || alpha.MaskBlend == AtlasAlphaMaskBlend.Replace);
-                return affine ? AtlasLiveMasks.Of(alpha.Mask) : AtlasLiveMasks.Of(alpha.Mask).Select(r => new AtlasBusRead(r.Channel, AtlasMaskBlend.Subtract));
+                bool masked = alpha.Source == AtlasAlphaSource.Mask || alpha.MaskBlend == AtlasAlphaMaskBlend.Multiply ||
+                              alpha.MaskBlend == AtlasAlphaMaskBlend.Replace;
+                var reads = AtlasLiveMasks.Of(alpha.Mask).Select(r => masked ? r : new AtlasBusRead(r.Channel, AtlasMaskBlend.Subtract));
+                if (alpha.Bus >= 0) reads = reads.Concat(new[] { new AtlasBusRead(alpha.Bus, alpha.BusBlend) });
+                return conversions[i].Kind == AtlasAlphaConversionKind.None ? reads : reads.Select(r => new AtlasBusRead(r.Channel, AtlasMaskBlend.Subtract));
             });
             if (live >= 0)
             {
-                var outputAlpha = context.Output.Surface.Alpha;
-                outputAlpha.Mask = new AtlasMask { Bus = live, BusBlend = AtlasMaskBlend.Replace };
-                outputAlpha.MaskBlend = AtlasAlphaMaskBlend.Add;
+                context.Output.Surface.Alpha.Bus = live;
+                context.Output.Surface.Alpha.BusBlend = AtlasMaskBlend.Add;
             }
             Notes(context, active);
         }
@@ -115,7 +116,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var materials = active.Select(i => context.Job.Sources[i].Material).ToList();
             if (materials.Any(m => m.Surface.Alpha.Modifiers.Count > 0))
                 context.Notes.Add("Alpha fades (distance, view angle, angle, audio) aren't merged yet; they're left out.");
-            if (materials.Any(m => m.Surface.Alpha.Mask != null && !AtlasMapEvaluator.CanEvaluate(m.Surface.Alpha.Mask, m)))
+            if (materials.Any(m => (m.Surface.Alpha.Mask != null && !AtlasMapEvaluator.CanEvaluate(m.Surface.Alpha.Mask, m)) ||
+                                   (m.Surface.Alpha.Bus >= 0 && !AtlasMaskBusEvaluator.CanBake(m, m.Surface.Alpha.Bus))))
                 context.Notes.Add("An alpha mask on another UV or a global mask written by layers or the second pass isn't baked yet; it counts as 1.");
             if (materials.Any(m => m.Surface.Alpha.Dithering || m.Surface.Alpha.DitherCutout))
                 context.Notes.Add("Alpha dithering isn't merged yet; it's left out.");
