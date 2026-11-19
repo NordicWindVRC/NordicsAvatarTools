@@ -466,3 +466,9 @@ Not planned in detail yet, in rough order:
   - a per-source bake cache in `Library`, keyed by the material's values, its textures'
     content hashes, the coverage, the bake size and the layout: repeat builds evaluate only
     changed sources; optionally the compressed textures too.
+  - a second measurement, a 5-material avatar in two Poiyomi outputs (Body 4096², Misc
+    4096 × 2048) with many maps: entering play mode takes about 2 minutes. The Atlaser's part
+    is about 57 s: the outputs 26.8 s and 22.6 s (each texture 2–4.5 s to evaluate, place and
+    pack, 0.3–2.5 s to compress; the body's decal layer alone 2.1 s) and the geometry bakes
+    7.6 s. The other minute, outside the Atlaser (other NDMF plugins, Unity), isn't broken down
+    yet.

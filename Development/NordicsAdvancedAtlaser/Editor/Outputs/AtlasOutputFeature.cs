@@ -65,6 +65,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         bool SharedValuesDiffer(IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasOutputCapabilities capabilities);
     }
 
+    // A shared value whose Automatic isn't the source with the largest region: the inspector
+    // says what it is instead.
+    public interface IAtlasAutomaticReference
+    {
+        string AutomaticRule { get; }
+    }
+
     // An on/off setting the output has once, which the user sets where the sources disagree.
     public sealed class AtlasConflictSwitch
     {

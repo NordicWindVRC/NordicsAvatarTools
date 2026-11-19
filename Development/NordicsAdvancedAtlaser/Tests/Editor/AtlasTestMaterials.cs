@@ -85,11 +85,14 @@ namespace NordicWind.AdvancedAtlaser.Tests
         public static void AddSavedColor(Material material, string name) => AddSavedColor(material, name, Color.white);
 
         public static void AddSavedTexture(Material material, string name, Texture texture) =>
+            AddSavedTexture(material, name, texture, Vector2.one, Vector2.zero);
+
+        public static void AddSavedTexture(Material material, string name, Texture texture, Vector2 scale, Vector2 offset) =>
             AddSaved(material, "m_TexEnvs", name, v =>
             {
                 v.FindPropertyRelative("m_Texture").objectReferenceValue = texture;
-                v.FindPropertyRelative("m_Scale").vector2Value = Vector2.one;
-                v.FindPropertyRelative("m_Offset").vector2Value = Vector2.zero;
+                v.FindPropertyRelative("m_Scale").vector2Value = scale;
+                v.FindPropertyRelative("m_Offset").vector2Value = offset;
             });
     }
 }

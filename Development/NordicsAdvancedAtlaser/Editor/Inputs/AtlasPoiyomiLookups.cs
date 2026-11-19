@@ -31,11 +31,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var tiling = Vector2.one * 2f * Float(m, p + "Border", 0.5f);
             if (map != null)
             {
-                // The matcap's own tiling and offset apply to the lookup coordinate.
-                tiling = Vector2.Scale(tiling, map.Tiling);
+                // The texture's own scale and offset stay on it: Poiyomi samples the matcap at
+                // TRANSFORM_TEX of the lookup coordinate, (projection × border + 0.5) × scale +
+                // offset. The pan moves the lookup coordinate first, so it scrolls by × scale.
                 map.Space = AtlasTextureSpace.View;
-                map.Tiling = Vector2.one;
-                map.Scroll = (Vector2)AtlasMaterialReader.Vector(m, p + "Pan", Vector4.zero) * 0.05f;
+                map.Scroll = Vector2.Scale((Vector2)AtlasMaterialReader.Vector(m, p + "Pan", Vector4.zero) * 0.05f, map.Tiling);
             }
             var color = TintColor(m, d, p + "Color", p + "ColorThemeIndex") * Float(m, p + "Intensity", 1f);
             int mode = Mathf.Clamp(Int(m, p + "UVMode", 1), 0, 4);

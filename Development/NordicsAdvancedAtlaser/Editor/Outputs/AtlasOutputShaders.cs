@@ -108,6 +108,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             MatcapMaskInvert = true,
             MatcapColor = true,
             MatcapBaseColorMix = true,
+            MatcapEmission = true,
+            MatcapWeights = true,
+            MatcapTextureTransform = true,
             // Rim Lighting 0 and 1, each with a mask (by channel, inverted); the environmental rim
             // with a mask (by channel); Backlight 0 with its color texture.
             RimSlots = 2,
@@ -303,7 +306,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             m.SetFloat("_LightingDirectionMode", direction);
             var ramp = l.Ramp;
             bool multilayer = l.Family == AtlasLightingFamily.RampToon && ramp.Term != AtlasShadingTerm.Wrapped && ramp.Bands.Count > 0 && !IsShadeMap(ramp);
-            // Multilayer Math builds its own half-Lambert terms; Shade Map keeps the light map's.
+            // Multilayer Math builds its own half-Lambert terms, and the light map (Light Data's
+            // mode) is what specular and light masks read; Shade Map keeps the light map's.
             bool blendedSdf = ramp.Term == AtlasShadingTerm.SdfFace && ramp.Sdf?.Style == AtlasSdfStyle.Blended;
             if (blendedSdf)
             {
@@ -313,7 +317,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 m.SetFloat("_LightDataSDFMapLOD", ramp.Sdf.Softness);
                 m.SetFloat("_LightDataSDFChannelsBA", ramp.Sdf.MaskChannels ? 1 : 0);
             }
-            m.SetFloat("_LightingMapMode", blendedSdf ? 4 : multilayer || ramp.Term == AtlasShadingTerm.HalfLambert ? 1 : ramp.Term == AtlasShadingTerm.Lambert ? 2
+            m.SetFloat("_LightingMapMode", blendedSdf ? 4 : ramp.Term == AtlasShadingTerm.HalfLambert ? 1 : ramp.Term == AtlasShadingTerm.Lambert ? 2
                 : ramp.Term == AtlasShadingTerm.ShadowsOnly ? 3 : 0);
             // Shadow masks scale the shadow strength; detail shadows multiply the light map.
             PackedMask(m, "_LightingShadowMasks", "_LightingShadowMaskStrength", ramp.RampStrengthMask);
@@ -432,9 +436,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var first = layers[0];
             var map = first.Source.Map;
             m.SetTexture(p, map?.Texture);
-            m.SetTextureScale(p, Vector2.one);
-            m.SetTextureOffset(p, Vector2.zero);
-            m.SetVector(p + "Pan", (map?.Scroll ?? Vector2.zero) / 0.05f);
+            // The texture's scale and offset apply after the lookup (TRANSFORM_TEX); the pan
+            // moves the lookup coordinate before the scale.
+            var scale = map?.Tiling ?? Vector2.one;
+            var scroll = map?.Scroll ?? Vector2.zero;
+            m.SetTextureScale(p, scale);
+            m.SetTextureOffset(p, map?.Offset ?? Vector2.zero);
+            m.SetVector(p + "Pan", new Vector2(Mathf.Abs(scale.x) > 1e-6f ? scroll.x / scale.x : 0f,
+                Mathf.Abs(scale.y) > 1e-6f ? scroll.y / scale.y : 0f) / 0.05f);
             // The lookup's tiling is 2 × Border.
             m.SetFloat(p + "Border", first.Tiling.x * 0.5f);
             var color = first.Source.Color;

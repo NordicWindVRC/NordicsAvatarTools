@@ -79,6 +79,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 {
                     Texture = AtlasRampTexture.SavePng(plan.Output.Lighting.Ramp.Keys, folder, name + "_ShadowRamp")
                 };
+            foreach (var step in plan.BeforeWrite) step();
             var material = new Material(unityShader) { name = name };
             shader.Write(plan.Output, material);
             plan.Notes.AddRange(AtlasLightingFeature.Unkept(plan.Output, material));

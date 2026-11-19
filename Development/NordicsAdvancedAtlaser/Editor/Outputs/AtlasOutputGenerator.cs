@@ -71,6 +71,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     result.Textures.Add(ramp);
                     plan.Output.Lighting.Ramp.Ramp = new AtlasTextureReference { Texture = ramp };
                 }
+                foreach (var step in plan.BeforeWrite) step();
                 result.Material = new Material(unityShader) { name = config.outputName };
                 shader.Write(plan.Output, result.Material);
                 result.Notes.AddRange(AtlasLightingFeature.Unkept(plan.Output, result.Material));

@@ -388,6 +388,60 @@ EditMode tests pass in Unity 2022.3.22.
   avatar shader, Uber, replaces it. Mochie Standard materials go to the fallback parser.
 
 ### Fixed
+- **Combined matcap slots brightened dark parts on Poiyomi.** When matcaps had to share a slot,
+  *Automatic* paired them by lookup and color, so a matcap that only glows (an eye's glass
+  highlight) could join one that blends (a screen over dark fur). The eyes then got the other
+  matcap added at full strength, and the slot glowed at the strongest member's emission without
+  the base color mix that had darkened it. Now:
+  - *Automatic* combines matcaps that do the same (blend, glow or both) first.
+  - A combined slot that only glows has its texture made from the glows and doesn't blend;
+    before, its texture was empty and the glow was lost.
+  - Combined matcaps with different base color mixes put the mix into their masks.
+  - The glow strength of a combined slot, or of one whose base color mix went into the mask or
+    the fit, is fitted to its matcaps' glows when the material is written
+    (`AtlasMatcapFeature.FitGlow`, `AtlasOutputPlan.BeforeWrite`); a slot with a constant mask
+    glows by that constant.
+  - The build log lists fitted glows and glow-only matcaps that show a slot's blend.
+- **Multilayer Math lost its light map** (Poiyomi's Light Data map mode): the parser replaced it
+  with the bands' own half-Lambert term and the writer always wrote half-Lambert, which is
+  brighter on the shadow side than Poiyomi's default. What reads the light map, such as the
+  specular's attenuation and matcap light masks, came out stronger in the shadow. The bands'
+  own term is now a flag (`AtlasRampToon.BandsOwnTerm`) and the light map's term is kept and
+  written back.
+- **Effect matcaps were shared and matcaps that change nothing took slots.** A shared slot
+  shows one texture on every member's parts, so a glint or shine sharing it put its highlights
+  on the others (glass glints on dark pants, a light-gray sphere over fur and eyes on Toon
+  Standard's one slot). Each matcap is now measured as its slot looks it up
+  (`AtlasMatcapFeature.Content`): one that reads black where it adds or glows (white where it
+  multiplies) is left out; an effect (half its light in its brightest tenth, or a reflection
+  lookup) gets its own slot, and where the slots run out the weakest effects are left out
+  instead of shared; environment matcaps share. Visibility now counts what each weight shows:
+  brightness where it adds or glows, darkness where it multiplies. All listed.
+- **Shared matcap slots were mixed by area.** A large but barely visible matcap (a glow on dark
+  pants, darkened by its base color mix) took most of a shared texture, so the eyes sharing its
+  slot glowed with the pants' matcap instead of their glass highlight. Stacks on different parts
+  are now mixed by area × how visible they are (weights and glow, color, mask, the base color
+  mix's darkening over the source's base colors), and *Automatic* gives the most visible matcaps
+  their own slots (`AtlasMatcapFeature.Visibility`, `AtlasSourceSamples`).
+- **Automatic lighting took the largest region's**, even where that lighting changed the rest
+  of the atlas most, such as a large dark material's sharp toon edge on bright fur. *Automatic*
+  now takes the setup that changes the sources' look least: each source's colors lit in a few
+  standard scenes by its own lighting and by each candidate's, compared as displayed colors and
+  weighted by area (`AtlasLightingResponse`, `AtlasLightingFeature.Automatic`). The build log
+  and the *Lighting from* tooltip say so.
+- **A matcap texture's scale and offset were lost** (Poiyomi's `_MatcapN_ST`). The parser folded
+  the scale into the lookup's border and the writer wrote scale 1 and offset 0, while Poiyomi
+  samples at `(projection × border + 0.5) × scale + offset`: a matcap with scale 0, which reads
+  one point of its texture, read the texture's center instead (Fluff's dark matcap came out
+  light gray). The texture now keeps its scale and offset, the Poiyomi writer writes them, and
+  generated matcap textures are sampled with them, including one for a matcap with a
+  transform on Toon Standard (`AtlasOutputCapabilities.MatcapTextureTransform`).
+- **Matcap glow was dropped on Toon Standard,** whose matcaps don't glow. It is added to the
+  color instead: one more add of the matcap at the glow's strength, with its base color mix
+  (lit, so it doesn't glow in the dark; listed).
+- **Toon Standard showed only a matcap's first weight** when it had several (an add and a
+  multiply, or an add and its glow): its one slot takes one blend at a time. The weights are
+  now merged where they blend alike and fitted otherwise (`AtlasOutputCapabilities.MatcapWeights`).
 - **Emissions with Override Base Color were left out** (Poiyomi's *Override Base Color*): no
   emission map, nothing in the output material. They are baked into the emission map like any
   other, and into the base color map as its last step, `lerp(b, saturate(e), max(e))`

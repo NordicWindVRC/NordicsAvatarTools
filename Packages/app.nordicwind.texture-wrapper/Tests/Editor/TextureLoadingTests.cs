@@ -151,5 +151,44 @@ namespace NordicWind.TextureWrapper.Tests
                 AssetDatabase.DeleteAsset(path);
             }
         }
+
+        // GetPixels refuses crunched textures even with Read/Write on.
+        [Test] public void CrunchedReadable_IsReadThroughTheGpu()
+        {
+            string path = "Assets/NordicWindTextureWrapperTest_" + Guid.NewGuid().ToString("N") + ".png";
+            var source = new Texture2D(8, 8, TextureFormat.RGBA32, false, true);
+            try
+            {
+                var pixels = new Color32[64];
+                for (int i = 0; i < pixels.Length; i++) pixels[i] = new Color32(204, 102, 226, 255);
+                source.SetPixels32(pixels);
+                File.WriteAllBytes(Path.GetFullPath(path), source.EncodeToPNG());
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+                var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+                importer.textureType = TextureImporterType.NormalMap;
+                importer.isReadable = true;
+                // Crunched for the active build target: the format the build would read.
+                bool android = EditorUserBuildSettings.activeBuildTarget == BuildTarget.Android;
+                importer.SetPlatformTextureSettings(new TextureImporterPlatformSettings
+                {
+                    name = android ? "Android" : "Standalone", overridden = true, maxTextureSize = 8,
+                    format = android ? TextureImporterFormat.ETC2_RGBA8Crunched : TextureImporterFormat.DXT5Crunched,
+                    crunchedCompression = true, compressionQuality = 100
+                });
+                importer.SaveAndReimport();
+
+                var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+                Assert.IsTrue(texture.isReadable);
+                Assert.That(texture.format, Is.EqualTo(TextureFormat.DXT5Crunched).Or.EqualTo(TextureFormat.ETC2_RGBA8Crunched));
+                using (var w = TextureAssetUtility.Load(texture))
+                    // Crunch is lossier than plain block compression.
+                    AssertNormal(Expected, w.GetPixel(4, 4), 6e-2);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(source);
+                AssetDatabase.DeleteAsset(path);
+            }
+        }
     }
 }

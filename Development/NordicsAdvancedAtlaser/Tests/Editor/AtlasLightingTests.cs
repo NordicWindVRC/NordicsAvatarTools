@@ -59,6 +59,44 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(AtlasLightingFamily.Flat, AtlasOutputPipeline.Resolve(job, Poiyomi).Output.Lighting.Family, "the chosen source");
         }
 
+        // Automatic weighs how much each material's look changes: the large dark material's sharp
+        // toon edge loses to the soft edge of the bright ones, since dark colors show the
+        // difference less. With equal colors the larger region's lighting stays.
+        [Test]
+        public void AutomaticTakesTheLightingThatChangesTheLookLeast()
+        {
+            AtlasUnifiedMaterial Toon(float blur, float gray)
+            {
+                var material = Lit(AtlasLightingFamily.RampToon);
+                var ramp = material.Lighting.Ramp;
+                ramp.Term = AtlasShadingTerm.HalfLambert;
+                var band = new AtlasShadeBand { Border = 0.5f, Blur = blur };
+                band.Color.Color = new Color(0.7f, 0.75f, 0.85f, 1f);
+                ramp.Bands.Add(band);
+                ramp.ShadowDirect = 1f;
+                ramp.ShadowAmbient = 0f;
+                ramp.LitAmbient = 0f;
+                material.Surface.BaseColor.Color = new Color(gray, gray, gray, 1f);
+                return material;
+            }
+            AtlasUnifiedMaterial Realistic(Color color)
+            {
+                var material = Lit(AtlasLightingFamily.PhysicallyBased);
+                material.Lighting.ShadowStrength = 1f;
+                material.Lighting.Ramp.Term = AtlasShadingTerm.RelativeBrightness;
+                material.Surface.BaseColor.Color = color;
+                return material;
+            }
+
+            var job = Job((Toon(0.1f, 0.02f), 0.5f), (Toon(0.8f, 0.8f), 0.25f), (Toon(0.7f, 0.8f), 0.25f));
+            Assert.AreNotEqual(0, AtlasLightingFeature.Automatic(job, new[] { 0, 1, 2 }), "a soft edge, not the dark material's sharp one");
+            var plan = AtlasOutputPipeline.Resolve(job, Poiyomi);
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("changes the others' look least")), string.Join(" | ", plan.Notes));
+
+            job = Job((Toon(0.1f, 0.8f), 0.75f), (Realistic(new Color(0.8f, 0.8f, 0.8f, 1f)), 0.25f));
+            Assert.AreEqual(0, AtlasLightingFeature.Automatic(job, new[] { 0, 1 }), "the same colors: the larger region");
+        }
+
         [Test]
         public void PartsDrawnOnTheTextureAreBakedOrListed()
         {
@@ -219,6 +257,11 @@ namespace NordicWind.AdvancedAtlaser.Tests
                     m.SetFloat("_ShadowBorder", 0.4f);
                     m.SetColor("_Shadow2ndColor", new Color(0.3f, 0.2f, 0.4f, 0.5f));
                     m.SetFloat("_ShadowEnvStrength", 0.2f);
+                },
+                ["multilayer math, Lambert light map"] = m =>
+                {
+                    m.SetFloat("_LightingMode", 1);
+                    m.SetFloat("_LightingMapMode", 2);
                 },
                 ["wrapped"] = m =>
                 {

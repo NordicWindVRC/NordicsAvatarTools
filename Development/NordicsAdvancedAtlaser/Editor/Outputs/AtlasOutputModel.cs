@@ -192,6 +192,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // A slot can multiply its matcap by the base color; without, the base color's brightness
         // goes into the slot's mask.
         public bool MatcapBaseColorMix;
+        // A slot glows by its matcap (an emission strength).
+        public bool MatcapEmission;
+        // A slot takes several blends at once, each by its weight (otherwise one at a time).
+        public bool MatcapWeights;
+        // A slot applies its texture's scale and offset to the lookup coordinate; without, a
+        // matcap with them gets a generated texture.
+        public bool MatcapTextureTransform;
         // Rims (4.4): how many view-angle rim slots; whether a slot has a mask; whether a slot only
         // has the band profile (others are fitted to it).
         public int RimSlots;

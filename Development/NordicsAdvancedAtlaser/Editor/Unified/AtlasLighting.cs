@@ -322,6 +322,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly System.Collections.Generic.List<AtlasShadeBand> Bands = new System.Collections.Generic.List<AtlasShadeBand>();
         // Bands: smoothstep edges instead of linear.
         public bool SmoothEdges;
+        // Bands: each band builds its own half-Lambert term (with its normal strength and
+        // received shadow). Term then stays the light map that the features reading it see
+        // (specular and matcap light masks, the light's side for rims).
+        public bool BandsOwnTerm;
         // Bands: the first band's edge widened by BorderRange brightens C toward white × BorderColor.
         public UnityEngine.Color BorderColor = UnityEngine.Color.black;
         public float BorderRange;

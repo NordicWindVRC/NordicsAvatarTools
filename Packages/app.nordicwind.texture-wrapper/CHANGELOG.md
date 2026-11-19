@@ -24,6 +24,9 @@ Newest first. Versions follow [SemVer](https://semver.org).
 - The `Mixed` blend mode is now `base + base × blend` instead of a copy of `Average`.
 
 ### Fixed
+- **Crunch-compressed textures with Read/Write on couldn't be loaded:** `GetPixels` doesn't
+  decode crunch, so loading threw. They are read through the GPU, like textures without
+  Read/Write.
 - **Color operations ran close to single-threaded in Unity:** applying operations allocated an
   enumerator per pixel, and masks without options allocated their default options per pixel.
   Allocations in parallel loops serialize on the garbage collector, so `ApplyColor`,

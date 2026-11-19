@@ -38,6 +38,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly List<AtlasGeneratedTexture> GeneratedTextures = new List<AtlasGeneratedTexture>();
         // The output's matcap slots the matcaps took; later features (rims) use the rest.
         public int MatcapSlotsUsed;
+        // Steps that set output values from the sources' maps, run just before the material is
+        // written, not when the plan is resolved (the glow of combined matcap slots).
+        public readonly List<System.Action> BeforeWrite = new List<System.Action>();
 
         public AtlasSourceRemap Remap(int source)
         {

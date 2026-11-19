@@ -320,7 +320,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // The source a shared value is taken from, where the sources' values differ: automatic
-        // (the one with the largest region) or a chosen one.
+        // (the one with the largest region, or the feature's own rule) or a chosen one.
         private static void SharedValue(SerializedProperty setting, AtlasFeatureState state, IReadOnlyList<Material> materials)
         {
             var feature = (IAtlasSharedValueFeature)state.Feature;
@@ -332,7 +332,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             int index = choices.IndexOf(reference.objectReferenceValue as Material) + 1;
             var label = new GUIContent(feature.SharedValueName + " from",
                 "The materials' " + feature.SharedValueName.ToLowerInvariant() + " differs, and the atlas material has one. " +
-                "Automatic takes it from the material with the largest area in the atlas.");
+                (feature is IAtlasAutomaticReference rule ? rule.AutomaticRule : "Automatic takes it from the material with the largest area in the atlas."));
             int next = PopupRow(label, index, options.ToArray());
             if (next != index) reference.objectReferenceValue = next == 0 ? null : choices[next - 1];
         }

@@ -485,8 +485,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             d.Lighting.Family = AtlasLightingFamily.RampToon;
             var ramp = d.Lighting.Ramp;
-            // The bands build their own half-Lambert terms.
-            if (Int(m, "_LightingMapMode", 0) != 4) ramp.Term = AtlasShadingTerm.HalfLambert;
+            // The bands build their own half-Lambert terms; Light Data's light map stays the
+            // term that specular and light masks read.
+            if (Int(m, "_LightingMapMode", 0) != 4) ramp.BandsOwnTerm = true;
             ramp.Bands.Add(Band(m, d, "_Shadow"));
             foreach (string prefix in new[] { "_Shadow2nd", "_Shadow3rd" })
                 if (LinearColor(m, prefix + "Color", Color.clear).a > 0f) ramp.Bands.Add(Band(m, d, prefix));

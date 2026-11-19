@@ -167,26 +167,29 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var textures = new[] { Solid(Color.red, "red"), Solid(Color.green, "green"), Solid(Color.blue, "blue") };
             var materials = textures.Select(t => WithMatcap(t, null, Color.white, (AtlasBlend.Add, 1f))).ToArray();
 
-            // Toon Standard's one slot, automatic: the largest gets it, the rest are combined in.
+            // Toon Standard's one slot, automatic: the most visible gets it, the rest are combined in.
             var job = Job(materials);
-            var keys = new AtlasMatcapFeature().Instances(job, new[] { 0, 1, 2 }).Select(i => i.Key).ToList();
-            Assert.AreEqual(3, keys.Count);
+            var instances = new AtlasMatcapFeature().Instances(job, new[] { 0, 1, 2 });
+            Assert.AreEqual(3, instances.Count);
+            string Key(string name) => instances.Single(i => i.Label.StartsWith(name)).Key;
             var plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
             var combined = Lookups(plan).Single();
             Assert.AreEqual(1, plan.GeneratedTextures.Count);
             Assert.AreSame(plan.GeneratedTextures[0].Reference, combined.Source.Map, "the slot shows the generated texture");
             var pixel = plan.GeneratedTextures[0].Pixels()[0];
-            // On different parts: averaged by area (the regions are 1/2, 1/3 and 1/6 of the atlas).
-            Assert.AreEqual(0.5f, pixel.r, 1e-3f);
-            Assert.AreEqual(1f / 3f, pixel.g, 1e-3f);
-            Assert.AreEqual(1f / 6f, pixel.b, 1e-3f);
+            // On different parts: averaged by area (1/2, 1/3 and 1/6 of the atlas) × what each
+            // adds (its luminance).
+            float red = 0.5f * 0.2126f, green = 1f / 3f * 0.7152f, blue = 1f / 6f * 0.0722f, total = red + green + blue;
+            Assert.AreEqual(red / total, pixel.r, 1e-3f);
+            Assert.AreEqual(green / total, pixel.g, 1e-3f);
+            Assert.AreEqual(blue / total, pixel.b, 1e-3f);
             Assert.IsTrue(plan.Notes.Any(n => n.Contains("combines")), string.Join("\n", plan.Notes));
 
             // The second in its own slot, the others off.
             job = Job(materials);
-            Place(job, keys[1], AtlasInstancePlacement.Own);
-            Place(job, keys[0], AtlasInstancePlacement.Off);
-            Place(job, keys[2], AtlasInstancePlacement.Off);
+            Place(job, Key("green"), AtlasInstancePlacement.Own);
+            Place(job, Key("red"), AtlasInstancePlacement.Off);
+            Place(job, Key("blue"), AtlasInstancePlacement.Off);
             plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
             Assert.AreSame(textures[1], Lookups(plan).Single().Source.Map.Texture);
             Assert.AreEqual(0, plan.GeneratedTextures.Count);
@@ -194,13 +197,248 @@ namespace NordicWind.AdvancedAtlaser.Tests
 
             // Poiyomi's four slots: the second combined with the first, the third on its own.
             job = Job(materials);
-            Place(job, keys[1], AtlasInstancePlacement.Combined, keys[0]);
+            Place(job, Key("green"), AtlasInstancePlacement.Combined, Key("red"));
             plan = AtlasOutputPipeline.Resolve(job, Poiyomi);
             var layers = Lookups(plan);
             Assert.AreEqual(2, layers.Count, "two slots");
             Assert.AreSame(plan.GeneratedTextures.Single().Reference, layers[0].Source.Map);
             Assert.AreSame(textures[2], layers[1].Source.Map.Texture);
             Assert.AreNotSame(layers[0].Mask, layers[1].Mask);
+        }
+
+        // A matcap that only glows: one layer of weight 0 carrying the emission, as the parser
+        // writes it.
+        private AtlasUnifiedMaterial Glowing(string name, Color color, float glow)
+        {
+            var material = WithMatcap(Solid(Color.white, name), null, color, (AtlasBlend.Mixed, 0f));
+            material.Layers[0].EmissionAmount = glow;
+            return material;
+        }
+
+        private static void BeforeWrite(AtlasOutputPlan plan)
+        {
+            foreach (var step in plan.BeforeWrite) step();
+        }
+
+        // Poiyomi's four slots and five matcaps: the smallest, which only glows, joins the other
+        // one that only glows, not the blend with the nearest color.
+        [Test]
+        public void AMatcapThatOnlyGlowsIsCombinedWithAnotherThatGlows()
+        {
+            var materials = new[]
+            {
+                WithMatcap(Solid(Color.white, "first"), null, Color.white, (AtlasBlend.Add, 1f)),
+                WithMatcap(Solid(Color.white, "second"), null, new Color(0.2f, 0.2f, 0.2f), (AtlasBlend.Add, 1f)),
+                Glowing("glow", new Color(0.2f, 0.2f, 0.2f), 0.4f),
+                WithMatcap(Solid(Color.white, "third"), null, new Color(0.2f, 0.2f, 0.2f), (AtlasBlend.Multiply, 1f)),
+                Glowing("small glow", Color.white, 0.5f)
+            };
+            var plan = AtlasOutputPipeline.Resolve(Job(materials), Poiyomi);
+            string combines = plan.Notes.Single(n => n.Contains("combines"));
+            StringAssert.Contains("glow (source 3)", combines);
+            StringAssert.Contains("small glow (source 5)", combines);
+            Assert.IsFalse(plan.Notes.Any(n => n.Contains("show the slot's blend")), string.Join(" | ", plan.Notes));
+        }
+
+        // Combined matcaps that only glow: the texture is made from their glows, the slot doesn't
+        // blend, and its one strength is fitted to both glows.
+        [Test]
+        public void ACombinedSlotThatOnlyGlowsKeepsTheGlow()
+        {
+            var job = Job(Glowing("strong", Color.white, 0.8f), Glowing("weak", Color.white, 0.4f));
+            var keys = new AtlasMatcapFeature().Instances(job, new[] { 0, 1 }).Select(i => i.Key).ToList();
+            Place(job, keys[1], AtlasInstancePlacement.Combined, keys[0]);
+            var plan = AtlasOutputPipeline.Resolve(job, Poiyomi);
+            var layer = Lookups(plan).Single();
+            Assert.AreEqual(0f, layer.Opacity, "no blend");
+            // The regions are 2/3 and 1/3 of the atlas: the stacks averaged by area × glow (how
+            // visible they are), the weaker glow at half.
+            const float a = 2f / 3f, b = 1f / 3f;
+            float strong = a * 0.8f / (a * 0.8f + b * 0.4f), weak = 1f - strong;
+            Assert.AreEqual(strong * 1f + weak * 0.5f, plan.GeneratedTextures.Single().Pixels()[0].r, 1e-3f);
+            BeforeWrite(plan);
+            // Least squares by area: glow × part against 0.8 and 0.4.
+            float expected = (a * strong * 0.8f + b * (weak * 0.5f) * 0.4f) / (a * strong * strong + b * (weak * 0.5f) * (weak * 0.5f));
+            Assert.AreEqual(expected, layer.EmissionAmount, 1e-3f);
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("one glow strength")), string.Join(" | ", plan.Notes));
+        }
+
+        // Combined matcaps that mix in the base color differently: the mix goes into each one's
+        // mask, and the glow is fitted to what each glowed with its own mix.
+        [Test]
+        public void CombinedMatcapsWithDifferentBaseColorMixesFoldItIntoTheMasks()
+        {
+            const float gray = 0.25f;
+            var mixed = WithMatcap(Solid(Color.white, "mixed"), null, Color.white, (AtlasBlend.Add, 1f));
+            ((AtlasLookupLayer)mixed.Layers[0]).BaseColorMix = 1f;
+            mixed.Layers[0].EmissionAmount = 0.6f;
+            mixed.Surface.BaseColor.Color = new Color(gray, gray, gray, 1f);
+            var plain = WithMatcap(Solid(Color.white, "plain"), null, Color.white, (AtlasBlend.Add, 1f));
+            plain.Layers[0].EmissionAmount = 0.6f;
+            var job = Job(mixed, plain);
+            var keys = new AtlasMatcapFeature().Instances(job, new[] { 0, 1 }).Select(i => i.Key).ToList();
+            Place(job, keys[1], AtlasInstancePlacement.Combined, keys[0]);
+            var plan = AtlasOutputPipeline.Resolve(job, Poiyomi);
+            var layer = Lookups(plan).Single();
+            Assert.AreEqual(0f, layer.BaseColorMix, "the slot mixes in nothing");
+            Assert.AreEqual(gray, Evaluate(plan, AtlasVirtualMap.Mask1, job, 0), 1e-3f, "the mix in the mask");
+            Assert.AreEqual(1f, Evaluate(plan, AtlasVirtualMap.Mask1, job, 1), 1e-3f);
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("mix in the base color differently")), string.Join(" | ", plan.Notes));
+            BeforeWrite(plan);
+            // Regions 2/3 and 1/3; the shares by area × (weight + glow) × the mix's darkening;
+            // masks 0.25 and 1; glows 0.6 × 0.25 and 0.6.
+            const float a = 2f / 3f, b = 1f / 3f;
+            float darkened = a * 1.6f * gray, bright = b * 1.6f;
+            float sm = darkened / (darkened + bright), sp = 1f - sm;
+            float expected = (a * (sm * gray) * (0.6f * gray) + b * sp * 0.6f) / (a * (sm * gray) * (sm * gray) + b * sp * sp);
+            Assert.AreEqual(expected, layer.EmissionAmount, 1e-3f);
+        }
+
+        // Toon Standard's matcap doesn't glow: the glow is added to the color, merged with the
+        // matcap's add since its slot takes one blend at a time. Poiyomi glows itself.
+        [Test]
+        public void AMatcapGlowIsAddedToTheColorWhereTheOutputDoesntGlow()
+        {
+            var material = WithMatcap(Solid(Color.white), null, Color.white, (AtlasBlend.Add, 0.5f));
+            material.Layers[0].EmissionAmount = 0.3f;
+            var plan = AtlasOutputPipeline.Resolve(Job(material), ToonStandard);
+            var layer = Lookups(plan).Single();
+            Assert.AreEqual(AtlasBlend.Add, layer.Blend);
+            Assert.AreEqual(0.8f, layer.Opacity, 1e-5f, "the add and the glow");
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("don't glow")), string.Join(" | ", plan.Notes));
+
+            plan = AtlasOutputPipeline.Resolve(Job(Glowing("glow", Color.white, 0.4f)), ToonStandard);
+            layer = Lookups(plan).Single();
+            Assert.AreEqual(AtlasBlend.Add, layer.Blend, "only the glow, as an add");
+            Assert.AreEqual(0.4f, layer.Opacity, 1e-5f);
+
+            plan = AtlasOutputPipeline.Resolve(Job(material), Poiyomi);
+            layer = Lookups(plan).Single();
+            Assert.AreEqual(0.5f, layer.Opacity, 1e-5f);
+            Assert.AreEqual(0.3f, layer.EmissionAmount, 1e-5f);
+            Assert.IsFalse(plan.Notes.Any(n => n.Contains("don't glow")), string.Join(" | ", plan.Notes));
+        }
+
+        // A matcap texture's scale and offset: Poiyomi keeps them on its slot; Toon Standard,
+        // whose matcap has none, gets a generated texture sampled with them (a scale of 0 reads
+        // one point everywhere: here the red half).
+        [Test]
+        public void AMatcapTexturesScaleAndOffsetAreKeptOrBakedIntoATexture()
+        {
+            var texture = new Texture2D(4, 4, TextureFormat.RGBAFloat, false, true) { name = "halves" };
+            var pixels = new Color[16];
+            for (int i = 0; i < 16; i++) pixels[i] = i % 4 < 2 ? Color.red : Color.white;
+            texture.SetPixels(pixels);
+            texture.Apply();
+            created.Add(texture);
+            var material = WithMatcap(texture, null, Color.white, (AtlasBlend.Add, 1f));
+            var map = ((AtlasLookupLayer)material.Layers[0]).Source.Map;
+            map.Tiling = Vector2.zero;
+            map.Offset = new Vector2(0.25f, 0.5f);
+
+            var poiyomi = AtlasOutputPipeline.Resolve(Job(material), Poiyomi);
+            Assert.AreEqual(0, poiyomi.GeneratedTextures.Count);
+            Assert.AreEqual(new Vector2(0.25f, 0.5f), Lookups(poiyomi).Single().Source.Map.Offset);
+
+            var toon = AtlasOutputPipeline.Resolve(Job(material), ToonStandard);
+            var generated = toon.GeneratedTextures.Single().Pixels();
+            foreach (var pixel in new[] { generated[0], generated[generated.Length / 2], generated[generated.Length - 1] })
+            {
+                Assert.AreEqual(1f, pixel.r, 1e-3f);
+                Assert.AreEqual(0f, pixel.g, 1e-3f, "the red half everywhere");
+            }
+        }
+
+        // A glow on a dark base with a strong base color mix barely shows: sharing a slot with a
+        // brighter one, it takes a small share of the texture, though its region is larger.
+        [Test]
+        public void ACombinedTextureIsSharedByHowVisibleTheMatcapsAre()
+        {
+            var faint = Glowing("faint", Color.white, 0.34f);
+            ((AtlasLookupLayer)faint.Layers[0]).BaseColorMix = 0.94f;
+            faint.Surface.BaseColor.Color = new Color(0.02f, 0.02f, 0.02f, 1f);
+            var glass = Glowing("glass", Color.white, 0.5f);
+            var job = Job(faint, glass);
+            var keys = new AtlasMatcapFeature().Instances(job, new[] { 0, 1 }).Select(i => i.Key).ToList();
+            Assert.AreEqual("glass (source 2)", new AtlasMatcapFeature().Instances(job, new[] { 0, 1 })[0].Label, "the more visible first");
+            Place(job, keys[1], AtlasInstancePlacement.Combined, keys[0]);
+            var plan = AtlasOutputPipeline.Resolve(job, Poiyomi);
+            // Regions 2/3 and 1/3: by area alone the faint glow would take 2/3 of the texture.
+            float faintVisible = 2f / 3f * 0.34f * Mathf.Lerp(1f, 0.02f, 0.94f), glassVisible = 1f / 3f * 0.5f;
+            float faintShare = faintVisible / (faintVisible + glassVisible);
+            Assert.Less(faintShare, 0.15f);
+            var pixel = plan.GeneratedTextures.Single().Pixels()[0];
+            // Glass at weight 1 (the strongest glow), the faint one at 0.34 / 0.5.
+            Assert.AreEqual((1f - faintShare) * 1f + faintShare * 0.68f, pixel.r, 1e-3f);
+        }
+
+        // A glint: black with one small bright spot, all its light in a few texels.
+        private Texture2D Glint(string name)
+        {
+            const int size = 32;
+            var texture = new Texture2D(size, size, TextureFormat.RGBAFloat, false, true) { name = name };
+            var pixels = Enumerable.Repeat(Color.black, size * size).ToArray();
+            for (int y = 15; y <= 16; y++) for (int x = 15; x <= 16; x++) pixels[y * size + x] = Color.white;
+            texture.SetPixels(pixels);
+            texture.Apply();
+            created.Add(texture);
+            return texture;
+        }
+
+        // A matcap that reads black where it adds (a texture scale of 0 on a black corner, or a
+        // black texture) changes nothing: left out and listed, not given a slot.
+        [Test]
+        public void AMatcapThatChangesNothingIsLeftOut()
+        {
+            var black = WithMatcap(Solid(Color.black, "black"), null, Color.white, (AtlasBlend.Screen, 1f), (AtlasBlend.Mixed, 1f));
+            black.Layers[0].EmissionAmount = 0.8f;
+            var shown = WithMatcap(Solid(Color.white, "shown"), null, Color.white, (AtlasBlend.Add, 0.5f));
+            foreach (var capabilities in new[] { Poiyomi, ToonStandard })
+            {
+                var plan = AtlasOutputPipeline.Resolve(Job(black, shown), capabilities);
+                Assert.AreSame(shown.Layers.OfType<AtlasLookupLayer>().First().Source.Map.Texture, Lookups(plan).Single().Source.Map.Texture);
+                Assert.IsTrue(plan.Notes.Any(n => n.Contains("change nothing") && n.Contains("black (source 1)")), string.Join(" | ", plan.Notes));
+            }
+        }
+
+        // Effects (most of their light in a few texels) get their own slots and aren't shared;
+        // where the slots run out the weakest are left out, and environment matcaps share.
+        [Test]
+        public void EffectsGetTheirOwnSlotsAndTheWeakestAreLeftOut()
+        {
+            var shading = Enumerable.Range(0, 4).Select(i => WithMatcap(Solid(new Color(0.5f, 0.5f, 0.5f, 1f), "shading" + i), null, Color.white,
+                (AtlasBlend.Add, 0.5f))).ToList();
+            var strong = WithMatcap(Glint("strong glint"), null, Color.white, (AtlasBlend.Add, 1f));
+            var weak = WithMatcap(Glint("weak glint"), null, Color.white, (AtlasBlend.Add, 0.2f));
+
+            // Toon Standard's one slot: the environment matcaps share it, both effects are left out.
+            var job = Job(shading[0], strong, shading[1], weak);
+            var toon = AtlasOutputPipeline.Resolve(job, ToonStandard);
+            Assert.AreEqual(1, Lookups(toon).Count);
+            string cut = toon.Notes.Single(n => n.Contains("effects"));
+            StringAssert.Contains("strong glint", cut);
+            StringAssert.Contains("weak glint", cut);
+            Assert.IsFalse(toon.Notes.Any(n => n.Contains("combines") && n.Contains("glint")), string.Join(" | ", toon.Notes));
+
+            // Poiyomi's four: both effects get their own, the four shading matcaps share two.
+            job = Job(shading[0], strong, shading[1], weak, shading[2], shading[3]);
+            var poiyomi = AtlasOutputPipeline.Resolve(job, Poiyomi);
+            var textures = Lookups(poiyomi).Select(l => l.Source.Map.Texture).ToList();
+            Assert.IsTrue(textures.Any(t => t != null && t.name == "strong glint"), "the strong effect has a slot of its own");
+            Assert.IsTrue(textures.Any(t => t != null && t.name == "weak glint"));
+            Assert.IsFalse(poiyomi.Notes.Any(n => n.Contains("effects")), string.Join(" | ", poiyomi.Notes));
+            Assert.IsFalse(poiyomi.Notes.Any(n => n.Contains("combines") && n.Contains("glint")), string.Join(" | ", poiyomi.Notes));
+
+            // Three slots taken by environment matcaps the user placed: one effect fits, the weak one is cut.
+            job = Job(shading[0], strong, shading[1], weak, shading[2], shading[3]);
+            var instances = new AtlasMatcapFeature().Instances(job, Enumerable.Range(0, 6).ToList());
+            foreach (var instance in instances.Where(i => i.Label.StartsWith("shading")).Take(3))
+                Place(job, instance.Key, AtlasInstancePlacement.Own);
+            poiyomi = AtlasOutputPipeline.Resolve(job, Poiyomi);
+            textures = Lookups(poiyomi).Select(l => l.Source.Map.Texture).ToList();
+            Assert.IsTrue(textures.Any(t => t != null && t.name == "strong glint"));
+            Assert.IsFalse(textures.Any(t => t != null && t.name == "weak glint"));
+            StringAssert.Contains("weak glint", poiyomi.Notes.Single(n => n.Contains("effects")));
         }
 
         [Test]

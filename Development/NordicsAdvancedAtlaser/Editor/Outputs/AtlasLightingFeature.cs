@@ -7,10 +7,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Shading, lighting and shadows (ATLAS_OUTPUT.md, "Feature inventory"): one lighting setup,
     // the reference source's, which the writer maps to its shader's own modes. Where the sources
-    // light differently, the user picks the source (Lighting from); automatic: the largest region.
+    // light differently, the user picks the source (Lighting from); automatic: the setup that
+    // changes the sources' look least (AtlasLightingResponse), the largest region among equals.
     // Parts drawn on the texture are baked by their own features (shadow masks, shadow colors,
     // skin thickness) or, for an SDF face, kept live on preserved UVs; cloth maps aren't merged yet.
-    public sealed class AtlasLightingFeature : IAtlasAlwaysOnFeature, IAtlasSharedValueFeature
+    public sealed class AtlasLightingFeature : IAtlasAlwaysOnFeature, IAtlasSharedValueFeature, IAtlasAutomaticReference
     {
         public const string FeatureId = "lighting";
 
@@ -25,6 +26,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public int Order => 0;
         public IReadOnlyList<AtlasFeatureMode> Modes => ModeList;
         public string SharedValueName => "Lighting";
+        public string AutomaticRule =>
+            "Automatic takes the lighting that changes the materials' look least: each material's colors lit by it, compared with " +
+            "their own lighting and weighted by area. Dark materials show lighting differences less.";
 
         public bool IsPresent(AtlasUnifiedMaterial source) => source != null;
 
@@ -65,7 +69,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var job = context.Job;
             var capabilities = context.Capabilities;
-            int reference = Reference(context);
+            int reference = Reference(context, out bool automatic);
             var lighting = context.Output.Lighting;
             AtlasFieldwise.Copy(job.Sources[reference].Material.Lighting, lighting);
             var sources = context.Sources.Select(i => job.Sources[i].Material.Lighting).ToList();
@@ -110,7 +114,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var differ = context.Sources.Where(i => i != reference &&
                 Differ(job.Sources[reference].Material.Lighting, job.Sources[i].Material.Lighting)).ToList();
             if (differ.Count > 0)
-                context.Notes.Add($"Lighting is taken from source {reference + 1}; {Numbers(differ)} {(differ.Count == 1 ? "is" : "are")} lit differently.");
+                context.Notes.Add($"Lighting is taken from source {reference + 1}" +
+                                  (automatic ? ", whose lighting changes the others' look least" : "") +
+                                  $"; {Numbers(differ)} {(differ.Count == 1 ? "is" : "are")} lit differently.");
             if (leftOut.Count > 0)
                 context.Notes.Add($"Lighting drawn on the texture isn't merged here ({string.Join(", ", leftOut)}); the atlas is lit without it.");
         }
@@ -136,13 +142,46 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return true;
         }
 
-        // The chosen source when it's one of the output's, otherwise the one with the largest region.
-        private static int Reference(AtlasFeatureContext context)
+        // The chosen source when it's one of the output's, otherwise Automatic's.
+        private static int Reference(AtlasFeatureContext context, out bool automatic)
         {
             var choice = context.Job.Features.Find(f => f.FeatureId == FeatureId);
-            if (choice != null && context.Sources.Contains(choice.ReferenceSource)) return choice.ReferenceSource;
-            return context.Sources.OrderByDescending(i => context.Job.Sources[i].UVRegion.width * context.Job.Sources[i].UVRegion.height)
-                .ThenBy(i => i).First();
+            automatic = !(choice != null && context.Sources.Contains(choice.ReferenceSource));
+            return automatic ? Automatic(context.Job, context.Sources) : choice.ReferenceSource;
+        }
+
+        /// <summary>Automatic's source: the one whose lighting changes the sources' look least,
+        /// the sum over the sources of their area × the visible difference between their colors
+        /// lit by it and by their own lighting (AtlasLightingResponse). Among equal ones, the
+        /// largest region.</summary>
+        public static int Automatic(AtlasGeneratorJob job, IReadOnlyList<int> sources)
+        {
+            float Area(int i) => job.Sources[i].UVRegion.width * job.Sources[i].UVRegion.height;
+            AtlasLighting Of(int i) => job.Sources[i].Material.Lighting;
+            var bySize = sources.OrderByDescending(Area).ThenBy(i => i).ToList();
+            if (bySize.Count == 0) return 0;
+            // One candidate per setup: the largest source with it.
+            var candidates = new List<int>();
+            foreach (int i in bySize)
+                if (!candidates.Any(c => !Differ(Of(c), Of(i)))) candidates.Add(i);
+            if (candidates.Count == 1) return candidates[0];
+            var bases = bySize.ToDictionary(i => i, i => AtlasSourceSamples.Bases(job.Sources[i].Material));
+            int best = candidates[0];
+            double lowest = double.MaxValue;
+            foreach (int candidate in candidates)
+            {
+                double cost = 0.0;
+                foreach (int i in bySize)
+                    if (Differ(Of(candidate), Of(i)))
+                        cost += Area(i) * AtlasLightingResponse.Difference(Of(i), Of(candidate), bases[i]);
+                // Larger regions come first, so only a lower cost replaces them.
+                if (cost < lowest - 1e-6)
+                {
+                    lowest = cost;
+                    best = candidate;
+                }
+            }
+            return best;
         }
 
         private static string Numbers(IEnumerable<int> indices)

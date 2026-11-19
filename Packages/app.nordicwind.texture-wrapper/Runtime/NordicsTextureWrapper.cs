@@ -38,15 +38,15 @@ namespace NordicWind.TextureWrapper
         }
         /// <summary>Loads a texture as color or data. See the overload with a data type.</summary>
         public NordicsTextureWrapper(Texture2D source,bool readOnly=true) : this(source,TextureDataType.Color,readOnly) { }
-        /// <summary>Loads a texture. Textures without Read/Write are read through the GPU.
-        /// sRGB textures are decoded to linear. Normal data types decode the stored packing
-        /// into signed vectors.</summary>
+        /// <summary>Loads a texture. Textures without Read/Write, and crunch-compressed ones
+        /// (which the CPU can't decode), are read through the GPU. sRGB textures are decoded
+        /// to linear. Normal data types decode the stored packing into signed vectors.</summary>
         public NordicsTextureWrapper(Texture2D source,TextureDataType dataType,bool readOnly=true)
             : this(source!=null?source.width:throw new ArgumentNullException(nameof(source)),source.height,InferSettings(source,dataType),readOnly)
         {
             bool srgb=GraphicsFormatUtility.IsSRGBFormat(source.graphicsFormat);
             Color[] colors;
-            if(!source.isReadable)
+            if(!source.isReadable || IsCrunched(source.format))
             {
                 // The GPU decodes sRGB textures when sampling, but only in a linear-color-space
                 // project. Decode here otherwise, so the result is the same either way.
@@ -70,6 +70,10 @@ namespace NordicWind.TextureWrapper
             for(int i=0;i<_usage.Length;i++)_usage[i]=1;
             _normalized=!Normal;
         }
+        // GetPixels and GetPixels32 don't support crunched formats, even with Read/Write on.
+        private static bool IsCrunched(TextureFormat format) =>
+            format==TextureFormat.DXT1Crunched || format==TextureFormat.DXT5Crunched ||
+            format==TextureFormat.ETC_RGB4Crunched || format==TextureFormat.ETC2_RGBA8Crunched;
         private static TextureSettings InferSettings(Texture2D tex,TextureDataType dataType)
         {
             return new TextureSettings { DataType=dataType, WrapMode=tex.wrapMode,FilterMode=tex.filterMode,AnisoLevel=tex.anisoLevel, Mipmaps=tex.mipmapCount>1,

@@ -205,6 +205,8 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(0.3f, ramp.ShadowColorFromBase, 1e-5f);
             Assert.IsFalse(ramp.SmoothEdges);
             Assert.AreSame(textureB, ramp.RampStrengthMask.Map.Texture);
+            Assert.IsTrue(ramp.BandsOwnTerm, "the bands build their own half-Lambert terms");
+            Assert.AreEqual(AtlasShadingTerm.RelativeBrightness, ramp.Term, "the light map stays Light Data's");
         }
 
         [Test]
@@ -641,6 +643,22 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(90f, layers[0].LookupRotation, 1e-5f);
             Assert.AreEqual(2f, layers[0].EmissionAmount, 1e-5f);
             Assert.AreEqual(0f, layers[1].EmissionAmount);
+        }
+
+        // Poiyomi samples at (projection × border + 0.5) × scale + offset: the texture keeps its
+        // scale and offset (a scale of 0 reads one point), and the pan scrolls by × scale.
+        [Test]
+        public void AMatcapTexturesScaleAndOffsetStayOnTheTexture()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_Matcap2Enable", 1f);
+            AtlasTestMaterials.AddSavedTexture(material, "_Matcap2", textureA, new Vector2(0.5f, 0f), new Vector2(0.1f, 0.2f));
+            AtlasTestMaterials.AddSavedFloat(material, "_Matcap2Border", 0.4f);
+            AtlasTestMaterials.AddSavedColor(material, "_Matcap2Pan", new Color(2f, 0f, 0f, 0f));
+            var layer = ParseSaved().Layers.OfType<AtlasLookupLayer>().Single();
+            Assert.AreEqual(0.8f, layer.Tiling.x, 1e-5f, "2 × border, without the scale");
+            Assert.AreEqual(new Vector2(0.5f, 0f), layer.Source.Map.Tiling);
+            Assert.AreEqual(new Vector2(0.1f, 0.2f), layer.Source.Map.Offset);
+            Assert.AreEqual(2f * 0.05f * 0.5f, layer.Source.Map.Scroll.x, 1e-6f);
         }
 
         [Test]
