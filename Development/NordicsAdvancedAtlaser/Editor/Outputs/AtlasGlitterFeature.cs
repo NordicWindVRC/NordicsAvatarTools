@@ -179,8 +179,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 context.Notes.Add("The glitter's color map isn't baked yet; it's left out.");
             }
             context.Output.Layers.Add(output);
-            if (job.Sources.Select(s => s.Material).Any(m => m != null && m.ColorAdjustments.Any(a => a.Layer == reference.Layer)))
-                context.Notes.Add("The glitter's hue shift isn't merged yet; it's left out.");
+            AtlasHueCycling.CopyLayerHue(context.Output, job.Sources[reference.Index].Material, reference.Layer, output);
         }
 
         // ---- Emulated ----

@@ -348,13 +348,21 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 bool fits = template.All(l => (capabilities.MatcapBlends & Flag(l)) != 0);
                 if (fits)
                 {
-                    foreach (var layer in template) output.Add(Copy(layer, slotMask, layer.Blend, layer.Placement, layer.Opacity * scale, layer.Source.Map, layer.Source.Color));
+                    foreach (var layer in template)
+                    {
+                        var copy = Copy(layer, slotMask, layer.Blend, layer.Placement, layer.Opacity * scale, layer.Source.Map, layer.Source.Color);
+                        output.Add(copy);
+                        // Its hue shift (and hue cycling) goes with it.
+                        AtlasHueCycling.CopyLayerHue(context.Output, context.Job.Sources[slot[0].Members[0].Source].Material, layer, copy);
+                    }
                     return;
                 }
                 approximated.Add(slot[0].Label);
                 var blend = Main(template);
                 float opacity = Mathf.Min(1f, template.Where(l => Nearest(l) == blend).Sum(l => l.Opacity));
-                output.Add(Copy(template[0], slotMask, blend, AtlasPlacement.Surface, opacity * scale, template[0].Source.Map, template[0].Source.Color));
+                var single = Copy(template[0], slotMask, blend, AtlasPlacement.Surface, opacity * scale, template[0].Source.Map, template[0].Source.Color);
+                output.Add(single);
+                AtlasHueCycling.CopyLayerHue(context.Output, context.Job.Sources[slot[0].Members[0].Source].Material, template[0], single);
                 return;
             }
 

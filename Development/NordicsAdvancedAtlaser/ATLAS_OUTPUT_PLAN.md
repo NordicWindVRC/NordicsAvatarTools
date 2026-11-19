@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is done; 2.9 is next (2.9a and 2.9b done, 2.9c next), before 2.8 (both outputs light and have the maps 2.8's bakes stand in for, so 2.8 matters first where the user turns maps off). It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is done; 2.9 is next (2.9a to 2.9c done, 2.9d next), before 2.8 (both outputs light and have the maps 2.8's bakes stand in for, so 2.8 matters first where the user turns maps off). It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -340,10 +340,18 @@ smallest offset) in a *Subsurface color and thickness* texture. Proximity color:
 from the reference source; Poiyomi's has no mask, so it covers the whole atlas, listed when
 some sources don't have it (*Off* leaves it out).
 
-**2.9c** *Color adjustments* (native live), with the output's modulators; *AudioLink* (native
-per feature).
+**2.9c Hue cycling** (live color adjustments: a hue shift with a speed). Every bake takes a
+cycling hue at its start (`AtlasHueCycling`), and outputs that cycle keep the turning live on
+top. *Hue Cycling* (Poiyomi): the base color's cycling at the reference source's rate (*Hue
+Cycling from*), each source's hue mask in the *Hue cycling mask* (Color Adjust's R), 0 where
+it doesn't cycle; the final color's (Post Processing) the same with an allocated mask.
+Sources at another rate stay at their start. Matcap, rim and glitter slots copy their
+layer's hue shift and cycling; an emission whose hue cycles takes an emission slot of its own
+(Emission 2 and 3). Toon Standard keeps every cycling hue at its start, listed.
 
-**2.9d** *World AO blocker*: typed in the unified material, read by the Poiyomi parser,
+**2.9d** *AudioLink* (native per feature).
+
+**2.9e** *World AO blocker*: typed in the unified material, read by the Poiyomi parser,
 written as one switch.
 - **Workable — M2 reached:** every initial feature, on both writers.
 

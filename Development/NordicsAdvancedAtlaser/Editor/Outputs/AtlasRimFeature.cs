@@ -306,6 +306,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 // Its color texture isn't baked yet (listed).
                 copy.Color.Map = null;
                 context.Output.Layers.Add(copy);
+                AtlasHueCycling.CopyLayerHue(context.Output, job.Sources[slot[0].Members[0].Source].Material, layer, copy);
             }
             if (capabilities.RimBandOnly && slot[0].Members[0].Layers.Any(l => l.Profile != AtlasAngleProfile.Band || !AtlasRimCurve.ViewOnly(l)))
                 context.Notes.Add($"The output shader's rim is a band; {slot[0].Label} is fitted to it.");

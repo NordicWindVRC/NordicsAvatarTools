@@ -106,7 +106,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         /// <summary>A source's emission: its baked emission layers added up, divided by
         /// <paramref name="outputStrength"/>, the strength the output's emission is drawn at.</summary>
-        public static NordicsTextureWrapper EvaluateEmission(AtlasUnifiedMaterial source, int width, int height, float outputStrength)
+        public static NordicsTextureWrapper EvaluateEmission(AtlasUnifiedMaterial source, int width, int height, float outputStrength,
+            ICollection<AtlasLayer> only = null)
         {
             var result = new NordicsTextureWrapper(width, height, AtlasMapEvaluator.Settings(AtlasVirtualMap.BaseColor));
             result.Fill(new Color(0f, 0f, 0f, 1f));
@@ -115,6 +116,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 for (int i = 0; i < source.Layers.Count; i++)
                 {
                     if (!(source.Layers[i] is AtlasSurfaceLayer layer) || !CanBakeEmission(source, i, layer)) continue;
+                    // Only the given layers; otherwise every one not kept elsewhere.
+                    if (only != null ? !only.Contains(layer) : AtlasLiveLayers.Skipped(source, layer)) continue;
                     foreach (var target in layer.Targets.Where(t => t.Target == AtlasSurfaceTarget.Emission))
                         using (AtlasEvaluationCache.Step($"emission layer {i + 1} ({Describe(layer, target)})"))
                         using (var layerSource = Source(layer, width, height, out var coverage))
@@ -143,11 +146,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         /// <summary>The most a source's baked emission reaches: each layer's brightest color
         /// channel × its strength, added up (maps reach at most 1).</summary>
-        public static float EmissionStrength(AtlasUnifiedMaterial source)
+        public static float EmissionStrength(AtlasUnifiedMaterial source, ICollection<AtlasLayer> only = null)
         {
             float strength = 0f;
             for (int i = 0; i < source.Layers.Count; i++)
-                if (source.Layers[i] is AtlasSurfaceLayer layer && CanBakeEmission(source, i, layer))
+                if (source.Layers[i] is AtlasSurfaceLayer layer && CanBakeEmission(source, i, layer) &&
+                    (only != null ? only.Contains(layer) : !AtlasLiveLayers.Skipped(source, layer)))
                     foreach (var target in layer.Targets.Where(t => t.Target == AtlasSurfaceTarget.Emission))
                         strength += Mathf.Max(0f, target.Opacity) * Mathf.Max(0f, Mathf.Max(layer.Source.Color.r, Mathf.Max(layer.Source.Color.g, layer.Source.Color.b)));
             return strength;
@@ -159,7 +163,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             if (adjustment.Target == AtlasAdjustmentTarget.FinalColor || adjustment.Target == AtlasAdjustmentTarget.Emission) return false;
             if (adjustment.Mask != null && !AtlasMapEvaluator.CanEvaluate(adjustment.Mask, source)) return false;
-            if (!IsStatic(source, "colorAdjustments[" + index + "]")) return false;
+            // A cycling hue is baked at its start (AtlasHueCycling).
+            if (!IsStatic(source, "colorAdjustments[" + index + "]") && !AtlasHueCycling.IsCycling(source, index)) return false;
             switch (adjustment.Operation)
             {
                 case AtlasColorOperation.Hue: return adjustment.HueMethod != AtlasHueMethod.GrayAxisRotation;
@@ -195,8 +200,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             for (int i = 0; i < source.ColorAdjustments.Count; i++)
             {
                 var adjustment = source.ColorAdjustments[i];
-                // Proximity color's tints are its own feature's.
+                // Proximity color's tints and a final color's hue cycling are their own features'.
                 if (proximity.Any(p => p.Adjustment == adjustment)) continue;
+                if (adjustment.Target == AtlasAdjustmentTarget.FinalColor && AtlasHueCycling.IsCycling(source, i)) continue;
                 if (adjustment.Target == AtlasAdjustmentTarget.FinalColor)
                     notes.Add("Final color adjustments aren't merged yet; they're left out.");
                 else if (adjustment.Target != AtlasAdjustmentTarget.Emission && !CanBake(source, i, adjustment))

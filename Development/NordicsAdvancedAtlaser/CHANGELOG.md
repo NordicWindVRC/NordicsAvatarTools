@@ -8,6 +8,12 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Hue cycling:** a cycling hue (a hue shift with a speed) is now baked at its start instead
+  of being left out (`AtlasHueCycling`). *Hue Cycling* (Poiyomi) keeps the base color's
+  cycling live (Color Adjust, its mask in a *Hue cycling mask* texture) and the final color's
+  (Post Processing, allocated mask), at the reference source's rate. Matcap, rim and glitter
+  slots now carry their layer's hue shift and cycling; an emission whose hue cycles gets
+  Emission 2 or 3 with its own texture.
 - **Subsurface scattering and proximity color** (Poiyomi): one setup each from the reference
   source. Subsurface keeps each source's color × strength and thickness in a *Subsurface color
   and thickness* texture (`_SSSThicknessMap`); proximity color's tints and camera distance go

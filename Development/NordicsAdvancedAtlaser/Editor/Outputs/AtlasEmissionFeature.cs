@@ -35,6 +35,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var job = context.Job;
             var active = new HashSet<int>(context.Sources);
+            Cycling(context, active);
             float strength = active.Max(i => AtlasColorStack.EmissionStrength(job.Sources[i].Material));
             Notes(context, active);
             if (strength <= 0f) return;
@@ -85,14 +86,80 @@ namespace NordicWind.AdvancedAtlaser.Editor
             context.Output.Layers.Add(layer);
         }
 
+        // Emissions whose hue cycles (AtlasHueCycling): each rate in an emission slot of its own
+        // (past the baked and the live global mask ones), the map holding those emissions at
+        // their start, the slot turning their hue. The rest stay at their start in the map.
+        private void Cycling(AtlasFeatureContext context, HashSet<int> active)
+        {
+            var job = context.Job;
+            var found = new List<(int Source, AtlasSurfaceLayer Layer, AtlasColorAdjustment Adjustment, AtlasModulator Turn)>();
+            foreach (int i in active)
+            {
+                var material = job.Sources[i].Material;
+                for (int k = 0; k < material.Layers.Count; k++)
+                {
+                    if (!(material.Layers[k] is AtlasSurfaceLayer layer) || !layer.Targets.Any(t => t.Target == AtlasSurfaceTarget.Emission) ||
+                        !AtlasColorStack.CanBakeEmission(material, k, layer)) continue;
+                    foreach (var cycling in AtlasHueCycling.Of(material, AtlasAdjustmentTarget.Layer, layer))
+                    {
+                        found.Add((i, layer, cycling.Adjustment, cycling.Turn));
+                        break;
+                    }
+                }
+            }
+            if (found.Count == 0) return;
+            int free = context.Capabilities.HueCycling ? context.Capabilities.EmissionSlots - 2 : 0;
+            var groups = found.GroupBy(f => AtlasHueCycling.Key(f.Adjustment, f.Turn))
+                .OrderByDescending(g => g.Select(f => f.Source).Distinct().Sum(i => job.Sources[i].UVRegion.width * job.Sources[i].UVRegion.height)).ToList();
+            var still = new List<int>();
+            for (int g = 0; g < groups.Count; g++)
+            {
+                if (g >= free || g >= 2)
+                {
+                    still.AddRange(groups[g].Select(f => f.Source));
+                    continue;
+                }
+                var layers = groups[g].GroupBy(f => f.Source).ToDictionary(s => s.Key, s => (ICollection<AtlasLayer>)new HashSet<AtlasLayer>(s.Select(f => (AtlasLayer)f.Layer)));
+                foreach (var entry in layers)
+                    foreach (var layer in entry.Value) AtlasLiveLayers.Add(job.Sources[entry.Key].Material, layer);
+                float strength = layers.Max(e => AtlasColorStack.EmissionStrength(job.Sources[e.Key].Material, e.Value));
+                if (strength <= 0f) continue;
+                var request = new AtlasMapRequest
+                {
+                    Map = g == 0 ? AtlasVirtualMap.EmissionCycle1 : AtlasVirtualMap.EmissionCycle2,
+                    Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Color },
+                    Evaluate = (index, material, width, height) => layers.TryGetValue(index, out var only)
+                        ? AtlasColorStack.EvaluateEmission(material, width, height, strength, only)
+                        : AtlasMapEvaluator.Constant(AtlasVirtualMap.Emission, 0f, width, height)
+                };
+                for (int i = 0; i < job.Sources.Count; i++) request.Sources.Add(i);
+                context.Maps.Add(request);
+                var slot = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission };
+                slot.Source.Map = request.Reference;
+                slot.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Emission, AtlasBlend.Add, strength));
+                context.Output.Layers.Add(slot);
+                var first = groups[g].First();
+                AtlasHueCycling.Add(context.Output, AtlasAdjustmentTarget.Layer, slot, first.Adjustment, first.Turn, null);
+            }
+            if (still.Count > 0)
+                context.Notes.Add("The emission's hue cycling of " + AtlasLiveMasks.Numbers(still.Distinct()) + " stays at its start" +
+                                  (context.Capabilities.HueCycling ? ": no emission slot is left for it." : ": the output shader has no hue cycling."));
+        }
+
+        /// <summary>The output's emission layers whose hue cycles, in slot order.</summary>
+        public static List<AtlasSurfaceLayer> CyclingOf(AtlasUnifiedMaterial output) =>
+            output.Layers.OfType<AtlasSurfaceLayer>().Where(l => l.Targets.Any(t => t.Target == AtlasSurfaceTarget.Emission) &&
+                AtlasHueCycling.LayerHue(output, l).Turn != null).ToList();
+
         // The output's live emission layer (shown through a global mask channel), if any.
         public static AtlasSurfaceLayer LiveOf(AtlasUnifiedMaterial output) =>
-            output.Layers.OfType<AtlasSurfaceLayer>().Where(l => l.Targets.Any(t => t.Target == AtlasSurfaceTarget.Emission)).Skip(1)
-                .FirstOrDefault(l => l.Mask != null && l.Mask.Bus >= 0);
+            output.Layers.OfType<AtlasSurfaceLayer>().FirstOrDefault(l => l.Targets.Any(t => t.Target == AtlasSurfaceTarget.Emission) &&
+                l.Mask != null && l.Mask.Bus >= 0);
 
         // The output's emission layer, if any.
         public static AtlasSurfaceLayer Of(AtlasUnifiedMaterial output) =>
-            output.Layers.OfType<AtlasSurfaceLayer>().FirstOrDefault(l => l.Targets.Any(t => t.Target == AtlasSurfaceTarget.Emission));
+            output.Layers.OfType<AtlasSurfaceLayer>().FirstOrDefault(l => l.Targets.Any(t => t.Target == AtlasSurfaceTarget.Emission) &&
+                (l.Mask == null || l.Mask.Bus < 0) && AtlasHueCycling.LayerHue(output, l).Turn == null);
 
         private static void Notes(AtlasFeatureContext context, IEnumerable<int> active)
         {

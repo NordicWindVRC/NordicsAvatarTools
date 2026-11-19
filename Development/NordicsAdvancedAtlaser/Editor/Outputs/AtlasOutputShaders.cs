@@ -46,6 +46,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 new AtlasOutputTexture("Occlusion", "Ambient occlusion") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
                     .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f)),
                 EmissionTexture(),
+                // _EmissionMap2 and 3: emissions whose hue cycles.
+                new AtlasOutputTexture("EmissionCycle1", "Cycling emission 1") { SizeMode = AtlasTextureSizeMode.MainAspect }
+                    .With(AtlasVirtualMap.EmissionCycle1, AtlasTextureChannels.RGB, new Color(0f, 0f, 0f, 1f)),
+                new AtlasOutputTexture("EmissionCycle2", "Cycling emission 2") { SizeMode = AtlasTextureSizeMode.MainAspect }
+                    .With(AtlasVirtualMap.EmissionCycle2, AtlasTextureChannels.RGB, new Color(0f, 0f, 0f, 1f)),
+                // _MainColorAdjustTexture: R where the base color's hue cycles.
+                new AtlasOutputTexture("ColorAdjust", "Hue cycling mask") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false, MainDivisor = 2 }
+                    .With(AtlasVirtualMap.HueCyclingMask, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f)),
                 // _EmissionMap1: emission shown through a live global mask channel.
                 new AtlasOutputTexture("EmissionLive", "Live emission") { SizeMode = AtlasTextureSizeMode.MainAspect }
                     .With(AtlasVirtualMap.EmissionLive, AtlasTextureChannels.RGB, new Color(0f, 0f, 0f, 1f)),
@@ -112,6 +120,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // UV channel; the detail mask's R and G.
             Glitter = true,
             ProximityColor = true,
+            HueCycling = true,
+            EmissionSlots = 4,
             DetailUVChannels = 3,
             DetailTextureBlends = { AtlasBlend.MultiplyDouble },
             DetailStrength = true,
@@ -181,6 +191,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             WriteGlitter(output, material);
             WriteSubsurface(output, material);
             WriteProximityColor(output, material);
+            WriteHueCycling(output, material);
+            WriteCyclingEmission(output, material);
             WriteEmission(output, material);
             WriteLiveEmission(output, material);
             var render = output.Render;
@@ -406,6 +418,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (on) m.EnableKeyword(MatcapKeywords[i]);
                 else m.DisableKeyword(MatcapKeywords[i]);
                 if (on) WriteMatcap(m, i, p, slots[i]);
+                WriteLayerHue(m, p + "HueShift", p + "HueSelectOrShift", output, on ? slots[i][0] : null);
             }
         }
 
@@ -488,6 +501,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (on) m.EnableKeyword(keyword);
                 else m.DisableKeyword(keyword);
                 if (on) WriteRim(m, slots[i], N);
+                WriteLayerHue(m, N("_RimHueShift", "_Rim2HueShift"), N("_RimHueSelectOrShift", "_Rim2HueSelectOrShift"), output, on ? slots[i][0] : null);
             }
         }
 
@@ -689,6 +703,91 @@ namespace NordicWind.AdvancedAtlaser.Editor
             Consumer(m, "_EmissionMask1GlobalMask", emission.Mask.Bus, emission.Mask.BusBlend);
         }
 
+        // A hue shift as Poiyomi's sections have it: enabled, shift, speed (turns per 20 seconds),
+        // color space (1 HSV, 0 Oklab), select (0) or shift (1). A numbered section (emission 2)
+        // puts its number after each name: `suffix`.
+        private static void WriteHue(Material m, string prefix, string select, AtlasColorAdjustment adjustment, AtlasModulator turn,
+            string enabled = null, string suffix = "")
+        {
+            m.SetFloat(enabled ?? prefix + "Enabled" + suffix, adjustment != null ? 1 : 0);
+            if (adjustment == null) return;
+            m.SetFloat(prefix + suffix, adjustment.Amount);
+            m.SetFloat(prefix + "Speed" + suffix, turn != null ? AtlasHueCycling.Rate(turn) / 0.05f : 0f);
+            m.SetFloat(prefix + "ColorSpace" + suffix, adjustment.HueMethod == AtlasHueMethod.HSV ? 1 : 0);
+            m.SetFloat(select, adjustment.HueSet ? 0 : 1);
+        }
+
+        private static void WriteLayerHue(Material m, string prefix, string select, AtlasUnifiedMaterial output, AtlasLayer layer, string suffix = "")
+        {
+            var (adjustment, turn) = layer != null ? AtlasHueCycling.LayerHue(output, layer) : (null, null);
+            WriteHue(m, prefix, select, adjustment, turn, suffix: suffix);
+        }
+
+        // The base color's hue cycling (Color Adjust, COLOR_GRADING_HDR: the hue shift masked by
+        // _MainColorAdjustTexture's R) and the final color's (Post Processing, POSTPROCESS).
+        private static void WriteHueCycling(AtlasUnifiedMaterial output, Material m)
+        {
+            var color = AtlasHueCycling.Of(output, AtlasAdjustmentTarget.BaseColor).Select(c => ((int, AtlasColorAdjustment, AtlasModulator)?)c).FirstOrDefault();
+            m.SetFloat("_MainColorAdjustToggle", color.HasValue ? 1 : 0);
+            if (color.HasValue) m.EnableKeyword("COLOR_GRADING_HDR");
+            else m.DisableKeyword("COLOR_GRADING_HDR");
+            if (color.HasValue)
+            {
+                var (_, adjustment, turn) = color.Value;
+                m.SetFloat("_MainHueShiftReplace", 1);
+                WriteHue(m, "_MainHueShift", "_MainHueShiftSelectOrShift", adjustment, turn, "_MainHueShiftToggle");
+                m.SetTexture("_MainColorAdjustTexture", adjustment.Mask?.Map?.Texture);
+                m.SetTextureScale("_MainColorAdjustTexture", Vector2.one);
+                m.SetTextureOffset("_MainColorAdjustTexture", Vector2.zero);
+                m.SetFloat("_MainColorAdjustTextureUV", 0);
+                m.SetFloat("_MainHueGlobalMask", 0);
+            }
+            var final = AtlasHueCycling.Of(output, AtlasAdjustmentTarget.FinalColor).Select(c => ((int, AtlasColorAdjustment, AtlasModulator)?)c).FirstOrDefault();
+            m.SetFloat("_PostProcess", final.HasValue ? 1 : 0);
+            if (final.HasValue) m.EnableKeyword("POSTPROCESS");
+            else m.DisableKeyword("POSTPROCESS");
+            if (!final.HasValue) return;
+            var (__, finalAdjustment, finalTurn) = final.Value;
+            m.SetFloat("_PPHue", finalAdjustment.Amount);
+            m.SetFloat("_PPHueSpeed", AtlasHueCycling.Rate(finalTurn) / 0.05f);
+            m.SetFloat("_PPHueShiftColorSpace", finalAdjustment.HueMethod == AtlasHueMethod.HSV ? 1 : 0);
+            m.SetFloat("_ppHueSelectOrShift", finalAdjustment.HueSet ? 0 : 1);
+            WriteMaskSlot(m, "_PPMask", finalAdjustment.Mask);
+            m.SetFloat("_PPMaskChannel", MaskChannel(finalAdjustment.Mask));
+            m.SetFloat("_PPMaskInvert", finalAdjustment.Mask?.Map?.Texture != null && finalAdjustment.Mask.Invert ? 1 : 0);
+            m.SetFloat("_PPMaskGlobalMask", 0);
+        }
+
+        // Emissions 2 and 3 (POI_EMISSION_2, POI_EMISSION_3): emissions whose hue cycles.
+        private static void WriteCyclingEmission(AtlasUnifiedMaterial output, Material m)
+        {
+            var slots = AtlasEmissionFeature.CyclingOf(output);
+            for (int k = 0; k < 2; k++)
+            {
+                string s = (k + 2).ToString();
+                var emission = k < slots.Count ? slots[k] : null;
+                var map = emission?.Source.Map?.Texture;
+                m.SetFloat("_EnableEmission" + s, map != null ? 1 : 0);
+                if (map != null) m.EnableKeyword("POI_EMISSION_" + s);
+                else m.DisableKeyword("POI_EMISSION_" + s);
+                if (map == null) continue;
+                float total = emission.Targets.First(t => t.Target == AtlasSurfaceTarget.Emission).Opacity;
+                float strength = Mathf.Min(total, 20f);
+                float rest = total / Mathf.Max(strength, 1e-4f);
+                m.SetTexture("_EmissionMap" + s, map);
+                m.SetTextureScale("_EmissionMap" + s, Vector2.one);
+                m.SetTextureOffset("_EmissionMap" + s, Vector2.zero);
+                m.SetFloat("_EmissionMap" + s + "UV", 0);
+                m.SetColor("_EmissionColor" + s, new Color(rest, rest, rest, 1f).gamma);
+                m.SetFloat("_EmissionColor" + s + "ThemeIndex", 0);
+                m.SetFloat("_EmissionStrength" + s, strength);
+                m.SetTexture("_EmissionMask" + s, null);
+                m.SetFloat("_EmissionReplace" + s, 0);
+                m.SetFloat("_EmissionBaseColorAsMap" + s, 0);
+                WriteLayerHue(m, "_EmissionHueShift", "_EmissionHueSelectOrShift" + s, output, emission, s);
+            }
+        }
+
         // Subsurface scattering (POI_SUBSURFACESCATTERING), as the Poiyomi parser reads it
         // (AtlasPoiyomiEdgeLight): the color and thickness from one texture (its channel enum: R 1,
         // G 2, B 3, A 0), the strength × π in the layer.
@@ -811,7 +910,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             m.SetFloat("_GlitterMaskInvert", layer.Mask?.Map?.Texture != null && layer.Mask.Invert ? 1 : 0);
             Consumer(m, "_GlitterMaskGlobalMask", layer.Mask?.Bus ?? -1, layer.Mask?.BusBlend ?? AtlasMaskBlend.Add);
             m.SetFloat("_GlitterHideInShadow", layer.HideInShadow);
-            m.SetFloat("_GlitterHueShiftEnabled", 0);
+            WriteLayerHue(m, "_GlitterHueShift", "_GlitterHueSelectOrShift", output, layer);
             m.SetFloat("_GlitterALEnabled", 0);
         }
 

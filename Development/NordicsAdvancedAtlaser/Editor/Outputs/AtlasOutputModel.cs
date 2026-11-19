@@ -46,7 +46,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         DetailTextureMask, DetailNormalMask,
         // RGB (4.5): each source's subsurface color × strength, black without; one value: its
         // thickness relative to the output's offset.
-        SubsurfaceColor, SubsurfaceThickness
+        SubsurfaceColor, SubsurfaceThickness,
+        // One value: where the base color's hue cycles (its hue mask, 0 where it doesn't).
+        HueCyclingMask,
+        // RGB: emissions whose hue cycles, each in an emission slot of its own.
+        EmissionCycle1, EmissionCycle2
     }
 
     // Which channels of a texture a virtual map fills.
@@ -208,6 +212,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool Glitter;
         // Proximity color (a camera distance tint of the final color or emission), without a mask.
         public bool ProximityColor;
+        // Hue cycling (a hue shift with a speed) of the base color (its mask in HueCyclingMask) and
+        // the final color (an allocated mask), and of the slots that have their own hue shift.
+        public bool HueCycling;
+        // Emission slots: the first holds the baked emission, the second the live global mask
+        // emission, the rest emissions whose hue cycles.
+        public int EmissionSlots = 1;
         // Global masks (1.5): the mask textures double as the first global mask textures (Mask1
         // to Mask8 are channels 0–7), and these steps run live on a channel.
         public bool GlobalMasks;

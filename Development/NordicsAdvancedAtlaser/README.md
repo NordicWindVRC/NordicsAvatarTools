@@ -200,6 +200,10 @@ its UV space. For the details, see `UNIFIED_MATERIAL.md` (the description of a m
        each (*… from*). Subsurface keeps each material's color, strength and thickness in a
        texture; proximity color has no mask, so it covers the whole atlas (the build log says
        so when some materials didn't have it).
+     - **Hue Cycling** (Poiyomi): colors that cycle through hues keep cycling, at one speed
+       for the atlas (*Hue Cycling from*), only where they did. Matcaps, rims, glitter and
+       emission keep their own cycling. Mobile Toon Standard can't cycle, so those colors
+       stay at their starting hue.
      - **Hidden UV Tiles** (Poiyomi's UV tile discard): *Kept live* (the atlas material hides
        the same tiles, read from a spare UV channel the build writes), *Removed from the mesh*
        (any output shader; only tiles hidden on both sides), or *Off*.
