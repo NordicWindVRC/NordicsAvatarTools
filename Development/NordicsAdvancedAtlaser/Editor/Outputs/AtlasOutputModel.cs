@@ -40,7 +40,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // reflection and highlight strengths relative to the strongest.
         ClearCoatStrength, ClearCoatRoughness, ClearCoatReflectionMask, ClearCoatSpecularMask,
         // RGB (1.5): the emission whose global masks change live, shown through its channel.
-        EmissionLive
+        EmissionLive,
+        // One value each: the live detail texture's and detail normal's strength × mask, 0 where
+        // a source has none (tiled layers kept live).
+        DetailTextureMask, DetailNormalMask
     }
 
     // Which channels of a texture a virtual map fills.
@@ -189,6 +192,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool EnvironmentalRim;
         // One backlight, its color from a texture (BacklightColor).
         public bool Backlight;
+        // Tiled layers kept live (a detail texture, a detail normal): the highest UV channel a
+        // detail can read, the detail texture's blends, whether it has a tint and strength of its
+        // own, whether there's a detail normal, and whether the detail mask picks a channel (one
+        // allocated mask for both; otherwise DetailTextureMask and DetailNormalMask).
+        public int DetailUVChannels;
+        public readonly System.Collections.Generic.HashSet<AtlasBlend> DetailTextureBlends = new System.Collections.Generic.HashSet<AtlasBlend>();
+        public bool DetailStrength;
+        public bool DetailNormal;
+        public bool DetailMaskByChannel;
         // Global masks (1.5): the mask textures double as the first global mask textures (Mask1
         // to Mask8 are channels 0–7), and these steps run live on a channel.
         public bool GlobalMasks;

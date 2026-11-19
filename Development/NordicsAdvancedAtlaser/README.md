@@ -118,6 +118,12 @@ and `ATLAS_OUTPUT.md` for the output design.
        their coat instead, so they keep its sharp highlights and reflections.
      - **Ambient Occlusion**: each source's occlusion map, at its strength; sources without
        one stay unoccluded.
+     - **Detail Texture** and **Detail Normal**: a detail texture or detail normal tiled over
+       a material stays sharp: the atlas material samples it through a spare UV channel the
+       build writes with each material's own tiling, instead of baking it into the atlas at
+       the material's size. Materials using a different detail are baked as before
+       (*Detail Texture from* / *Detail Normal from* picks the one kept live); *Baked* bakes
+       them all, *Off* leaves them out.
      - **Lighting**: one lighting setup for the atlas, taken from one material. Where the
        materials are lit differently, *Lighting from* picks it (*Automatic*: the one with the
        largest area). Poiyomi keeps the lighting type and Light Data settings; Toon Standard

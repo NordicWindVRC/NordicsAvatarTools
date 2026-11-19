@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7a to 2.7d are done; 2.7e is next. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is done; 2.8 is next. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -298,9 +298,16 @@ metallic, smoothness, reflection and highlight strengths, occlusion, clear coat,
 rim slots. Where a feature's sources need different live setups, *Live from* picks the one
 kept; the others are baked as normally seen and listed. Contacts stay baked (Poiyomi 11).
 
-**2.7e Tiled layers kept live** (from 2.5b): tiled detail and normal layers on a preserved UV
-channel with each source's tiling (Poiyomi's detail texture and detail normal, Toon
-Standard's detail normal), so they stay sharp instead of being baked at the region's size.
+**2.7e Tiled layers kept live** (from 2.5b): *Detail Texture* and *Detail Normal* (kept live,
+baked, off). A source's last static layer of the kind tiled over UV0 stays live on a preserved
+UV channel holding its UV0 × tiling + offset, so each source keeps its own scale; its strength
+× mask goes into the detail mask (Poiyomi's *Detail mask* R and G, Toon Standard's allocated
+mask by channel, one for both), 0 where a source has none. Sources whose layer looks the
+same as the reference source's share the slot (*Detail Texture from*, *Detail Normal from*);
+the others, and layers that are rotated, followed by layers of the same kind, adjusted, or
+in a blend or tint the output lacks, are baked as before and listed. The base color and
+normal bakes skip what's kept live (`AtlasLiveLayers`); *off* leaves it out of them
+(`IAtlasLeftOutFeature`).
 - **Workable:** matcaps and rims survive atlasing, as far as the output has slots for them.
 
 ### 2.8 Baking toolkit

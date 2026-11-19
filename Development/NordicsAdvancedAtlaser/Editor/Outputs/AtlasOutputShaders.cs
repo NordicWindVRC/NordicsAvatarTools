@@ -71,6 +71,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     .With(AtlasVirtualMap.ClearCoatRoughness, AtlasTextureChannels.G, AtlasOutputTexture.Gray(0f), invert: true)
                     .With(AtlasVirtualMap.ClearCoatReflectionMask, AtlasTextureChannels.B, AtlasOutputTexture.Gray(0f))
                     .With(AtlasVirtualMap.ClearCoatSpecularMask, AtlasTextureChannels.A, AtlasOutputTexture.Gray(0f)),
+                // _DetailMask: R the detail texture's strength, G the detail normal's.
+                new AtlasOutputTexture("DetailMask", "Detail mask") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false, MainDivisor = 2 }
+                    .With(AtlasVirtualMap.DetailTextureMask, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f))
+                    .With(AtlasVirtualMap.DetailNormalMask, AtlasTextureChannels.G, AtlasOutputTexture.Gray(1f)),
                 // _BacklightColorTex: the backlight's color, black where a source has none.
                 new AtlasOutputTexture("Backlight", "Backlight color") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
                     .With(AtlasVirtualMap.BacklightColor, AtlasTextureChannels.RGB, Color.black)
@@ -100,6 +104,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
             Backlight = true,
             // Global masks: Masks 1 and 2 as Global Mask Textures 1 and 2; the back face, mirror,
             // camera, distance and blacklight modifiers (contacts are Poiyomi 11's).
+            // Detail texture (× 2 in gamma, tinted, with an intensity) and detail normal, on any
+            // UV channel; the detail mask's R and G.
+            DetailUVChannels = 3,
+            DetailTextureBlends = { AtlasBlend.MultiplyDouble },
+            DetailStrength = true,
+            DetailNormal = true,
             GlobalMasks = true,
             LiveMaskSteps =
             {
@@ -161,6 +171,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             WriteSurfaceResponse(output.Surface.Response, material);
             WriteClearCoat(output.Surface.Response.ClearCoat, material);
             WriteGlobalMasks(output, material);
+            WriteDetails(output, material);
             WriteEmission(output, material);
             WriteLiveEmission(output, material);
             var render = output.Render;
@@ -669,6 +680,48 @@ namespace NordicWind.AdvancedAtlaser.Editor
             Consumer(m, "_EmissionMask1GlobalMask", emission.Mask.Bus, emission.Mask.BusBlend);
         }
 
+        // The detail texture and detail normal kept live (FINALPASS), as the Poiyomi parser reads
+        // them: on their preserved UV channel at tiling 1, the texture × tint × brightness at its
+        // intensity, the normal at its scale, both masked by _DetailMask's R and G.
+        private static void WriteDetails(AtlasUnifiedMaterial output, Material m)
+        {
+            var texture = AtlasDetailFeatures.Of(output, AtlasSurfaceTarget.BaseColor);
+            var normal = AtlasDetailFeatures.Of(output, AtlasSurfaceTarget.Normal);
+            bool on = texture != null || normal != null;
+            m.SetFloat("_DetailEnabled", on ? 1 : 0);
+            if (on) m.EnableKeyword("FINALPASS");
+            else m.DisableKeyword("FINALPASS");
+            if (!on) return;
+            m.SetTexture("_DetailMask", texture?.Mask?.Map?.Texture ?? normal?.Mask?.Map?.Texture);
+            m.SetTextureScale("_DetailMask", Vector2.one);
+            m.SetTextureOffset("_DetailMask", Vector2.zero);
+            m.SetFloat("_DetailMaskUV", 0);
+            m.SetFloat("_DetailTexGlobalMask", 0);
+            m.SetFloat("_DetailNormalGlobalMask", 0);
+            m.SetTexture("_DetailTex", texture?.Source.Map.Texture);
+            m.SetTextureScale("_DetailTex", Vector2.one);
+            m.SetTextureOffset("_DetailTex", Vector2.zero);
+            if (texture != null)
+            {
+                m.SetFloat("_DetailTexUV", AtlasDetailFeatures.UV(texture));
+                var color = texture.Source.Color;
+                float brightness = Mathf.Max(1f, color.maxColorComponent);
+                m.SetColor("_DetailTint", new Color(color.r / brightness, color.g / brightness, color.b / brightness, 1f).gamma);
+                m.SetFloat("_DetailTintThemeIndex", 0);
+                m.SetFloat("_DetailBrightness", brightness);
+                m.SetFloat("_DetailTexIntensity", texture.Targets[0].Opacity);
+            }
+            else m.SetFloat("_DetailTexIntensity", 0);
+            m.SetTexture("_DetailNormalMap", normal?.Source.Map.Texture);
+            m.SetTextureScale("_DetailNormalMap", Vector2.one);
+            m.SetTextureOffset("_DetailNormalMap", Vector2.zero);
+            if (normal != null)
+            {
+                m.SetFloat("_DetailNormalMapUV", AtlasDetailFeatures.UV(normal));
+                m.SetFloat("_DetailNormalMapScale", normal.Targets[0].Opacity);
+            }
+        }
+
         // Global masks (1.5), as the Poiyomi parser reads them: the texture steps' maps as Global
         // Mask Textures (channel c in texture c / 4), the back face, mirror, camera and distance
         // modifiers per channel, blacklight masking; and every consumer of the output's channels.
@@ -1132,8 +1185,39 @@ namespace NordicWind.AdvancedAtlaser.Editor
             MatcapBlends = AtlasMatcapBlends.Add | AtlasMatcapBlends.Multiply,
             // One band rim without a mask, added after lighting.
             RimSlots = 1,
-            RimBandOnly = true
+            RimBandOnly = true,
+            // Detail albedo by mode and detail normal on UV0 or UV1, one mask by channel.
+            DetailUVChannels = 1,
+            DetailTextureBlends = { AtlasBlend.Replace, AtlasBlend.Add, AtlasBlend.Multiply, AtlasBlend.MultiplyDouble },
+            DetailNormal = true,
+            DetailMaskByChannel = true
         };
+
+        // The detail maps kept live (USE_DETAIL_MAPS) on UV1: the albedo by mode, the normal at its
+        // scale (normal maps on), one mask by channel for both.
+        private static readonly AtlasBlend[] DetailModes = { AtlasBlend.Replace, AtlasBlend.Add, AtlasBlend.Multiply, AtlasBlend.MultiplyDouble };
+
+        private static void WriteDetails(AtlasUnifiedMaterial output, Material material)
+        {
+            var texture = AtlasDetailFeatures.Of(output, AtlasSurfaceTarget.BaseColor);
+            var normal = AtlasDetailFeatures.Of(output, AtlasSurfaceTarget.Normal);
+            bool on = texture != null || normal != null;
+            if (on) material.EnableKeyword("USE_DETAIL_MAPS");
+            else material.DisableKeyword("USE_DETAIL_MAPS");
+            if (!on) return;
+            material.SetFloat("_DetailUV", AtlasDetailFeatures.UV(texture ?? normal) >= 1 ? 1 : 0);
+            var mask = texture != null ? texture.Mask : normal.Mask;
+            material.SetTexture("_DetailMask", mask?.Map?.Texture);
+            material.SetFloat("_DetailMaskChannel", mask?.Map?.Texture != null ? Mathf.Clamp((int)mask.Channel, 0, 3) : 3);
+            material.SetTexture("_DetailAlbedoMap", texture?.Source.Map.Texture);
+            if (texture != null) material.SetFloat("_DetailMode", Mathf.Max(0, Array.IndexOf(DetailModes, texture.Targets[0].Blend)));
+            material.SetTexture("_DetailNormalMap", normal?.Source.Map.Texture);
+            if (normal != null)
+            {
+                material.SetFloat("_DetailNormalMapScale", normal.Targets[0].Opacity);
+                material.EnableKeyword("USE_NORMAL_MAPS");
+            }
+        }
 
         // Its one rim: a band, added after lighting (× the scene's light when Environmental). A
         // rim of another shape is fitted to the band (AtlasRimCurve.FitBand); its strength and
@@ -1235,6 +1319,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 material.SetTextureOffset("_BumpMap", Vector2.zero);
             }
             else material.DisableKeyword("USE_NORMAL_MAPS");
+            // After the normal map: a live detail normal turns normal maps on.
+            WriteDetails(output, material);
 
             // USE_SPECULAR: metallic = _MetallicMap's channel × strength, smoothness = _GlossMap's ×
             // strength, reflectance = gloss × _Reflectance. USE_OCCLUSION_MAP: lerp(1, channel, strength).

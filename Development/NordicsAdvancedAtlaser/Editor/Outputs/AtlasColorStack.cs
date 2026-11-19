@@ -30,8 +30,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     AtlasVertexColors.MultiplyColor(result, source, width, height);
                 using (AtlasEvaluationCache.Step("base color adjustments"))
                     Adjust(result, source, AtlasAdjustmentTarget.BaseColor, null, width, height);
+                // Layers kept live (or left out) by their own feature aren't baked.
                 for (int i = 0; i < source.Layers.Count; i++)
-                    if (source.Layers[i] is AtlasSurfaceLayer layer && CanBake(source, i, layer))
+                    if (source.Layers[i] is AtlasSurfaceLayer layer && CanBake(source, i, layer) && !AtlasLiveLayers.Skipped(source, layer))
                         foreach (var target in layer.Targets.Where(t => t.Target == AtlasSurfaceTarget.BaseColor))
                             using (AtlasEvaluationCache.Step($"layer {i + 1} ({Describe(layer, target)})"))
                                 Apply(result, source, layer, target, width, height);

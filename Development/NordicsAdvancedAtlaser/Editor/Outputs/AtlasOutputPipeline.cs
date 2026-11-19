@@ -26,6 +26,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly HashSet<AtlasVirtualMap> MaskPlaces = new HashSet<AtlasVirtualMap>();
         public readonly Dictionary<string, AtlasMask> PlacedMasks = new Dictionary<string, AtlasMask>();
         public readonly Dictionary<string, AtlasVirtualMap> PlacedMaskPlaces = new Dictionary<string, AtlasVirtualMap>();
+        // The UV channels the tiled layers kept live use, by the sources' tilings.
+        public readonly Dictionary<string, int> DetailChannels = new Dictionary<string, int>();
         // The next global mask channel past the mask places (8–15) for live parts with no texture.
         public int NextUnitChannel = 8;
         // The sources' bus channels whose live steps a feature keeps live, by source index.
@@ -60,7 +62,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var plan = new AtlasOutputPlan();
             // What an earlier resolve attached to the same unified materials.
-            foreach (var source in job.Sources) AtlasVertexColors.Detach(source.Material);
+            foreach (var source in job.Sources)
+            {
+                AtlasVertexColors.Detach(source.Material);
+                AtlasLiveLayers.Clear(source.Material);
+            }
             foreach (var feature in AtlasOutputFeatures.All)
                 Resolve(job, capabilities, feature, plan);
             var live = new List<string>();
@@ -126,13 +132,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var choice = job.Features.Find(f => f.FeatureId == feature.Id);
             var mode = AtlasOutputFeatures.Effective(feature, choice?.ModeId, capabilities);
             var sources = new List<int>();
+            var off = new List<int>();
             for (int i = 0; i < job.Sources.Count; i++)
             {
                 bool present = feature is IAtlasSourceAwareFeature aware
                     ? aware.IsPresent(job.Sources[i]) : feature.IsPresent(job.Sources[i].Material);
-                if (present &&
-                    (choice == null || feature is IAtlasAlwaysOnFeature || !choice.DisabledSources.Contains(i)))
-                    sources.Add(i);
+                if (!present) continue;
+                if (choice == null || feature is IAtlasAlwaysOnFeature || !choice.DisabledSources.Contains(i)) sources.Add(i);
+                else off.Add(i);
+            }
+            if (feature is IAtlasLeftOutFeature leftOut && mode != null)
+            {
+                if (mode.Kind == AtlasFeatureModeKind.Off) off.AddRange(sources);
+                if (off.Count > 0) leftOut.LeaveOut(job, off);
             }
             if (sources.Count == 0) return;
             if (mode == null)

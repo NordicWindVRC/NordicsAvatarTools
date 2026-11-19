@@ -8,6 +8,13 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Tiled layers kept live:** *Detail Texture* and *Detail Normal* keep a source's tiled
+  detail live on a preserved UV channel holding its UV0 × tiling + offset (Poiyomi's
+  `_DetailTex` and `_DetailNormalMap` on any channel with the new *Detail mask* texture; Toon
+  Standard's detail albedo and normal on UV1 with an allocated mask). Strengths and masks go
+  into the detail mask; the base color and normal bakes skip what's kept live
+  (`AtlasLiveLayers`), and *Off* leaves it out (`IAtlasLeftOutFeature`). Sources with another
+  detail, or one the output can't hold, are baked as before and listed.
 - **Generated and reused textures in the Textures list:** combined matcaps, rims drawn into
   matcaps and the generated shadow ramp, and the sources' textures the atlas material uses as
   they are (matcaps, ramps, cubemaps), each with its size and memory, counted in the totals.

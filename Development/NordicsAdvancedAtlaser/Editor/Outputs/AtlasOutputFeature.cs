@@ -111,6 +111,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         bool CanPlaceAsMatcap(AtlasOutputCapabilities capabilities);
     }
 
+    // A feature whose parts another feature bakes unless it's told they're left out: called with
+    // the sources that have it but have it off (all of them when its mode is off).
+    public interface IAtlasLeftOutFeature : IAtlasOutputFeature
+    {
+        void LeaveOut(AtlasGeneratorJob job, IReadOnlyList<int> sources);
+    }
+
     // A feature a source can have without its material having it, from what the build adds (the
     // geometry bake's correction) or the source's settings (a pre-baked normal map).
     public interface IAtlasSourceAwareFeature : IAtlasOutputFeature

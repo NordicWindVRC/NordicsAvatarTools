@@ -70,7 +70,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (primary?.Map?.Texture is Texture2D texture)
                     using (var sampled = Sample(primary.Map, texture, TextureDataType.NormalTangent, width, height))
                         result.Blit(sampled, blend: TextureBlendMode.NormalWhiteout, strength: primary.Strength * scale);
-                foreach (var layer in AtlasNormalFeature.NormalLayers(material).Where(l => CanBakeNormalLayer(l, material)))
+                foreach (var layer in AtlasNormalFeature.NormalLayers(material)
+                             .Where(l => CanBakeNormalLayer(l, material) && !AtlasLiveLayers.Skipped(material, l)))
                     foreach (var target in layer.Targets.Where(t => t.Target == AtlasSurfaceTarget.Normal))
                         using (var sampled = Sample(layer.Source.Map, (Texture2D)layer.Source.Map.Texture, TextureDataType.NormalTangent, width, height))
                         {
