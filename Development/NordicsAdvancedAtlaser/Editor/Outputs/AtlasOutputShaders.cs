@@ -75,6 +75,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 new AtlasOutputTexture("DetailMask", "Detail mask") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false, MainDivisor = 2 }
                     .With(AtlasVirtualMap.DetailTextureMask, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f))
                     .With(AtlasVirtualMap.DetailNormalMask, AtlasTextureChannels.G, AtlasOutputTexture.Gray(1f)),
+                // _SSSThicknessMap: RGB the subsurface color (black where a source has none), A the thickness.
+                new AtlasOutputTexture("Subsurface", "Subsurface color and thickness") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
+                    .With(AtlasVirtualMap.SubsurfaceColor, AtlasTextureChannels.RGB, Color.black)
+                    .With(AtlasVirtualMap.SubsurfaceThickness, AtlasTextureChannels.A, AtlasOutputTexture.Gray(1f)),
                 // _BacklightColorTex: the backlight's color, black where a source has none.
                 new AtlasOutputTexture("Backlight", "Backlight color") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
                     .With(AtlasVirtualMap.BacklightColor, AtlasTextureChannels.RGB, Color.black)
@@ -107,6 +111,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // Detail texture (× 2 in gamma, tinted, with an intensity) and detail normal, on any
             // UV channel; the detail mask's R and G.
             Glitter = true,
+            ProximityColor = true,
             DetailUVChannels = 3,
             DetailTextureBlends = { AtlasBlend.MultiplyDouble },
             DetailStrength = true,
@@ -174,6 +179,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             WriteGlobalMasks(output, material);
             WriteDetails(output, material);
             WriteGlitter(output, material);
+            WriteSubsurface(output, material);
+            WriteProximityColor(output, material);
             WriteEmission(output, material);
             WriteLiveEmission(output, material);
             var render = output.Render;
@@ -680,6 +687,58 @@ namespace NordicWind.AdvancedAtlaser.Editor
             m.SetFloat("_EmissionReplace1", 0);
             m.SetFloat("_EmissionBaseColorAsMap1", 0);
             Consumer(m, "_EmissionMask1GlobalMask", emission.Mask.Bus, emission.Mask.BusBlend);
+        }
+
+        // Subsurface scattering (POI_SUBSURFACESCATTERING), as the Poiyomi parser reads it
+        // (AtlasPoiyomiEdgeLight): the color and thickness from one texture (its channel enum: R 1,
+        // G 2, B 3, A 0), the strength × π in the layer.
+        private static void WriteSubsurface(AtlasUnifiedMaterial output, Material m)
+        {
+            var sss = output.Layers.OfType<AtlasSubsurfaceLayer>().FirstOrDefault(l => l.Enabled);
+            m.SetFloat("_SubsurfaceScattering", sss != null ? 1 : 0);
+            if (sss != null) m.EnableKeyword("POI_SUBSURFACESCATTERING");
+            else m.DisableKeyword("POI_SUBSURFACESCATTERING");
+            if (sss == null) return;
+            var map = sss.Thickness?.Texture ?? sss.Color.Map?.Texture;
+            m.SetTexture("_SSSThicknessMap", map);
+            m.SetTextureScale("_SSSThicknessMap", Vector2.one);
+            m.SetTextureOffset("_SSSThicknessMap", Vector2.zero);
+            m.SetFloat("_SSSThicknessMapUV", 0);
+            m.SetFloat("_SSSThicknessMapChannel", ((int)sss.ThicknessChannel + 1) % 4);
+            // Without a map the shader's thickness is 1: the offset is read one lower.
+            m.SetFloat("_SSSThicknessMod", map != null ? sss.ThicknessOffset : sss.ThicknessOffset - 1f);
+            m.SetFloat("_SSSStrength", sss.Intensity / Mathf.PI);
+            m.SetFloat("_SSSSpread", sss.Power);
+            m.SetFloat("_SSSDistortion", sss.Distortion);
+            m.SetColor("_SSSColor", sss.Color.Color.gamma);
+            m.SetFloat("_SSSLightColorMix", sss.LightColorMix);
+            m.SetFloat("_SSSShadowStrength", sss.ShadowStrength);
+            m.SetFloat("_SSSBaseColorMix", sss.BaseColorMix);
+            m.SetFloat("_SSSGlobalMaskIndex", 0);
+        }
+
+        // Proximity color, as the Poiyomi parser reads it (AtlasPoiyomiColorAdjust): one near and
+        // far color for the final color and or the emission.
+        private static void WriteProximityColor(AtlasUnifiedMaterial output, Material m)
+        {
+            var tints = AtlasProximityColorFeature.Of(output);
+            m.SetFloat("_FXProximityColor", tints.Count > 0 ? 1 : 0);
+            if (tints.Count == 0) return;
+            var (adjustment, modulator) = tints[0];
+            m.SetColor("_FXProximityColorMinColor", adjustment.Color.gamma);
+            m.SetFloat("_FXProximityColorMinColorThemeIndex", 0);
+            m.SetColor("_FXProximityColorMaxColor", modulator.Color.gamma);
+            m.SetFloat("_FXProximityColorMaxColorThemeIndex", 0);
+            var distance = modulator.CameraDistance;
+            m.SetFloat("_FXProximityColorType", distance.PixelPosition ? 1 : 0);
+            m.SetFloat("_FXProximityColorMinDistance", distance.Near);
+            m.SetFloat("_FXProximityColorMaxDistance", distance.Far);
+            m.SetVector("_FXProximityColorCurve", distance.Curve);
+            m.SetFloat("_FXProximityColorSolid", distance.Step ? 1 : 0);
+            m.SetFloat("_FXProximityColorOverrideColor", tints.Any(t => t.Adjustment.Target == AtlasAdjustmentTarget.FinalColor) ? 1 : 0);
+            m.SetFloat("_FXProximityColorOverrideEmission", tints.Any(t => t.Adjustment.Target == AtlasAdjustmentTarget.Emission) ? 1 : 0);
+            m.SetFloat("_FXProximityColorOverrideAlpha", 0);
+            m.SetFloat("_FXProximityColorBackFace", 0);
         }
 
         // Glitter (_SUNDISK_SIMPLE), as the Poiyomi parser reads it (AtlasPoiyomiPatterns).

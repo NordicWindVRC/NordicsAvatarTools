@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is done; 2.9 is next (2.9a done, 2.9b next), before 2.8 (both outputs light and have the maps 2.8's bakes stand in for, so 2.8 matters first where the user turns maps off). It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is done; 2.9 is next (2.9a and 2.9b done, 2.9c next), before 2.8 (both outputs light and have the maps 2.8's bakes stand in for, so 2.8 matters first where the user turns maps off). It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -333,7 +333,12 @@ the maps*, the cells drawn as still points into the emission (*Glow*), the metal
 (*Shine*) and the base color (*Color*), each with its own strength (feature options,
 `IAtlasOptionFeature`); they don't twinkle, which the build log says.
 
-**2.9b** *Subsurface scattering* (native), *Proximity color*.
+**2.9b Subsurface scattering and proximity color** (native, Poiyomi). Subsurface: one setup
+from the reference source (*Subsurface from*); each source's color × strength (relative to
+the strongest, black without it, which turns it off there) and its thickness (relative to the
+smallest offset) in a *Subsurface color and thickness* texture. Proximity color: one setup
+from the reference source; Poiyomi's has no mask, so it covers the whole atlas, listed when
+some sources don't have it (*Off* leaves it out).
 
 **2.9c** *Color adjustments* (native live), with the output's modulators; *AudioLink* (native
 per feature).

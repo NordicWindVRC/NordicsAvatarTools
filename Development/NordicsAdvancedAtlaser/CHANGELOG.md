@@ -8,6 +8,11 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Subsurface scattering and proximity color** (Poiyomi): one setup each from the reference
+  source. Subsurface keeps each source's color × strength and thickness in a *Subsurface color
+  and thickness* texture (`_SSSThicknessMap`); proximity color's tints and camera distance go
+  to `_FXProximityColor`, covering the whole atlas (listed where sources lacked it). Its tints
+  are no longer listed as unmerged final color adjustments.
 - **Glitter:** a *Glitter* feature. Poiyomi: one setup from the reference source (*Glitter
   from*) on a preserved UV channel scaled by each source's density, opacity × mask in an
   allocated mask, written as the reverse of the parser. Toon Standard: *Points in the maps*

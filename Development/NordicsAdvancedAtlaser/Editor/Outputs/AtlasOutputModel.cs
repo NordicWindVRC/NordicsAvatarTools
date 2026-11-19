@@ -43,7 +43,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         EmissionLive,
         // One value each: the live detail texture's and detail normal's strength × mask, 0 where
         // a source has none (tiled layers kept live).
-        DetailTextureMask, DetailNormalMask
+        DetailTextureMask, DetailNormalMask,
+        // RGB (4.5): each source's subsurface color × strength, black without; one value: its
+        // thickness relative to the output's offset.
+        SubsurfaceColor, SubsurfaceThickness
     }
 
     // Which channels of a texture a virtual map fills.
@@ -203,6 +206,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool DetailMaskByChannel;
         // Glitter (4.6): the glitter pattern, its mask by channel and its UV channel.
         public bool Glitter;
+        // Proximity color (a camera distance tint of the final color or emission), without a mask.
+        public bool ProximityColor;
         // Global masks (1.5): the mask textures double as the first global mask textures (Mask1
         // to Mask8 are channels 0–7), and these steps run live on a channel.
         public bool GlobalMasks;

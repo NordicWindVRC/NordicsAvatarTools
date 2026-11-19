@@ -191,9 +191,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                                             t.Target == AtlasSurfaceTarget.Occlusion || t.Target == AtlasSurfaceTarget.Alpha))
                     notes.Add("Layers targeting alpha, metallic, roughness or occlusion aren't baked yet; they're left out.");
             }
+            var proximity = AtlasProximityColorFeature.Tints(source);
             for (int i = 0; i < source.ColorAdjustments.Count; i++)
             {
                 var adjustment = source.ColorAdjustments[i];
+                // Proximity color's tints are its own feature's.
+                if (proximity.Any(p => p.Adjustment == adjustment)) continue;
                 if (adjustment.Target == AtlasAdjustmentTarget.FinalColor)
                     notes.Add("Final color adjustments aren't merged yet; they're left out.");
                 else if (adjustment.Target != AtlasAdjustmentTarget.Emission && !CanBake(source, i, adjustment))

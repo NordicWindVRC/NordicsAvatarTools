@@ -27,6 +27,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     continue;
                 }
                 var target = field.GetValue(into);
+                // A fixed-size array: its elements in place (objects of the model field by field).
+                if (target is Array array && value is Array source)
+                {
+                    for (int i = 0; i < Math.Min(source.Length, array.Length); i++)
+                    {
+                        var item = source.GetValue(i);
+                        var existing = array.GetValue(i);
+                        if (item != null && existing != null && !item.GetType().IsValueType && !(item is UnityEngine.Object) && !(item is string))
+                            Copy(item, existing);
+                        else array.SetValue(item, i);
+                    }
+                    continue;
+                }
                 if (target is IList list)
                 {
                     list.Clear();

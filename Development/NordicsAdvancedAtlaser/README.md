@@ -1,8 +1,7 @@
 # Nordic's Advanced Atlaser
 
-> **Work in progress.** Input parsing, the inspector UI, geometry baking and debug output
-> work. **Output materials are not generated yet**, so builds are unchanged apart from
-> removing the components.
+> **Work in progress, not released yet.** Builds generate atlased materials for Poiyomi Toon
+> 10 and VRChat Mobile Toon Standard; more features are still being added.
 
 A non-destructive, multi-purpose material processor. Its main job is building atlased
 materials. It is also meant to:
@@ -13,11 +12,48 @@ materials. It is also meant to:
 - apply per-variant changes, such as a decal on one prefab variant, without maintaining
   another material copy
 
-Mapping is **per material**, not per submesh, because every submesh that uses a material
-shares that material's UV space. Each source material is parsed into one
-**shader-agnostic unified material**. Independent **output generators** read only that
-unified model and never see the source shader. See `UNIFIED_MATERIAL.md` for the model
-and `ATLAS_OUTPUT.md` for the output design.
+## What it does
+
+**TL;DR:** each of your materials is read into one common description of how it looks, no
+matter which shader it uses. The Atlaser then combines them into one material for the shader
+you pick, feature by feature (color, normal maps, matcaps, rim lighting, glitter, …). Each
+feature is made the best way that shader allows: as it is, approximated, baked into the
+textures, or left out. Where your materials differ, the differences are kept per part of the
+atlas, or you choose which material's settings to use. Whatever couldn't be kept, or was only
+approximated, is listed in the build log.
+
+In a bit more detail:
+
+1. **Reading your materials.** Each material is read into a description that doesn't depend
+   on its shader. The supported shaders are listed below; anything that isn't understood yet
+   is reported.
+2. **Combining them, one feature at a time.** Each feature gathers the materials that use it
+   and merges them. A feature can be made in different **modes**:
+   - **Native:** the new material's shader does it itself, as close to the original as it can.
+   - **Approximated:** the shader doesn't have it, so the look is recreated with what it does
+     have. For example, a clear coat becomes extra gloss, and glitter becomes still, shiny
+     points.
+   - **Baked:** drawn into the atlas textures.
+   - **Off.**
+
+   The inspector only offers the modes the chosen shader supports, starts with the best one,
+   and lets you pick another.
+3. **Keeping your materials' differences.**
+   - Values that differ per material, such as colors, smoothness, strengths and masks, are
+     kept per part of the atlas, in its textures.
+   - Settings the new material can only have once, such as the lighting setup, come from one
+     material. When they differ, a **"… from"** choice picks which one (*Automatic*: the
+     material covering the most of the atlas).
+   - Things the shader has a limited number of, such as matcaps and rims, are placed one by
+     one: automatically, or the way you choose.
+   - Where there's no right answer, the inspector shows a choice instead of guessing.
+4. **Writing the new material.** The combined description is turned into the new material
+   and its textures, and the meshes are moved onto the atlas. Your scene and original
+   materials are never changed.
+
+Mapping is per material, not per submesh, because every submesh that uses a material shares
+its UV space. For the details, see `UNIFIED_MATERIAL.md` (the description of a material) and
+`ATLAS_OUTPUT.md` (how the new material is made).
 
 | | |
 |---|---|
@@ -160,6 +196,10 @@ and `ATLAS_OUTPUT.md` for the output design.
        glitter: its particles are drawn as still points that glow (*Glow*), shine in the
        light and reflections (*Shine*) and take the glitter's color (*Color*), each with its
        own strength; they don't twinkle.
+     - **Subsurface Scattering** and **Proximity Color** (Poiyomi): one setup for the atlas
+       each (*… from*). Subsurface keeps each material's color, strength and thickness in a
+       texture; proximity color has no mask, so it covers the whole atlas (the build log says
+       so when some materials didn't have it).
      - **Hidden UV Tiles** (Poiyomi's UV tile discard): *Kept live* (the atlas material hides
        the same tiles, read from a spare UV channel the build writes), *Removed from the mesh*
        (any output shader; only tiles hidden on both sides), or *Off*.
@@ -242,7 +282,8 @@ Exporting 4096² float maps is slow, so leave it off for everyday builds.
      when it's turned off for the material, or when every surviving triangle is an unchanged
      original triangle (removed submeshes or triangles only). A reducer that removes vertices
      creates new triangles, so its result is always baked.
-   - Hands output jobs to the output generators, which are placeholders for now.
+   - Hands each output's job to the output pipeline, which builds the atlas material and its
+     textures, then remaps the meshes onto them.
 3. Removes both components from the build copy. Scene components and source assets are never changed.
 
 After merging, each configured source material must appear on **at most one** surviving
