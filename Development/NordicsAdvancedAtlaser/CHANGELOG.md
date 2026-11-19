@@ -388,6 +388,29 @@ EditMode tests pass in Unity 2022.3.22.
   avatar shader, Uber, replaces it. Mochie Standard materials go to the fallback parser.
 
 ### Fixed
+- **Mobile builds with VRCFury baked nothing:** on Android and iOS, VRCFury removes every
+  material without a `VRChat/Mobile/` shader from the renderers (with its *Invalid Mobile
+  Materials* dialog), and AAO then removes those submeshes. For outputs with a mobile shader
+  (Toon Standard), the Atlaser now holds each source material's slots with a mobile placeholder
+  from late in NDMF's Transforming phase until just before AAO (`AtlasMobilePlaceholders`), so
+  VRCFury neither removes them nor warns about them. Sources of other outputs keep the warning.
+  The placeholders that NDMF saves with the build's assets are left to it instead of being
+  destroyed, which failed with "Destroying assets is not permitted".
+- **Multiplied matcaps with base color mix came out far too bright on Toon Standard.** Poiyomi
+  multiplies the matcap by the base color before multiplying it in, so a darker base color
+  darkens more. Folding the base color's luminance into the mask did the opposite and weakened
+  the darkening. A multiplying slot now fits it per texel with its mask and the base color map
+  (`AtlasMatcapFeature.MultiplyFit`): exact for one matcap on a gray base, approximated for
+  colored bases and stacked matcaps. Adding slots keep the mask fold.
+- **Source materials swapped by another tool during the build** (VRCFury copies materials whose
+  textures don't stream their mipmaps) weren't found on any renderer, so their bakes came out
+  empty. The early capture now records the renderer slots holding each source material, and a
+  pass before AAO points the Atlaser's settings at the copy now in those slots
+  (`AtlasMaterialSlots`). Slots can move (Submesh Splitter reassembly), so only a copy counts:
+  same shader, not another source material, and only while the source material is on no
+  renderer. After AAO, a source material no renderer holds takes the one renderer
+  material that NDMF's object registry records as a copy of it. A source still not found is
+  reported with the materials the renderers hold.
 - **The Textures list** showed the textures the active feature modes can use, so it listed an
   *Emission* texture the build didn't make (Toon Standard, with an emission that only glows
   with music) and left out the cycling emission textures. With the sources readable, it now

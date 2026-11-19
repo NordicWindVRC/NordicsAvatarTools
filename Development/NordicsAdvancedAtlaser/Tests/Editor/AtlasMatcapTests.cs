@@ -243,6 +243,49 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsFalse(poiyomi.Maps.Any(m => m.Map == AtlasVirtualMap.Mask1));
         }
 
+        // Poiyomi multiplies by lerp(1, matcap × lerp(1, base, mix), weight); Toon Standard by
+        // lerp(1, matcap, strength), so the fit goes into the mask and the base color map.
+        [Test]
+        public void AMultipliedMatcapsBaseColorMixGoesIntoTheMaskAndTheBaseColor()
+        {
+            const float weight = 0.8f, gray = 0.5f;
+            var material = WithMatcap(Solid(Color.white), null, Color.white, (AtlasBlend.Multiply, weight));
+            ((AtlasLookupLayer)material.Layers[0]).BaseColorMix = 1f;
+            material.Surface.BaseColor.Color = new Color(gray, gray, gray, 1f);
+            var job = Job(material);
+            var plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
+            var layer = Lookups(plan).Single();
+            Assert.AreEqual(AtlasBlend.Multiply, layer.Blend);
+            Assert.AreEqual(0f, layer.BaseColorMix);
+            float strength = layer.Opacity * Evaluate(plan, AtlasVirtualMap.Mask1, job, 0);
+            float baseColor = Evaluate(plan, AtlasVirtualMap.BaseColor, job, 0) * plan.Output.Surface.BaseColor.Color.r;
+            foreach (float matcap in new[] { 0f, 0.25f, 1f })
+                Assert.AreEqual(gray * Mathf.Lerp(1f, matcap * gray, weight), baseColor * Mathf.Lerp(1f, matcap, strength), 1e-3f,
+                    "exact for one matcap on a gray base: matcap " + matcap);
+        }
+
+        [Test]
+        public void StackedMultipliedMatcapsWithBaseColorMixMatchWithoutAndWithFullMatcaps()
+        {
+            const float gray = 0.6f;
+            var material = WithMatcap(Solid(Color.white, "a"), null, new Color(0.5f, 0.5f, 0.5f, 1f), (AtlasBlend.Multiply, 0.8f));
+            material.Layers.AddRange(WithMatcap(Solid(Color.white, "b"), null, new Color(0.9f, 0.9f, 0.9f, 1f), (AtlasBlend.Multiply, 0.6f)).Layers);
+            foreach (var lookup in material.Layers.OfType<AtlasLookupLayer>()) lookup.BaseColorMix = 1f;
+            material.Surface.BaseColor.Color = new Color(gray, gray, gray, 1f);
+            var job = Job(material);
+            var plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
+            var layer = Lookups(plan).Single();
+            Assert.AreEqual(AtlasBlend.Multiply, layer.Blend);
+            float strength = layer.Opacity * Evaluate(plan, AtlasVirtualMap.Mask1, job, 0);
+            float baseColor = Evaluate(plan, AtlasVirtualMap.BaseColor, job, 0) * plan.Output.Surface.BaseColor.Color.r;
+            // The combined texture with the white matcaps; black ones give the weights' leftover.
+            float full = plan.GeneratedTextures.Single(t => t.Name == "Matcap1").Pixels()[0].r;
+            float none = (1f - 0.8f) * (1f - 0.6f);
+            Assert.AreEqual(gray * none, baseColor * Mathf.Lerp(1f, none, strength), 1e-3f, "black matcaps");
+            Assert.AreEqual(gray * (1f - 0.8f + 0.8f * 0.5f * gray) * (1f - 0.6f + 0.6f * 0.9f * gray),
+                baseColor * Mathf.Lerp(1f, full, strength), 1e-3f, "white matcaps");
+        }
+
         [Test]
         public void TheOverviewListsGeneratedAndReusedTexturesWithTheirMemory()
         {

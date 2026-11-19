@@ -43,6 +43,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 foreach(var m in r.sharedMaterials)
                     if(m!=null) currentlyPresent.Add(m);
             group.DiscoveredMaterials.AddRange(currentlyPresent);
+            FollowCopies(context, component, currentlyPresent);
 
             var sources=new Dictionary<Material,AtlasInputMaterialJob>();
             var assigned=new HashSet<Material>();
@@ -81,7 +82,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         sources.Add(source.material,input);
                         group.Inputs.Add(input);
                         if(!currentlyPresent.Contains(source.material))
-                            context.Diagnostics.Add(source.material.name+": no current renderer uses this material; an empty bake will be supplied.");
+                            context.Diagnostics.Add(source.material.name+": no current renderer uses this material; an empty bake will be supplied. "+
+                                "The renderers hold: "+Holding(renderers)+".");
                     }
                     job.Sources.Add(new AtlasOutputSourceJob { Input=input,UVRegion=source.uvRegion,
                         SourceKey=AtlasOriginalGeometry.SourceKey(atlaserIndex,outputIndex,sourceIndex),
@@ -155,6 +157,51 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
             }
             foreach(var job in group.Outputs) AtlasOutputProcessor.Prepare(job,context);
+        }
+
+        // Tools that copy materials during the build record the original in NDMF's object
+        // registry (AAO copies every material it may change). A configured material that no
+        // renderer holds takes the one renderer material with the same original, and the
+        // settings follow it.
+        private static void FollowCopies(AtlasBuildContext context, NordicsAdvancedAtlaser component, HashSet<Material> present)
+        {
+            var byOrigin = present.GroupBy(Origin).ToDictionary(g => g.Key, g => g.ToList());
+            var swaps = new Dictionary<Material,Material>();
+            foreach(var output in component.GetComponents<NordicsAtlasOutput>())
+            {
+                if(output.configuration.sources==null) continue;
+                foreach(var source in output.configuration.sources)
+                {
+                    var material=source?.material;
+                    if(material==null || present.Contains(material) || swaps.ContainsKey(material)) continue;
+                    if(byOrigin.TryGetValue(Origin(material),out var copies) && copies.Count==1)
+                        swaps[material]=copies[0];
+                }
+            }
+            if(swaps.Count==0) return;
+            AtlasMaterialSlots.Replace(component.gameObject,swaps);
+            if(AtlasDebugSettings.VerboseLogging)
+                foreach(var swap in swaps)
+                    context.Diagnostics.Add(swap.Key.name+": the renderers hold a copy made during the build; the settings follow it.");
+        }
+
+        private static UnityEngine.Object Origin(Material material) =>
+            nadena.dev.ndmf.ObjectRegistry.GetReference(material)?.Object ?? material;
+
+        // The materials the renderers hold (with the original NDMF records for a copy), for
+        // a source that none of them holds.
+        private static string Holding(List<SkinnedMeshRenderer> renderers)
+        {
+            var names=renderers.SelectMany(r=>r.sharedMaterials.Select(m=>(Renderer:r,Material:m)))
+                .Where(e=>e.Material!=null)
+                .Select(e=>
+                {
+                    var origin=Origin(e.Material);
+                    return e.Renderer.name+": "+e.Material.name+" #"+e.Material.GetInstanceID()+
+                           (origin!=e.Material?" (copy of "+origin.name+" #"+origin.GetInstanceID()+")":"");
+                })
+                .Distinct().ToList();
+            return names.Count==0?"nothing":string.Join(", ",names.Take(16))+(names.Count>16?", …":"");
         }
     }
 }

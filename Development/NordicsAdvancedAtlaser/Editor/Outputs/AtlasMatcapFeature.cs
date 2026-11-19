@@ -19,7 +19,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     //   blend converted to one of the two. Stacks on different parts are averaged by area,
     //   since each part shows the one texture.
     // - A slot without base color mix takes a matcap's base color mix through its mask: the
-    //   mask × lerp(1, the base color's luminance, mix).
+        //   mask × lerp(1, the base color's luminance, mix). A multiplying slot fits it with its
+    //   mask and the base color map instead (MultiplyFit), since a darker base color makes
+    //   the multiplied matcap darker, not weaker.
     // - A slot that lacks a blend a matcap uses (Toon Standard's add or multiply) takes the
     //   nearest: add, add to light, screen and mixed brighten, so they add; replace and multiply
     //   multiply. Listed as approximated.
@@ -267,16 +269,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var job = context.Job;
             var capabilities = context.Capabilities;
-            // The base color mix the slot can't do, folded into the mask (where a place is left).
+            // The base color mix the slot can't do, folded into the mask (where a place is left);
+            // a multiplying slot also scales the base color map (MultiplyFit).
             bool fold = !capabilities.MatcapBaseColorMix && slot.Any(g => BaseColorMix(g.Members[0]) > 0f);
-            var request = MaskRequest(job, slot, index, fold, capabilities.MatcapMaskInvert);
+            var baseColor = AtlasLiveMasks.Request(context, AtlasVirtualMap.BaseColor);
+            var fits = fold && baseColor != null && Main(slot.SelectMany(g => g.Members[0].Layers).ToList()) == AtlasBlend.Multiply
+                ? Fits(slot, Combined(slot, capabilities), capabilities)
+                : null;
+            var request = MaskRequest(job, slot, index, fold, capabilities.MatcapMaskInvert, fits);
             int live = AtlasLiveMasks.Split(context, FeatureId, "matcap slot " + (index + 1), request,
                 i => Member(slot, i) is Instance member ? AtlasLiveMasks.Of(member.Mask) : null);
             var mask = AtlasMaskAllocator.Allocate(context, request);
             if (mask == null && fold)
             {
                 fold = false;
-                mask = AtlasMaskAllocator.Allocate(context, MaskRequest(job, slot, index, false, capabilities.MatcapMaskInvert));
+                fits = null;
+                mask = AtlasMaskAllocator.Allocate(context, MaskRequest(job, slot, index, false, capabilities.MatcapMaskInvert, null));
             }
             if (fold) approximated.AddRange(slot.Where(g => BaseColorMix(g.Members[0]) > 0f).Select(g => g.Label));
             if (mask == null)
@@ -285,6 +293,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 return;
             }
             if (mask.IsConstant && mask.Constant <= 0f) return;
+            if (fits != null) ScaleBaseColor(context, baseColor, fits);
             // Every slot has a mask object of its own, which the writers group its layers by.
             var slotMask = mask.Mask ?? new AtlasMask();
             if (live >= 0) AtlasLiveMasks.Read(slotMask, live);
@@ -303,7 +312,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         private static float BaseColorMix(Instance instance) => Mathf.Clamp01(instance.Layers[0].BaseColorMix);
 
-        private static AtlasMaskRequest MaskRequest(AtlasGeneratorJob job, List<Group> slot, int index, bool fold, bool canInvert)
+        private static AtlasMaskRequest MaskRequest(AtlasGeneratorJob job, List<Group> slot, int index, bool fold, bool canInvert,
+            Dictionary<int, MultiplyFit> fits)
         {
             float Mix(int i) => fold && Member(slot, i) is Instance m ? BaseColorMix(m) : 0f;
             return new AtlasMaskRequest
@@ -312,7 +322,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 CanInvert = canInvert,
                 Key = i => Member(slot, i) is Instance m
                     ? AtlasMaskKeys.Of(m.Mask, 1f, job.Sources[i].Material) + (Mix(i) > 0f
-                        ? "|base " + Mix(i).ToString("0.####", System.Globalization.CultureInfo.InvariantCulture) + "@" +
+                        ? (fits != null && fits.ContainsKey(i) ? "|multiply" : "") +
+                          "|base " + Mix(i).ToString("0.####", System.Globalization.CultureInfo.InvariantCulture) + "@" +
                           System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(job.Sources[i].Material)
                         : "")
                     : AtlasMaskKeys.Constant(0f),
@@ -324,13 +335,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     if (!(Member(slot, i) is Instance m)) return AtlasMapEvaluator.Constant(AtlasVirtualMap.Mask1, 0f, w, h);
                     var result = AtlasMapEvaluator.ScaledMask(m.Mask, 1f, w, h, material);
                     float mix = Mix(i);
-                    if (mix > 0f)
-                        using (var color = AtlasColorStack.Evaluate(material, w, h, multiplyColor: true))
+                    if (mix <= 0f) return result;
+                    using (var color = AtlasColorStack.Evaluate(material, w, h, multiplyColor: true))
+                    {
+                        if (fits != null && fits.TryGetValue(i, out var fit))
+                            AtlasPixels.Map(result, color, (value, c) => value * StrengthFactor(fit, value.r, Ratio(fit, c)));
+                        else
                             AtlasPixels.Map(result, color, (value, c) =>
                             {
-                                float factor = Mathf.Lerp(1f, Mathf.Clamp01(0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b), mix);
+                                float factor = Mathf.Lerp(1f, Mathf.Clamp01(Luminance(c)), mix);
                                 return new Color(value.r * factor, value.g * factor, value.b * factor, value.a * factor);
                             });
+                    }
                     return result;
                 }
             };
@@ -341,9 +357,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var capabilities = context.Capabilities;
             var template = slot[0].Members[0].Layers;
             var output = context.Output.Layers;
-            var tint = template[0].Source.Color;
-            bool tinted = Mathf.Abs(tint.r - 1f) + Mathf.Abs(tint.g - 1f) + Mathf.Abs(tint.b - 1f) > 1e-3f;
-            if (slot.Count == 1 && (capabilities.MatcapColor || !tinted))
+            if (!Combined(slot, capabilities))
             {
                 bool fits = template.All(l => (capabilities.MatcapBlends & Flag(l)) != 0);
                 if (fits)
@@ -383,6 +397,130 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var combined = Copy(template[0], slotMask, main, AtlasPlacement.Surface, scale, reference, Color.white);
             combined.EmissionAmount = slot.Max(g => g.Members[0].Layers[0].EmissionAmount);
             output.Add(combined);
+        }
+
+        // One generated texture for the slot: several groups, or a tint the slot has no color for.
+        private static bool Combined(List<Group> slot, AtlasOutputCapabilities capabilities)
+        {
+            var tint = slot[0].Members[0].Layers[0].Source.Color;
+            bool tinted = Mathf.Abs(tint.r - 1f) + Mathf.Abs(tint.g - 1f) + Mathf.Abs(tint.b - 1f) > 1e-3f;
+            return slot.Count > 1 || (tinted && !capabilities.MatcapColor);
+        }
+
+        // A multiplying slot without base color mix (Toon Standard): a source's matcaps are
+        // base × Π lerp(1, color × matcap × lerp(1, base, mix), weight × mask), the slot's
+        // base × lerp(1, T, s) for its texture T and strength s (s0 without base color mix).
+        // Per texel, the fit keeps the slot's value where the matcaps are black (T0) and scales
+        // its rise toward full matcaps (T1) by R: the source's rise with the base color mixed in
+        // over the rise without. That is s = s0 R / g, with the base color × g = 1 − s0 (1 − T0)
+        // (1 − R): exact for one matcap on a gray base. R is a color and s one value, so s takes
+        // R's luminance, and each channel of g matches halfway between T0 and T1.
+        private sealed class MultiplyFit
+        {
+            public AtlasMask Mask;
+            // s0 without the mask, T0 and T1.
+            public float Opacity = 1f, Zero = 1f;
+            public Color Full = Color.white;
+            public readonly List<(float Weight, Color Color, float Mix)> Layers = new List<(float, Color, float)>();
+        }
+
+        // The fit of each source with base color mix (its multiplying layers).
+        private static Dictionary<int, MultiplyFit> Fits(List<Group> slot, bool combined, AtlasOutputCapabilities capabilities)
+        {
+            var result = new Dictionary<int, MultiplyFit>();
+            foreach (var instances in slot.SelectMany(g => g.Members).GroupBy(m => m.Source))
+            {
+                var first = instances.First();
+                if (BaseColorMix(first) <= 0f) continue;
+                var fit = new MultiplyFit { Mask = first.Mask };
+                foreach (var instance in instances)
+                {
+                    var layers = instance.Layers.Where(l => Nearest(l) == AtlasBlend.Multiply).ToList();
+                    foreach (var layer in layers)
+                        fit.Layers.Add((Mathf.Clamp01(layer.Opacity), layer.Source.Color, Mathf.Clamp01(layer.BaseColorMix)));
+                    if (!combined || layers.Count == 0) continue;
+                    // The generated texture: lerp(1, color × matcap, weight) for each matcap.
+                    float weight = Mathf.Min(1f, layers.Sum(l => l.Opacity));
+                    var color = layers[0].Source.Color;
+                    fit.Zero *= 1f - weight;
+                    fit.Full = new Color(fit.Full.r * Mathf.Lerp(1f, color.r, weight), fit.Full.g * Mathf.Lerp(1f, color.g, weight),
+                        fit.Full.b * Mathf.Lerp(1f, color.b, weight), 1f);
+                }
+                if (!combined)
+                {
+                    // The matcap's own texture (× its color where the slot has one) at its weight.
+                    fit.Opacity = Mathf.Min(1f, first.Layers.Where(l => Nearest(l) == AtlasBlend.Multiply).Sum(l => l.Opacity));
+                    fit.Zero = 0f;
+                    var color = capabilities.MatcapColor ? first.Layers[0].Source.Color : Color.white;
+                    fit.Full = new Color(color.r, color.g, color.b, 1f);
+                }
+                result[instances.Key] = fit;
+            }
+            return result;
+        }
+
+        private static float Luminance(Color c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+
+        // R for base color b, per channel.
+        private static Color Ratio(MultiplyFit fit, Color b)
+        {
+            float zero = 1f;
+            Color with = Color.white, without = Color.white, ratio = Color.white;
+            foreach (var (weight, color, mix) in fit.Layers)
+            {
+                zero *= 1f - weight;
+                for (int c = 0; c < 3; c++)
+                {
+                    with[c] *= 1f - weight + weight * color[c] * Mathf.Lerp(1f, Mathf.Clamp01(b[c]), mix);
+                    without[c] *= 1f - weight + weight * color[c];
+                }
+            }
+            for (int c = 0; c < 3; c++)
+                ratio[c] = Mathf.Abs(without[c] - zero) > 1e-5f ? Mathf.Clamp01((with[c] - zero) / (without[c] - zero)) : 1f;
+            return ratio;
+        }
+
+        // s / s0, the factor on the slot's mask.
+        private static float StrengthFactor(MultiplyFit fit, float mask, Color ratio)
+        {
+            float r = Luminance(ratio);
+            return r / Mathf.Max(1e-4f, 1f - fit.Opacity * mask * (1f - fit.Zero) * (1f - r));
+        }
+
+        // g, the factor on the base color.
+        private static Color BaseFactor(MultiplyFit fit, float mask, Color ratio)
+        {
+            float s0 = fit.Opacity * mask;
+            float s = s0 * StrengthFactor(fit, mask, ratio);
+            var result = Color.white;
+            for (int c = 0; c < 3; c++)
+            {
+                float half = (fit.Zero + fit.Full[c]) * 0.5f;
+                float target = 1f - s0 * (1f - fit.Zero) + ratio[c] * s0 * (half - fit.Zero);
+                result[c] = Mathf.Max(0f, target) / Mathf.Max(1e-4f, 1f - s + s * half);
+            }
+            return result;
+        }
+
+        // The base color map × g where the fitted sources are.
+        private static void ScaleBaseColor(AtlasFeatureContext context, AtlasMapRequest request, Dictionary<int, MultiplyFit> fits)
+        {
+            var inner = request.Evaluate ?? ((i, m, w, h) => AtlasMapEvaluator.Evaluate(AtlasVirtualMap.BaseColor, m, w, h));
+            var output = context.Output.Surface.BaseColor;
+            request.Evaluate = (i, material, w, h) =>
+            {
+                var result = inner(i, material, w, h);
+                if (!fits.TryGetValue(i, out var fit)) return result;
+                // The map holds the base color without the shared color.
+                var tint = output.Color;
+                using (var mask = AtlasMapEvaluator.ScaledMask(fit.Mask, 1f, w, h, material))
+                    AtlasPixels.Map(result, mask, (c, m) =>
+                    {
+                        var factor = BaseFactor(fit, m.r, Ratio(fit, new Color(c.r * tint.r, c.g * tint.g, c.b * tint.b, 1f)));
+                        return new Color(c.r * factor.r, c.g * factor.g, c.b * factor.b, c.a);
+                    });
+                return result;
+            };
         }
 
         // The source's member of the slot (the first, if several).

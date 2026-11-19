@@ -275,8 +275,15 @@ Exporting 4096² float maps is slow, so leave it off for everyday builds.
 ## How it works
 
 1. **NDMF Resolving:** captures the original geometry of each configured material, in
-   avatar-root space with the current pose applied, before AAO or other tools change it.
-2. **NDMF Optimizing, after AAO:**
+   avatar-root space with the current pose applied, before AAO or other tools change it,
+   and which renderer slots hold it.
+2. **NDMF Transforming, mobile builds only:** puts a mobile placeholder in the slots of each
+   source of an output with a mobile shader, because VRCFury, which runs next, removes (and
+   warns about) materials without one.
+3. **NDMF Optimizing, before AAO:** puts the source materials back, and where another tool
+   has since swapped a source material on the renderers for a copy (VRCFury does for
+   textures without mipmap streaming), the settings follow the material now in its slots.
+4. **NDMF Optimizing, after AAO:**
    - Finds the surviving renderers and parses each assigned source material once into the
      unified model. Unsupported or approximate features are reported.
    - Bakes, in **source UV space** using the Texture Wrapper:
@@ -292,7 +299,7 @@ Exporting 4096² float maps is slow, so leave it off for everyday builds.
      creates new triangles, so its result is always baked.
    - Hands each output's job to the output pipeline, which builds the atlas material and its
      textures, then remaps the meshes onto them.
-3. Removes both components from the build copy. Scene components and source assets are never changed.
+5. Removes both components from the build copy. Scene components and source assets are never changed.
 
 After merging, each configured source material must appear on **at most one** surviving
 submesh. If it appears on more, the build stops, because the bake would be ambiguous.

@@ -6,5 +6,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public bool CaptureCompleted;
         public AtlasOriginalGeometry Original;
+        // The renderer slots of the configured materials at the early capture; null once
+        // followed (see AtlasMaterialSlots).
+        public AtlasMaterialSlots Slots;
+        // Mobile builds: the source materials held behind mobile placeholders until just
+        // before AAO (see AtlasMobilePlaceholders); null once released.
+        public AtlasMobilePlaceholders Placeholders;
     }
 }
