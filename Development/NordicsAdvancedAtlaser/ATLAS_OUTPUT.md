@@ -49,6 +49,7 @@ What exists today, which this design builds on:
 | Output model | `Editor/Outputs/AtlasOutputModel.cs`, `AtlasOutputFeature.cs` | Virtual maps, texture layouts, capabilities; `IAtlasOutputFeature` with its modes; the feature registry, available and effective modes |
 | Features | `Editor/Outputs/AtlasColorFeature.cs`, `AtlasColorStack.cs`, `AtlasAlphaFeature.cs`, `AtlasNormalFeature.cs`, `AtlasSurfaceResponseFeatures.cs`, `AtlasEmissionFeature.cs`, `AtlasVertexColorFeature.cs`, `AtlasHiddenTilesFeature.cs`, `AtlasLightingFeature.cs`, `AtlasLightingMasksFeature.cs`, `AtlasLightingTextureFeatures.cs`, `AtlasRenderFeatures.cs`, `AtlasMatcapFeature.cs`, `AtlasRimFeature.cs`, `AtlasEdgeLightFeatures.cs`, `AtlasClearCoatFeature.cs` | *Color*: the base color map, each source's color stack baked (its color, color layers, static adjustments), the color shared when every source has it and nothing is layered on it. *Alpha*: each source's alpha in the base color's alpha, converted to the output's surface mode. *Normal Maps*: the main normal map, each source's normals combined in the established order. *Reflection and Specular*: metallic and roughness maps, and the highlight and reflection strengths in masks, relative to the largest (none where one value fits everywhere). *Matcaps*: lookup layers in the output's matcap slots, placed per matcap, combined into generated textures (`AtlasGeneratedTextures.cs`) where needed. *Rim Lighting*: view-angle rims in rim slots or drawn into free matcap slots (`AtlasRimCurve.cs`). *Environmental Rim* and *Backlight*: one setup each, from the reference source. A feature the output shader has nothing for is listed in the build log. *Clear Coat*: the coat's strength and roughness in maps, its reflection and highlight strengths in masks, the rest from the reference source. *Ambient Occlusion*: the occlusion map. *Emission*: the emission map, relative to the strongest source's emission. *Surface Mode* and *Fallback Shader*, which are always on. A feature can count a source by more than its material (`IAtlasSourceAwareFeature`): Normal Maps counts a pre-baked map, or a geometry-bake correction that bends the normal (only in the build) |
 | Resolve | `Editor/Outputs/AtlasOutputPipeline.cs` | Feature choices from the settings, and steps 1 and 2 of the pipeline: the output unified material and its map requests (`AtlasOutputPlan`), with the UV channel and mask allocators' places and the generated textures |
+| Live global masks | `Editor/Outputs/AtlasLiveMasks.cs` | Masks whose global mask channels change live split into an own part and a live channel with the same live steps (see [*Masks*](#masks)): alpha, emission, metallic, smoothness, reflection and highlight strengths, occlusion, clear coat, matcap and rim slots, on Poiyomi |
 | Mask allocator | `Editor/Outputs/AtlasMaskAllocator.cs` | Masks over the whole atlas: constants without a texture, equal masks sharing a channel, inverses read inverted, the rest packed into the output's mask textures (see [*Masks*](#masks)) |
 | Generator boundary | `Editor/Outputs/AtlasGeneratorJob.cs` | The unified materials, UV regions, bakes and feature choices; no `Material` or `Shader` crosses it |
 | Bake sizing | `Editor/Outputs/AtlasOutputLayout.cs` | Each source is baked at 1.5× its island size, at most 4096 |
@@ -251,9 +252,22 @@ specular masks) follow rules 1 and 2 within those channels.
 When there aren't enough places, the feature leaves the instance out and the build log says
 so.
 
-**Live mask steps** (back face, mirror, camera distance, contacts) stay live only on an output
-mask bus that evaluates the same step. Otherwise the mask is baked with the step's value in
-the normal view: front faces, not in a mirror, the camera at the far distance, no contact.
+**Live mask steps** (back face, mirror, camera, distance, blacklight, contacts) stay live only
+on an output mask bus that evaluates the same step (`AtlasLiveMasks`). A value that reads a
+channel by *multiply* or *replace* is affine in the channel's value, and a channel whose last
+steps are live ones that keep 0 at 0 (back face, mirror and camera; distance and blacklight
+by *multiply*) is its steps before them × the live factor. So in a source:
+`value = own + (prefix − own) × live`, with `own` the value with the channel at 0 and
+`prefix` the value without the live steps (`AtlasBusView`). The atlas keeps `own` in the
+feature's map (the other sources as they are) and `prefix − own` in an allocated mask place,
+which is also a global mask channel (the mask textures double as the output's global mask
+textures, *Mask1* to *Mask8* being channels 0–7); the same live steps run on it, and the
+feature reads it by *add*. Outside the live sources the channel is 0, so the live steps don't
+reach them. A color (emission) keeps the difference in a second map, shown through a channel
+past the mask places that is 1 before the live steps. One live setup per feature stays live:
+where the sources' differ, *Live from* picks it (*Automatic*: the one on the largest area).
+Every other mask is baked with the steps' values in the normal view: front faces, not in a
+mirror or camera, the camera far away, no blacklight or contact; the build lists the sources.
 
 **Vertex color masks** are handled by the *Vertex colors* feature (see
 [*Feature inventory*](#feature-inventory)): kept live, baked into a texture by painting the

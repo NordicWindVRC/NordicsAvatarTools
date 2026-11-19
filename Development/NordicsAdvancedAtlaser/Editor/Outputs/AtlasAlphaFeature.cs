@@ -68,6 +68,21 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // Every source, so the ones without alpha are solid rather than filled from a neighbor.
             for (int i = 0; i < context.Job.Sources.Count; i++) request.Sources.Add(i);
             context.Maps.Add(request);
+            // Live global masks (AtlasLiveMasks), where alpha is the source's as it is and its mask
+            // multiplies or replaces it: alpha = the own part + the channel.
+            int live = AtlasLiveMasks.Split(context, Id, "alpha", request, i =>
+            {
+                var alpha = context.Job.Sources[i].Material.Surface.Alpha;
+                bool affine = conversions[i].Kind == AtlasAlphaConversionKind.None &&
+                              (alpha.Source == AtlasAlphaSource.Mask || alpha.MaskBlend == AtlasAlphaMaskBlend.Multiply || alpha.MaskBlend == AtlasAlphaMaskBlend.Replace);
+                return affine ? AtlasLiveMasks.Of(alpha.Mask) : AtlasLiveMasks.Of(alpha.Mask).Select(r => new AtlasBusRead(r.Channel, AtlasMaskBlend.Subtract));
+            });
+            if (live >= 0)
+            {
+                var outputAlpha = context.Output.Surface.Alpha;
+                outputAlpha.Mask = new AtlasMask { Bus = live, BusBlend = AtlasMaskBlend.Replace };
+                outputAlpha.MaskBlend = AtlasAlphaMaskBlend.Add;
+            }
             Notes(context, active);
         }
 

@@ -275,6 +275,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (state.SharedValuesDiffer)
                 using (new EditorGUI.IndentLevelScope())
                     SharedValue(setting, state, materials);
+            if (state.LiveSetups.Count > 1)
+                using (new EditorGUI.IndentLevelScope())
+                    LiveFrom(setting, state, materials);
             foreach (var conflictSwitch in state.Switches)
                 using (new EditorGUI.IndentLevelScope())
                     Switch(setting, conflictSwitch);
@@ -304,6 +307,24 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 "Automatic takes it from the material with the largest area in the atlas.");
             int next = PopupRow(label, index, options.ToArray());
             if (next != index) reference.objectReferenceValue = next == 0 ? null : choices[next - 1];
+        }
+
+        // Which material's live global masks stay live, where the materials' differ: automatic
+        // (the setup on the largest area) or a chosen one; the others are baked as normally seen.
+        private static void LiveFrom(SerializedProperty setting, AtlasFeatureState state, IReadOnlyList<Material> materials)
+        {
+            var stored = StoredValue(setting, AtlasLiveMasks.LiveFromId);
+            int chosen = stored != null ? Mathf.RoundToInt(stored.FindPropertyRelative("number").floatValue) - 1 : -1;
+            var options = new List<string> { "Automatic" };
+            options.AddRange(state.LiveSetups.Select(i => "Source " + (i + 1) + " (" + materials[i].name + ")"));
+            int index = state.LiveSetups.IndexOf(chosen) + 1;
+            var label = new GUIContent("Live from",
+                "The materials' global masks that change live (back faces, mirrors, cameras, distance, blacklights) differ, and the atlas " +
+                "keeps one setup live. Automatic keeps the one on the largest area; the others are baked as normally seen.");
+            int next = PopupRow(label, index, options.ToArray());
+            if (next == index) return;
+            if (stored == null) stored = AddValue(setting, AtlasLiveMasks.LiveFromId);
+            stored.FindPropertyRelative("number").floatValue = next == 0 ? 0 : state.LiveSetups[next - 1] + 1;
         }
 
         // A setting the materials disagree on, which the atlas material has once: on or off.

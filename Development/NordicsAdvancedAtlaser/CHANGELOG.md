@@ -8,6 +8,17 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Live global masks** (Poiyomi): a mask whose global mask channel ends in live steps (back
+  face, mirror, camera; distance and blacklight by multiply) and that's read by multiply or
+  replace stays live. The feature keeps its value with the channel at 0, and the rest in an
+  allocated mask place that is also a global mask channel (`Masks 1`/`Masks 2` as Global
+  Mask Textures 1 and 2), followed by the same live steps and read by add
+  (`AtlasLiveMasks`, `AtlasBusView`). Wired for alpha, emission (the rest in a *Live
+  emission* texture as Emission 1 through a channel past the mask places), metallic,
+  smoothness, the reflection and highlight strengths, occlusion, clear coat, and matcap and
+  rim slots. *Live from* picks one live setup per feature where the sources' differ. The
+  Poiyomi writer writes the global mask textures, the back face, mirror, camera and distance
+  modifiers, blacklight masking and every consumer's channel.
 - **Clear coat** (Poiyomi): a *Clear Coat* feature bakes every source's coat strength and
   roughness into a *Clear coat maps* texture (`_ClearCoatMaps`: R strength, G smoothness),
   its reflection and highlight strengths into B and A relative to the strongest (none where

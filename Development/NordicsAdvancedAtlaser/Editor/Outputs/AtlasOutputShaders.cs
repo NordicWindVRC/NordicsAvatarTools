@@ -46,6 +46,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 new AtlasOutputTexture("Occlusion", "Ambient occlusion") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
                     .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f)),
                 EmissionTexture(),
+                // _EmissionMap1: emission shown through a live global mask channel.
+                new AtlasOutputTexture("EmissionLive", "Live emission") { SizeMode = AtlasTextureSizeMode.MainAspect }
+                    .With(AtlasVirtualMap.EmissionLive, AtlasTextureChannels.RGB, new Color(0f, 0f, 0f, 1f)),
                 // _LightingShadowMasks reads R, _LightingDetailShadowMaps G (by their channel strengths).
                 new AtlasOutputTexture("LightingMasks", "Shadow and detail masks") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
                     .With(AtlasVirtualMap.ShadowStrengthMask, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f))
@@ -94,7 +97,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
             RimSlots = 2,
             RimMask = true,
             EnvironmentalRim = true,
-            Backlight = true
+            Backlight = true,
+            // Global masks: Masks 1 and 2 as Global Mask Textures 1 and 2; the back face, mirror,
+            // camera, distance and blacklight modifiers (contacts are Poiyomi 11's).
+            GlobalMasks = true,
+            LiveMaskSteps =
+            {
+                AtlasMaskBusStepKind.Faces, AtlasMaskBusStepKind.Mirror, AtlasMaskBusStepKind.Camera,
+                AtlasMaskBusStepKind.Distance, AtlasMaskBusStepKind.Blacklight
+            }
         };
 
         // Poiyomi 10's rendering presets (_Mode), as its shader's on_value_actions set them, by
@@ -149,7 +160,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             WriteBacklight(output, material);
             WriteSurfaceResponse(output.Surface.Response, material);
             WriteClearCoat(output.Surface.Response.ClearCoat, material);
+            WriteGlobalMasks(output, material);
             WriteEmission(output, material);
+            WriteLiveEmission(output, material);
             var render = output.Render;
             var preset = Array.Find(Presets, p => p.Mode == render.SurfaceMode &&
                 (p.Mode != AtlasSurfaceMode.Fade || (p.ZWrite == 1) == render.Pass.DepthWrite));
@@ -402,7 +415,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             m.SetFloat(p + "MaskUV", 0);
             m.SetFloat(p + "MaskChannel", mask?.Map?.Texture != null ? Mathf.Clamp((int)mask.Channel, 0, 3) : 0);
             m.SetFloat(p + "MaskInvert", mask?.Map?.Texture != null && mask.Invert ? 1 : 0);
-            m.SetFloat(p + "MaskGlobalMask", 0);
+            Consumer(m, p + "MaskGlobalMask", mask?.Bus ?? -1, mask?.BusBlend ?? AtlasMaskBlend.Add);
+            if (mask == null || mask.Bus < 0) m.SetFloat(p + "MaskGlobalMask", 0);
             foreach (var weight in MatcapWeights)
             {
                 var layer = layers.Find(l => l.Blend == weight.Blend && l.Placement == weight.Placement);
@@ -491,7 +505,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             m.SetFloat(n("_RimStyle", "_Rim2Style"), style == 3 ? 0 : style);
             m.SetFloat(n("_RimHueShiftEnabled", "_Rim2HueShiftEnabled"), 0);
             m.SetFloat(n("_RimApplyAlpha", "_Rim2ApplyAlpha"), 0);
-            m.SetFloat(n("_RimGlobalMask", "_Rim2GlobalMask"), 0);
+            Consumer(m, n("_RimGlobalMask", "_Rim2GlobalMask"), slot[0].Mask?.Bus ?? -1, slot[0].Mask?.BusBlend ?? AtlasMaskBlend.Add);
             m.SetFloat(n("_RimApplyGlobalMaskIndex", "_Rim2ApplyGlobalMaskIndex"), 0);
             switch (style)
             {
@@ -630,6 +644,127 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         private static int MaskChannel(AtlasMask mask) => mask?.Map?.Texture != null ? Mathf.Clamp((int)mask.Channel, 0, 3) : 0;
 
+        // Emission 1 (POI_EMISSION_1): the live emission, × its global mask channel by multiply.
+        private static void WriteLiveEmission(AtlasUnifiedMaterial output, Material m)
+        {
+            var emission = AtlasEmissionFeature.LiveOf(output);
+            var map = emission?.Source.Map?.Texture;
+            m.SetFloat("_EnableEmission1", map != null ? 1 : 0);
+            if (map != null) m.EnableKeyword("POI_EMISSION_1");
+            else m.DisableKeyword("POI_EMISSION_1");
+            if (map == null) return;
+            float total = emission.Targets.First(t => t.Target == AtlasSurfaceTarget.Emission).Opacity;
+            float strength = Mathf.Min(total, 20f);
+            float rest = total / Mathf.Max(strength, 1e-4f);
+            m.SetTexture("_EmissionMap1", map);
+            m.SetTextureScale("_EmissionMap1", Vector2.one);
+            m.SetTextureOffset("_EmissionMap1", Vector2.zero);
+            m.SetFloat("_EmissionMap1UV", 0);
+            m.SetColor("_EmissionColor1", new Color(rest, rest, rest, 1f).gamma);
+            m.SetFloat("_EmissionColor1ThemeIndex", 0);
+            m.SetFloat("_EmissionStrength1", strength);
+            m.SetTexture("_EmissionMask1", null);
+            m.SetFloat("_EmissionReplace1", 0);
+            m.SetFloat("_EmissionBaseColorAsMap1", 0);
+            Consumer(m, "_EmissionMask1GlobalMask", emission.Mask.Bus, emission.Mask.BusBlend);
+        }
+
+        // Global masks (1.5), as the Poiyomi parser reads them: the texture steps' maps as Global
+        // Mask Textures (channel c in texture c / 4), the back face, mirror, camera and distance
+        // modifiers per channel, blacklight masking; and every consumer of the output's channels.
+        private static void WriteGlobalMasks(AtlasUnifiedMaterial output, Material m)
+        {
+            var steps = output.MaskBus.Steps;
+            var textures = new Texture[4];
+            foreach (var step in steps.Where(s => s.Kind == AtlasMaskBusStepKind.Texture && s.Mask?.Map?.Texture != null))
+                textures[Mathf.Clamp(step.Channel / 4, 0, 3)] = step.Mask.Map.Texture;
+            bool anyTexture = textures.Any(t => t != null);
+            m.SetFloat("_GlobalMaskTexturesEnable", anyTexture ? 1 : 0);
+            if (anyTexture) m.EnableKeyword("POI_GLOBALMASK_TEXTURES");
+            else m.DisableKeyword("POI_GLOBALMASK_TEXTURES");
+            for (int t = 0; t < 4; t++)
+            {
+                string p = "_GlobalMaskTexture" + t;
+                m.SetTexture(p, textures[t]);
+                m.SetTextureScale(p, Vector2.one);
+                m.SetTextureOffset(p, Vector2.zero);
+                m.SetFloat(p + "UV", 0);
+                m.SetFloat(p + "Split", 0);
+            }
+            bool faces = false, mirror = false, camera = false, distance = false;
+            for (int c = 0; c < 16; c++)
+            {
+                var channel = steps.Where(s => s.Channel == c).ToList();
+                var face = channel.FirstOrDefault(s => s.Kind == AtlasMaskBusStepKind.Faces);
+                m.SetFloat("_GlobalMaskBackface_" + c, face == null ? 0 : face.Faces == AtlasFaces.Back ? 1 : 2);
+                faces |= face != null;
+                var inMirror = channel.FirstOrDefault(s => s.Kind == AtlasMaskBusStepKind.Mirror);
+                m.SetFloat("_GlobalMaskMirror_" + c, inMirror == null ? 0 : inMirror.Inside ? 2 : 1);
+                mirror |= inMirror != null;
+                var inCamera = channel.FirstOrDefault(s => s.Kind == AtlasMaskBusStepKind.Camera);
+                m.SetFloat("_GlobalMaskCamera_" + c, inCamera == null ? 0 : inCamera.Inside ? 2 : 1);
+                camera |= inCamera != null;
+                var far = channel.FirstOrDefault(s => s.Kind == AtlasMaskBusStepKind.Distance);
+                m.SetFloat("_GlobalMaskDistanceEnable_" + c, far != null ? 1 : 0);
+                distance |= far != null;
+                if (far != null)
+                {
+                    m.SetFloat("_GlobalMaskDistanceType_" + c, far.PixelPosition ? 1 : 0);
+                    m.SetFloat("_GlobalMaskDistanceMin_" + c, far.Min);
+                    m.SetFloat("_GlobalMaskDistanceMax_" + c, far.Max);
+                    m.SetFloat("_GlobalMaskDistanceMinAlpha_" + c, far.MinValue);
+                    m.SetFloat("_GlobalMaskDistanceMaxAlpha_" + c, far.MaxValue);
+                    m.SetFloat("_GlobalMaskDistanceBlendType_" + c, far.Blend == AtlasMaskBlend.Multiply ? 2 : 0);
+                }
+            }
+            m.SetFloat("_GlobalMaskModifiersBackfaceEnable", faces ? 1 : 0);
+            m.SetFloat("_GlobalMaskModifiersMirrorEnable", mirror ? 1 : 0);
+            m.SetFloat("_GlobalMaskMirrorVisibilityMode", 1);
+            m.SetFloat("_GlobalMaskModifiersCameraEnable", camera ? 1 : 0);
+            m.SetFloat("_GlobalMaskModifiersDistanceEnable", distance ? 1 : 0);
+            var blacklights = steps.Where(s => s.Kind == AtlasMaskBusStepKind.Blacklight).Take(4).ToList();
+            m.SetFloat("_BlackLightMaskingEnabled", blacklights.Count > 0 ? 1 : 0);
+            if (blacklights.Count > 0) m.EnableKeyword("POI_BLACKLIGHTMASKING");
+            else m.DisableKeyword("POI_BLACKLIGHTMASKING");
+            for (int b = 0; b < 4; b++)
+            {
+                string p = "_BlackLightMasking" + b;
+                var light = b < blacklights.Count ? blacklights[b] : null;
+                m.SetFloat(p + "GlobalMaskIndex", light != null ? light.Channel + 1 : 0);
+                if (light == null) continue;
+                m.SetFloat(p + "Key", light.Amount);
+                m.SetVector(p + "Range", new Vector4(light.Min, light.Max, 0f, 0f));
+                m.SetFloat(p + "GlobalMaskBlendType", (int)light.Blend);
+            }
+            m.SetFloat("_GlobalMaskOptionsEnable", 0);
+            foreach (var color in new[] { "Red", "Green", "Blue", "Alpha" }) m.SetFloat("_GlobalMaskVertexColor" + color, 0);
+
+            // Consumers: the channel (1R = 1) and blend (maskBlend's order; the Mochie strengths
+            // use customBlend, whose 8 adds).
+            var response = output.Surface.Response;
+            Consumer(m, "_MochieMetallicGlobalMask", response.Metallic.Bus, response.Metallic.BusBlend);
+            Consumer(m, "_MochieSmoothnessGlobalMask", response.Roughness.Bus, response.Roughness.BusBlend);
+            Consumer(m, "_MochieReflectionStrengthGlobalMask", response.Reflections.Mask?.Bus ?? -1, response.Reflections.Mask?.BusBlend ?? AtlasMaskBlend.Add, custom: true);
+            Consumer(m, "_MochieSpecularStrengthGlobalMask", response.Highlights.Mask?.Bus ?? -1, response.Highlights.Mask?.BusBlend ?? AtlasMaskBlend.Add, custom: true);
+            Consumer(m, "_LightDataAOGlobalMaskR", response.Occlusion.Bus, response.Occlusion.BusBlend, "_LightDataAOGlobalMaskBlendTypeR");
+            var coat = response.ClearCoat;
+            Consumer(m, "_ClearCoatGlobalMask", coat?.Strength.Bus ?? -1, coat?.Strength.BusBlend ?? AtlasMaskBlend.Add);
+            Consumer(m, "_ClearCoatSmoothnessGlobalMask", coat?.Roughness.Bus ?? -1, coat?.Roughness.BusBlend ?? AtlasMaskBlend.Add);
+            Consumer(m, "_ClearCoatReflectionStrengthGlobalMask", coat?.Reflections.Mask?.Bus ?? -1, coat?.Reflections.Mask?.BusBlend ?? AtlasMaskBlend.Add);
+            Consumer(m, "_ClearCoatSpecularStrengthGlobalMask", coat?.Highlights.Mask?.Bus ?? -1, coat?.Highlights.Mask?.BusBlend ?? AtlasMaskBlend.Add);
+            // Alpha: saturate(alpha + the channel), a mask without a map adding the channel.
+            var alpha = output.Surface.Alpha;
+            bool alphaChannel = alpha.Mask != null && alpha.Mask.Map == null && alpha.Mask.Bus >= 0 && alpha.MaskBlend == AtlasAlphaMaskBlend.Add;
+            Consumer(m, "_AlphaGlobalMask", alphaChannel ? alpha.Mask.Bus : -1, AtlasMaskBlend.Add);
+        }
+
+        private static void Consumer(Material m, string property, int bus, AtlasMaskBlend blend, string blendProperty = null, bool custom = false)
+        {
+            m.SetFloat(property, bus >= 0 ? bus + 1 : 0);
+            if (bus < 0) return;
+            m.SetFloat(blendProperty ?? property + "BlendType", custom && blend == AtlasMaskBlend.Add ? 8 : (int)blend);
+        }
+
         // The clear coat, as the Poiyomi parser reads it (AtlasPoiyomiSpecular): strength and
         // smoothness from the packed map (or their constants), the masks in B and A, or none
         // (channel 4: white), the highlight mask sharing B when it reads the reflection mask's map.
@@ -676,10 +811,6 @@ namespace NordicWind.AdvancedAtlaser.Editor
             m.SetFloat("_ClearCoatGSAAEnabled", coat.SpecularAntiAliasing.Enabled ? 1 : 0);
             m.SetFloat("_ClearCoatGSAAVariance", coat.SpecularAntiAliasing.Variance);
             m.SetFloat("_ClearCoatGSAAThreshold", coat.SpecularAntiAliasing.Threshold);
-            m.SetFloat("_ClearCoatGlobalMask", 0);
-            m.SetFloat("_ClearCoatSmoothnessGlobalMask", 0);
-            m.SetFloat("_ClearCoatReflectionStrengthGlobalMask", 0);
-            m.SetFloat("_ClearCoatSpecularStrengthGlobalMask", 0);
             m.SetFloat("_ClearCoatTPSDepthMaskEnabled", 0);
         }
 

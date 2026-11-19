@@ -158,7 +158,12 @@ and `ATLAS_OUTPUT.md` for the output design.
        colors are baked either way.
      - Masks, including Poiyomi's global masks, are baked into the features they limit.
        Global mask options that change live (back faces, mirrors, cameras, distance,
-       contacts) are baked as the avatar is normally seen, and the build lists them.
+       blacklights) stay live on a Poiyomi atlas, for alpha, emission, metallic, smoothness,
+       reflections and highlights, occlusion, clear coat, matcaps and rims: the build bakes
+       the rest of the mask and keeps the live part in a global mask with the same options.
+       When materials of one feature use different live options, *Live from* picks the ones
+       kept. The rest (and everything on Mobile Toon Standard, and contacts) is baked as the
+       avatar is normally seen, and the build lists it.
      - **Surface Mode**: *Automatic* takes the most see-through mode among the sources that
        the output shader supports (Poiyomi: opaque, cutout, transparent, fade; Mobile Toon
        Standard: opaque). When transparent sources share the atlas with solid ones, it uses

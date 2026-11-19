@@ -26,6 +26,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public sealed class AtlasAllocatedMask
     {
         public AtlasMask Mask;
+        // The mask place (Mask1 to Mask8) it's in.
+        public AtlasVirtualMap Place;
         public float Constant = 1f;
         public bool IsConstant => Mask == null;
     }
@@ -86,12 +88,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (keys.Count > 0 && keys.All(k => k == keys[0]) && AtlasMaskKeys.IsConstant(keys[0], out float constant))
                 return new AtlasAllocatedMask { Constant = constant };
             string vector = string.Join("|", keys);
-            if (plan.PlacedMasks.TryGetValue(vector, out var placed)) return new AtlasAllocatedMask { Mask = Read(placed, false) };
+            if (plan.PlacedMasks.TryGetValue(vector, out var placed))
+                return new AtlasAllocatedMask { Mask = Read(placed, false), Place = plan.PlacedMaskPlaces[vector] };
             if (request.CanInvert && request.InverseKey != null)
             {
                 var inverse = Enumerable.Range(0, count).Select(request.InverseKey).ToList();
                 if (inverse.All(k => k != null) && plan.PlacedMasks.TryGetValue(string.Join("|", inverse), out var other))
-                    return new AtlasAllocatedMask { Mask = Read(other, true) };
+                    return new AtlasAllocatedMask { Mask = Read(other, true), Place = plan.PlacedMaskPlaces[string.Join("|", inverse)] };
             }
             foreach (var place in Places)
             {
@@ -108,7 +111,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 context.Maps.Add(map);
                 var mask = new AtlasMask { Map = map.Reference, Channel = Channel(texture, place) };
                 plan.PlacedMasks[vector] = mask;
-                return new AtlasAllocatedMask { Mask = Read(mask, false) };
+                plan.PlacedMaskPlaces[vector] = place;
+                return new AtlasAllocatedMask { Mask = Read(mask, false), Place = place };
             }
             return null;
         }

@@ -269,7 +269,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var capabilities = context.Capabilities;
             // The base color mix the slot can't do, folded into the mask (where a place is left).
             bool fold = !capabilities.MatcapBaseColorMix && slot.Any(g => BaseColorMix(g.Members[0]) > 0f);
-            var mask = AtlasMaskAllocator.Allocate(context, MaskRequest(job, slot, index, fold, capabilities.MatcapMaskInvert));
+            var request = MaskRequest(job, slot, index, fold, capabilities.MatcapMaskInvert);
+            int live = AtlasLiveMasks.Split(context, FeatureId, "matcap slot " + (index + 1), request,
+                i => Member(slot, i) is Instance member ? AtlasLiveMasks.Of(member.Mask) : null);
+            var mask = AtlasMaskAllocator.Allocate(context, request);
             if (mask == null && fold)
             {
                 fold = false;
@@ -284,6 +287,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (mask.IsConstant && mask.Constant <= 0f) return;
             // Every slot has a mask object of its own, which the writers group its layers by.
             var slotMask = mask.Mask ?? new AtlasMask();
+            if (live >= 0) AtlasLiveMasks.Read(slotMask, live);
             float scale = mask.IsConstant ? mask.Constant : 1f;
             if (slot.Select(g => g.Members.Select(m => m.Source)).SelectMany(s => s).GroupBy(s => s).Any(s => s.Count() > 1))
                 context.Notes.Add($"Matcap slot {index + 1} has several matcaps on one source; the first one's mask is used there.");

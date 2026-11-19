@@ -278,13 +278,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             else if (capabilities.RimMask)
             {
-                var allocated = AtlasMaskAllocator.Allocate(context, MaskRequest(job, slot, "rim " + (index + 1), false));
+                var request = MaskRequest(job, slot, "rim " + (index + 1), false);
+                int live = AtlasLiveMasks.Split(context, FeatureId, "rim slot " + (index + 1), request,
+                    i => Member(slot, i) is Instance member ? AtlasLiveMasks.Of(member.Mask) : null);
+                var allocated = AtlasMaskAllocator.Allocate(context, request);
                 if (allocated == null)
                 {
                     context.Notes.Add($"No mask place is left for rim slot {index + 1}; " + string.Join(", ", slot.Select(g => g.Label)) + " left out.");
                     return;
                 }
                 mask = allocated.Mask ?? new AtlasMask();
+                if (live >= 0) AtlasLiveMasks.Read(mask, live);
                 if (allocated.IsConstant) scale = allocated.Constant;
             }
             else

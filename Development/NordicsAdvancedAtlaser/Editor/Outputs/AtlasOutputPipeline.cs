@@ -25,6 +25,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The mask allocator's places: taken mask maps, and the placed masks by their per-source keys.
         public readonly HashSet<AtlasVirtualMap> MaskPlaces = new HashSet<AtlasVirtualMap>();
         public readonly Dictionary<string, AtlasMask> PlacedMasks = new Dictionary<string, AtlasMask>();
+        public readonly Dictionary<string, AtlasVirtualMap> PlacedMaskPlaces = new Dictionary<string, AtlasVirtualMap>();
+        // The next global mask channel past the mask places (8–15) for live parts with no texture.
+        public int NextUnitChannel = 8;
+        // The sources' bus channels whose live steps a feature keeps live, by source index.
+        public readonly HashSet<(int Source, int Channel)> LiveKept = new HashSet<(int Source, int Channel)>();
+        // Per feature whose sources have different live setups: one source of each setup.
+        public readonly Dictionary<string, List<int>> LiveSetups = new Dictionary<string, List<int>>();
         // Textures the build makes besides the atlas maps (combined matcaps), before writing.
         public readonly List<AtlasGeneratedTexture> GeneratedTextures = new List<AtlasGeneratedTexture>();
         // The output's matcap slots the matcaps took; later features (rims) use the rest.
@@ -58,7 +65,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Resolve(job, capabilities, feature, plan);
             var live = new List<string>();
             for (int i = 0; i < job.Sources.Count; i++)
-                if (AtlasMaskBusEvaluator.HasLiveSteps(job.Sources[i].Material)) live.Add((i + 1).ToString());
+            {
+                var material = job.Sources[i].Material;
+                if (material == null) continue;
+                int index = i;
+                // Channels with live steps not kept live by every feature reading them.
+                if (material.MaskBus.Steps.Where(s => AtlasMaskBusEvaluator.IsLive(s.Kind)).Select(s => s.Channel).Distinct()
+                    .Any(c => !plan.LiveKept.Contains((index, c))))
+                    live.Add((i + 1).ToString());
+            }
             if (live.Count > 0)
                 plan.Notes.Add("Global masks that change live (back faces, mirrors, cameras, distance, blacklights, contacts) are baked as normally seen: " +
                     "front faces, outside mirrors and cameras, from far away, with no blacklight or touch (" +

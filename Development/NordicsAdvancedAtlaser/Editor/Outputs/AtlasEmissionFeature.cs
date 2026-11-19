@@ -53,7 +53,42 @@ namespace NordicWind.AdvancedAtlaser.Editor
             layer.Source.Map = request.Reference;
             layer.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Emission, AtlasBlend.Add, strength));
             context.Output.Layers.Add(layer);
+            Live(context, request, strength);
         }
+
+        // Live global masks (AtlasLiveMasks): the live sources' emission with their channels at 0
+        // stays in the map; the rest, a color, goes into a second emission map shown through a
+        // channel that is 1 before the same live steps.
+        private void Live(AtlasFeatureContext context, AtlasMapRequest request, float strength)
+        {
+            var job = context.Job;
+            if (!context.Capabilities.Provides(AtlasVirtualMap.EmissionLive)) return;
+            var split = AtlasLiveMasks.Plan(context, Id, "emission", i => job.Sources[i].Material.Layers.OfType<AtlasSurfaceLayer>()
+                .Where(l => l.Enabled && l.Targets.Any(t => t.Target == AtlasSurfaceTarget.Emission)).SelectMany(l => AtlasLiveMasks.Of(l.Mask)));
+            if (split == null) return;
+            int channel = AtlasLiveMasks.Unit(context, split, "emission");
+            if (channel < 0) return;
+            var inner = request.Evaluate;
+            var live = new AtlasMapRequest
+            {
+                Map = AtlasVirtualMap.EmissionLive,
+                Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Color },
+                Evaluate = (i, material, width, height) => AtlasLiveMasks.Difference(split, i, material, width, height, inner, false, color: true)
+            };
+            for (int i = 0; i < job.Sources.Count; i++) live.Sources.Add(i);
+            context.Maps.Add(live);
+            request.Evaluate = AtlasLiveMasks.Own(split, inner);
+            AtlasLiveMasks.Kept(context, split);
+            var layer = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission, Mask = new AtlasMask { Bus = channel, BusBlend = AtlasMaskBlend.Multiply } };
+            layer.Source.Map = live.Reference;
+            layer.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Emission, AtlasBlend.Add, strength));
+            context.Output.Layers.Add(layer);
+        }
+
+        // The output's live emission layer (shown through a global mask channel), if any.
+        public static AtlasSurfaceLayer LiveOf(AtlasUnifiedMaterial output) =>
+            output.Layers.OfType<AtlasSurfaceLayer>().Where(l => l.Targets.Any(t => t.Target == AtlasSurfaceTarget.Emission)).Skip(1)
+                .FirstOrDefault(l => l.Mask != null && l.Mask.Bus >= 0);
 
         // The output's emission layer, if any.
         public static AtlasSurfaceLayer Of(AtlasUnifiedMaterial output) =>

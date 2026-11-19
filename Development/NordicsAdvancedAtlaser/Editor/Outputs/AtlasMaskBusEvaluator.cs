@@ -6,6 +6,10 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
 {
+    // How a bus channel is evaluated: as it is, at 0, or without its live steps (from the first
+    // live step on; AtlasLiveMasks).
+    public enum AtlasBusView { Normal, Zero, Prefix }
+
     // A source's mask bus (UNIFIED_MATERIAL_FEATURES.md, 1.5) baked over its UV 0–1: each channel
     // starts at 1 and runs its steps in order. Steps that change live are baked as the avatar is
     // normally seen (ATLAS_OUTPUT.md, "Masks"): front faces, outside mirrors and VRChat cameras,
@@ -43,17 +47,56 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static IEnumerable<AtlasMaskBusStep> Steps(AtlasUnifiedMaterial source, int channel) =>
             source.MaskBus.Steps.Where(s => s.Channel == channel);
 
-        /// <summary>The channel's value in RGB, over the source's UV 0–1. Only for channels that
-        /// CanBake.</summary>
-        public static NordicsTextureWrapper Channel(AtlasUnifiedMaterial source, int channel, int width, int height) =>
-            AtlasEvaluationCache.Copy(("bus", source, channel, width, height), () => Compute(source, channel, width, height));
+        // The views set on this thread, by source and channel.
+        [ThreadStatic] private static Dictionary<(AtlasUnifiedMaterial, int), AtlasBusView> views;
 
-        private static NordicsTextureWrapper Compute(AtlasUnifiedMaterial source, int channel, int width, int height)
+        /// <summary>Evaluates the source's channels in the view until disposed (on this thread).</summary>
+        public static IDisposable View(AtlasUnifiedMaterial source, IEnumerable<int> channels, AtlasBusView view)
+        {
+            if (views == null) views = new Dictionary<(AtlasUnifiedMaterial, int), AtlasBusView>();
+            var before = new List<((AtlasUnifiedMaterial, int) Key, AtlasBusView? View)>();
+            foreach (int channel in channels.Distinct())
+            {
+                var key = (source, channel);
+                before.Add((key, views.TryGetValue(key, out var old) ? old : (AtlasBusView?)null));
+                views[key] = view;
+            }
+            return new Restore(before);
+        }
+
+        private sealed class Restore : IDisposable
+        {
+            private readonly List<((AtlasUnifiedMaterial, int) Key, AtlasBusView? View)> before;
+            public Restore(List<((AtlasUnifiedMaterial, int) Key, AtlasBusView? View)> before) { this.before = before; }
+
+            public void Dispose()
+            {
+                foreach (var entry in before)
+                    if (entry.View.HasValue) views[entry.Key] = entry.View.Value;
+                    else views.Remove(entry.Key);
+            }
+        }
+
+        private static AtlasBusView ViewOf(AtlasUnifiedMaterial source, int channel) =>
+            views != null && views.TryGetValue((source, channel), out var view) ? view : AtlasBusView.Normal;
+
+        /// <summary>The channel's value in RGB, over the source's UV 0–1, in the view set for it.
+        /// Only for channels that CanBake.</summary>
+        public static NordicsTextureWrapper Channel(AtlasUnifiedMaterial source, int channel, int width, int height)
+        {
+            var view = ViewOf(source, channel);
+            if (view == AtlasBusView.Zero) return AtlasMapEvaluator.Constant(AtlasVirtualMap.Alpha, 0f, width, height);
+            return AtlasEvaluationCache.Copy(("bus", source, channel, view, width, height), () => Compute(source, channel, width, height, view));
+        }
+
+        private static NordicsTextureWrapper Compute(AtlasUnifiedMaterial source, int channel, int width, int height, AtlasBusView view)
         {
             var value = AtlasMapEvaluator.Constant(AtlasVirtualMap.Alpha, 1f, width, height);
             try
             {
-                foreach (var step in Steps(source, channel))
+                var steps = Steps(source, channel);
+                if (view == AtlasBusView.Prefix) steps = steps.TakeWhile(s => !IsLive(s.Kind));
+                foreach (var step in steps)
                 {
                     if (step.Kind == AtlasMaskBusStepKind.Texture)
                     {

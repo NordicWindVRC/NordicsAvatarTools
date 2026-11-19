@@ -105,6 +105,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
             output.Metallic.Map = Request(context, AtlasVirtualMap.Metallic, active, 0f, (m, w, h) => AtlasMapEvaluator.Scalar(m.Surface.Response.Metallic, w, h, m));
             output.Roughness.Constant = 1f;
             output.Roughness.Map = Request(context, AtlasVirtualMap.Roughness, active, 1f, (m, w, h) => AtlasMapEvaluator.Scalar(m.Surface.Response.Roughness, w, h, m));
+            // Live global masks (AtlasLiveMasks): metallic as it is, roughness as smoothness.
+            int live = AtlasLiveMasks.Split(context, "specular", "metallic", AtlasLiveMasks.Request(context, AtlasVirtualMap.Metallic),
+                i => AtlasLiveMasks.Of(job.Sources[i].Material.Surface.Response.Metallic));
+            if (live >= 0) AtlasLiveMasks.Read(output.Metallic, live);
+            live = AtlasLiveMasks.Split(context, "specular", "smoothness", AtlasLiveMasks.Request(context, AtlasVirtualMap.Roughness),
+                i => AtlasLiveMasks.Of(job.Sources[i].Material.Surface.Response.Roughness), decreasing: true);
+            if (live >= 0)
+            {
+                AtlasLiveMasks.Read(output.Roughness, live);
+                output.Roughness.InvertSample = output.Roughness.InvertResult = true;
+            }
             // The masks follow the mask allocator's rules within their own channels: one value
             // everywhere needs no map (folded into the strength), and a highlight mask equal to the
             // reflection mask reads the reflection mask's channel.
@@ -114,24 +125,37 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 reflectionKeys = Keys(context, active, r => r.Reflections.Enabled, r => r.Reflections.Mask, r => r.Reflections.Strength / reflections);
                 if (Constant(reflectionKeys, out float constant)) output.Reflections.Strength = reflections * constant;
                 else
+                {
                     output.Reflections.Mask = new AtlasMask
                     {
                         Map = Request(context, AtlasVirtualMap.ReflectionMask, active, 0f, (m, w, h) => Strength(m, m.Surface.Response.Reflections.Enabled,
                             m.Surface.Response.Reflections.Mask, m.Surface.Response.Reflections.Strength / reflections, w, h))
                     };
+                    live = AtlasLiveMasks.Split(context, "specular", "reflection strength", AtlasLiveMasks.Request(context, AtlasVirtualMap.ReflectionMask),
+                        i => AtlasLiveMasks.Of(job.Sources[i].Material.Surface.Response.Reflections.Mask));
+                    if (live >= 0) AtlasLiveMasks.Read(output.Reflections.Mask, live);
+                }
             }
             if (context.Capabilities.Provides(AtlasVirtualMap.SpecularMask) && highlights > 0f)
             {
                 var keys = Keys(context, active, r => r.Highlights.Enabled, r => r.Highlights.Mask, r => r.Highlights.Strength / highlights);
                 if (Constant(keys, out float constant)) output.Highlights.Strength = highlights * constant;
                 else if (output.Reflections.Mask != null && keys.SequenceEqual(reflectionKeys))
-                    output.Highlights.Mask = new AtlasMask { Map = output.Reflections.Mask.Map };
+                    output.Highlights.Mask = new AtlasMask
+                    {
+                        Map = output.Reflections.Mask.Map, Bus = output.Reflections.Mask.Bus, BusBlend = output.Reflections.Mask.BusBlend
+                    };
                 else
+                {
                     output.Highlights.Mask = new AtlasMask
                     {
                         Map = Request(context, AtlasVirtualMap.SpecularMask, active, 0f, (m, w, h) => Strength(m, m.Surface.Response.Highlights.Enabled,
                             m.Surface.Response.Highlights.Mask, m.Surface.Response.Highlights.Strength / highlights, w, h))
                     };
+                    live = AtlasLiveMasks.Split(context, "specular", "highlight strength", AtlasLiveMasks.Request(context, AtlasVirtualMap.SpecularMask),
+                        i => AtlasLiveMasks.Of(job.Sources[i].Material.Surface.Response.Highlights.Mask));
+                    if (live >= 0) AtlasLiveMasks.Read(output.Highlights.Mask, live);
+                }
             }
             Notes(context, active);
             ReflectanceNotes(context, reference);
@@ -277,6 +301,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             occlusion.Combine = AtlasScalarCombine.StrengthAroundOne;
             occlusion.Map = AtlasSpecularFeature.Request(context, AtlasVirtualMap.Occlusion, active, 1f,
                 (m, w, h) => AtlasMapEvaluator.Scalar(m.Surface.Response.Occlusion, w, h, m));
+            int live = AtlasLiveMasks.Split(context, "occlusion", "ambient occlusion", AtlasLiveMasks.Request(context, AtlasVirtualMap.Occlusion),
+                i => AtlasLiveMasks.Of(context.Job.Sources[i].Material.Surface.Response.Occlusion));
+            if (live >= 0) AtlasLiveMasks.Read(occlusion, live);
             if (active.Any(i => !AtlasMapEvaluator.CanEvaluate(context.Job.Sources[i].Material.Surface.Response.Occlusion, context.Job.Sources[i].Material)))
                 context.Notes.Add("An occlusion map on another UV, remapped or on a global mask written by layers or the second pass isn't baked yet; it's left out.");
         }

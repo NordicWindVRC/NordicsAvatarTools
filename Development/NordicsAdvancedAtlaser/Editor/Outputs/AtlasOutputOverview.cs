@@ -25,6 +25,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly List<AtlasFeatureInstance> Instances = new List<AtlasFeatureInstance>();
         // Whether an item can also be placed in a matcap slot.
         public bool InstancesAsMatcap;
+        // Sources with different live global mask setups for the feature, one of each (Live from).
+        public readonly List<int> LiveSetups = new List<int>();
     }
 
     // One output texture the chosen modes use, with its size and memory.
@@ -69,6 +71,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     state.InstancesAsMatcap = items.CanPlaceAsMatcap(capabilities);
                 }
                 overview.Features.Add(state);
+            }
+            // Live global mask setups the user picks between: from a resolve of the sources.
+            if (capabilities.GlobalMasks && unified.All(u => u != null) &&
+                unified.Any(u => u.MaskBus.Steps.Any(s => AtlasMaskBusEvaluator.IsLive(s.Kind))))
+            {
+                var plan = AtlasOutputPipeline.Resolve(probe ?? (probe = Probe(config, materials, unified)), capabilities);
+                foreach (var state in overview.Features)
+                    if (plan.LiveSetups.TryGetValue(state.Feature.Id, out var setups)) state.LiveSetups.AddRange(setups);
             }
             overview.AddTextures(config, capabilities);
             return overview;

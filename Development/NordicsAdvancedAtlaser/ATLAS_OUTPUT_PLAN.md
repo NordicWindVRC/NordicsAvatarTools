@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7a, 2.7b and 2.7c are done; 2.7d is next. It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7a to 2.7d are done; 2.7e is next. It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -289,11 +289,14 @@ its masks relative to the strongest, under the allocator's rules; tints, fresnel
 the normal map amount and anti-aliasing from the reference source (*Clear Coat from*).
 
 **2.7d Global masks on Poiyomi** (from 2.4b), keeping live steps live: a feature splits its
-mask into its own mask (sources without live steps) and a global mask channel with the live
-steps (sources with them), combined by *add*. Poiyomi 10 reads global masks for emission,
-alpha, metallic, smoothness, reflection and specular strength and AO. Where a feature's
-sources need different live steps, the user picks which stays live (*Decisions*: no result
-left to chance); the others are baked at their normal-view value.
+value into its own part (the live channel at 0) and the rest, a global mask channel holding
+the value without the live steps minus the own part, with the same live steps after it, read
+by *add* (`AtlasLiveMasks`). Exact for values reading a channel by multiply or replace whose
+live steps keep 0 at 0 (back face, mirror, camera; distance and blacklight by multiply).
+Wired for alpha, emission (a second emission through a channel past the mask places),
+metallic, smoothness, reflection and highlight strengths, occlusion, clear coat, matcap and
+rim slots. Where a feature's sources need different live setups, *Live from* picks the one
+kept; the others are baked as normally seen and listed. Contacts stay baked (Poiyomi 11).
 
 **2.7e Tiled layers kept live** (from 2.5b): tiled detail and normal layers on a preserved UV
 channel with each source's tiling (Poiyomi's detail texture and detail normal, Toon

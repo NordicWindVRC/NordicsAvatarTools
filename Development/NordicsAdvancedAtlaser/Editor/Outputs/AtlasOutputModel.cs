@@ -38,7 +38,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         BacklightColor,
         // One value each (2.4): the clear coat's strength (0 without one), its roughness, and its
         // reflection and highlight strengths relative to the strongest.
-        ClearCoatStrength, ClearCoatRoughness, ClearCoatReflectionMask, ClearCoatSpecularMask
+        ClearCoatStrength, ClearCoatRoughness, ClearCoatReflectionMask, ClearCoatSpecularMask,
+        // RGB (1.5): the emission whose global masks change live, shown through its channel.
+        EmissionLive
     }
 
     // Which channels of a texture a virtual map fills.
@@ -187,6 +189,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool EnvironmentalRim;
         // One backlight, its color from a texture (BacklightColor).
         public bool Backlight;
+        // Global masks (1.5): the mask textures double as the first global mask textures (Mask1
+        // to Mask8 are channels 0–7), and these steps run live on a channel.
+        public bool GlobalMasks;
+        public readonly System.Collections.Generic.HashSet<AtlasMaskBusStepKind> LiveMaskSteps =
+            new System.Collections.Generic.HashSet<AtlasMaskBusStepKind>();
 
         public AtlasOutputTexture TextureFor(AtlasVirtualMap map) => Textures.Find(t => t.Provides(map));
 

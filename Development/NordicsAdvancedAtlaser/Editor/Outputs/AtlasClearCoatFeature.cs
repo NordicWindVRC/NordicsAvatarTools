@@ -83,6 +83,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
             output.Roughness.Map = AtlasSpecularFeature.Request(context, AtlasVirtualMap.ClearCoatRoughness, active, 1f,
                 (m, w, h) => AtlasMapEvaluator.Scalar(Coat(m).Roughness, w, h, m));
             Plain(output.Roughness);
+            int live = AtlasLiveMasks.Split(context, FeatureId, "clear coat", AtlasLiveMasks.Request(context, AtlasVirtualMap.ClearCoatStrength),
+                i => AtlasLiveMasks.Of(Coat(job.Sources[i].Material).Strength));
+            if (live >= 0) AtlasLiveMasks.Read(output.Strength, live);
+            live = AtlasLiveMasks.Split(context, FeatureId, "clear coat smoothness", AtlasLiveMasks.Request(context, AtlasVirtualMap.ClearCoatRoughness),
+                i => AtlasLiveMasks.Of(Coat(job.Sources[i].Material).Roughness), decreasing: true);
+            if (live >= 0)
+            {
+                AtlasLiveMasks.Read(output.Roughness, live);
+                output.Roughness.InvertSample = output.Roughness.InvertResult = true;
+            }
 
             float reflections = active.Max(i => Coat(job.Sources[i].Material).Reflections.Strength);
             float highlights = active.Max(i => Coat(job.Sources[i].Material).Highlights.Strength);
@@ -96,24 +106,37 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 reflectionKeys = Keys(context, active, c => c.Reflections.Mask, c => c.Reflections.Strength / reflections);
                 if (Constant(reflectionKeys, out float constant)) output.Reflections.Strength = reflections * constant;
                 else
+                {
                     output.Reflections.Mask = new AtlasMask
                     {
                         Map = AtlasSpecularFeature.Request(context, AtlasVirtualMap.ClearCoatReflectionMask, active, 0f, (m, w, h) =>
                             AtlasMapEvaluator.ScaledMask(Coat(m).Reflections.Mask, Mathf.Clamp01(Coat(m).Reflections.Strength / reflections), w, h, m))
                     };
+                    live = AtlasLiveMasks.Split(context, FeatureId, "clear coat reflection strength",
+                        AtlasLiveMasks.Request(context, AtlasVirtualMap.ClearCoatReflectionMask), i => AtlasLiveMasks.Of(Coat(job.Sources[i].Material).Reflections.Mask));
+                    if (live >= 0) AtlasLiveMasks.Read(output.Reflections.Mask, live);
+                }
             }
             if (context.Capabilities.Provides(AtlasVirtualMap.ClearCoatSpecularMask) && highlights > 0f)
             {
                 var keys = Keys(context, active, c => c.Highlights.Mask, c => c.Highlights.Strength / highlights);
                 if (Constant(keys, out float constant)) output.Highlights.Strength = highlights * constant;
                 else if (output.Reflections.Mask != null && keys.SequenceEqual(reflectionKeys))
-                    output.Highlights.Mask = new AtlasMask { Map = output.Reflections.Mask.Map };
+                    output.Highlights.Mask = new AtlasMask
+                    {
+                        Map = output.Reflections.Mask.Map, Bus = output.Reflections.Mask.Bus, BusBlend = output.Reflections.Mask.BusBlend
+                    };
                 else
+                {
                     output.Highlights.Mask = new AtlasMask
                     {
                         Map = AtlasSpecularFeature.Request(context, AtlasVirtualMap.ClearCoatSpecularMask, active, 0f, (m, w, h) =>
                             AtlasMapEvaluator.ScaledMask(Coat(m).Highlights.Mask, Mathf.Clamp01(Coat(m).Highlights.Strength / highlights), w, h, m))
                     };
+                    live = AtlasLiveMasks.Split(context, FeatureId, "clear coat highlight strength",
+                        AtlasLiveMasks.Request(context, AtlasVirtualMap.ClearCoatSpecularMask), i => AtlasLiveMasks.Of(Coat(job.Sources[i].Material).Highlights.Mask));
+                    if (live >= 0) AtlasLiveMasks.Read(output.Highlights.Mask, live);
+                }
             }
 
             string used = Setup(Coat(job.Sources[reference].Material));
