@@ -280,6 +280,15 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 Assert.AreEqual(AtlasAudioBand.HighMids, parsedModulator.Audio.Band);
                 Assert.AreEqual(AtlasAudioSpread.History, parsedModulator.Audio.Spread);
                 Assert.AreEqual(256f, parsedModulator.Audio.HistoryLength, 1e-3f);
+
+                // A level below 1 goes into the tint: an intensity below 1 would count twice.
+                glow.Source.Color = new Color(0.25f, 0.25f, 0.25f, 1f);
+                toon.Write(output, material);
+                Assert.AreEqual(1f, material.GetFloat("_ALIntensity"), 1e-5f);
+                parsed = AtlasShaderRegistry.Detect(material).Parse(material);
+                layer = parsed.Layers.OfType<AtlasSurfaceLayer>().Single(l => AtlasAudio.Of(parsed, l).Count > 0);
+                Assert.AreEqual(0.25f, layer.Source.Color.r, 1e-3f, "the tint");
+                Assert.AreEqual(1f, layer.Targets[0].Opacity, 1e-4f);
             }
         }
     }

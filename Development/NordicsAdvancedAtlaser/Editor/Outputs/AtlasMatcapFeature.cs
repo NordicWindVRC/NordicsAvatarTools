@@ -207,11 +207,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // What a matcap texture shows as its slot looks it up: luminance (linear, before its
         // color) over the lookup disc, its darkest, mean and brightest value, and the share of its
-        // light in its brightest tenth.
+        // light in its brightest tenth; and its mean color (alpha included).
         private sealed class Content
         {
             public float Min, Mean, Max, Concentration;
+            public Color MeanColor = Color.white;
         }
+
+        /// <summary>A matcap texture's mean color (linear, before its color, alpha included) over
+        /// the lookup disc: its average look over the visible surface. White without a texture.</summary>
+        internal static Color MeanColor(AtlasLookupLayer layer) => ContentOf(layer).MeanColor;
 
         private const int ContentSize = 32, ContentSteps = 24;
         private static readonly Dictionary<string, Content> Contents = new Dictionary<string, Content>();
@@ -225,8 +230,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (Contents.TryGetValue(key, out var content)) return content;
             var pixels = AtlasSourceSamples.Small(texture, ContentSize, ContentSize);
             var values = new List<float>();
-            void Add(Vector2 lookup) =>
-                values.Add(Mathf.Max(0f, AtlasSourceSamples.Luminance(SampleRepeat(pixels, Vector2.Scale(lookup, map.Tiling) + map.Offset))));
+            var sum = new Color(0f, 0f, 0f, 0f);
+            void Add(Vector2 lookup)
+            {
+                var sample = SampleRepeat(pixels, Vector2.Scale(lookup, map.Tiling) + map.Offset);
+                values.Add(Mathf.Max(0f, AtlasSourceSamples.Luminance(sample)));
+                sum += sample;
+            }
             if (line)
                 // The gradient projection looks up u = v = 1 − |N·V|.
                 for (int i = 0; i < ContentSteps; i++)
@@ -249,7 +259,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             content = new Content
             {
                 Min = values[0], Max = values[values.Count - 1], Mean = total / values.Count,
-                Concentration = total > 1e-6f ? values.Skip(values.Count - top).Sum() / total : 0.1f
+                Concentration = total > 1e-6f ? values.Skip(values.Count - top).Sum() / total : 0.1f,
+                MeanColor = sum / values.Count
             };
             Contents[key] = content;
             return content;

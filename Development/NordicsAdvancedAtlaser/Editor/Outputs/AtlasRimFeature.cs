@@ -311,6 +311,38 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             if (capabilities.RimBandOnly && slot[0].Members[0].Layers.Any(l => l.Profile != AtlasAngleProfile.Band || !AtlasRimCurve.ViewOnly(l)))
                 context.Notes.Add($"The output shader's rim is a band; {slot[0].Label} is fitted to it.");
+            if (capabilities.RimAddsAfterLighting) FitAddedAfterLighting(context, slot, context.Output.Layers.Count - slot[0].Members[0].Layers.Count);
+        }
+
+        // An output whose rim only adds after lighting: each rim that blends otherwise, sits on
+        // the surface or glows gets the strength, base color mix and lighting that look most like
+        // it on its group's sources (AtlasRimResponse).
+        private static void FitAddedAfterLighting(AtlasFeatureContext context, List<Group> slot, int first)
+        {
+            var job = context.Job;
+            var sources = slot[0].Members.Select(m => m.Source).Distinct()
+                .Select(i => ((IReadOnlyList<Color>)AtlasSourceSamples.Bases(job.Sources[i].Material), job.Sources[i].UVRegion.width * job.Sources[i].UVRegion.height))
+                .ToList();
+            for (int k = first; k < context.Output.Layers.Count; k++)
+            {
+                if (!(context.Output.Layers[k] is AtlasAngleLayer copy) || AtlasRimResponse.AddsAsIs(copy)) continue;
+                if (!AtlasRimCurve.FitBand(copy, out _, out _, out float peak) || peak <= 0f) continue;
+                var fitted = AtlasRimResponse.Fit(copy, peak, sources);
+                var color = copy.Color.Color;
+                copy.Color.Color = new Color(color.r, color.g, color.b, 1f);
+                copy.SourceAlphaIsOpacity = false;
+                copy.Placement = AtlasPlacement.Overlay;
+                copy.Blend = AtlasBlend.Add;
+                copy.EmissionAmount = 0f;
+                copy.LightColorMix = 0f;
+                copy.HideInShadow = 0f;
+                copy.LightResponse = fitted.Lit ? AtlasLightResponse.ScaleByLight : AtlasLightResponse.IgnoreLight;
+                copy.BaseColorMix = fitted.BaseColorMix;
+                copy.Opacity = fitted.Strength;
+                context.Notes.Add($"The output shader's rim adds its color after lighting; {slot[0].Label}'s blend, lighting and glow are fitted to it " +
+                                  $"(strength {fitted.Strength.ToString("0.##", CultureInfo.InvariantCulture)}, base color mix " +
+                                  $"{fitted.BaseColorMix.ToString("0.##", CultureInfo.InvariantCulture)}, {(fitted.Lit ? "lit by the scene" : "unlit")}).");
+            }
         }
 
         // A matcap slot: the rims drawn into a generated matcap, added after the matcaps.

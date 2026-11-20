@@ -52,7 +52,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public sealed class AtlasSurfaceLayer : AtlasLayer
     {
         public readonly AtlasColorInput Source = new AtlasColorInput();
-        // The source times the base color ("use base color" emission).
+        // The source times the surface color at the end of S1, after the surface layers, matcaps
+        // and rims included ("use base color" emission).
         public bool SourceTimesBaseColor;
         // The source's alpha multiplies every target's opacity (alpha-blended details and decals);
         // the product is clamped to 0–1.

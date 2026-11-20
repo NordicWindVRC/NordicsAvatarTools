@@ -402,6 +402,21 @@ EditMode tests pass in Unity 2022.3.22.
     (`AtlasMatcapFeature.FitGlow`, `AtlasOutputPlan.BeforeWrite`); a slot with a constant mask
     glows by that constant.
   - The build log lists fitted glows and glow-only matcaps that show a slot's blend.
+- **Toon Standard's rims came out too bright and glowed in the dark.** Its rim only adds a
+  color after lighting, but a source's rim that blends into the base color before lighting
+  (Poiyomi's Mixed, Replace, Multiply or Screen), is lit with it or glows only partly was
+  written as if added, unlit, at full strength. Such rims are now fitted by their look
+  (`AtlasRimResponse`): the source's placement, blend, light response and emission amount at
+  the rim's peak, on the sources' base colors, against the added rim's strength, base color mix
+  and lighting. Rims already added after lighting are kept as they are.
+- **Emissions that take the base color missed the matcaps and rims.** Poiyomi applies its
+  matcaps and rims to the base color before such an emission reads it; the bake used the base
+  color without them, so an emission on a dark texture brightened by a matcap came out far too
+  dim (Toon Standard's AudioLink emission, Poiyomi's baked emission maps). The bake now takes
+  the surface matcaps and rims at their average look over the view (`AtlasViewLayers`).
+- **The AudioLink color map lost a dim emission's precision.** It's now stretched to its
+  brightest value, the level carried in the AudioLink tint or intensity (Toon Standard's tint
+  below 1, since an intensity below 1 also lowers the tint's alpha and would count twice).
 - **Toon Standard's highlights and reflections came out far too strong.** It has no highlight
   or reflection strengths, so they were dropped and drawn at full, and its one `_Reflectance`
   came from the largest source, capped at 1 where that source was rough, which a smoother

@@ -41,6 +41,43 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(expected.b, actual.b, 1e-3f, message + " b");
         }
 
+        // An emission that takes the base color reads it after the surface matcaps and rims, as
+        // Poiyomi applies them; a bake takes them at their average look.
+        [Test]
+        public void AnEmissionTakingTheBaseColorSeesTheSurfaceMatcapsAndRimsOnAverage()
+        {
+            var material = new AtlasUnifiedMaterial();
+            material.Surface.BaseColor.Color = new Color(0.01f, 0.01f, 0.01f, 1f);
+            var emission = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission, SourceTimesBaseColor = true };
+            emission.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Emission, AtlasBlend.Add, 1f));
+            material.Layers.Add(emission);
+            float Glow()
+            {
+                using (var map = AtlasColorStack.EvaluateEmission(material, 4, 4, 1f)) return map.GetPixel(1, 1).r;
+            }
+            Assert.AreEqual(0.01f, Glow(), 1e-4f, "the base color alone");
+
+            // A matcap screened on the surface; without a texture, its color everywhere.
+            var matcap = new AtlasLookupLayer { Placement = AtlasPlacement.Surface, Blend = AtlasBlend.Screen };
+            matcap.Source.Color = new Color(0.5f, 0.5f, 0.5f, 1f);
+            material.Layers.Insert(0, matcap);
+            float screened = 1f - 0.99f * 0.5f;
+            Assert.AreEqual(screened, Glow(), 1e-3f, "1 − (1 − 0.01)(1 − 0.5)");
+
+            // A rim added on the surface: its strength averaged over the visible surface.
+            var rim = new AtlasAngleLayer { Placement = AtlasPlacement.Surface, Profile = AtlasAngleProfile.Band, Width = 0.3f, Softness = 0.1f, Blend = AtlasBlend.Add };
+            rim.Color.Color = Color.white;
+            float coverage = AtlasViewLayers.Coverage(rim);
+            Assert.Greater(coverage, 0f);
+            Assert.Less(coverage, 0.3f, "only near the edges");
+            material.Layers.Insert(1, rim);
+            Assert.AreEqual(screened + coverage, Glow(), 1e-3f);
+
+            // Matcaps added after lighting don't change the base color.
+            matcap.Placement = AtlasPlacement.Overlay;
+            Assert.AreEqual(0.01f + coverage, Glow(), 1e-3f);
+        }
+
         private static AtlasSurfaceLayer ColorLayer(Color color, AtlasBlend blend, float opacity)
         {
             var layer = new AtlasSurfaceLayer();

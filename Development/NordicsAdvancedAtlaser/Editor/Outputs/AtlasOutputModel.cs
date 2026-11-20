@@ -217,6 +217,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public int RimSlots;
         public bool RimMask;
         public bool RimBandOnly;
+        // A slot only adds its color after lighting, unlit or × (light + ambient), × lerp(1, base,
+        // mix): rims that blend otherwise, sit on the surface or glow are fitted to it
+        // (AtlasRimResponse).
+        public bool RimAddsAfterLighting;
         // One environmental rim (the probe's color at the edge), with a mask.
         public bool EnvironmentalRim;
         // One backlight, its color from a texture (BacklightColor).

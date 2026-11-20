@@ -166,7 +166,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // One AudioLink emission: the reference source's, each kept source's emission × gain in
-        // the AudioLink color map, normalized to its brightest value.
+        // the AudioLink color map, stretched to its brightest value, which the layer's color keeps.
         private static void EmissionSection(AtlasFeatureContext context)
         {
             var job = context.Job;
@@ -201,11 +201,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     AtlasPixels.Map(result, c => new Color(c.r * gain, c.g * gain, c.b * gain, 1f));
                     return result;
                 },
+                // Stretched to its brightest value, so a dim emission keeps its precision through
+                // 8 bits and compression; the level goes into the layer's color.
                 Finish = map =>
                 {
                     float peak = AtlasColorFeature.Peak(map);
-                    output.Source.Color = peak > 1f ? new Color(peak, peak, peak, 1f) : Color.white;
-                    if (peak <= 1f) return;
+                    if (peak <= 1e-4f)
+                    {
+                        output.Source.Color = Color.white;
+                        return;
+                    }
+                    output.Source.Color = new Color(peak, peak, peak, 1f);
+                    if (Mathf.Abs(peak - 1f) < 1e-4f) return;
                     map.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Tint, Parameters = { Color = new Color(1f / peak, 1f / peak, 1f / peak, 1f) } });
                 }
             };

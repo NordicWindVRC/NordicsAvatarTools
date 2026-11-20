@@ -166,10 +166,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         using (coverage)
                         {
                             Adjust(layerSource, source, AtlasAdjustmentTarget.Layer, layer, width, height);
-                            // The base color as it is before emissions replace it.
+                            // The surface color as it is before emissions replace it: the end of S1,
+                            // with the view-dependent surface layers (matcaps, rims) at their
+                            // average look, as Poiyomi applies them before its emissions read it.
                             if (layer.SourceTimesBaseColor)
                                 using (var baseColor = Evaluate(source, width, height, multiplyColor: true, emissionOverride: false))
+                                {
+                                    AtlasViewLayers.Apply(source, baseColor, width, height);
                                     layerSource.Blit(baseColor, blend: TextureBlendMode.Multiply);
+                                }
                             using (var mask = Mask(layer, source, layerSource, coverage, width, height))
                                 // Unit strength: the emission's color, map and mask alone (an emission
                                 // AudioLink gives its strength).

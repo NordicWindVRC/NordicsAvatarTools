@@ -176,6 +176,59 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(0f, Evaluate(plan, AtlasVirtualMap.Mask1, job, 2), 1e-4f);
         }
 
+        private static List<(IReadOnlyList<Color> Bases, float Weight)> Bases(params Color[] colors) =>
+            new List<(IReadOnlyList<Color> Bases, float Weight)> { (colors, 1f) };
+
+        // An output whose rim only adds after lighting gets the strength, base color mix and
+        // lighting that look most like the source's rim, its blend, placement and glow included.
+        [Test]
+        public void ARimTheOutputCanOnlyAddIsFittedByItsLook()
+        {
+            var dark = new Color(0.01f, 0.01f, 0.01f, 1f);
+            // Added after lighting: shown as it is, and a fit finds it again.
+            var added = With(new AtlasAngleLayer { Profile = AtlasAngleProfile.Band, Opacity = 0.7f, BaseColorMix = 0.3f }, new Color(1f, 0.5f, 0.2f, 1f));
+            Assert.IsTrue(AtlasRimResponse.AddsAsIs(added));
+            var fit = AtlasRimResponse.Fit(added, 1f, Bases(new Color(0.3f, 0.3f, 0.3f, 1f), new Color(0.6f, 0.5f, 0.4f, 1f)));
+            Assert.AreEqual(0.7f, fit.Strength, 0.01f, "as it is");
+            Assert.AreEqual(0.3f, fit.BaseColorMix, 0.05f);
+            Assert.IsFalse(fit.Lit);
+
+            // Mixed into a dark base color before lighting, glowing at 0.2: the glow is what shows.
+            var mixed = Rim(Color.white);
+            mixed.Blend = AtlasBlend.Mixed;
+            mixed.EmissionAmount = 0.2f;
+            Assert.IsFalse(AtlasRimResponse.AddsAsIs(mixed));
+            fit = AtlasRimResponse.Fit(mixed, 1f, Bases(dark));
+            Assert.IsFalse(fit.Lit, "the glow is unlit");
+            Assert.AreEqual(0.2f, fit.Strength, 0.03f);
+            Assert.AreEqual(0f, fit.BaseColorMix, 0.05f, "the source's mix, on an even base");
+
+            // Added to a gray base color before lighting: lit with it, only on the light's side.
+            var surface = Rim(Color.white);
+            surface.Opacity = 0.5f;
+            fit = AtlasRimResponse.Fit(surface, 1f, Bases(new Color(0.5f, 0.5f, 0.5f, 1f)));
+            Assert.IsTrue(fit.Lit);
+            Assert.Less(fit.Strength, 0.5f);
+
+            // In a build: the slot's rim is the fitted one, listed.
+            var first = Material(mixed);
+            first.Surface.BaseColor.Color = dark;
+            var copy = Rim(Color.white);
+            copy.Blend = AtlasBlend.Mixed;
+            copy.EmissionAmount = 0.2f;
+            var second = Material(copy);
+            second.Surface.BaseColor.Color = dark;
+            var plan = AtlasOutputPipeline.Resolve(Job(first, second), ToonStandard);
+            var rim = Rims(plan).Single();
+            Assert.AreEqual(AtlasPlacement.Overlay, rim.Placement, Notes(plan));
+            Assert.AreEqual(AtlasBlend.Add, rim.Blend);
+            Assert.AreEqual(0f, rim.EmissionAmount);
+            Assert.AreEqual(AtlasLightResponse.IgnoreLight, rim.LightResponse);
+            Assert.AreEqual(0.2f, rim.Opacity, 0.03f);
+            StringAssert.Contains("fitted to it", Notes(plan));
+            Assert.AreEqual(AtlasBlend.Mixed, Rims(AtlasOutputPipeline.Resolve(Job(first, second), Poiyomi)).Single().Blend, "Poiyomi keeps it");
+        }
+
         private static AtlasAngleLayer EnvironmentalRim(float opacity, AtlasMask mask = null) => new AtlasAngleLayer
         {
             Placement = AtlasPlacement.Overlay, Profile = AtlasAngleProfile.Step, StepBase = AtlasAngleBase.Facing, Power = 1f,

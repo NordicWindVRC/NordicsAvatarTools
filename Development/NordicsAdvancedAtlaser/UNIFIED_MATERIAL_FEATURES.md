@@ -695,7 +695,7 @@ detail, decal, flipbook, recolor or color mask, back face, and emission.
 | emission amount | ≥ 0 | 0 | |
 | hide in shadow | 0–1 | 0 | the mask × `lerp(1, shading brightness, amount)`, the brightness being the ramp × light map |
 | source | color input | white | |
-| source times base color | bool | off | "use base color" |
+| source times base color | bool | off | "use base color": the surface color at the end of S1, after the surface layers, matcaps and rims included (Poiyomi applies them before its emissions read it) |
 | replaces emission | bool | off | the emission below is replaced where the layer covers: `e × (1 − coverage) + its own` (decals) |
 | overrides base color | bool | off | an emission layer's emission `e` also replaces the base color: `lerp(b, saturate(e), max(e))` |
 | targets | list of: target, blend (1.7), opacity, channel, invert channel, replace normal | — | opacity 0–1, or any amount ≥ 0 for blend *add*; *normal* targets composite by whiteout, opacity being the strength, or with *replace normal* lerp toward the layer's normal by the mask; one-value targets read the source's *channel* (`1 − channel` when inverted) |

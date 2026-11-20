@@ -1564,6 +1564,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // One band rim without a mask, added after lighting.
             RimSlots = 1,
             RimBandOnly = true,
+            RimAddsAfterLighting = true,
             // Detail albedo by mode and detail normal on UV0 or UV1, one mask by channel.
             DetailUVChannels = 1,
             DetailTextureBlends = { AtlasBlend.Replace, AtlasBlend.Add, AtlasBlend.Multiply, AtlasBlend.MultiplyDouble },
@@ -1594,8 +1595,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetFloat("_ALMaskUVChannel", 0);
             material.SetFloat("_ALMaskByEmission", 0);
             material.SetFloat("_ALMaskChannel", 0);
-            material.SetColor("_ALTint", Color.white);
-            material.SetFloat("_ALIntensity", Mathf.Clamp(layer.Source.Color.maxColorComponent, 0f, 12f));
+            // The level: above 1 in the intensity (up to 12), below 1 in the tint, since an
+            // intensity below 1 also lowers the tint's alpha and would count twice.
+            float level = Mathf.Max(0f, layer.Source.Color.maxColorComponent);
+            material.SetColor("_ALTint", level < 1f ? new Color(level, level, level, 1f).gamma : Color.white);
+            material.SetFloat("_ALIntensity", Mathf.Clamp(Mathf.Max(level, 1f), 1f, 12f));
             material.SetFloat("_ALBand", Mathf.Clamp((int)audio.Band, 0, 3));
             material.SetFloat("_ALSmoothing", Mathf.Clamp(Mathf.Round(audio.Smoothing * 15f), 0f, 15f));
             material.SetFloat("_ALEnableFallback", audio.FallbackBeat ? 1 : 0);
