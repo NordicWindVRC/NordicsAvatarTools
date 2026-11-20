@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is done; 2.9 is next (2.9a to 2.9d done, 2.9e next), then 2.8, which completes milestone 2 (done after 2.9: both outputs light and have the maps 2.8's bakes stand in for, so 2.8 matters first where the user turns maps off). It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is done; 2.9 is done; 2.8 is next and completes milestone 2 (done after 2.9: both outputs light and have the maps 2.8's bakes stand in for, so 2.8 matters first where the user turns maps off). It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -363,8 +363,11 @@ from*), each kept source's emission × its audio gain in an *AudioLink color* te
 others aren't kept, listed. AudioLink on parts without a slot (decals, patterns, colors,
 alpha) is shown at rest, listed.
 
-**2.9e** *World AO blocker*: typed in the unified material, read by the Poiyomi parser,
-written as one switch.
+**2.9e World AO blocker.** Typed in the unified material (`AtlasAOBlocker`: its UV channel and
+flip normal), read by the Poiyomi parser (9.2 and later), written by the Poiyomi writer as one
+switch. *Kept live* where the output has a blocker: on UV0 the remap leaves its triangles in
+their tile; on another channel it goes into a free UV channel. *Removed from the mesh* on any
+output, the default on Toon Standard, or *Off*.
 - **Workable:** every initial feature but the baking toolkit, on both writers (2.8 follows
   and completes milestone 2).
 

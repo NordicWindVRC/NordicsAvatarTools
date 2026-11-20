@@ -8,6 +8,11 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **World AO Blocker:** Poiyomi's blocker (9.2 and later) is typed and read instead of ignored
+  (`AtlasAOBlocker`: its UV channel and flip normal). The new *World AO Blocker* feature keeps it
+  live where the output has one (on UV0 the remap leaves its triangles in their tile, on another
+  channel it goes into a free UV channel), removes its triangles from the mesh on any output
+  (the default on Toon Standard), or shows them (*Off*). The Poiyomi writer sets it.
 - **AudioLink:** parts that AudioLink drives are baked at rest instead of being left out,
   where their modulators leave them as they are without music (`AtlasAudio`). Poiyomi keeps
   matcap, rim and glitter AudioLink on their slots and gives an audio-driven emission an

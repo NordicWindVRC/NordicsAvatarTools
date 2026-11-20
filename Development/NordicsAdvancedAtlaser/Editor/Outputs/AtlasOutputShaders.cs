@@ -99,6 +99,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // each reading UV0 to UV3.
             TileDiscard = true,
             FaceTileDiscard = true,
+            // World AO Blocker on UV0 to UV3.
+            AOBlocker = true,
             UVChannels = 3,
             // _SDFShadingTextureUV and _LightDataSDFMapUV pick the channel.
             SdfFace = true,
@@ -183,6 +185,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetFloat("_MainUseVertexColorAlpha", vertex.MultiplyAlpha ? Mathf.Clamp01(vertex.AlphaAmount) : 0f);
             material.SetFloat("_MainVertexColoringLinearSpace", vertex.SrgbData ? 1 : 0);
             WriteTileDiscard(output.Render.HiddenTiles, material);
+            WriteAOBlocker(output.Render.AOBlocker, material);
             WriteLighting(output.Lighting, material);
             WriteMatcaps(output, material);
             WriteRims(output, material);
@@ -1440,6 +1443,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // UV Tile Discard (vertex mode: a triangle with a vertex in a hidden tile is hidden; never
         // outside the 4 × 4 grid) for both sides, and Face Discard for one side, which needs the
         // first one's keyword.
+        // World AO Blocker: depth only for triangles in the tile left of the default one, on its
+        // UV channel.
+        private static void WriteAOBlocker(AtlasAOBlocker blocker, Material material)
+        {
+            material.SetFloat("_RenderingAOBlockerEnabled", blocker != null ? 1 : 0);
+            material.SetFloat("_RenderingAOBlockerUVChannel", blocker != null ? Mathf.Clamp((int)(blocker.Space - AtlasTextureSpace.UV0), 0, 3) : 0);
+            material.SetFloat("_RenderingAOBlockerFlipNormal", blocker != null && blocker.FlipNormal ? 1 : 0);
+        }
+
         private static void WriteTileDiscard(List<AtlasTileDiscard> hidden, Material material)
         {
             var both = hidden.FirstOrDefault(t => t.Faces == AtlasFaces.Both);

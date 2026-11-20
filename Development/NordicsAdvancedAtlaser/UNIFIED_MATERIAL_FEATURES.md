@@ -1353,6 +1353,11 @@ flip their normal, so they light like front faces). Also:
     its alpha.
 - **Depth prepass**: a depth-only pass first, so a see-through surface
   shows only its nearest layer.
+- **World AO blocker**: triangles with a vertex whose UV (on a chosen channel, UV0 to UV3)
+  lies inside the tile left of the default one (U −1 to 0, V 0 to 1, edges excluded) render
+  only to depth, so screen-space effects such as ambient occlusion treat them as solid while
+  they stay invisible; *flip normal* flips their normals in depth-normal passes (scriptable
+  render pipelines only). Poiyomi from 9.2.
 - **Clock**: time for animation and modulators is the local clock or
   VRChat's network time, the same for every viewer (Poiyomi 11's default).
 - **Second pass** (Poiyomi's Two Pass): the whole surface drawn again

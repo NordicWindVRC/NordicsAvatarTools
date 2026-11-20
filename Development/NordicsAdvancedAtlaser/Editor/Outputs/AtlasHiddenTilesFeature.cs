@@ -20,6 +20,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly List<AtlasPreservedUV> PreservedUVs = new List<AtlasPreservedUV>();
         // Triangles with a vertex in one of these tiles (hidden on both sides) are left out.
         public readonly List<AtlasTileDiscard> RemovedTiles = new List<AtlasTileDiscard>();
+        // World AO blocker: triangles with a vertex in its tile (AtlasAOBlockerFeature.InTile) on
+        // this UV channel are left out; −1: none.
+        public int RemoveBlockerChannel = -1;
+        // World AO blocker: triangles with a vertex in its tile on UV0 keep their UV0 as it is, so
+        // the output's blocker on UV0 still hides them.
+        public bool KeepBlockerTile;
     }
 
     // Hidden UV tiles (ATLAS_OUTPUT.md, "UV channels"): triangles a source hides by their UV tile

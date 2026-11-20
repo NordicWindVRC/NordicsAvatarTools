@@ -186,6 +186,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Hides UV tiles on both sides (Poiyomi's UV tile discard), and on one chosen side.
         public bool TileDiscard;
         public bool FaceTileDiscard;
+        // The world AO blocker, on a UV channel it's told.
+        public bool AOBlocker;
         // How many UV channels after UV0 the output's features can read (preserved UVs).
         public int UVChannels;
         // The writer shades only through a ramp texture: a ramp described otherwise (bands,

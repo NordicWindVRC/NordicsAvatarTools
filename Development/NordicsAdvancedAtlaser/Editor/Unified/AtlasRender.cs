@@ -132,6 +132,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly AtlasPassSettings Pass = new AtlasPassSettings();
     }
 
+    // 6: triangles with a vertex whose UV (on Space) lies inside the tile left of the default one
+    // (U −1 to 0, V 0 to 1, edges excluded) render only to depth (the shadow and depth passes), so
+    // screen-space effects such as ambient occlusion treat them as solid while they stay
+    // invisible. FlipNormal flips their normals in depth-normal passes, which only scriptable
+    // render pipelines draw.
+    public sealed class AtlasAOBlocker
+    {
+        public AtlasTextureSpace Space = AtlasTextureSpace.UV0;
+        public bool FlipNormal;
+    }
+
     public sealed class AtlasRender
     {
         public AtlasSurfaceMode SurfaceMode = AtlasSurfaceMode.Opaque;
@@ -160,6 +171,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly AtlasSecondPass SecondPass = new AtlasSecondPass();
         // A depth-only pass first, so a see-through surface shows only its nearest layer.
         public bool DepthPrepass;
+        // The world AO blocker; null: off.
+        public AtlasAOBlocker AOBlocker;
         // Outputs only (see AtlasFallbackShader).
         public AtlasFallbackShader Fallback = AtlasFallbackShader.Automatic;
     }

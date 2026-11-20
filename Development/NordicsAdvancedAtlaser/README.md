@@ -213,6 +213,10 @@ its UV space. For the details, see `UNIFIED_MATERIAL.md` (the description of a m
      - **Hidden UV Tiles** (Poiyomi's UV tile discard): *Kept live* (the atlas material hides
        the same tiles, read from a spare UV channel the build writes), *Removed from the mesh*
        (any output shader; only tiles hidden on both sides), or *Off*.
+     - **World AO Blocker** (Poiyomi's): invisible geometry that blocks the world's ambient
+       occlusion. *Kept live* on Poiyomi (the build leaves those triangles where the atlas
+       material's blocker finds them), *Removed from the mesh* (the default on Mobile Toon
+       Standard, which has no blocker), or *Off* (shown).
      - **Vertex Colors**: *Kept on the mesh* (the atlas material multiplies by them as the
        sources did; the build rewrites each material's vertex colors to match, white where a
        material didn't use them), *Baked into the textures*, or *Off*. Masks that read vertex

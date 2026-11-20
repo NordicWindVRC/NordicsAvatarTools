@@ -103,8 +103,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 d.ColorAdjustments.Add(new AtlasColorAdjustment { Target = AtlasAdjustmentTarget.Emission, Operation = AtlasColorOperation.Brightness, Amount = Mathf.Max(0f, emission) });
             if (final != 1f)
                 d.ColorAdjustments.Add(new AtlasColorAdjustment { Target = AtlasAdjustmentTarget.FinalColor, Operation = AtlasColorOperation.Brightness, Amount = Mathf.Max(0f, final) });
+            // World AO Blocker (from 9.2): the tile left of the default one on its UV channel.
             if (On(m, "_RenderingAOBlockerEnabled"))
-                d.Report(AtlasIssueKind.Note, "world.ao-blocker", "The world AO blocker is a world feature and is ignored.");
+                d.Render.AOBlocker = new AtlasAOBlocker
+                {
+                    Space = AtlasTextureSpace.UV0 + Mathf.Clamp(Int(m, "_RenderingAOBlockerUVChannel", 0), 0, 3),
+                    FlipNormal = On(m, "_RenderingAOBlockerFlipNormal")
+                };
         }
     }
 }

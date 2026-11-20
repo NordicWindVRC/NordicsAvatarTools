@@ -47,6 +47,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                                 {
                                     remapTarget.PreservedUVs.AddRange(remap.PreservedUVs);
                                     remapTarget.RemovedTiles.AddRange(remap.RemovedTiles);
+                                    remapTarget.RemoveBlockerChannel = remap.RemoveBlockerChannel;
+                                    remapTarget.KeepBlockerTile = remap.KeepBlockerTile;
                                 }
                                 targets[source.Input.SourceMaterial] = remapTarget;
                                 index++;
@@ -91,6 +93,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     context.Diagnostics.Add($"{clamped.Key.name}: {clamped.Value} triangle(s) straddle a UV tile edge and were clamped into the atlas region.");
                 foreach (var removed in result.Removed)
                     context.Diagnostics.Add($"{removed.Key.name}: {removed.Value} triangle(s) in hidden UV tiles removed from the mesh.");
+                foreach (var removed in result.RemovedBlockers)
+                    context.Diagnostics.Add($"{removed.Key.name}: {removed.Value} world AO blocker triangle(s) removed from the mesh.");
             }
         }
 

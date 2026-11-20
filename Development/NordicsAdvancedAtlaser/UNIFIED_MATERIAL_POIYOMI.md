@@ -445,8 +445,8 @@ So the unified lighting needs:
   - Stencils for the base and outline.
   - World AO blocker.
 - **Unified:** render: surface mode, which gains *additive* and *multiplicative*; culling;
-  depth; stencil; fog; two-sided lighting. Raw blend factors are kept only when they don't
-  match a named surface mode.
+  depth; stencil; fog; two-sided lighting; the world AO blocker (its UV channel and flip normal).
+  Raw blend factors are kept only when they don't match a named surface mode.
 
 ## Lil Fur (variants Lil Fur and Lil Fur Two Pass)
 
@@ -765,7 +765,7 @@ blend operation: Max, Poiyomi's default (10's too), makes additional lights comb
 brighter, with the forward-add transparency boost; Add with factors other than the preset's,
 or another operation, is reported. The time source (VRChat network time). Early Z as a depth
 prepass. The Deliot-Heitz density on stochastic textures. Shading turned off reads as unlit,
-with a note. Parallax curvature and the world AO blocker (a world feature) are reported.
+with a note. Parallax curvature is reported.
 
 ## Parser
 

@@ -17,6 +17,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly List<AtlasPreservedUV> PreservedUVs = new List<AtlasPreservedUV>();
         // Triangles with a vertex in one of these tiles are left out (Hidden UV tiles, removed).
         public readonly List<AtlasTileDiscard> RemovedTiles = new List<AtlasTileDiscard>();
+        // World AO blocker triangles (a vertex in AtlasAOBlockerFeature.InTile on this channel)
+        // are left out; −1: none.
+        public int RemoveBlockerChannel = -1;
+        // World AO blocker triangles on UV0 keep their UV0, so the output's blocker hides them.
+        public bool KeepBlockerTile;
     }
 
     public sealed class AtlasRemapResult
@@ -29,6 +34,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public int SplitVertices;
         // Triangles left out because they lie in hidden UV tiles, per source material.
         public readonly Dictionary<Material, int> Removed = new Dictionary<Material, int>();
+        // World AO blocker triangles left out, per source material.
+        public readonly Dictionary<Material, int> RemovedBlockers = new Dictionary<Material, int>();
     }
 
     // The mesh remapper (ATLAS_OUTPUT.md, "Mesh remapper"): a new mesh with each source's UV0
@@ -56,6 +63,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             public AtlasRemapTarget Target;
             public Vector2 Shift;
             public bool Clamp;
+            // A world AO blocker vertex: its UV0 stays as it is.
+            public bool Keep;
         }
 
         // Null when no submesh of the mesh uses a source material.
@@ -137,7 +146,25 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             result.Removed[materials[s]] = removed + 1;
                             continue;
                         }
+                        if (target.RemoveBlockerChannel >= 0 &&
+                            UVs(mesh, target.RemoveBlockerChannel, channelUVs) is List<Vector4> blockerUVs &&
+                            (AtlasAOBlockerFeature.InTile(blockerUVs[source[i]]) || AtlasAOBlockerFeature.InTile(blockerUVs[source[i + 1]]) ||
+                             AtlasAOBlockerFeature.InTile(blockerUVs[source[i + 2]])))
+                        {
+                            result.RemovedBlockers.TryGetValue(materials[s], out int removed);
+                            result.RemovedBlockers[materials[s]] = removed + 1;
+                            continue;
+                        }
                         Vector2 a = uv0[source[i]], b = uv0[source[i + 1]], c = uv0[source[i + 2]];
+                        // A world AO blocker triangle on UV0 stays in its tile, where the output hides it.
+                        if (target.KeepBlockerTile &&
+                            (AtlasAOBlockerFeature.InTile(a) || AtlasAOBlockerFeature.InTile(b) || AtlasAOBlockerFeature.InTile(c)))
+                        {
+                            var keep = new VertexUse { Target = target, Keep = true };
+                            for (int k = 0; k < 3; k++)
+                                kept.Add(Resolve(new VertexKey { Vertex = source[i + k], Group = group, TileX = int.MinValue, TileY = int.MinValue }, keep));
+                            continue;
+                        }
                         // A triangle within one UV tile moves into 0–1 by whole tiles; one that
                         // straddles a tile edge is clamped.
                         int tileX = Mathf.FloorToInt(Mathf.Min(a.x, Mathf.Min(b.x, c.x)));
@@ -339,7 +366,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             for (int i = 0; i < origin.Count; i++)
             {
                 var uv = source[origin[i]];
-                if (uses != null && uses[i].Target != null)
+                if (uses != null && uses[i].Target != null && !uses[i].Keep)
                 {
                     var use = uses[i];
                     var moved = new Vector2(uv.x, uv.y) + use.Shift;

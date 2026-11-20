@@ -805,7 +805,7 @@ allocator (see [*Masks*](#masks)). *Merge* uses the strategies above.
 | **Surface mode and render queue** | 6 | 1. Automatic: the most see-through mode among the sources that the output supports (opaque, cutout, dithered, transparent, fade, in that order). When transparent or fade sources mix with others, a **fade with depth writes** (Poiyomi's TransClipping): the solid parts, at alpha 1, sort like opaque ones and the transparent sources keep their alpha; a plain blended mode would make the whole avatar sort wrongly. An output that can't do that gets the most see-through of the other sources' modes, and the transparent sources are drawn solid (alpha 1), never cut or dithered. A source whose alpha is turned off counts as opaque<br>2. A chosen mode, including *Fade with Depth* | — | Always on. The queue follows the mode (the writer's queue for it); a queue override isn't there yet. Additive, multiplicative and custom blends aren't merged yet: their sources count as opaque |
 | **Fallback shader** | 6 (not typed) | 1. Automatic: the writer's choice<br>2. Toon, Unlit, Standard or Hidden | — | Always on, where the writer sets one. The writer follows the surface mode and culling (Poiyomi: `VRCFallback`, such as `ToonCutout` or `ToonFadeDoubleSided`) |
 | **Hidden UV tiles** | 6 tile discard | 1. Live<br>2. Removed from the mesh<br>3. Off | a preserved UV channel, live | *Live*: each source's UVs (in its tiles' channel) go into a UV channel the allocator gives, moved by whole tiles where the output would hide them differently; a tile keeps its number where the sources agree, so animated tile toggles keep their meaning there. Sources without hidden tiles get UVs outside the 4 × 4 grid. One side can be hidden live where the output has it (Poiyomi's Face Discard); a second side is listed. *Removed*: the remap leaves out the triangles with a vertex in a tile hidden on both sides, on any output; one-sided tiles are listed. *Off*: shown |
-| **World AO blocker** | 6 render (to be typed; the Poiyomi parser ignores it today) | 1. On<br>2. Off | — | One switch for the whole material. Offered when a source uses it and the output supports it; the user chooses. See below |
+| **World AO blocker** | 6 render, world AO blocker | 1. Kept live (where the output has one)<br>2. Removed from the mesh<br>3. Off | a preserved UV channel, when a source's blocker reads UV1 to UV3 | One switch for the whole material (`AtlasAOBlockerFeature`). See below |
 
 **Ambient occlusion baked into color.** Native occlusion darkens ambient light and
 reflections, not direct light (2.4), so multiplying the color by the occlusion map would
@@ -816,12 +816,21 @@ only by the source's *occlusion: direct* amount. Texels facing the key light kee
 their brightness; creases facing away get the full darkening. A strength blends the result
 in, and a source's occlusion tint (2.4) colors the darkening.
 
-**World AO blocker.** Triangles whose UVs lie in the tile left of the default one (U −1 to
-0, V 0 to 1) render to depth only. Screen-space effects that read depth, such as ambient
-occlusion, treat them as solid, while they stay invisible. When it is on, it reads the tile
-from a preserved UV channel, or from UV0, where the remap leaves those triangles in their
-tile: clamping or remapping them into the atlas would make them visible. When it is off, they
-render like any other triangle, as they would in the source shader without the option.
+**World AO blocker.** Triangles with a vertex whose UV lies inside the tile left of the
+default one (U −1 to 0, V 0 to 1, edges excluded) render to depth only (Poiyomi from 9.2, on
+UV0 to UV3). Screen-space effects that read depth, such as ambient occlusion, treat them as
+solid, while they stay invisible.
+- *Kept live*, where the output has a blocker: when every source's blocker reads UV0, the
+  output's does too, and the remap leaves those triangles' UV0 in their tile; moving them into
+  the atlas would make them visible. Otherwise each source's blocker channel goes into a free UV
+  channel the output reads, with (0, 0) for the other sources. Without a free channel, blockers
+  on UV0 stay live and the others are removed from the mesh, listed. *Flip normal* only changes
+  depth-normal passes, which VRChat's built-in pipeline doesn't draw; it's kept where any source
+  sets it.
+- *Removed from the mesh*, on any output and the default where the output has no blocker: the
+  triangles stay invisible but no longer block.
+- *Off*: they render like any other triangle, as they would in the source shader without the
+  option.
 
 ### Later phases
 
@@ -1087,8 +1096,9 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
   rig, when the output has no occlusion map. Occlusion generated from the mesh is not planned.
 - **Memory:** GPU memory of the compressed textures, for PC and Android, per texture and in
   total per material.
-- **World AO blocker:** typed as a render feature, one switch for the whole material, offered
-  when a source uses it and the output supports it. The UV remap keeps its tile when it's on.
+- **World AO blocker:** typed as a render feature, one switch for the whole material, kept live
+  where the output supports it (the UV remap keeps its tile), and otherwise removed from the
+  mesh by default, since showing the triangles would make invisible geometry visible.
 - **Input reports:** the input parsers' *unmapped* lines are logged only with the debug
   setting, not in normal builds.
 - **Vertex colors:** when a source uses them, the user chooses to keep them live, bake them

@@ -101,6 +101,79 @@ namespace NordicWind.AdvancedAtlaser.Tests
             AssertUV(uv[1] + new Vector2(10f, 0f), preserved[corner], "the source UV, converted");
         }
 
+        private static AtlasUnifiedMaterial Blocking(AtlasTextureSpace space)
+        {
+            var material = new AtlasUnifiedMaterial();
+            material.Render.AOBlocker = new AtlasAOBlocker { Space = space };
+            return material;
+        }
+
+        // The world AO blocker: kept live on UV0 where the output has one (its triangles stay in
+        // their tile), on a free UV channel when a source reads another, removed elsewhere.
+        [Test]
+        public void TheWorldAOBlockerIsKeptLiveOrRemoved()
+        {
+            Assert.IsTrue(AtlasAOBlockerFeature.InTile(new Vector2(-0.5f, 0.5f)));
+            Assert.IsFalse(AtlasAOBlockerFeature.InTile(new Vector2(0.5f, 0.5f)), "the default tile");
+            Assert.IsFalse(AtlasAOBlockerFeature.InTile(new Vector2(-1f, 0.5f)), "on the edge");
+
+            var poiyomi = AtlasShaderRegistry.Output("poiyomi10").Capabilities;
+            var job = Job(Blocking(AtlasTextureSpace.UV0), Blocking(AtlasTextureSpace.UV0), new AtlasUnifiedMaterial());
+            var plan = AtlasOutputPipeline.Resolve(job, poiyomi);
+            Assert.AreEqual(AtlasTextureSpace.UV0, plan.Output.Render.AOBlocker.Space);
+            Assert.IsTrue(plan.SourceRemaps[0].KeepBlockerTile);
+            Assert.IsTrue(plan.SourceRemaps[1].KeepBlockerTile);
+            Assert.IsFalse(plan.SourceRemaps.ContainsKey(2) && plan.SourceRemaps[2].KeepBlockerTile, "no blocker");
+
+            // Another channel: a free UV channel, the blocker's UVs as they are, (0, 0) for the others.
+            job = Job(Blocking(AtlasTextureSpace.UV2), new AtlasUnifiedMaterial());
+            plan = AtlasOutputPipeline.Resolve(job, poiyomi);
+            var space = plan.Output.Render.AOBlocker.Space;
+            Assert.AreNotEqual(AtlasTextureSpace.UV0, space);
+            int channel = space - AtlasTextureSpace.UV0;
+            var own = plan.SourceRemaps[0].PreservedUVs.Single(p => p.Channel == channel);
+            Assert.AreEqual(2, own.SourceChannel);
+            var other = plan.SourceRemaps[1].PreservedUVs.Single(p => p.Channel == channel);
+            AssertUV(Vector2.zero, other.Convert(new Vector2(-0.5f, 0.5f)), "outside the tile");
+
+            // Toon Standard has none: removed from the mesh.
+            plan = AtlasOutputPipeline.Resolve(Job(Blocking(AtlasTextureSpace.UV1)), AtlasShaderRegistry.Output("mobiletoon").Capabilities);
+            Assert.IsNull(plan.Output.Render.AOBlocker);
+            Assert.AreEqual(1, plan.SourceRemaps[0].RemoveBlockerChannel);
+        }
+
+        [Test]
+        public void TheRemapKeepsOrRemovesWorldAOBlockerTriangles()
+        {
+            var a = AtlasTestMaterials.Standard();
+            var output = AtlasTestMaterials.Standard();
+            var mesh = new Mesh();
+            created.AddRange(new Object[] { a, output, mesh });
+            // A quad in the default tile and one in the blocker's tile.
+            var quad = new[] { new Vector2(0.1f, 0.1f), new Vector2(0.9f, 0.1f), new Vector2(0.9f, 0.9f), new Vector2(0.1f, 0.9f) };
+            var uv = quad.Concat(quad.Select(q => q - new Vector2(1f, 0f))).ToArray();
+            mesh.vertices = uv.Select((u, i) => new Vector3(i, 0f, 0f)).ToArray();
+            mesh.uv = uv;
+            mesh.SetTriangles(new[] { 0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7 }, 0);
+            var region = new Rect(0.5f, 0f, 0.5f, 1f);
+
+            var keep = new AtlasRemapTarget { Region = region, Output = output, KeepBlockerTile = true };
+            var result = AtlasMeshRemapper.Remap(mesh, new[] { a }, new Dictionary<Material, AtlasRemapTarget> { [a] = keep });
+            created.Add(result.Mesh);
+            var uvs = new List<Vector2>();
+            result.Mesh.GetUVs(0, uvs);
+            var triangles = result.Mesh.GetTriangles(0);
+            Assert.AreEqual(12, triangles.Length, "both quads stay");
+            AssertUV(uv[5], uvs[triangles[7]], "the blocker's UV stays in its tile");
+            AssertUV(new Vector2(0.5f + 0.9f * 0.5f, 0.1f), uvs[triangles[1]], "the other moves into the region");
+
+            var remove = new AtlasRemapTarget { Region = region, Output = output, RemoveBlockerChannel = 0 };
+            result = AtlasMeshRemapper.Remap(mesh, new[] { a }, new Dictionary<Material, AtlasRemapTarget> { [a] = remove });
+            created.Add(result.Mesh);
+            Assert.AreEqual(6, result.Mesh.GetTriangles(0).Length, "the blocker's quad is gone");
+            Assert.AreEqual(2, result.RemovedBlockers[a]);
+        }
+
         [Test]
         public void TheWritersSetTheTilesTheParsersReadBack()
         {
@@ -123,6 +196,22 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 created.Add(without);
                 shader.Write(new AtlasUnifiedMaterial(), without);
                 Assert.IsFalse(AtlasShaderRegistry.Detect(without).Parse(without).Render.HiddenTiles.Any(t => t.Tiles != 0), shader.DisplayName + ": none");
+            }
+            foreach (var shader in AtlasShaderRegistry.InstalledOutputShaders.Where(s => s.Capabilities.AOBlocker))
+            {
+                var unified = new AtlasUnifiedMaterial();
+                unified.Render.AOBlocker = new AtlasAOBlocker { Space = AtlasTextureSpace.UV2, FlipNormal = true };
+                var material = new Material(shader.FindShader());
+                created.Add(material);
+                shader.Write(unified, material);
+                var blocker = AtlasShaderRegistry.Detect(material).Parse(material).Render.AOBlocker;
+                Assert.IsNotNull(blocker, shader.DisplayName + ": the world AO blocker");
+                Assert.AreEqual(AtlasTextureSpace.UV2, blocker.Space, shader.DisplayName);
+                Assert.IsTrue(blocker.FlipNormal, shader.DisplayName);
+                var without = new Material(shader.FindShader());
+                created.Add(without);
+                shader.Write(new AtlasUnifiedMaterial(), without);
+                Assert.IsNull(AtlasShaderRegistry.Detect(without).Parse(without).Render.AOBlocker, shader.DisplayName + ": none");
             }
         }
     }
