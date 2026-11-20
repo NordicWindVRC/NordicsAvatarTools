@@ -36,6 +36,8 @@ Related documents:
   one texture section, then one section per feature with a mode and that mode's settings.
 - **The look is the benchmark.** As on the input side, a same-shader round trip (Poiyomi into
   Poiyomi) should look the same as the original for every feature the output keeps natively.
+  Where the output can't keep a feature as it is, it should still look as close as its controls
+  allow (see [*Matching the look*](#matching-the-look)).
 
 ## Current state
 
@@ -171,7 +173,7 @@ The merge strategies are shared building blocks; features combine them.
 | Strategy | When | How |
 |---|---|---|
 | **Bake** | Static content placed in UV space | Evaluated per source and blitted into its region. Always available |
-| **Shared value** | A setting that applies to the whole material | Equal values pass through. Different values: the value of the **reference source** (*Automatic*: the source with the largest region; or a chosen source, in a drop-down under the feature that appears only when the sources need different values on the output), or the largest or average where the feature says so |
+| **Shared value** | A setting that applies to the whole material | Equal values pass through. Different values: the value of the **reference source** (*Automatic*: the value that changes the sources' look least where the feature can draw it, as lighting and reflectance do (see [*Matching the look*](#matching-the-look)), otherwise the source with the largest region; or a chosen source, in a drop-down under the feature that appears only when the sources need different values on the output), or the largest or average where the feature says so |
 | **Spatial value** | A setting that differs between sources and the output has a map for | Written per region into a map (for example roughness constants into a roughness map) |
 | **Strength in mask** | A difference that only scales a feature's opacity or strength | Written into the feature's mask: 0 where a source lacks the feature, its strength where it has it |
 | **Slots** | Countable instances: matcaps, rims, decals, outlines | Instances with the same configuration share one slot, told apart by the mask. The user places each instance (*Automatic*, its own slot, combined with another, off), in a list under the feature shown while there is more than one; *Automatic* combines what doesn't fit into the most similar slot and the build log says so |
@@ -200,6 +202,116 @@ It isn't shown when the values agree, or when the output shader has no setting f
 work the same way, as a switch under the feature shown only while the sources disagree
 (`IAtlasConflictSwitchFeature`), stored in the feature's values by switch ID. Alpha to
 coverage is one: on or off for every cutout part.
+
+## Matching the look
+
+A feature is finished when the atlased avatar looks like the original, not when its values are
+copied. This section collects how features get there and what comparing builds with their
+originals has shown; new features and fixes follow it.
+
+### Principles
+
+- **Approximate the intent, don't drop it.** Where the output can't do a source's math, the
+  feature is expressed with the output's own controls: blends it lacks become the nearest it
+  has, a glow it can't show becomes added color, a clear coat becomes gloss, strengths without
+  a setting go into one it has. An approximation that still gives the effect is closer to the
+  original than nothing. Modes that don't give the effect at all aren't offered (see
+  [*Decisions*](#decisions)), and what is approximated is listed in the build log.
+- **General rules only.** A fix found on one avatar must hold for every material and avatar.
+  Each rule comes from a shader's source or the unified model. A heuristic (scenes, weights,
+  thresholds) has a reason that holds for any material and isn't tuned to one avatar's numbers;
+  where it could choose differently elsewhere, its comment says so. Tests use synthetic
+  materials that cover several cases (dark and bright, masked, blended, mixed), not copies of
+  one avatar's values.
+- **Sources, not memory.** What a shader does is read in its source, for each version it
+  applies to. A missing source is named, not guessed.
+- **Exact where the output can be exact.** A source the output can reproduce gets its exact
+  values, so same-shader round trips stay unchanged. Approximation starts only where the output
+  lacks something.
+- **No silent choices.** Where sources need different values, the automatic choice is a
+  default the user can change (see [*Decisions*](#decisions)), and the log says what it chose
+  and which sources would need something else.
+
+### Fitting what the output lacks
+
+A shared value, or a setting the output lacks, is chosen by how the result looks:
+
+1. Each source is drawn twice with the **output's own response**: with its own settings, and
+   with the candidate value and only what the output keeps. Drawing both sides with the
+   output's response leaves only the missing part to differ, and a source the output can
+   reproduce costs nothing, so its exact value wins.
+2. The results are compared as **displayed (sRGB) colors** in a few standard scenes (a bright
+   and a dim main light, each with ambient), over the light and view angles, on the source's own
+   base colors (`AtlasSourceSamples`, 4 × 4 samples). Displayed colors count what the eye sees:
+   linear ones would overweight bright parts, and dark sources show differences less.
+3. The cost is the sum over the sources of **area × the mean absolute difference**. Absolute
+   differences make the result follow the source whose look changes most with the value,
+   rather than averaging two looks into one that matches neither.
+4. What doesn't depend on the candidate is computed once per source, so the fit stays fast
+   enough for the inspector.
+
+| Fit | What it chooses | Where |
+|---|---|---|
+| Automatic lighting | One lighting setup among the sources' | `AtlasLightingResponse` |
+| Reflectance | Toon Standard's `_Reflectance`, carrying the highlight and reflection strengths it has no settings for | `AtlasSpecularResponse` |
+| Matcap glow | A combined slot's one glow strength, by least squares over the sources' texels when the material is written | `AtlasMatcapFeature` |
+| Matcap blends | A slot's strength and base color for blends it lacks, from Poiyomi's chain with black and white textures | `AtlasMatcapFeature` |
+| Band rims | Another rim's midpoint and rise on a writer whose rim is a band | `AtlasRimCurve` |
+
+### Reading intent from content
+
+A setting doesn't always say what it's for. Where the purpose changes the result, the content
+is measured as the output will use it:
+- **What a texture shows where it's used.** Matcaps are sampled through the lookup disc with
+  their texture's scale and offset, as the slot reads them. One that changes nothing (black
+  where it adds, white where it multiplies) is left out, which frees a slot.
+- **Effect or environment.** A matcap with half its light in its brightest tenth, or the
+  reflection projection, is an effect (shine, glints) and keeps a slot of its own. Soft
+  shading can be combined. When slots run out, the weakest effects go first.
+- **Visibility, not counts.** Priorities and shares weigh what shows: area × the blend's effect
+  × the mask's average × the base color mix's darkening.
+
+### Versions
+
+A shader's settings can change meaning between versions under the same names: Poiyomi 10.0.26
+to 10.0.29 multiply the direct highlights by π, the versions before and Poiyomi 11 don't, and
+Poiyomi's upgrader doesn't convert old materials. So:
+- each unified value has one convention, stated where it's declared (`AtlasHighlights.Strength`
+  is without π);
+- parsers and writers convert by the full version in the shader's master label, which locking
+  keeps (`AtlasPoiyomiVersionDetector`). A locked material keeps the version it was locked
+  with, which can differ from the installed one the writer targets;
+- version handling is added only where the sources show which version changed. Versions outside
+  the checked range, and unknown versions, are noted rather than guessed.
+
+### What reads a value
+
+- **A value can feed several features.** Poiyomi's Multilayer Math builds its own half-Lambert
+  terms, but the light map it bypasses still drives the specular attenuation and the light
+  masks; replacing the light map for the bands made those stronger in shadow. A feature that
+  needs a value of its own gets a field (`AtlasRampToon.BandsOwnTerm`) instead of overwriting one
+  that others read.
+- **Transforms belong to the texture.** A texture's scale, offset and pan are applied in the
+  shader's order (Poiyomi's matcap adds the pan before the scale and offset). An output slot
+  without them gets a generated texture with them applied.
+- **A shared slot shows on all its members' parts.** A combined texture is seen wherever the
+  slot's mask reaches, so only what tolerates that is combined (environment matcaps, shared by
+  visibility); effects whose highlights would move aren't.
+- **Inputs aren't always readable as stored.** Crunched or unreadable textures are read through
+  the GPU (Texture Wrapper).
+
+### Checking a build against the original
+
+1. Build each output and compare it with the original avatar in the same scene and light, from
+   several angles: highlights, fresnel and matcaps differ only at some.
+2. Isolate the difference: turn features off in the generated material (normal maps,
+   specular, one matcap slot at a time) until it goes. Turning the atlas off tells the mesh
+   from the material.
+3. Compare the generated material's values with the sources', and work out from both shaders'
+   sources what each does with them. A missing factor or a capped value shows in the numbers
+   before it shows in a screenshot.
+4. Fix the rule, not the value: state the fix for all materials, cover it with synthetic
+   materials in the tests, and record it here or in the feature's row.
 
 ---
 
@@ -903,6 +1015,11 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
   allow.
 - **Bakes:** small synthetic meshes (a quad, a sphere, mirrored halves) give the expected
   values at known texels.
+- **Fits:** a source the output can reproduce gets its exact value back; a fit with nothing
+  missing finds that same value; a weaker setting gives the expected direction (weaker
+  highlights, a lower reflectance); shared values follow the source whose look changes most.
+- **Versions:** where a convention depends on the version, the rule is tested at its edges
+  (the last version before a change, the first with it, and the next major version).
 
 ---
 

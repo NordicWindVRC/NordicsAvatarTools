@@ -16,6 +16,9 @@
   - unit tests for allocators, packing and evaluators;
   - round trips (parse, write, parse, compare) for what a writer maps natively;
   - small synthetic meshes for bakes and the remapper.
+- **A feature is done when it looks right**: a build on both writers is compared with the
+  original avatar, as the design's *Matching the look* describes, and what that turns up is
+  fixed as a general rule with tests, not tuned to the test avatar.
 - **Settings change freely until the first release.** The Atlaser isn't released yet, so
   changes to the serialized output settings need no migration.
 
