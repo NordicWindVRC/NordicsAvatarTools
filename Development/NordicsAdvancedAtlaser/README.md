@@ -147,7 +147,7 @@ its UV space. For the details, see `UNIFIED_MATERIAL.md` (the description of a m
        (*Classic*: the key light from one side, the fill from the other; *Symmetric*: every
        light centered, so both halves of the avatar match; materials whose UVs overlap, such
        as mirrored halves, always use it), an overall strength, how much of the lights' color
-       is baked, a strength per bake (*Normal-Map Shading*), and each light's intensity, color
+       is baked, a strength per bake (*Normal-Map Shading*, *Occlusion*), and each light's intensity, color
        temperature and softness. Baked shading follows the surface around the avatar, so
        detail on the sides and back reads like detail on the front.
      - **Reflection and Specular**: each source's metallic and roughness in maps, and how
@@ -165,7 +165,11 @@ its UV space. For the details, see `UNIFIED_MATERIAL.md` (the description of a m
        Toon Standard has no coat; *Into the gloss map* makes the coated parts as glossy as
        their coat instead, so they keep its sharp highlights and reflections.
      - **Ambient Occlusion**: each source's occlusion map, at its strength; sources without
-       one stay unoccluded.
+       one stay unoccluded. *Baked into color* saves the occlusion map: its darkening goes into
+       the base color, as strongly as the source's shader lets occlusion darken the light
+       (Toon Standard darkens all of it, Poiyomi only the ambient light on the shadow side),
+       and into the reflection mask where the output has one. It's the default on an output
+       shader without an occlusion map.
      - **Detail Texture** and **Detail Normal**: a detail texture or detail normal tiled over
        a material stays sharp: the atlas material samples it through a spare UV channel the
        build writes with each material's own tiling, instead of baking it into the atlas at

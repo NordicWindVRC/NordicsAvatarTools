@@ -8,6 +8,14 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Ambient occlusion baked into color:** *Ambient Occlusion* has a *Baked into color* mode. No
+  occlusion map is made; each source's base color is darkened by its occlusion × the share of
+  the light its shader lets occlusion darken (the rig's direct and ambient light by the
+  source's occlusion amounts, averaged over every direction a surface can face), toward its
+  occlusion tint, with multi-bounce where the source has it (`AtlasOcclusionShading`).
+  Reflections are multiplied by the occlusion in the reflection mask, highlights kept apart. A
+  new *Occlusion* strength in the *Baking* section. It's the default on outputs without an
+  occlusion map.
 - **Baking toolkit, groundwork:** the virtual light rig (`AtlasLightRig`: key, fill and back
   lights and a sky and ground ambient, classic or symmetric, each light's role weights, color
   temperature, softness as diffuse wrap and angular size, and the color influence), the

@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is done; 2.9 is done; 2.8a and 2.8b are done, 2.8c is next, and 2.8 completes milestone 2 (done after 2.9: both outputs light and have the maps 2.8's bakes stand in for, so 2.8 matters first where the user turns maps off). It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is done; 2.9 is done; 2.8a to 2.8c are done, 2.8d is next, and 2.8 completes milestone 2 (done after 2.9: both outputs light and have the maps 2.8's bakes stand in for, so 2.8 matters first where the user turns maps off). It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -329,8 +329,11 @@ the base color × `lerp(1, shade(N mapped) / shade(N mesh), strength)` under the
 diffuse terms, the rig turned with each texel's view and tilted onto its surface, symmetric for sources with overlapping
 UVs, mirrored halves shaded apart and averaged (`AtlasNormalShading`).
 
-**2.8c Occlusion into color.** The occlusion map turned off: the ambient term and reflections
-darkened by it, direct light by the source's *occlusion: direct*.
+**2.8c Occlusion into color (done).** *Ambient Occlusion: Baked into color*: no occlusion map;
+the base color × `1 − (1 − tint) × darkening`, the darkening by the shares of the rig's
+direct and ambient light the source's occlusion darkens, averaged over every direction a
+surface can face (multi-bounce on the ambient part where the source has it); reflections ×
+occlusion in the reflection mask, highlights kept apart (`AtlasOcclusionShading`).
 
 **2.8d Full light and form shading (design first).** The lit color for unlit outputs and the
 form shading for flatly lit ones, with each source's lighting family and surface response;

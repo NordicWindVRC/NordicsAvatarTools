@@ -330,8 +330,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // Ambient occlusion (ATLAS_OUTPUT.md, "Feature inventory"): each source's occlusion,
     // 1 − (1 − map) × strength, baked into the output's occlusion map, drawn at strength 1. Sources
     // without one are unoccluded.
-    public sealed class AtlasOcclusionFeature : IAtlasOutputFeature
+    // Baked into color: no occlusion map; the darkening it would give under the virtual light
+    // rig is baked into the base color (AtlasOcclusionShading), and its darkening of reflections
+    // into the reflection mask where the output has one.
+    public sealed class AtlasOcclusionFeature : IAtlasOutputFeature, IAtlasLitBakeFeature
     {
+        public static readonly AtlasFeatureMode Baked = new AtlasFeatureMode
+        {
+            Id = "baked", Label = "Baked into color", Kind = AtlasFeatureModeKind.Baked,
+            RequiredMaps = new[] { AtlasVirtualMap.BaseColor }
+        };
+
         private static readonly AtlasFeatureMode[] ModeList =
         {
             new AtlasFeatureMode
@@ -339,8 +348,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Id = "native", Label = "Occlusion map", Kind = AtlasFeatureModeKind.Native,
                 RequiredMaps = new[] { AtlasVirtualMap.Occlusion }
             },
+            Baked,
             AtlasFeatureMode.Off
         };
+
+        public AtlasLitBake? LitBake(AtlasFeatureMode mode) => mode == Baked ? AtlasLitBake.Occlusion : (AtlasLitBake?)null;
 
         public string Id => "occlusion";
         public string DisplayName => "Ambient Occlusion";
@@ -353,6 +365,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public void Resolve(AtlasFeatureContext context)
         {
             var active = new HashSet<int>(context.Sources);
+            if (active.Any(i => !AtlasMapEvaluator.CanEvaluate(context.Job.Sources[i].Material.Surface.Response.Occlusion, context.Job.Sources[i].Material)))
+                context.Notes.Add("An occlusion map on another UV, remapped or on a global mask written by layers or the second pass isn't baked yet; it's left out.");
+            if (context.Mode == Baked)
+            {
+                BakeIntoColor(context, active);
+                return;
+            }
             var occlusion = context.Output.Surface.Response.Occlusion;
             occlusion.Constant = 1f;
             occlusion.Combine = AtlasScalarCombine.StrengthAroundOne;
@@ -361,8 +380,107 @@ namespace NordicWind.AdvancedAtlaser.Editor
             int live = AtlasLiveMasks.Split(context, "occlusion", "ambient occlusion", AtlasLiveMasks.Request(context, AtlasVirtualMap.Occlusion),
                 i => AtlasLiveMasks.Of(context.Job.Sources[i].Material.Surface.Response.Occlusion));
             if (live >= 0) AtlasLiveMasks.Read(occlusion, live);
-            if (active.Any(i => !AtlasMapEvaluator.CanEvaluate(context.Job.Sources[i].Material.Surface.Response.Occlusion, context.Job.Sources[i].Material)))
-                context.Notes.Add("An occlusion map on another UV, remapped or on a global mask written by layers or the second pass isn't baked yet; it's left out.");
+        }
+
+        // The base color × each source's occlusion as its shader applies it, by the share of the
+        // rig's light it darkens (AtlasOcclusionShading); reflections × occlusion in the
+        // reflection mask.
+        private static void BakeIntoColor(AtlasFeatureContext context, HashSet<int> active)
+        {
+            var job = context.Job;
+            var settings = job.Baking ?? new AtlasBakeSettings();
+            float strength = Mathf.Clamp01(settings.strength) * Mathf.Clamp01(settings.occlusion);
+            if (strength <= 0f) return;
+            var request = AtlasLiveMasks.Request(context, AtlasVirtualMap.BaseColor);
+            if (request == null)
+                context.Notes.Add("Ambient occlusion is baked into the base color, which is off; its darkening of diffuse light is left out.");
+            else
+            {
+                var shares = new Dictionary<int, Vector2>();
+                foreach (int i in active)
+                {
+                    var response = job.Sources[i].Material.Surface.Response;
+                    var rig = AtlasLightRig.Create(settings, AtlasNormalFeature.UsesSymmetricRig(settings, job.Sources[i]));
+                    shares[i] = AtlasOcclusionShading.Shares(rig, response.OcclusionDirect, response.OcclusionIndirect);
+                }
+                if (active.Any(i => job.Sources[i].Material.Surface.Response.OcclusionTint?.Map?.Texture != null))
+                    context.Notes.Add("An occlusion tint texture isn't baked; its color is used.");
+                var inner = request.Evaluate ?? ((i, m, w, h) => AtlasMapEvaluator.Evaluate(AtlasVirtualMap.BaseColor, m, w, h));
+                request.Evaluate = (i, material, w, h) =>
+                {
+                    var result = inner(i, material, w, h);
+                    if (!shares.TryGetValue(i, out var share)) return result;
+                    var response = material.Surface.Response;
+                    using (var occlusion = AtlasMapEvaluator.Scalar(response.Occlusion, w, h, material))
+                    using (var metallic = response.MultiBounceOcclusion ? AtlasMapEvaluator.Scalar(response.Metallic, w, h, material) : null)
+                        AtlasOcclusionShading.Apply(result, occlusion, metallic, share,
+                            response.OcclusionTint?.Color ?? Color.black, response.MultiBounceOcclusion, strength);
+                    return result;
+                };
+            }
+            BakeIntoReflections(context, active, strength);
+        }
+
+        // Reflections × lerp(1, occlusion, the source's occlusion of reflections), in the
+        // reflection mask: its own map is multiplied (a highlight mask that read the same map gets
+        // a copy of it, since occlusion doesn't darken highlights), and one strength everywhere
+        // gets a mask that holds the occlusion alone.
+        private static void BakeIntoReflections(AtlasFeatureContext context, HashSet<int> active, float strength)
+        {
+            var job = context.Job;
+            var output = context.Output.Surface.Response;
+            var occluded = new HashSet<int>(active.Where(i =>
+            {
+                var r = job.Sources[i].Material.Surface.Response;
+                return r.OcclusionReflections > 0f && r.Reflections.Enabled && r.Reflections.Strength > 0f;
+            }));
+            if (occluded.Count == 0 || !output.Reflections.Enabled || output.Reflections.Strength <= 0f) return;
+            if (!context.Capabilities.Provides(AtlasVirtualMap.ReflectionMask))
+            {
+                context.Notes.Add($"The output has no reflection mask to bake the occlusion of reflections into; reflections stay unoccluded on {AtlasLiveMasks.Numbers(occluded)}.");
+                return;
+            }
+            NordicsTextureWrapper Factor(AtlasUnifiedMaterial m, int w, int h)
+            {
+                var map = AtlasMapEvaluator.Scalar(m.Surface.Response.Occlusion, w, h, m);
+                float amount = Mathf.Clamp01(m.Surface.Response.OcclusionReflections) * strength;
+                AtlasPixels.Map(map, c =>
+                {
+                    float f = Mathf.Lerp(1f, Mathf.Clamp01(c.r), amount);
+                    return new Color(f, f, f, 1f);
+                });
+                return map;
+            }
+            if (output.Reflections.Mask == null)
+            {
+                output.Reflections.Mask = new AtlasMask
+                {
+                    Map = AtlasSpecularFeature.Request(context, AtlasVirtualMap.ReflectionMask, occluded, 1f, Factor)
+                };
+                return;
+            }
+            var request = context.Maps.LastOrDefault(r => r.Map == AtlasVirtualMap.ReflectionMask && r.Reference == output.Reflections.Mask.Map);
+            if (request == null) return;
+            var inner = request.Evaluate;
+            if (output.Highlights.Mask?.Map == request.Reference && context.Capabilities.Provides(AtlasVirtualMap.SpecularMask))
+            {
+                var copy = new AtlasMapRequest
+                {
+                    Map = AtlasVirtualMap.SpecularMask, Evaluate = inner,
+                    Reference = new AtlasTextureReference { Interpretation = request.Reference.Interpretation }
+                };
+                copy.Sources.AddRange(request.Sources);
+                context.Maps.Add(copy);
+                output.Highlights.Mask.Map = copy.Reference;
+            }
+            request.Evaluate = (i, material, w, h) =>
+            {
+                var result = inner(i, material, w, h);
+                if (!occluded.Contains(i)) return result;
+                using (var factor = Factor(material, w, h))
+                    AtlasPixels.Map(result, factor, (c, f) => new Color(c.r * f.r, c.g * f.r, c.b * f.r, c.a));
+                return result;
+            };
         }
     }
 }

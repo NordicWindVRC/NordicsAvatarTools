@@ -309,6 +309,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             EditorGUILayout.PropertyField(baking.FindPropertyRelative("normalShading"), new GUIContent("Normal-Map Shading",
                                 "How strongly the shading of normal maps baked into color shows."));
                             break;
+                        case AtlasLitBake.Occlusion:
+                            EditorGUILayout.PropertyField(baking.FindPropertyRelative("occlusion"), new GUIContent("Occlusion",
+                                "How strongly ambient occlusion baked into color darkens it."));
+                            break;
                     }
                 if (Fold("baking.lights", "Lights", false))
                     using (new EditorGUI.IndentLevelScope())

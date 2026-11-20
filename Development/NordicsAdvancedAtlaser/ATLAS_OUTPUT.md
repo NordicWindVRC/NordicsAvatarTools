@@ -59,7 +59,7 @@ What exists today, which this design builds on:
 | Auto setup | `Editor/Outputs/AtlasOutputAutoSetup.cs`, `AtlasRegionPacker.cs` | The Auto Setup button's work for the assigned sources: regions packed by base color size, the main texture size, default modes (see [*Auto setup*](#auto-setup)) |
 | Output shader pick | `Editor/Outputs/AtlasOutputShaderPick.cs` | A new output's shader, once: the family most unused sources use, at its highest installed rank (see [*Auto setup*](#auto-setup)) |
 | Inspector | `Editor/NordicsAtlasOutputEditor.cs`, `Editor/AtlasOutputUI.cs` | Sources, UV regions, auto setup, the *Textures* section (sizes, memory, formats), the feature sections with modes and per-source switches, the *Baking* section while a feature bakes with the light rig, UV preview |
-| Baking toolkit | `Editor/Outputs/AtlasLightRig.cs`, `AtlasSurfaceShading.cs` | The virtual light rig (key, fill and back lights and a sky and ground ambient, classic or symmetric) from the output's baking settings, the virtual view, each source's current surface read when a lit bake asks for it (`AtlasSurfaceGeometry`), overlapping UVs, and normal-map shading baked into the base color (`AtlasNormalShading`) |
+| Baking toolkit | `Editor/Outputs/AtlasLightRig.cs`, `AtlasSurfaceShading.cs` | The virtual light rig (key, fill and back lights and a sky and ground ambient, classic or symmetric) from the output's baking settings, the virtual view, each source's current surface read when a lit bake asks for it (`AtlasSurfaceGeometry`), overlapping UVs, normal-map shading baked into the base color (`AtlasNormalShading`), and ambient occlusion baked into the base color and the reflection mask (`AtlasOcclusionShading`) |
 | Source analysis cache | `Editor/AtlasSourceAnalysisCache.cs` | Each source's parse, kept until the material, its shader or an imported texture or shader changes |
 | Overview | `Editor/Outputs/AtlasOutputOverview.cs`, `AtlasTextureMemory.cs` | What an output uses: features with their modes and sources, the textures they need with sizes and memory |
 | Evaluator | `Editor/Outputs/AtlasMapEvaluator.cs`, `AtlasColorStack.cs` | The bakeable subset, over a source's UV 0–1: the base color texture with its tiling, offset and rotation, its color, the static color layers (tiled UV0 textures, decals placed by center, scale and rotation, or colors, every blend, masks, source alpha as opacity) and static color adjustments on the base color, the surface color and layer sources; the static emission layers; alpha; the combined normal; scalar inputs and masks on UV0, masks with their levels and vertex colors, both reading the mask bus (`AtlasMaskBusEvaluator.cs`: texture, offset, remap and force steps; live steps at their normal-view value). Live parts, decals with symmetry, mirror sides, depth or spin, final-color adjustments are listed in the diagnostics |
@@ -739,7 +739,7 @@ needs:
 | Normal-map shading | key and fill, diffuse: detail reads evenly over the surface |
 | Highlights, glitter emulation | the specular terms |
 | Backlight, rim bakes | the back light |
-| Occlusion into color | the ambient term and reflections; direct light by the source's *occlusion: direct* |
+| Occlusion into color | the ambient and direct diffuse light by the source's occlusion amounts, averaged over every direction a surface can face; reflections in the reflection mask |
 | Subsurface | not baked (native or off) |
 
 **Influence sliders.** The *Baking* section is shown while a feature bakes with the rig
@@ -747,8 +747,8 @@ needs:
 - the rig (*Light Rig*: classic or symmetric) and an overall *Strength*; with the classic rig,
   the sources whose UVs overlap, which use the symmetric one;
 - the color influence (*Light Color*);
-- one strength per bake in use: form shading or full light, normal-map shading, highlights,
-  backlight and rims, occlusion;
+- one strength per bake in use: form shading or full light, normal-map shading
+  (*Normal-Map Shading*), highlights, backlight and rims, occlusion (*Occlusion*);
 - a *Lights* foldout with each light's intensity, temperature and softness. The directions
   stay fixed by the rig, so the symmetric rig stays symmetric.
 
@@ -854,14 +854,29 @@ allocator (see [*Masks*](#masks)). *Merge* uses the strategies above.
 | **Hidden UV tiles** | 6 tile discard | 1. Live<br>2. Removed from the mesh<br>3. Off | a preserved UV channel, live | *Live*: each source's UVs (in its tiles' channel) go into a UV channel the allocator gives, moved by whole tiles where the output would hide them differently; a tile keeps its number where the sources agree, so animated tile toggles keep their meaning there. Sources without hidden tiles get UVs outside the 4 × 4 grid. One side can be hidden live where the output has it (Poiyomi's Face Discard); a second side is listed. *Removed*: the remap leaves out the triangles with a vertex in a tile hidden on both sides, on any output; one-sided tiles are listed. *Off*: shown |
 | **World AO blocker** | 6 render, world AO blocker | 1. Kept live (where the output has one)<br>2. Removed from the mesh<br>3. Off | a preserved UV channel, when a source's blocker reads UV1 to UV3 | One switch for the whole material (`AtlasAOBlockerFeature`). See below |
 
-**Ambient occlusion baked into color.** Native occlusion darkens ambient light and
-reflections, not direct light (2.4), so multiplying the color by the occlusion map would
-darken the lit side too. Instead, the bake evaluates each source's occlusion under the virtual
-light rig, with the world normals and the virtual view. Each texel is darkened by the share of
-its light that occlusion would darken: the ambient part, the reflections, and the direct part
-only by the source's *occlusion: direct* amount. Texels facing the key light keep most of
-their brightness; creases facing away get the full darkening. A strength blends the result
-in, and a source's occlusion tint (2.4) colors the darkening.
+**Ambient occlusion baked into color** (`AtlasOcclusionShading`). Occlusion darkens what its
+shader says (2.4): Toon Standard multiplies the ambient light and the direct light's shadow
+ramp, not highlights; Poiyomi multiplies the ambient on the shadow side and the reflections,
+not the lit side. Multiplying the color by the occlusion map would darken a Poiyomi source's
+lit side too; instead, the bake darkens by the share of the light the source's occlusion
+darkens:
+- **Diffuse:** the base color × `1 − (1 − tint) × (shares.direct × (1 − o) + shares.ambient ×
+  (1 − o ambient))`, lerped from 1 by the overall strength × *Occlusion*. The shares are the
+  rig's direct light × the source's *occlusion: direct* and its ambient × *occlusion:
+  ambient*, each over their sum, averaged over every direction a surface can face (1024 evenly
+  spread): shadow sides, lit by the ambient alone, count fully. With the starting rig, that is
+  1 for Toon Standard (direct and ambient) and about 0.31 for Poiyomi (ambient only; the back
+  light counts as direct). The darkening is the same over the whole surface, so no light
+  direction is baked.
+- **Multi-bounce occlusion** (Poiyomi's PBR lighting) raises the ambient's occlusion on light
+  colors: o ambient = o × max(1, (a o + b) o + c), Jimenez et al.'s fit (2016) over the base
+  color × (1 − metallic).
+- **Tint:** a source's occlusion tint (2.4) is what full occlusion darkens toward; its color is
+  used, a tint texture is listed.
+- **Reflections:** × `lerp(1, o, occlusion: reflections)`, in the output's reflection mask: a
+  mask map of its own is multiplied; a highlight mask that read the same map gets its own copy,
+  since occlusion doesn't darken highlights; one strength everywhere gets a mask holding the
+  occlusion alone. An output without a reflection mask keeps reflections unoccluded, listed.
 
 **World AO blocker.** Triangles with a vertex whose UV lies inside the tile left of the
 default one (U −1 to 0, V 0 to 1, edges excluded) render to depth only (Poiyomi from 9.2, on

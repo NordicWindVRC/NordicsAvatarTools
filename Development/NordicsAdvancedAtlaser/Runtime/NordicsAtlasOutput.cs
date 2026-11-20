@@ -166,6 +166,8 @@ namespace NordicWind.AdvancedAtlaser
         [Range(0, 1)] public float colorInfluence = 0.25f;
         /// <summary>Normal-map shading baked into the base color.</summary>
         [Range(0, 1)] public float normalShading = 1f;
+        /// <summary>Ambient occlusion baked into the base color.</summary>
+        [Range(0, 1)] public float occlusion = 1f;
         /// <summary>The main light: the form and the main highlight.</summary>
         public AtlasBakeLight key = new AtlasBakeLight(5000f, 0.4f);
         /// <summary>Lifts the shadow side without a second highlight.</summary>

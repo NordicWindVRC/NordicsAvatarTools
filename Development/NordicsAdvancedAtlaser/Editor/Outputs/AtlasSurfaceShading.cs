@@ -237,4 +237,86 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         private static Vector3 Vector(Color c) => new Vector3(c.r, c.g, c.b);
     }
+
+    // Ambient occlusion baked into the base color (ATLAS_OUTPUT.md, "Virtual light rigs"):
+    // the base color × 1 − (1 − occlusion) × the share of the light the source's occlusion
+    // darkens. The share is averaged over every direction a surface can face under the rig, so
+    // the shadow sides, lit by the ambient alone, count fully, and no light direction is baked.
+    public static class AtlasOcclusionShading
+    {
+        // The directions the shares are averaged over, evenly spread on the sphere.
+        private const int Directions = 1024;
+
+        // The shares of the rig's diffuse light that occlusion darkens, averaged over every
+        // direction a surface can face: x, the direct light's × `direct`; y, the ambient's ×
+        // `indirect` (the source's occlusion of direct and ambient light, 0–1).
+        public static Vector2 Shares(AtlasLightRig rig, float direct, float indirect)
+        {
+            direct = Mathf.Clamp01(direct);
+            indirect = Mathf.Clamp01(indirect);
+            double directShare = 0, ambientShare = 0;
+            float golden = Mathf.PI * (3f - Mathf.Sqrt(5f));
+            for (int i = 0; i < Directions; i++)
+            {
+                float y = 1f - (i + 0.5f) * 2f / Directions, r = Mathf.Sqrt(Mathf.Max(0f, 1f - y * y)), phi = golden * i;
+                var n = new Vector3(Mathf.Cos(phi) * r, y, Mathf.Sin(phi) * r);
+                float lit = rig.Key.Diffuse * rig.Key.Lambert(n, rig.Key.Direction) + rig.Fill.Diffuse * rig.Fill.Lambert(n, rig.Fill.Direction) +
+                            rig.Back.Diffuse * rig.Back.Lambert(n, rig.Back.Direction);
+                var ambientColor = rig.Ambient(n);
+                float ambient = 0.2126f * ambientColor.r + 0.7152f * ambientColor.g + 0.0722f * ambientColor.b;
+                float total = lit + ambient;
+                if (total <= 1e-6f) continue;
+                directShare += lit * direct / total;
+                ambientShare += ambient * indirect / total;
+            }
+            return new Vector2((float)(directShare / Directions), (float)(ambientShare / Directions));
+        }
+
+        // Multiplies `color` by lerp(1, 1 − (1 − tint) × darkening, strength), where darkening is
+        // shares.x × (1 − o) + shares.y × (1 − o ambient) and o is `occlusion`'s R (the same
+        // size). With `multiBounce`, the ambient's occlusion is raised on light colors by
+        // Jimenez et al.'s multi-bounce fit (2016), over the base color × (1 − metallic), with
+        // `metallic`'s R; o ambient = o × max(1, (a o + b) o + c).
+        public static void Apply(NordicsTextureWrapper color, NordicsTextureWrapper occlusion, NordicsTextureWrapper metallic,
+            Vector2 shares, Color tint, bool multiBounce, float strength)
+        {
+            if (color == null || occlusion == null || strength <= 0f) return;
+            int width = color.Width, height = color.Height;
+            if (occlusion.Width != width || occlusion.Height != height) throw new ArgumentException("The occlusion map must have the color map's size.");
+            var pixels = color.GetPixels();
+            var occlusions = occlusion.GetPixels();
+            var metals = multiBounce && metallic != null ? metallic.GetPixels() : null;
+            Parallel.For(0, height, y =>
+            {
+                int row = y * width;
+                for (int x = 0; x < width; x++)
+                {
+                    int i = row + x;
+                    float o = Mathf.Clamp01(occlusions[i].r);
+                    var c = pixels[i];
+                    float diffuse = metals != null ? 1f - Mathf.Clamp01(metals[i].r) : 1f;
+                    pixels[i] = new Color(
+                        c.r * Factor(o, Mathf.Clamp01(c.r) * diffuse, tint.r, shares, multiBounce, strength),
+                        c.g * Factor(o, Mathf.Clamp01(c.g) * diffuse, tint.g, shares, multiBounce, strength),
+                        c.b * Factor(o, Mathf.Clamp01(c.b) * diffuse, tint.b, shares, multiBounce, strength), c.a);
+                }
+            });
+            color.SetPixels(pixels);
+        }
+
+        private static float Factor(float o, float albedo, float tint, Vector2 shares, bool multiBounce, float strength)
+        {
+            float ambient = multiBounce ? Mathf.Min(1f, o * Mathf.Max(1f, MultiBounce(albedo, o))) : o;
+            float darkening = shares.x * (1f - o) + shares.y * (1f - ambient);
+            return Mathf.Lerp(1f, 1f - (1f - Mathf.Clamp01(tint)) * darkening, strength);
+        }
+
+        // Jimenez, Wu, Pesce and Jarabo, "Practical Real-Time Strategies for Accurate Indirect
+        // Occlusion" (2016): the visibility after interreflections, divided by the occlusion.
+        public static float MultiBounce(float albedo, float occlusion)
+        {
+            float a = 2.0404f * albedo - 0.3324f, b = -4.7951f * albedo + 0.6417f, c = 2.7552f * albedo + 0.6903f;
+            return (a * occlusion + b) * occlusion + c;
+        }
+    }
 }

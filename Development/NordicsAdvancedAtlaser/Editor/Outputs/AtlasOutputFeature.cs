@@ -11,7 +11,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     // The bakes that use the virtual light rig (ATLAS_OUTPUT.md, "Virtual light rigs"), each with
     // its strength in the inspector's Baking section.
-    public enum AtlasLitBake { NormalShading }
+    public enum AtlasLitBake { NormalShading, Occlusion }
 
     // A feature with modes that bake with the virtual light rig; the Baking section is shown
     // while one of them is in use.

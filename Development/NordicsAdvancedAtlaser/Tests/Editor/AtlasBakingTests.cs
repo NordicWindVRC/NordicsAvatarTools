@@ -219,6 +219,90 @@ namespace NordicWind.AdvancedAtlaser.Tests
         };
 
         [Test]
+        public void OcclusionDarkensTheShareOfTheLightItsShaderDarkens()
+        {
+            var rig = AtlasLightRig.Create(new AtlasBakeSettings(), false);
+            var all = AtlasOcclusionShading.Shares(rig, 1f, 1f);
+            Assert.AreEqual(1f, all.x + all.y, 1e-4f, "direct and ambient: all of it");
+            var ambientOnly = AtlasOcclusionShading.Shares(rig, 0f, 1f);
+            Assert.AreEqual(0f, ambientOnly.x);
+            Assert.AreEqual(all.y, ambientOnly.y, 1e-6f);
+            Assert.That(ambientOnly.y, Is.InRange(0.2f, 0.5f), "the ambient's share, counting the shadow sides fully");
+            Assert.AreEqual(Vector2.zero, AtlasOcclusionShading.Shares(rig, 0f, 0f));
+        }
+
+        private float Occluded(float o, Vector2 shares, Color tint, float strength = 1f, bool multiBounce = false, float albedo = 1f)
+        {
+            var color = new NordicsTextureWrapper(Size, Size, AtlasMapEvaluator.Settings(AtlasVirtualMap.BaseColor));
+            color.Fill(new Color(albedo, albedo, albedo, 1f));
+            disposables.Add(color);
+            using (var occlusion = AtlasMapEvaluator.Constant(AtlasVirtualMap.Occlusion, o, Size, Size))
+                AtlasOcclusionShading.Apply(color, occlusion, null, shares, tint, multiBounce, strength);
+            return color.GetPixel(1, 1).g / albedo;
+        }
+
+        [Test]
+        public void OcclusionMultipliesTheColorByItsDarkening()
+        {
+            var shares = new Vector2(0.2f, 0.3f);
+            Assert.AreEqual(1f, Occluded(1f, shares, Color.black), 1e-5f, "unoccluded");
+            Assert.AreEqual(0.5f, Occluded(0f, shares, Color.black), 1e-5f, "fully occluded: 1 − 0.2 − 0.3");
+            Assert.AreEqual(0.75f, Occluded(0.5f, shares, Color.black), 1e-5f);
+            Assert.AreEqual(0.75f, Occluded(0f, shares, Color.black, 0.5f), 1e-5f, "at half strength");
+            Assert.AreEqual(1f, Occluded(0f, shares, Color.white), 1e-5f, "toward a white tint: nothing");
+            Assert.AreEqual(0.75f, Occluded(0f, shares, new Color(0.5f, 0.5f, 0.5f)), 1e-5f, "toward a gray tint: halfway");
+            Assert.Greater(Occluded(0.3f, shares, Color.black, multiBounce: true, albedo: 0.9f), Occluded(0.3f, shares, Color.black, albedo: 0.9f),
+                "light colors keep more light with multi-bounce");
+            Assert.AreEqual(Occluded(1f, shares, Color.black, multiBounce: true), 1f, 1e-3f);
+        }
+
+        private Texture2D Solid(float value)
+        {
+            var texture = new Texture2D(4, 4, TextureFormat.RGBAFloat, false, true);
+            texture.SetPixels(Enumerable.Repeat(new Color(value, value, value, 1f), 16).ToArray());
+            texture.Apply();
+            created.Add(texture);
+            return texture;
+        }
+
+        [Test]
+        public void WithoutAnOcclusionMapTheOcclusionIsBakedIntoTheBaseColorAndTheReflectionMask()
+        {
+            var material = new AtlasUnifiedMaterial();
+            var response = material.Surface.Response;
+            response.Occlusion.Map = new AtlasTextureReference { Texture = Solid(0.5f), Interpretation = AtlasTextureInterpretation.Data };
+            response.OcclusionDirect = 1f;
+            response.OcclusionIndirect = 1f;
+            var job = new AtlasGeneratorJob();
+            job.Sources.Add(new AtlasGeneratorSource { Material = material, UVRegion = new Rect(0f, 0f, 1f, 1f) });
+            var plan = AtlasOutputPipeline.Resolve(job, BaseColorOnly());
+            Assert.AreSame(AtlasOcclusionFeature.Baked, plan.Modes["occlusion"], "the default where the output has no occlusion map");
+            Assert.IsFalse(plan.Maps.Any(m => m.Map == AtlasVirtualMap.Occlusion));
+            using (var color = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Evaluate(0, material, Size, Size))
+                Assert.AreEqual(0.5f, color.GetPixel(1, 1).g, 1e-3f, "darkening every light: × the occlusion");
+
+            // Poiyomi: reflections × occlusion, in a reflection mask of their own.
+            response.OcclusionDirect = 0f;
+            response.OcclusionReflections = 1f;
+            material.Lighting.Family = AtlasLightingFamily.PhysicallyBased;
+            response.Reflections.Enabled = response.Highlights.Enabled = true;
+            response.Reflections.Strength = response.Highlights.Strength = 1f;
+            job.Features.Add(new AtlasFeatureChoice { FeatureId = "occlusion", ModeId = "baked" });
+            var poiyomi = AtlasOutputPipeline.Resolve(job, AtlasShaderRegistry.Output("poiyomi10").Capabilities);
+            var output = poiyomi.Output.Surface.Response;
+            Assert.IsNotNull(output.Reflections.Mask?.Map, "a mask that holds the occlusion");
+            var reflections = poiyomi.Maps.Single(m => m.Map == AtlasVirtualMap.ReflectionMask);
+            using (var mask = reflections.Evaluate(0, material, Size, Size))
+                Assert.AreEqual(0.5f, mask.GetPixel(1, 1).r, 1e-3f);
+            Assert.AreNotSame(output.Reflections.Mask.Map, output.Highlights.Mask?.Map, "highlights aren't occluded");
+            using (var color = poiyomi.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Evaluate(0, material, Size, Size))
+            {
+                var share = AtlasOcclusionShading.Shares(AtlasLightRig.Create(job.Baking, false), 0f, 1f).y;
+                Assert.AreEqual(1f - 0.5f * share, color.GetPixel(1, 1).g, 1e-3f, "only the ambient's share");
+            }
+        }
+
+        [Test]
         public void WithoutANormalMapTheNormalsAreBakedIntoTheBaseColor()
         {
             var material = new AtlasUnifiedMaterial();
