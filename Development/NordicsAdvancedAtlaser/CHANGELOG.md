@@ -402,6 +402,9 @@ EditMode tests pass in Unity 2022.3.22.
     (`AtlasMatcapFeature.FitGlow`, `AtlasOutputPlan.BeforeWrite`); a slot with a constant mask
     glows by that constant.
   - The build log lists fitted glows and glow-only matcaps that show a slot's blend.
+- **Rewritten vertex colors took four times the room.** The mesh remapper wrote the colors it
+  rewrites per source as 32-bit floats; they're now 8 bits per channel where the mesh had them so
+  (or had none) and the results fit 0–1, and floats otherwise.
 - **Toon Standard's rims came out too bright and glowed in the dark.** Its rim only adds a
   color after lighting, but a source's rim that blends into the base color before lighting
   (Poiyomi's Mixed, Replace, Multiply or Screen), is lit with it or glows only partly was

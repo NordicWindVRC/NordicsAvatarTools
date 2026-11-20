@@ -3,6 +3,7 @@ using System.Linq;
 using NUnit.Framework;
 using NordicWind.AdvancedAtlaser.Editor;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace NordicWind.AdvancedAtlaser.Tests
 {
@@ -187,6 +188,19 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var triangles = result.Mesh.GetTriangles(0);
             AssertColor(Color.green, colors[triangles[0]], "the source's vertices");
             AssertColor(Vertex, colors[result.Mesh.GetTriangles(1)[0]], "another material's vertices keep theirs");
+            Assert.AreEqual(VertexAttributeFormat.Float32, result.Mesh.GetVertexAttributeFormat(VertexAttribute.Color), "float colors stay float");
+
+            // 8-bit colors, or none, are written in 8 bits.
+            mesh.colors32 = Enumerable.Repeat((Color32)Vertex, 8).ToArray();
+            result = AtlasMeshRemapper.Remap(mesh, new[] { a, c }, targets);
+            created.Add(result.Mesh);
+            Assert.AreEqual(VertexAttributeFormat.UNorm8, result.Mesh.GetVertexAttributeFormat(VertexAttribute.Color), "8-bit colors");
+            AssertColor(Color.green, result.Mesh.colors[result.Mesh.GetTriangles(0)[0]], "8 bits: the source's vertices");
+            mesh.colors32 = new Color32[0];
+            result = AtlasMeshRemapper.Remap(mesh, new[] { a, c }, targets);
+            created.Add(result.Mesh);
+            Assert.AreEqual(VertexAttributeFormat.UNorm8, result.Mesh.GetVertexAttributeFormat(VertexAttribute.Color), "no colors: white in 8 bits");
+            AssertColor(Color.white, result.Mesh.colors[result.Mesh.GetTriangles(1)[0]], "another material's vertices: white");
         }
     }
 }

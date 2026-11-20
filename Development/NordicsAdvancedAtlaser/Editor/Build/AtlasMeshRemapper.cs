@@ -257,7 +257,21 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     var convert = uses[i].Target?.VertexColor;
                     colors[i] = convert != null ? convert(color) : color;
                 }
-                result.SetColors(colors);
+                // 8 bits per channel where the mesh had them so (or had none) and the results fit
+                // 0–1: floats take four times the room for no visible difference.
+                bool bytes = original == null || mesh.GetVertexAttributeFormat(VertexAttribute.Color) == VertexAttributeFormat.UNorm8;
+                for (int i = 0; bytes && i < colors.Length; i++)
+                {
+                    var c = colors[i];
+                    bytes = c.r >= 0f && c.r <= 1f && c.g >= 0f && c.g <= 1f && c.b >= 0f && c.b <= 1f && c.a >= 0f && c.a <= 1f;
+                }
+                if (bytes)
+                {
+                    var packed = new Color32[colors.Length];
+                    for (int i = 0; i < colors.Length; i++) packed[i] = colors[i];
+                    result.SetColors(packed);
+                }
+                else result.SetColors(colors);
             }
             else if (mesh.HasVertexAttribute(VertexAttribute.Color))
             {
