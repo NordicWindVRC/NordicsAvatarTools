@@ -143,9 +143,11 @@ its UV space. For the details, see `UNIFIED_MATERIAL.md` (the description of a m
      - **Reflection and Specular**: each source's metallic and roughness in maps, and how
        strong its highlights and reflections are, in masks (Poiyomi; relative to the
        strongest; no mask where they're the same everywhere). Sources without them stay
-       matte. Poiyomi's reflectance is fixed; on Toon
-       Standard, where the materials need different reflectance, *Reflectance from* picks
-       the material it comes from (*Automatic*: the one with the largest area).
+       matte. Poiyomi's reflectance is fixed. Toon Standard has one reflectance and no
+       highlight or reflection strengths, so the reflectance is fitted to look like the
+       materials' highlights and reflections, weaker ones through a lower reflectance; where
+       the materials need different ones, *Reflectance from* picks the material it's fitted
+       to (*Automatic*: the value that changes all of them least, by area).
      - **Clear Coat**: on Poiyomi, each material's coat strength and smoothness in a *Clear
        coat maps* texture, and how strong its reflections and highlights are, relative to the
        strongest; materials without a coat have none. Where the coats' other settings (tints,

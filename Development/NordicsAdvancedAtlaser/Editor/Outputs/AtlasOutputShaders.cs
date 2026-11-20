@@ -1551,6 +1551,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     .With(AtlasVirtualMap.AudioLinkColor, AtlasTextureChannels.RGB, Color.black)
             },
             Reflectance = AtlasReflectanceSupport.FollowsSmoothness,
+            // fresnel = F_Schlick(f0, V·H, V·N) × saturate((reflectance + metallic) × 4).
+            ReflectanceFade = 0.25f,
+            SpecularFresnel = AtlasSpecularFresnel.ViewHalfTimesViewNormal,
             // _VertexColor: the base color × the vertex RGB as stored.
             VertexColors = AtlasVertexColorSupport.Color,
             // _Ramp is its only shading control.

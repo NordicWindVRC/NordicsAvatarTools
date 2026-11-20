@@ -364,14 +364,42 @@ namespace NordicWind.AdvancedAtlaser.Tests
 
             var job = Job(a, c);
             var plan = AtlasOutputPipeline.Resolve(job, toon);
-            Assert.AreEqual(0.5f, plan.Output.Surface.Response.Reflectance.Constant, 1e-5f, "automatic: the first of equal regions");
-            Assert.IsTrue(plan.Notes.Any(n => n.Contains("taken from source 1")));
+            // Automatic: the value that changes the two looks least, the smoother one's here (its
+            // highlights change most with the reflectance).
+            Assert.AreEqual(0.5f, plan.Output.Surface.Response.Reflectance.Constant, 0.01f, "automatic: fitted to both");
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("fitted to change the sources' highlights and reflections least")));
             job.Features.Add(new AtlasFeatureChoice { FeatureId = "specular", ReferenceSource = 1 });
             plan = AtlasOutputPipeline.Resolve(job, toon);
-            Assert.AreEqual(1f, plan.Output.Surface.Response.Reflectance.Constant, 1e-5f, "the chosen source");
+            Assert.AreEqual(1f, plan.Output.Surface.Response.Reflectance.Constant, 1e-5f, "the chosen source, exactly");
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("fitted to source 2; source 1 would need a different one")));
+            plan = AtlasOutputPipeline.Resolve(Job(a, b), toon);
+            Assert.AreEqual(0.5f, plan.Output.Surface.Response.Reflectance.Constant, 1e-5f, "sources that agree keep their exact value");
 
             plan = AtlasOutputPipeline.Resolve(Job(a, c), Poiyomi);
             Assert.IsTrue(plan.Notes.Any(n => n.Contains("fixed at 0.5")));
+        }
+
+        // Toon Standard has no highlight or reflection strengths: a lower reflectance dims them.
+        [Test]
+        public void StrengthsTheOutputLacksAreFittedIntoTheReflectance()
+        {
+            var toon = AtlasShaderRegistry.Output("mobiletoon").Capabilities;
+            // Reflectance 0.5 (4%) at smoothness 0.772: 0.5 / 0.772 at full strengths.
+            float full = 0.5f / 0.772f;
+            Assert.AreEqual(full, AtlasSpecularFeature.OwnReflectance(Lit(1f, 1f, roughness: 0.228f), toon), 1e-5f, "exact");
+            Assert.AreEqual(full, AtlasSpecularResponse.Fit(new[] { AtlasSpecularResponse.Sample(Lit(1f, 1f, roughness: 0.228f)) }, toon), 0.003f,
+                "the fit finds the exact value");
+
+            float weak = AtlasSpecularFeature.OwnReflectance(Lit(0.28f, 0.041f, roughness: 0.228f), toon);
+            float weaker = AtlasSpecularFeature.OwnReflectance(Lit(0.1f, 0.041f, roughness: 0.228f), toon);
+            // F0 = 0.16 × r², so a highlight strength of 0.28 is about √0.28 of the reflectance.
+            Assert.AreEqual(full * Mathf.Sqrt(0.28f), weak, 0.06f, "highlights at 0.28");
+            Assert.Less(weaker, weak, "weaker highlights, lower reflectance");
+
+            var plan = AtlasOutputPipeline.Resolve(Job(Lit(0.28f, 0.041f, roughness: 0.228f)), toon);
+            Assert.AreEqual(weak, plan.Output.Surface.Response.Reflectance.Constant, 1e-5f);
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("highlights of source 1 are approximated through its reflectance")));
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("reflections of source 1 are approximated through its reflectance")));
         }
     }
 }

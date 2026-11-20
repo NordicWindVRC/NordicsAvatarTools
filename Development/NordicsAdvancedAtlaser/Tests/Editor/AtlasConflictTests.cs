@@ -100,8 +100,8 @@ namespace NordicWind.AdvancedAtlaser.Tests
         {
             var job = Job(Lit(1f), Lit(0.5f));
             var toon = AtlasOutputPipeline.Resolve(job, AtlasShaderRegistry.Output("mobiletoon").Capabilities);
-            Assert.IsTrue(toon.Notes.Any(n => n.Contains("weaker highlights of source 2")), "Toon Standard has no highlight strength");
-            Assert.IsFalse(toon.Notes.Any(n => n.Contains("weaker reflections")), "equal reflections");
+            Assert.IsTrue(toon.Notes.Any(n => n.Contains("highlights of source 2 are approximated through its reflectance")), "Toon Standard has no highlight strength");
+            Assert.IsFalse(toon.Notes.Any(n => n.Contains("reflections of")), "full reflections");
             var poiyomi = AtlasOutputPipeline.Resolve(job, Poiyomi);
             Assert.IsFalse(poiyomi.Notes.Any(n => n.Contains("weaker")), "Poiyomi keeps them in masks");
             Assert.IsFalse(poiyomi.Notes.Any(n => n.Contains("lit differently")), "the sources light alike");

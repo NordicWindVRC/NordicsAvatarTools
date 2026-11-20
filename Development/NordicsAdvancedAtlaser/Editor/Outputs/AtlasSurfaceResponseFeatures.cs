@@ -8,9 +8,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // Reflection and specular (ATLAS_OUTPUT.md, "Feature inventory"): each source's metallic and
     // roughness baked into maps; the strengths of its highlights and reflections into masks,
     // relative to the largest, which the output uses. Sources without them get no metallic, full
-    // roughness and no highlights or reflections. Reflectance is one value in the output: where
-    // the sources need different ones, it comes from the reference source.
-    public sealed class AtlasSpecularFeature : IAtlasSharedValueFeature
+    // roughness and no highlights or reflections. Reflectance is one value in the output, fitted
+    // to the sources' highlights and reflections (AtlasSpecularResponse): where the output has no
+    // strengths or masks for them, a lower reflectance is what dims them. Automatic fits all
+    // sources by area; a chosen source is fitted alone.
+    public sealed class AtlasSpecularFeature : IAtlasSharedValueFeature, IAtlasAutomaticReference
     {
         private static readonly AtlasFeatureMode[] ModeList =
         {
@@ -29,15 +31,50 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public int Order => 3;
         public IReadOnlyList<AtlasFeatureMode> Modes => ModeList;
         public string SharedValueName => "Reflectance";
+        public string AutomaticRule =>
+            "Automatic fits the reflectance that changes the materials' highlights and reflections least, weighted by area. " +
+            "Where the output shader has no strengths for them, they're dimmed through it.";
 
         public bool SharedValuesDiffer(IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasOutputCapabilities capabilities)
         {
             if (capabilities.Reflectance == AtlasReflectanceSupport.None || sources.Count < 2) return false;
-            float first = OutputReflectance(sources[0].Surface.Response, capabilities.Reflectance, out _);
-            return sources.Skip(1).Any(s => !Same(OutputReflectance(s.Surface.Response, capabilities.Reflectance, out _), first));
+            float first = OwnReflectance(sources[0], capabilities);
+            return sources.Skip(1).Any(s => !Close(OwnReflectance(s, capabilities), first));
         }
 
         private static bool Same(float a, float b) => Mathf.Abs(a - b) <= 0.005f;
+        // Fitted values: within the fit's steps.
+        private static bool Close(float a, float b) => Mathf.Abs(a - b) <= 0.01f;
+
+        // Whether the output gives a source its look exactly: its reflectance, and its highlight
+        // and reflection strengths where the output has none.
+        private static bool Exact(AtlasUnifiedMaterial source, AtlasOutputCapabilities capabilities)
+        {
+            var response = source.Surface.Response;
+            OutputReflectance(response, capabilities.Reflectance, out bool exact);
+            return exact && (capabilities.Provides(AtlasVirtualMap.SpecularMask) || Full(response.Highlights.Enabled, response.Highlights.Strength, response.Highlights.Mask)) &&
+                   (capabilities.Provides(AtlasVirtualMap.ReflectionMask) || Full(response.Reflections.Enabled, response.Reflections.Strength, response.Reflections.Mask));
+        }
+
+        private static bool Full(bool enabled, float strength, AtlasMask mask) => enabled && Same(strength, 1f) && mask == null;
+
+        /// <summary>The output's reflectance value for a source alone: exact where the output can
+        /// give it, otherwise fitted (AtlasSpecularResponse).</summary>
+        public static float OwnReflectance(AtlasUnifiedMaterial source, AtlasOutputCapabilities capabilities) =>
+            Exact(source, capabilities)
+                ? OutputReflectance(source.Surface.Response, capabilities.Reflectance, out _)
+                : AtlasSpecularResponse.Fit(new[] { AtlasSpecularResponse.Sample(source) }, capabilities);
+
+        // The output's reflectance value: the fitted sources' own where they're exact and agree,
+        // otherwise fitted to them by area.
+        private static float Reflectance(AtlasFeatureContext context, IReadOnlyList<int> fitted, Dictionary<int, float> own)
+        {
+            var job = context.Job;
+            var capabilities = context.Capabilities;
+            if (fitted.All(i => Exact(job.Sources[i].Material, capabilities) && Same(own[i], own[fitted[0]]))) return own[fitted[0]];
+            return AtlasSpecularResponse.Fit(fitted.Select(i => AtlasSpecularResponse.Sample(job.Sources[i].Material,
+                job.Sources[i].UVRegion.width * job.Sources[i].UVRegion.height)).ToList(), capabilities);
+        }
 
         // The output's reflectance value that gives the source its reflectance. Where the output
         // multiplies it by the smoothness map, that is the source's reflectance over its
@@ -93,9 +130,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             var output = context.Output.Surface.Response;
             var support = context.Capabilities.Reflectance;
-            int reference = Reference(context);
+            int reference = Reference(context, out bool automatic);
+            var own = new Dictionary<int, float>();
             if (support != AtlasReflectanceSupport.None)
-                output.Reflectance.Constant = OutputReflectance(job.Sources[reference].Material.Surface.Response, support, out _);
+            {
+                foreach (int i in active) own[i] = OwnReflectance(job.Sources[i].Material, context.Capabilities);
+                var fitted = automatic ? context.Sources.Where(active.Contains).Distinct().ToList() : new List<int> { reference };
+                output.Reflectance.Constant = Reflectance(context, fitted, own);
+            }
             output.Reflections.Enabled = reflections > 0f;
             output.Reflections.Strength = reflections;
             output.Highlights.Enabled = highlights > 0f;
@@ -158,15 +200,27 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
             }
             Notes(context, active);
-            ReflectanceNotes(context, reference);
-            StrengthNotes(context, AtlasVirtualMap.SpecularMask, "highlight", r => r.Highlights.Enabled ? r.Highlights.Strength : 0f);
-            StrengthNotes(context, AtlasVirtualMap.ReflectionMask, "reflection", r => r.Reflections.Enabled ? r.Reflections.Strength : 0f);
+            ReflectanceNotes(context, reference, automatic, output.Reflectance.Constant, own);
+            StrengthNotes(context, AtlasVirtualMap.SpecularMask, "highlight", r => r.Highlights.Enabled ? r.Highlights.Strength : 0f,
+                r => Full(r.Highlights.Enabled, r.Highlights.Strength, r.Highlights.Mask));
+            StrengthNotes(context, AtlasVirtualMap.ReflectionMask, "reflection", r => r.Reflections.Enabled ? r.Reflections.Strength : 0f,
+                r => Full(r.Reflections.Enabled, r.Reflections.Strength, r.Reflections.Mask));
         }
 
-        // Without a mask, the output can't keep different strengths: one line naming the weaker sources.
-        private static void StrengthNotes(AtlasFeatureContext context, AtlasVirtualMap mask, string name, System.Func<AtlasSurfaceResponse, float> strength)
+        // Without a mask, the output can't keep different strengths: one line naming the sources
+        // whose strengths are approximated through the reflectance, or the weaker ones where the
+        // output has no reflectance value either.
+        private static void StrengthNotes(AtlasFeatureContext context, AtlasVirtualMap mask, string name, System.Func<AtlasSurfaceResponse, float> strength,
+            System.Func<AtlasSurfaceResponse, bool> full)
         {
             if (context.Capabilities.Provides(mask)) return;
+            if (context.Capabilities.Reflectance != AtlasReflectanceSupport.None)
+            {
+                var approximated = context.Sources.Where(i => !full(context.Job.Sources[i].Material.Surface.Response)).ToList();
+                if (approximated.Count > 0)
+                    context.Notes.Add($"The output shader has no {name} strength or mask; the {name}s of {Numbers(approximated)} are approximated through its reflectance.");
+                return;
+            }
             var strengths = context.Sources.Select(i => (index: i, value: strength(context.Job.Sources[i].Material.Surface.Response))).ToList();
             float strongest = strengths.Max(s => s.value);
             var weaker = strengths.Where(s => s.value < strongest - 0.005f).Select(s => s.index).ToList();
@@ -175,7 +229,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Sources whose reflectance the output doesn't keep, by source number.
-        private static void ReflectanceNotes(AtlasFeatureContext context, int reference)
+        private static void ReflectanceNotes(AtlasFeatureContext context, int reference, bool automatic, float used, Dictionary<int, float> own)
         {
             var support = context.Capabilities.Reflectance;
             var sources = context.Sources.Select(i => (index: i, response: context.Job.Sources[i].Material.Surface.Response)).ToList();
@@ -186,10 +240,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     context.Notes.Add($"The output shader's reflectance is fixed at 0.5 (4%); the reflectance of {Numbers(lost.Select(s => s.index))} isn't kept.");
                 return;
             }
-            float used = OutputReflectance(context.Job.Sources[reference].Material.Surface.Response, support, out _);
-            var differ = sources.Where(s => !Same(OutputReflectance(s.response, support, out _), used)).ToList();
+            var differ = sources.Where(s => own.TryGetValue(s.index, out float value) && !Close(value, used)).ToList();
             if (differ.Count > 0)
-                context.Notes.Add($"Reflectance is taken from source {reference + 1}; the reflectance of {Numbers(differ.Select(s => s.index))} differs.");
+                context.Notes.Add((automatic
+                                      ? "Reflectance is one value, fitted to change the sources' highlights and reflections least; "
+                                      : $"Reflectance is fitted to source {reference + 1}; ") +
+                                  $"{Numbers(differ.Select(s => s.index))} would need a different one.");
             var inexact = sources.Where(s => { OutputReflectance(s.response, support, out bool exact); return !exact; }).ToList();
             if (inexact.Count > 0 && support == AtlasReflectanceSupport.FollowsSmoothness)
                 context.Notes.Add($"The output shader's reflectance follows its smoothness map; the reflectance of {Numbers(inexact.Select(s => s.index))} doesn't, so it matches only where the smoothness is full.");
@@ -201,12 +257,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return (list.Count == 1 ? "source " : "sources ") + string.Join(", ", list);
         }
 
-        // The reference source: the chosen one when it has the feature, otherwise the one with the
-        // largest region among those that have it.
-        private static int Reference(AtlasFeatureContext context)
+        // The reference source: the chosen one when it has the feature, otherwise (automatic) the
+        // one with the largest region among those that have it.
+        private static int Reference(AtlasFeatureContext context, out bool automatic)
         {
             var choice = context.Job.Features.Find(f => f.FeatureId == "specular");
-            if (choice != null && context.Sources.Contains(choice.ReferenceSource)) return choice.ReferenceSource;
+            automatic = !(choice != null && context.Sources.Contains(choice.ReferenceSource));
+            if (!automatic) return choice.ReferenceSource;
             return context.Sources.OrderByDescending(i => context.Job.Sources[i].UVRegion.width * context.Job.Sources[i].UVRegion.height)
                 .ThenBy(i => i).First();
         }

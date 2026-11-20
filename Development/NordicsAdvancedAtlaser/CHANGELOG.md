@@ -402,6 +402,14 @@ EditMode tests pass in Unity 2022.3.22.
     (`AtlasMatcapFeature.FitGlow`, `AtlasOutputPlan.BeforeWrite`); a slot with a constant mask
     glows by that constant.
   - The build log lists fitted glows and glow-only matcaps that show a slot's blend.
+- **Toon Standard's highlights and reflections came out far too strong.** It has no highlight
+  or reflection strengths, so they were dropped and drawn at full, and its one `_Reflectance`
+  came from the largest source, capped at 1 where that source was rough, which a smoother
+  source then got as its gloss. The value is now fitted to the sources' look
+  (`AtlasSpecularResponse`): their strengths go into a lower reflectance, and Automatic takes
+  the value that changes all sources' highlights and reflections least by area (a chosen source
+  is fitted alone). Sources Toon Standard can give exactly keep their value, so round trips are
+  unchanged.
 - **Highlights came out π times too strong (or weak) between Poiyomi versions.** Poiyomi 10.0.26
   multiplies the direct highlights of Reflections & Specular and Clear Coat by π; the versions
   before it and Poiyomi 11 don't (checked in the released and installed shaders: 8.1 to 10.0.25

@@ -46,6 +46,27 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return pixels;
         }
 
+        /// <summary>A scalar input's values over a 4 × 4 copy of its map, through its channel,
+        /// invert, combine and remap, clamped to 0–1; its value alone without a map. Bus channels
+        /// aren't part of them.</summary>
+        public static float[] Scalars(AtlasScalarInput input)
+        {
+            if (!(input.Map?.Texture is Texture2D texture)) return new[] { Mathf.Clamp01(input.Evaluate()) };
+            return Small(texture, Size, Size).Select(p => Mathf.Clamp01(input.Evaluate(Channel(p, input.Channel)))).ToArray();
+        }
+
+        /// <summary>A mask's values over a 4 × 4 copy of its map, through its levels, invert and
+        /// strength; 1 without a mask or a map. Bus channels and vertex colors aren't part of them.</summary>
+        public static float[] Masks(AtlasMask mask)
+        {
+            if (mask == null) return new[] { 1f };
+            if (!(mask.Map?.Texture is Texture2D texture)) return new[] { mask.Evaluate() };
+            return Small(texture, Size, Size).Select(p => mask.Evaluate(Channel(p, mask.Channel))).ToArray();
+        }
+
+        private static float Channel(Color p, AtlasChannel channel) =>
+            channel == AtlasChannel.Luminance ? Luminance(p) : p[Mathf.Clamp((int)channel, 0, 3)];
+
         public static float Luminance(Color c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
     }
 }

@@ -126,6 +126,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
         FollowsSmoothness
     }
 
+    // The fresnel of an output's highlights and reflections (AtlasSpecularResponse).
+    public enum AtlasSpecularFresnel
+    {
+        // Schlick's: f0 + (1 − f0)(1 − V·H)⁵ for highlights, (1 − N·V)⁵ for reflections.
+        Schlick,
+        // One term for both, f0 + (1 − f0)((1 − V·H)(1 − |V·N|))⁵ (Toon Standard).
+        ViewHalfTimesViewNormal
+    }
+
     // What the output shader does with the mesh's vertex colors on the base color.
     [System.Flags]
     public enum AtlasVertexColorSupport
@@ -169,6 +178,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // ones (Poiyomi's TransClipping).
         public bool BlendedDepthWrite;
         public AtlasReflectanceSupport Reflectance;
+        // Below this reflectance + metallic, highlights and reflections fade out linearly (Toon
+        // Standard: × saturate((reflectance + metallic) × 4), 0.25); 0: none.
+        public float ReflectanceFade;
+        public AtlasSpecularFresnel SpecularFresnel;
         public AtlasVertexColorSupport VertexColors;
         // Hides UV tiles on both sides (Poiyomi's UV tile discard), and on one chosen side.
         public bool TileDiscard;
