@@ -5,6 +5,11 @@ Newest first. Versions follow [SemVer](https://semver.org).
 ## 0.10.0 — unreleased
 
 ### Changed
+- **`BakeNormalDifference`'s angle limit is soft.** Corrections above half of `MaxAngle` are
+  compressed smoothly toward it instead of fading to flat over the last 10°, where a larger raw
+  correction gave a smaller result and left a visible step in the shading. Corrections that would
+  point into the surface are compressed the same way. `Limited` now counts raw corrections
+  beyond the limit.
 - **Behavior change: colors are linear inside the wrapper.** The C# API is unchanged, but
   results differ for sRGB textures and sRGB output:
   - Loading an sRGB `Texture2D` decodes its colors to linear. A linear texture's values are
@@ -35,6 +40,11 @@ Newest first. Versions follow [SemVer](https://semver.org).
   only had an effect on normal blends.
 
 ### Added
+- `NormalDifferenceOptions.Keep`: a per-texel map of how much of the correction to keep, for
+  rules the caller knows; `NormalDifferenceStatistics.Kept`, `MeanAngleBefore` and
+  `MeanAngleAfter`, and `NordicsTextureWrapper.SoftLimit`.
+- `TextureSamplingMode.AreaFlatten`: area sampling that, for tangent-space normal maps, tilts
+  each texel back toward flat by how much the normals it covers disagree.
 - **`GetPixels` and `SetPixels`:** read and write every pixel at once, for whole-texture
   processing outside the wrapper without a call per pixel; `GetPixels(Color[])` fills an
   array you reuse.

@@ -53,18 +53,25 @@ namespace NordicWind.AdvancedAtlaser.Editor
         /// divided by <paramref name="outputStrength"/>, the strength the output's normal map is
         /// drawn at. Layers outside CanBakeNormalLayer are left out (the feature reports them).
         /// </summary>
-        public static NordicsTextureWrapper Normal(AtlasGeneratorSource source, int width, int height, float outputStrength)
+        public static NordicsTextureWrapper Normal(AtlasGeneratorSource source, int width, int height, float outputStrength,
+            Vector2Int? placed = null, int block = 1)
         {
             var result = Flat(width, height);
             try
             {
                 float scale = 1f / Mathf.Max(outputStrength, 1e-4f);
-                if (source.PrebakedNormalMap != null)
-                    using (var prebaked = new NordicsTextureWrapper(source.PrebakedNormalMap, TextureDataType.NormalTangent))
-                        result.Blit(prebaked, blend: TextureBlendMode.NormalWhiteout, strength: scale, sampling: TextureSamplingMode.Area);
                 var correction = Correction(source);
-                if (correction != null)
-                    result.Blit(correction, blend: TextureBlendMode.NormalWhiteout, strength: scale, sampling: TextureSamplingMode.Area);
+                if (source.PrebakedNormalMap != null || correction != null)
+                    using (var corrections = Flat(width, height))
+                    {
+                        if (source.PrebakedNormalMap != null)
+                            using (var prebaked = new NordicsTextureWrapper(source.PrebakedNormalMap, TextureDataType.NormalTangent))
+                                corrections.Blit(prebaked, blend: TextureBlendMode.NormalWhiteout, sampling: TextureSamplingMode.AreaFlatten);
+                        if (correction != null)
+                            corrections.Blit(correction, blend: TextureBlendMode.NormalWhiteout, sampling: TextureSamplingMode.AreaFlatten);
+                        if (placed.HasValue) FadeCorrectionsAtSeams(source, corrections, placed.Value, block);
+                        result.Blit(corrections, blend: TextureBlendMode.NormalWhiteout, strength: scale);
+                    }
                 var material = source.Material;
                 var primary = material?.Surface.Normal;
                 if (primary?.Map?.Texture is Texture2D texture)
@@ -92,6 +99,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         /// <summary>The build's normal correction for a source; null when it has none or it's flat.</summary>
+        // The corrections (pre-baked map and geometry correction) faded to none at the borders of
+        // the source's UV islands (AtlasNormalSeams), over a compression block of the normal
+        // map's format in final pixels, at least two: within that, filtering and compression mix
+        // what the two sides of a seam read.
+        private static void FadeCorrectionsAtSeams(AtlasGeneratorSource source, NordicsTextureWrapper corrections, Vector2Int placed, int block)
+        {
+            float width = Mathf.Max(2f, block);
+            var scale = new Vector2(corrections.Width / (float)Mathf.Max(1, placed.x), corrections.Height / (float)Mathf.Max(1, placed.y));
+            AtlasNormalSeams.Result faded;
+            using (AtlasEvaluationCache.Step("fade normal corrections at UV seams"))
+            using (var coverage = AtlasCoverage.Paint(source.Coverage, corrections.Width, corrections.Height))
+                faded = AtlasNormalSeams.Fade(corrections, coverage, scale, width);
+            AtlasEvaluationCache.Note($"normal corrections faded to none at the UV islands' borders over {width:0} final pixels " +
+                                      $"({block}×{block} compression blocks), on {faded.FadedShare:P1} of the pixels.");
+        }
+
         public static NordicsTextureWrapper Correction(AtlasGeneratorSource source) =>
             source?.Bakes?.Submeshes.FirstOrDefault(s => !s.CurrentSubmeshMissing && !s.CorrectionIsFlat && s.TangentNormalCorrection != null)
                 ?.TangentNormalCorrection;
@@ -323,8 +346,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 var loaded = Loaded(texture, type, out bool owned);
                 try
                 {
+                    // Normal maps flatten where the detail is finer than the result's texels.
                     var result = loaded.Resize(width, height, scale: tiling, offset: offset + (tiling - Vector2.one) * 0.5f,
-                        rotation: rotation, sampling: TextureSamplingMode.Area);
+                        rotation: rotation, sampling: TextureSamplingMode.AreaFlatten);
                     result.Settings.WrapMode = TextureWrapMode.Clamp;
                     return result;
                 }

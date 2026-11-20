@@ -162,6 +162,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // How one source's map is evaluated (source index, its material, width, height), when
         // the feature converts it for the output; null: AtlasMapEvaluator.Evaluate.
         public Func<int, AtlasUnifiedMaterial, int, int, NordicsTextureWrapper> Evaluate;
+        // Optional: Evaluate for the map baker, which also passes the size the source's content
+        // ends up at in the texture (its region, in pixels), for evaluations that depend on it.
+        public Func<int, AtlasUnifiedMaterial, int, int, UnityEngine.Vector2Int, NordicsTextureWrapper> EvaluatePlaced;
         // Run on the whole baked map before it is packed; null: nothing.
         public Action<NordicsTextureWrapper> Finish;
     }

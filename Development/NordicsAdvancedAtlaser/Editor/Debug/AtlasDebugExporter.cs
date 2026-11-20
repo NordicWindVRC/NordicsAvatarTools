@@ -50,6 +50,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     encoded[i].b * 2f - 1f, encoded[i].a);
             WriteTexture(folder, name + "_Raw", wrapper.Width, wrapper.Height, encoded, true);
         }
+        // A map's red channel as gray, black where it's unused.
+        internal static void Grayscale(string folder, string name, NordicsTextureWrapper wrapper)
+        {
+            if (wrapper == null) return;
+            var pixels = new Color[wrapper.Width * wrapper.Height];
+            for (int y=0; y<wrapper.Height; y++)
+                for (int x=0; x<wrapper.Width; x++)
+                {
+                    float v = wrapper.IsPixelUsed(x,y) ? Mathf.Clamp01(wrapper.GetPixel(x,y).r) : 0f;
+                    pixels[y*wrapper.Width+x] = new Color(v, v, v, 1f);
+                }
+            WriteTexture(folder, name, wrapper.Width, wrapper.Height, pixels, false);
+        }
         internal static void Coverage(string folder, string name, NordicsTextureWrapper wrapper)
         {
             if (wrapper == null) return;

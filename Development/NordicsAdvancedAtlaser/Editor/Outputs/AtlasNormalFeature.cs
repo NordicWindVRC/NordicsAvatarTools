@@ -53,6 +53,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.TangentNormal },
                 Evaluate = (index, material, width, height) => active.Contains(index)
                     ? AtlasMapEvaluator.Normal(job.Sources[index], width, height, strength)
+                    : AtlasMapEvaluator.Flat(width, height),
+                // Placed in the texture: corrections are smoothed to the size they're shown at.
+                EvaluatePlaced = (index, material, width, height, placed) => active.Contains(index)
+                    ? AtlasMapEvaluator.Normal(job.Sources[index], width, height, strength, placed, job.NormalBlock)
                     : AtlasMapEvaluator.Flat(width, height)
             };
             normal.Map = request.Reference;

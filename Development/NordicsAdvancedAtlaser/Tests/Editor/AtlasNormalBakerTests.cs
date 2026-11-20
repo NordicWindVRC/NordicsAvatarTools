@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using NordicWind.AdvancedAtlaser.Editor;
+using NordicWind.TextureWrapper;
 using UnityEngine;
 using Object = UnityEngine.Object;
 using T = NordicWind.AdvancedAtlaser.Tests.AtlasSubmeshBakeTests;
@@ -106,6 +107,69 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 Assert.That(checkedTexels, Is.GreaterThan(9000), stats);
                 Assert.That(sum / checkedTexels, Is.LessThan(.05), stats);
                 Assert.That(worst, Is.LessThan(.5), stats);
+            }
+        }
+
+        // Where the original's surface at a UV is far from the current one, compared with the
+        // current triangles' size, the correction fades: the original's normal belongs elsewhere.
+        [Test]
+        public void TheCorrectionFadesWhereTheSurfacesDontLineUp()
+        {
+            const int count = 9;
+            NordicsTextureWrapper Map() => new NordicsTextureWrapper(count, 1,
+                new TextureSettings { DataType = TextureDataType.LinearData, SRGB = false, Mipmaps = false });
+            using (var original = Map()) using (var current = Map()) using (var sizes = Map())
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    // Painted × coverage with coverage in alpha; the first texel is half covered.
+                    float coverage = i == 0 ? .5f : 1f;
+                    var place = new Vector3(i, 0f, 0f);
+                    var moved = i == 7 ? place + Vector3.up * .5f : i == 8 ? place + Vector3.up * 2f : place;
+                    original.SetPixel(i, 0, new Color(moved.x * coverage, moved.y * coverage, moved.z * coverage, coverage));
+                    current.SetPixel(i, 0, new Color(place.x * coverage, place.y * coverage, place.z * coverage, coverage));
+                    sizes.SetPixel(i, 0, new Color(coverage, coverage, coverage, coverage)); // triangles 1 long
+                }
+                AtlasSubmeshBaker.Alignment(original, current, sizes);
+                AtlasPixels.Release();
+                Assert.AreEqual(1f, original.GetPixel(0, 0).r, 1e-4f, "half covered, in place");
+                Assert.AreEqual(1f, original.GetPixel(3, 0).r, 1e-4f, "in place");
+                Assert.AreEqual(.5f, original.GetPixel(7, 0).r, 1e-3f, "half a triangle off: halfway");
+                Assert.AreEqual(0f, original.GetPixel(8, 0).r, 1e-4f, "two triangles off: none");
+            }
+        }
+
+        // Corrections fade to none at the borders of their UV islands, where the two sides of a
+        // seam can't be made to match; the middle of an island keeps its correction.
+        [Test]
+        public void CorrectionsFadeToNoneAtUVIslandBorders()
+        {
+            const int width = 32, height = 9;
+            Vector3 Tilted(float degrees) => new Vector3(Mathf.Sin(degrees * Mathf.Deg2Rad), 0f, Mathf.Cos(degrees * Mathf.Deg2Rad));
+            float Angle(Color c) => Vector3.Angle(Vector3.forward, new Vector3(c.r, c.g, c.b));
+            using (var map = new NordicsTextureWrapper(width, height,
+                       new TextureSettings { DataType = TextureDataType.NormalTangent, SRGB = false, Mipmaps = false }))
+            using (var coverage = new NordicsTextureWrapper(width, height,
+                       new TextureSettings { DataType = TextureDataType.Mask, SRGB = false, Mipmaps = false }))
+            {
+                for (int y = 0; y < height; y++)
+                    for (int x = 0; x < width; x++)
+                    {
+                        // Two islands, x 0-15 and x 17-31, apart at x 16; every pixel tilted 20°.
+                        Vector3 n = Tilted(20f);
+                        map.SetPixel(x, y, new Color(n.x, n.y, n.z, 1f));
+                        coverage.SetPixel(x, y, x == 16 ? Color.black : Color.white);
+                    }
+                // Map pixels at twice the final size; a fade over 2 final pixels is 4 map pixels.
+                var result = AtlasNormalSeams.Fade(map, coverage, new Vector2(2f, 2f), 2f);
+                Assert.Less(Angle(map.GetPixel(0, 4)), 2f, "at the border: none");
+                Assert.Less(Angle(map.GetPixel(15, 4)), 2f, "at the border: none");
+                Assert.Less(Angle(map.GetPixel(17, 4)), 2f, "the other island's border too");
+                Assert.AreEqual(20f, Angle(map.GetPixel(8, 4)), .5f, "the middle keeps its correction");
+                Assert.AreEqual(20f, Angle(map.GetPixel(24, 4)), .5f, "the middle keeps its correction");
+                Assert.Greater(Angle(map.GetPixel(2, 4)), 2f, "fading in between");
+                Assert.Less(Angle(map.GetPixel(2, 4)), 20f, "fading in between");
+                Assert.Greater(result.FadedShare, 0f);
             }
         }
 

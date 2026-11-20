@@ -18,22 +18,32 @@ namespace NordicWind.AdvancedAtlaser.Editor
             DataType=TextureDataType.Mask, SRGB=false, Mipmaps=false, Compression=TextureCompression.None,
             WrapMode=TextureWrapMode.Clamp, OutputChannels=TextureOutputChannels.RGB
         };
-        // Corrections larger than this more likely come from a mismatch between the original
-        // and reduced mesh than from real shape, so they fade out (see NormalDifferenceOptions).
+        // The soft limit for corrections: larger ones more likely come from a mismatch between the
+        // original and reduced mesh than from real shape, so they're compressed toward it (see
+        // NormalDifferenceOptions).
         private const float MaxCorrectionAngle = 60f;
+        // Where the original's surface at a UV lies further from the current one than these shares
+        // of the current triangles' size (the mean edge length around each vertex, blended over
+        // each triangle so it's continuous), the two don't describe the same
+        // place, and the correction fades out between them. A reduction moves the surface by a
+        // fraction of the triangles it makes; a collapsed tip or a flattened ridge moves it by most
+        // of one, and the original's normal there belongs to a surface that isn't there any more.
+        private const float AlignedShare=0.25f, MisalignedShare=0.75f;
         // One summary line per material, never one per texel. Overlapping UVs are a normal
         // modeling choice and are handled safely, so they are information only. Corrections
-        // cut by the angle limit point to a mismatch: one warning when they reach 1%.
+        // beyond the angle limit point to a mismatch: one warning when they reach 1%.
         private static void ReportCorrection(string material,NormalDifferenceStatistics stats,List<string> diagnostics)
         {
             if(stats.Baked==0) return;
             string Share(int count) => (100.0*count/stats.Baked).ToString("F1")+"%";
             diagnostics.Add(material+": normal correction on "+stats.Baked+" texels; overlapping UVs left uncorrected on "+
-                Share(stats.Overlapping)+"; corrections reduced by the "+MaxCorrectionAngle+"° limit on "+Share(stats.Limited)+
-                "; largest correction kept "+stats.LargestAngle.ToString("F1")+"°.");
+                Share(stats.Overlapping)+"; faded where the surfaces don't line up on "+Share(stats.Kept)+
+                "; beyond the "+MaxCorrectionAngle+"° soft limit on "+Share(stats.Limited)+
+                "; largest correction kept "+stats.LargestAngle.ToString("F1")+"°; shading off from the original by "+
+                stats.MeanAngleBefore.ToString("F1")+"° on average without the correction, "+stats.MeanAngleAfter.ToString("F1")+"° with it.");
             if(stats.Limited*100>=stats.Baked)
                 diagnostics.Add("[Warning] "+material+": "+Share(stats.Limited)+" of the normal correction is larger than "+
-                    MaxCorrectionAngle+"° and was reduced or left out. The original and reduced meshes may not match there, " +
+                    MaxCorrectionAngle+"° and was compressed toward it. The original and reduced meshes may not match there, " +
                     "for example if UVs moved during reduction.");
         }
         private static NordicsTextureWrapper Flat(int width,int height,TextureDataType kind)
@@ -108,6 +118,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Tangent",maps.Tangent),diagnostics);
                         TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Bitangent",maps.Bitangent),diagnostics);
                         TryExport(() => AtlasDebugExporter.Normal(debugFolder,"TangentBasis_Normal",maps.FrameNormal),diagnostics);
+                        TryExport(() => AtlasDebugExporter.Grayscale(debugFolder,"CorrectionKeep",maps.Keep),diagnostics);
                         ExportGeometryDebug(debugFolder,material,maps.Original,maps.FrameNormal,diagnostics);
                         // Preserve the raw correction for debug inspection before padding.
                         TryExport(() => AtlasDebugExporter.Normal(debugFolder,
@@ -130,7 +141,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         /// <summary>The maps of one bake, handed to the inspect callback of BakeCorrection.</summary>
         internal sealed class CorrectionMaps
         {
-            public NordicsTextureWrapper Original, Tangent, Bitangent, FrameNormal, Correction;
+            // Keep: the share of the correction kept where the surfaces don't line up (R).
+            public NordicsTextureWrapper Original, Tangent, Bitangent, FrameNormal, Correction, Keep;
             public NormalDifferenceStatistics Statistics;
         }
         /// <summary>
@@ -148,36 +160,92 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             NordicsTextureWrapper correction;
             using(var originalNormals=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
-            using(var tangent=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
-            using(var bitangent=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
-            using(var normalBasis=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
             using(var coverage=new NordicsTextureWrapper(width,height,Masks()))
+            using(var keep=new NordicsTextureWrapper(width,height,Data()))
             {
                 // Coverage per UV winding finds overlapping UVs (mirrored halves, stacked
                 // copies), which get no correction rather than a wrong one. All original sections
-                // paint in one batch, so a hidden part of one can be hidden by another.
+                // paint in one batch, so a hidden part of one can be hidden by another. The
+                // original's positions go into `keep`, which Alignment turns into the share of the
+                // correction to keep.
                 using(new AtlasStageTimer($"paint original normals ({width}×{height})",timings))
-                    Rasterize(originals,originalNormals,null,null,null,null,coverage,false,excludeHidden);
+                    Rasterize(originals,originalNormals,null,null,null,null,coverage,false,excludeHidden,keep);
+                using(new AtlasStageTimer($"surface alignment ({width}×{height})",timings))
+                {
+                    using(var positions=new NordicsTextureWrapper(width,height,Data()))
+                    using(var sizes=new NordicsTextureWrapper(width,height,Data()))
+                    {
+                        Rasterize(current,null,null,null,null,null,null,true,excludeHidden,positions,sizes);
+                        Alignment(keep,positions,sizes);
+                    }
+                    AtlasPixels.Release();
+                }
                 // Tangent-space correction must be expressed in the current mesh's frame. The
                 // frame-normal map covers exactly the current triangles, so it also serves as
                 // the bake's coverage area.
-                using(new AtlasStageTimer($"paint current frames ({width}×{height})",timings))
-                    Rasterize(current,null,null,tangent,bitangent,normalBasis,coverage,true,excludeHidden);
-                using(new AtlasStageTimer($"normal difference ({width}×{height})",timings))
-                    correction=originalNormals.BakeNormalDifference(normalBasis,
-                        new TangentBasisData { Tangent=tangent,Bitangent=bitangent,Normal=normalBasis },
-                        new NormalDifferenceOptions { Coverage=coverage, MaxAngle=maxAngle },
-                        out statistics);
-                try
+                using(var tangent=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
+                using(var bitangent=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
+                using(var normalBasis=new NordicsTextureWrapper(width,height,Normals(TextureDataType.NormalWorld)))
                 {
-                    inspect?.Invoke(new CorrectionMaps { Original=originalNormals,Tangent=tangent,Bitangent=bitangent,
-                        FrameNormal=normalBasis,Correction=correction,Statistics=statistics });
+                    using(new AtlasStageTimer($"paint current frames ({width}×{height})",timings))
+                        Rasterize(current,null,null,tangent,bitangent,normalBasis,coverage,true,excludeHidden);
+                    using(new AtlasStageTimer($"normal difference ({width}×{height})",timings))
+                        correction=originalNormals.BakeNormalDifference(normalBasis,
+                            new TangentBasisData { Tangent=tangent,Bitangent=bitangent,Normal=normalBasis },
+                            new NormalDifferenceOptions { Coverage=coverage, MaxAngle=maxAngle, Keep=keep },
+                            out statistics);
+                    try
+                    {
+                        inspect?.Invoke(new CorrectionMaps { Original=originalNormals,Tangent=tangent,Bitangent=bitangent,
+                            FrameNormal=normalBasis,Correction=correction,Keep=keep,Statistics=statistics });
+                    }
+                    catch { correction.Dispose(); throw; }
                 }
-                catch { correction.Dispose(); throw; }
             }
             using(new AtlasStageTimer($"dilate correction ({width}×{height})",timings))
                 AtlasNormalPadding.DilateAndFinalize(correction);
             return correction;
+        }
+        private static TextureSettings Data() => new TextureSettings {
+            DataType=TextureDataType.LinearData, SRGB=false, Mipmaps=false, Compression=TextureCompression.None,
+            WrapMode=TextureWrapMode.Clamp, OutputChannels=TextureOutputChannels.RGBA
+        };
+        /// <summary>
+        /// Turns the original's painted positions (`original`: position × coverage, coverage in
+        /// alpha) into the share of the correction to keep, given the current mesh's positions
+        /// and triangle sizes painted the same way: 1 where both surfaces at a UV are in the same
+        /// place, fading to 0 between AlignedShare and MisalignedShare of the current triangles'
+        /// mean edge length. A constant offset between the two (scene objects standing apart) is
+        /// removed first: the median difference. Texels only one surface covers keep everything.
+        /// </summary>
+        public static void Alignment(NordicsTextureWrapper original,NordicsTextureWrapper current,NordicsTextureWrapper sizes)
+        {
+            // The current positions and sizes, divided by their coverage, into `current`.
+            AtlasPixels.Map(current,sizes,(c,s) => c.a>1e-4f && s.a>1e-4f
+                ? new Color(c.r/c.a,c.g/c.a,c.b/c.a,s.r/s.a) : new Color(0f,0f,0f,0f));
+            int step=Math.Max(1,Math.Max(original.Width,original.Height)/256);
+            var dx=new List<float>(); var dy=new List<float>(); var dz=new List<float>();
+            for(int y=step/2;y<original.Height;y+=step)
+                for(int x=step/2;x<original.Width;x+=step)
+                {
+                    var o=original.GetPixel(x,y); var c=current.GetPixel(x,y);
+                    if(o.a<=1e-4f || c.a<=0f) continue;
+                    dx.Add(o.r/o.a-c.r); dy.Add(o.g/o.a-c.g); dz.Add(o.b/o.a-c.b);
+                }
+            var offset=dx.Count>0 ? new Vector3(Median(dx),Median(dy),Median(dz)) : Vector3.zero;
+            AtlasPixels.Map(original,current,(o,c) =>
+            {
+                if(o.a<=1e-4f || c.a<=0f) return Color.white;
+                float distance=new Vector3(o.r/o.a-c.r-offset.x,o.g/o.a-c.g-offset.y,o.b/o.a-c.b-offset.z).magnitude;
+                float share=distance/c.a;
+                float keep=1f-Mathf.SmoothStep(0f,1f,Mathf.Clamp01((share-AlignedShare)/(MisalignedShare-AlignedShare)));
+                return new Color(keep,keep,keep,1f);
+            });
+        }
+        private static float Median(List<float> values)
+        {
+            values.Sort();
+            return values[values.Count/2];
         }
         // Bounded CPU diagnostic: detects systematic coordinate mismatches without
         // allocating another full-resolution float texture. Only compare overlapping UVs.
@@ -306,16 +374,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private const float HiddenMargin=0.002f;
         private static void Rasterize(AtlasMeshSection section,NordicsTextureWrapper normals,NordicsTextureWrapper mask,
             NordicsTextureWrapper tangent,NordicsTextureWrapper bitangent,NordicsTextureWrapper basisNormal,
-            NordicsTextureWrapper coverage=null,bool target=false,bool hidden=false)
-            => Rasterize(new[]{section},normals,mask,tangent,bitangent,basisNormal,coverage,target,hidden);
+            NordicsTextureWrapper coverage=null,bool target=false,bool hidden=false,
+            NordicsTextureWrapper positionMap=null,NordicsTextureWrapper sizeMap=null)
+            => Rasterize(new[]{section},normals,mask,tangent,bitangent,basisNormal,coverage,target,hidden,positionMap,sizeMap);
         // Each map gets the sections' triangles in one batch (PaintTriangles), painted on every
         // core or the GPU; the values are the same as painting one triangle at a time. With
         // `hidden`, surfaces hidden close behind another surface with the same UVs are left out
-        // of every map but the usage mask.
+        // of every map but the usage mask. `positionMap` gets the surface's position and `sizeMap`
+        // the triangles' size around it (VertexSizes), both × coverage, with coverage in alpha.
         private static void Rasterize(IReadOnlyList<AtlasMeshSection> sections,NordicsTextureWrapper normals,NordicsTextureWrapper mask,
             NordicsTextureWrapper tangent,NordicsTextureWrapper bitangent,NordicsTextureWrapper basisNormal,
-            NordicsTextureWrapper coverage=null,bool target=false,bool hidden=false)
+            NordicsTextureWrapper coverage=null,bool target=false,bool hidden=false,
+            NordicsTextureWrapper positionMap=null,NordicsTextureWrapper sizeMap=null)
         {
+            var positionValues=positionMap!=null ? new List<Color>() : null;
+            var sizeValues=sizeMap!=null ? new List<Color>() : null;
+            float[] vertexSizes=null;
             bool frames=tangent!=null && bitangent!=null && basisNormal!=null;
             var uvs=new List<Vector2>();
             var normalValues=normals!=null||frames ? new List<Color>() : null;
@@ -328,6 +402,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 if(section==null || section.UV==null || section.Vertices==null || section.Triangles==null) continue;
                 int count=section.Vertices.Length;
+                if(sizeValues!=null) vertexSizes=VertexSizes(section);
                 var nMat=section.LocalToWorld.inverse.transpose;
                 float sign=section.LocalToWorld.determinant < 0f ? -1f : 1f;
                 for(int i=0;i+2<section.Triangles.Length;i+=3)
@@ -355,6 +430,24 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         Color cover=NormalDifferenceOptions.CoverageColor(uv0,uv1,uv2,target);
                         coverValues.Add(cover);coverValues.Add(cover);coverValues.Add(cover);
                     }
+                    if(positionValues!=null || sizeValues!=null)
+                    {
+                        Vector3 pa=section.LocalToWorld.MultiplyPoint3x4(section.Vertices[a]);
+                        Vector3 pb=section.LocalToWorld.MultiplyPoint3x4(section.Vertices[b]);
+                        Vector3 pc=section.LocalToWorld.MultiplyPoint3x4(section.Vertices[c]);
+                        if(positionValues!=null)
+                        {
+                            positionValues.Add(new Color(pa.x,pa.y,pa.z,1f));
+                            positionValues.Add(new Color(pb.x,pb.y,pb.z,1f));
+                            positionValues.Add(new Color(pc.x,pc.y,pc.z,1f));
+                        }
+                        if(sizeValues!=null)
+                        {
+                            sizeValues.Add(new Color(vertexSizes[a],vertexSizes[a],vertexSizes[a],1f));
+                            sizeValues.Add(new Color(vertexSizes[b],vertexSizes[b],vertexSizes[b],1f));
+                            sizeValues.Add(new Color(vertexSizes[c],vertexSizes[c],vertexSizes[c],1f));
+                        }
+                    }
                     if(!frames) continue;
                     Vector3 t0=Tangent(section,a,n0,sign),t1=Tangent(section,b,n1,sign),t2=Tangent(section,c,n2,sign);
                     tangentValues.Add(Pack(t0));tangentValues.Add(Pack(t1));tangentValues.Add(Pack(t2));
@@ -373,10 +466,40 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 mask.PaintTriangles(uvs,white,Fast);
             }
             coverage?.PaintTriangles(uvs,coverValues,Quality,depth);
+            positionMap?.PaintTriangles(uvs,positionValues,Quality,depth);
+            sizeMap?.PaintTriangles(uvs,sizeValues,Quality,depth);
             if(!frames) return;
             tangent.PaintTriangles(uvs,tangentValues,Quality,depth);
             bitangent.PaintTriangles(uvs,bitangentValues,Quality,depth);
             basisNormal.PaintTriangles(uvs,normalValues,Quality,depth);
+        }
+        // Each vertex's size: the mean edge length of the triangles around it, merged over
+        // vertices at the same position (split at UV seams or hard edges), so the size changes
+        // smoothly over the surface. A size per triangle would step at every edge between a
+        // large and a small triangle, and so would everything measured against it.
+        private static float[] VertexSizes(AtlasMeshSection section)
+        {
+            int count=section.Vertices.Length;
+            var sums=new Dictionary<Vector3,Vector2>();
+            void Add(Vector3 position,float size)
+            {
+                sums.TryGetValue(position,out var sum);
+                sums[position]=new Vector2(sum.x+size,sum.y+1f);
+            }
+            for(int i=0;i+2<section.Triangles.Length;i+=3)
+            {
+                int a=section.Triangles[i], b=section.Triangles[i+1], c=section.Triangles[i+2];
+                if(a<0||b<0||c<0||a>=count||b>=count||c>=count) continue;
+                Vector3 pa=section.LocalToWorld.MultiplyPoint3x4(section.Vertices[a]);
+                Vector3 pb=section.LocalToWorld.MultiplyPoint3x4(section.Vertices[b]);
+                Vector3 pc=section.LocalToWorld.MultiplyPoint3x4(section.Vertices[c]);
+                float size=((pb-pa).magnitude+(pc-pb).magnitude+(pa-pc).magnitude)/3f;
+                Add(section.Vertices[a],size);Add(section.Vertices[b],size);Add(section.Vertices[c],size);
+            }
+            var sizes=new float[count];
+            for(int v=0;v<count;v++)
+                sizes[v]=sums.TryGetValue(section.Vertices[v],out var sum) && sum.y>0f ? sum.x/sum.y : 0f;
+            return sizes;
         }
         private static bool Finite(Vector2 uv) => !float.IsNaN(uv.x) && !float.IsNaN(uv.y) && !float.IsInfinity(uv.x) && !float.IsInfinity(uv.y);
         private static Color Pack(Vector3 v) => new Color(v.x,v.y,v.z,1);

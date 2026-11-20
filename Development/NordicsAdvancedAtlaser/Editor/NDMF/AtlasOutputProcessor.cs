@@ -24,6 +24,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 OutputName = config.outputName,
                 OutputShaderId = config.shaderId,
                 RegionPadding = AtlasOutputLayout.EffectivePadding(config),
+                NormalBlock = AtlasTextureMemory.NormalBlock(config),
                 MainTexture = config.mainTexture == null ? null : new AtlasTextureSize
                 {
                     width = config.mainTexture.width, height = config.mainTexture.height

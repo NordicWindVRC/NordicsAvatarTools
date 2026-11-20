@@ -15,6 +15,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Already 0 when the output has fewer than two sources.
         public int RegionPadding;
         public AtlasTextureSize MainTexture;
+        // The compression block, in pixels, of the normal map's format on the platform being
+        // built (1: uncompressed). Normal corrections are smoothed to half of it.
+        public int NormalBlock = 1;
         public readonly List<AtlasFeatureChoice> Features = new List<AtlasFeatureChoice>();
         public readonly List<AtlasGeneratorSource> Sources = new List<AtlasGeneratorSource>();
     }

@@ -32,6 +32,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (depth > 0) label = name;
         }
 
+        /// <summary>One line about the evaluation for the build log, named after it; dropped
+        /// outside a scope with timings.</summary>
+        public static void Note(string line)
+        {
+            timings?.Add(label + ": " + line);
+        }
+
         /// <summary>Times one step of the evaluation; null outside a scope with timings.</summary>
         public static IDisposable Step(string step)
         {

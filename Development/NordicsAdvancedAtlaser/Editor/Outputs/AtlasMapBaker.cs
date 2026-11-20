@@ -66,7 +66,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                                 AtlasEvaluationCache.Name("evaluate " + map);
                                 NordicsTextureWrapper evaluated;
                                 using (new AtlasStageTimer("evaluate " + map, timings))
-                                    evaluated = part.Request.Evaluate != null
+                                    evaluated = part.Request.EvaluatePlaced != null
+                                        ? part.Request.EvaluatePlaced(index, source.Material, bake.x, bake.y, AtlasOutputLayout.IslandSize(source.UVRegion, size))
+                                        : part.Request.Evaluate != null
                                         ? part.Request.Evaluate(index, source.Material, bake.x, bake.y)
                                         : AtlasMapEvaluator.Evaluate(part.Request.Map, source.Material, bake.x, bake.y);
                                 if (part.Copy == null)
@@ -89,7 +91,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         // takes the content's edge; its usage is copied, so the dilation knows the
                         // regions. The mesh remap uses the same inset (AtlasOutputLayout.ContentRegion).
                         using (new AtlasStageTimer("place " + label, timings))
-                            atlas.Blit(content, region: source.UVRegion, padding: padding, sampling: TextureSamplingMode.Area);
+                            atlas.Blit(content, region: source.UVRegion, padding: padding, sampling: TextureSamplingMode.AreaFlatten);
                     }
                     finally
                     {

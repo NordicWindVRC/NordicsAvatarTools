@@ -5,7 +5,10 @@ using UnityEngine;
 namespace NordicWind.TextureWrapper
 {
     public enum TextureDataType { Color, LinearData, Mask, NormalTangent, NormalObject, NormalWorld }
-    public enum TextureSamplingMode { Nearest, Bilinear, Bicubic, Area }
+    // AreaFlatten: Area, and for tangent-space normal maps each texel's tilt scaled by how much
+    // the normals it covers agree (the length of their average), so detail finer than a texel
+    // flattens instead of turning into noise.
+    public enum TextureSamplingMode { Nearest, Bilinear, Bicubic, Area, AreaFlatten }
     public enum TextureChannel { R, G, B, A, AverageRGB, Usage }
     public enum TextureBlendMode { Replace, Darken, Multiply, Lighten, Screen, Subtract, Add, Overlay, Mixed, Divide, Average, NormalLerp, NormalRNM, NormalWhiteout }
     public enum TextureMaskBlendMode { Replace, Subtract, Multiply, Divide, Min, Max, Average, Add }
@@ -138,10 +141,17 @@ namespace NordicWind.TextureWrapper
         /// surface (overlapping UVs, such as mirrored halves or stacked copies) get no correction,
         /// because one texel can't hold the right value for both.</summary>
         public NordicsTextureWrapper Coverage;
-        /// <summary>Largest correction kept, in degrees from no correction. Larger ones more
-        /// likely come from a mismatch than from real shape, so they fade out over the last 10°.
-        /// Never above 90°: a normal map can't store a correction pointing into the surface.</summary>
+        /// <summary>The soft limit for corrections, in degrees from no correction. Corrections
+        /// up to half of it are kept as they are; larger ones are compressed smoothly toward it
+        /// (`half + half × tanh((angle − half) / half)`), so a larger raw correction never gives
+        /// a smaller result and the map has no steps. Large corrections more likely come from a
+        /// mismatch than from real shape. Never above 90°: a normal map can't store a correction
+        /// pointing into the surface.</summary>
         public float MaxAngle = 90f;
+        /// <summary>Optional map of the bake's size: how much of the correction to keep per texel
+        /// (R, 0–1), for rules the caller knows, such as places where the two surfaces don't line
+        /// up. The correction fades toward flat by it. Unused texels keep it all.</summary>
+        public NordicsTextureWrapper Keep;
 
         /// <summary>The color to paint a triangle with into <see cref="Coverage"/>.</summary>
         public static Color CoverageColor(Vector2 uv0, Vector2 uv1, Vector2 uv2, bool target)
@@ -158,11 +168,17 @@ namespace NordicWind.TextureWrapper
         public int Baked;
         /// <summary>Texels whose correction was reduced or removed because surfaces overlap.</summary>
         public int Overlapping;
-        /// <summary>Texels whose correction was reduced or removed by <c>MaxAngle</c>, including
-        /// ones that would point into the surface.</summary>
+        /// <summary>Texels whose raw correction was beyond <c>MaxAngle</c>, including ones that
+        /// would point into the surface (compressed toward the limit).</summary>
         public int Limited;
+        /// <summary>Texels whose correction was reduced by the <c>Keep</c> map.</summary>
+        public int Kept;
         /// <summary>The largest correction kept, in degrees.</summary>
         public float LargestAngle;
+        /// <summary>How far the target's shading is from the reference's, in degrees, averaged
+        /// over the texels with a valid frame: with its own normals, and with the correction as
+        /// stored (decoded as shaders do).</summary>
+        public float MeanAngleBefore, MeanAngleAfter;
     }
     // TBN vectors may be baked from mesh vertices by a higher-level caller.
     public sealed class TangentBasisData

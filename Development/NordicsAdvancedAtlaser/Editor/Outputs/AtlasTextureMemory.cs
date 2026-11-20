@@ -36,6 +36,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
         }
 
+        /// <summary>A format's compression block width in pixels (1: uncompressed).</summary>
+        public static int BlockSize(AtlasTextureFormat format)
+        {
+            Block(format, out int width, out _, out _);
+            return width;
+        }
+
+        /// <summary>The normal map's block size on the platform being built.</summary>
+        public static int NormalBlock(AtlasOutputConfiguration config)
+        {
+            var target = UnityEditor.EditorUserBuildSettings.activeBuildTarget;
+            bool mobile = target == UnityEditor.BuildTarget.Android || target == UnityEditor.BuildTarget.iOS;
+            var formats = mobile ? config?.androidFormats : config?.pcFormats;
+            return formats == null ? 1 : BlockSize(Format(formats, AtlasTextureKind.Normal));
+        }
+
         // "2.7 MB": megabytes of 1024², as Unity shows texture memory.
         public static string Label(long bytes) => $"{bytes / (1024.0 * 1024.0):0.0} MB";
 

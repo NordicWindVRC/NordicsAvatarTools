@@ -402,6 +402,23 @@ EditMode tests pass in Unity 2022.3.22.
     (`AtlasMatcapFeature.FitGlow`, `AtlasOutputPlan.BeforeWrite`); a slot with a constant mask
     glows by that constant.
   - The build log lists fitted glows and glow-only matcaps that show a slot's blend.
+- **The normal correction left creases and patches.** Its angle limit faded corrections to flat
+  over the last 10°, so the shading stepped where the raw correction crossed it; it's now a soft
+  limit that compresses corrections above half of it smoothly toward it. The correction also
+  fades out where the original's surface at a UV is far from the reduced one (a quarter to three
+  quarters of the reduced mesh's size around each point apart, a size blended between vertices
+  so it doesn't step at triangle edges), where a reducer moved or collapsed the shape
+  and the original's normal belongs elsewhere. Both apply to the build's correction and the
+  Normal Baker, whose summaries now also say how far the shading is from the original without
+  and with the correction.
+- **Normal corrections showed hard edges along UV seams.** Where two UV islands meet on the
+  mesh, each side reads its own part of the texture, and filtering, compression and mip levels
+  never let both decode to the same direction, while the mesh's vertex normals are seamless. The
+  pre-baked map and the geometry correction now fade to none at the borders of the source's UV
+  islands, over one compression block of the normal map's format in final pixels
+  (`AtlasNormalSeams`); the build log says on how much of the source.
+- **Shrunk normal maps turned fine detail into noise.** Normal maps shrunk into a bake size or
+  an atlas region are now flattened where the normals a texel covers disagree (`AreaFlatten`).
 - **Rewritten vertex colors took four times the room.** The mesh remapper wrote the colors it
   rewrites per source as 32-bit floats; they're now 8 bits per channel where the mesh had them so
   (or had none) and the results fit 0–1, and floats otherwise.

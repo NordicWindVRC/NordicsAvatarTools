@@ -178,8 +178,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             result.Map = map;
             result.Summary = "Baked " + stats.Baked + " texels. No correction where UVs overlap (" +
-                Share(stats.Baked > 0 ? stats.Overlapping / (float)stats.Baked : 0f) + ") or above " + maxAngle + "° (" +
-                Share(limited) + "); largest correction kept " + stats.LargestAngle.ToString("F1") + "°.";
+                Share(stats.Baked > 0 ? stats.Overlapping / (float)stats.Baked : 0f) + "); faded where the surfaces don't line up (" +
+                Share(stats.Baked > 0 ? stats.Kept / (float)stats.Baked : 0f) + "); compressed beyond " + maxAngle + "° (" +
+                Share(limited) + "); largest correction kept " + stats.LargestAngle.ToString("F1") + "°. Shading off from the original by " +
+                stats.MeanAngleBefore.ToString("F1") + "° on average without the map, " + stats.MeanAngleAfter.ToString("F1") +
+                "° with it, at this size; the atlas fades the map out at its UV seams.";
             return result;
         }
         private static TextureSettings MapSettings() => new TextureSettings {

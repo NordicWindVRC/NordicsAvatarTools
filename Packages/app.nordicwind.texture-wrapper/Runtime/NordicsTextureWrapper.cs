@@ -228,7 +228,7 @@ namespace NordicWind.TextureWrapper
             float fx=uv.x*Width-.5f,fy=uv.y*Height-.5f;
             if(sampling==TextureSamplingMode.Nearest)return Tap(Mathf.FloorToInt(fx+.5f),Mathf.FloorToInt(fy+.5f),wrap);
             int x=Mathf.FloorToInt(fx),y=Mathf.FloorToInt(fy);float u=fx-x,v=fy-y;
-            if(sampling==TextureSamplingMode.Bilinear||sampling==TextureSamplingMode.Area)
+            if(sampling==TextureSamplingMode.Bilinear||sampling==TextureSamplingMode.Area||sampling==TextureSamplingMode.AreaFlatten)
             {
                 return MathUtil.Lerp(MathUtil.Lerp(Tap(x,y,wrap),Tap(x+1,y,wrap),u),MathUtil.Lerp(Tap(x,y+1,wrap),Tap(x+1,y+1,wrap),u),v);
             }
@@ -304,8 +304,11 @@ namespace NordicWind.TextureWrapper
                     Vector2 local=new Vector2((x+.5f)/width,(y+.5f)/height);
                     Vector2 uv=MapUV(local,r,s,o,rotation);
                     Color c;
-                    if(sampling==TextureSamplingMode.Area&&(Mathf.Abs(s.x*r.width)*Width>width || Mathf.Abs(s.y*r.height)*Height>height))
+                    bool area=sampling==TextureSamplingMode.Area||sampling==TextureSamplingMode.AreaFlatten;
+                    bool averaged=false;
+                    if(area&&(Mathf.Abs(s.x*r.width)*Width>width || Mathf.Abs(s.y*r.height)*Height>height))
                     {
+                        averaged=true;
                         // Deterministic supersampling approximation to area integration.
                         int nx=Mathf.Clamp(Mathf.CeilToInt(Mathf.Abs(s.x*r.width)*Width/width),1,16);
                         int ny=Mathf.Clamp(Mathf.CeilToInt(Mathf.Abs(s.y*r.height)*Height/height),1,16);
@@ -317,10 +320,17 @@ namespace NordicWind.TextureWrapper
                         }
                         c*=1f/(nx*ny);
                     }
-                    else c=SampleRaw(uv,sampling==TextureSamplingMode.Area?TextureSamplingMode.Bilinear:sampling,w);
+                    else c=SampleRaw(uv,area?TextureSamplingMode.Bilinear:sampling,w);
                     if(Normal)
                     {
                         Vector3 n=MathUtil.Normal(c);
+                        // The average of unit normals is shorter the more they disagree: tilt
+                        // the result back toward flat by that much.
+                        if(averaged&&sampling==TextureSamplingMode.AreaFlatten&&Settings.DataType==TextureDataType.NormalTangent)
+                        {
+                            float agreement=Mathf.Clamp01(n.magnitude);
+                            n=Vector3.Lerp(Vector3.forward,MathUtil.SafeNormal(n),agreement);
+                        }
                         if(Settings.DataType==TextureDataType.NormalTangent && rotation!=0f)n=RotateNormal(n,rotation);
                         c=MathUtil.Pack(MathUtil.SafeNormal(n),c.a);
                     }
@@ -989,11 +999,19 @@ namespace NordicWind.TextureWrapper
                 if (coverage.Width != Width || coverage.Height != Height)
                     throw new ArgumentException("The coverage map must match the bake's dimensions.", nameof(options));
             }
-            // Corrections fade to flat over the last FadeAngle degrees before the limit.
-            const float FadeAngle = 10f;
+            // Corrections are compressed smoothly toward the limit above half of it.
             float maxAngle = options == null ? float.PositiveInfinity : Mathf.Min(options.MaxAngle, 90f);
-            var baked = new int[Height]; var overlapping = new int[Height]; var limited = new int[Height];
+            var keepMap = options?.Keep;
+            if (keepMap != null)
+            {
+                keepMap.Check();
+                if (keepMap.Width != Width || keepMap.Height != Height)
+                    throw new ArgumentException("The keep map must match the bake's dimensions.", nameof(options));
+                if (keepMap.Normal) keepMap.EnsureNormalized();
+            }
+            var baked = new int[Height]; var overlapping = new int[Height]; var limited = new int[Height]; var kept = new int[Height];
             var largest = new float[Height];
+            var before = new double[Height]; var after = new double[Height]; var measured = new int[Height];
             if (targetNormals == null) throw new ArgumentNullException(nameof(targetNormals));
             if (basis == null) throw new ArgumentNullException(nameof(basis));
             if (basis.Tangent == null || basis.Bitangent == null || basis.Normal == null)
@@ -1054,13 +1072,31 @@ namespace NordicWind.TextureWrapper
                         Vector3.Dot(reference,bn), Vector3.Dot(reference,nt), Vector3.Dot(reference,tb))/det);
                     if (options != null)
                     {
+                        float angle = Mathf.Atan2(new Vector2(tangentSpace.x, tangentSpace.y).magnitude, tangentSpace.z) * Mathf.Rad2Deg;
+                        if (angle > maxAngle) limited[y]++;
+                        float limitedAngle = SoftLimit(angle, maxAngle);
+                        if (limitedAngle < angle - 1e-4f)
+                        {
+                            // The same direction around the normal, at the compressed angle.
+                            Vector2 side = new Vector2(tangentSpace.x, tangentSpace.y);
+                            side = side.sqrMagnitude > 1e-12f ? side.normalized : Vector2.right;
+                            float radians = limitedAngle * Mathf.Deg2Rad;
+                            tangentSpace = new Vector3(side.x * Mathf.Sin(radians), side.y * Mathf.Sin(radians), Mathf.Cos(radians));
+                        }
                         float keep = 1f;
                         if (overlap < 1f) { keep *= overlap; overlapping[y]++; }
-                        float angle = Mathf.Atan2(new Vector2(tangentSpace.x, tangentSpace.y).magnitude, tangentSpace.z) * Mathf.Rad2Deg;
-                        float angleKeep = 1f - Mathf.Clamp01((angle - (maxAngle - FadeAngle)) / FadeAngle);
-                        if (angleKeep < 1f) { keep *= angleKeep; limited[y]++; }
+                        if (keepMap != null && keepMap._usage[i] != 0)
+                        {
+                            float rule = Mathf.Clamp01(keepMap._pixels[i].r);
+                            if (rule < 1f) { keep *= rule; kept[y]++; }
+                        }
                         if (keep < 1f) tangentSpace = MathUtil.SafeNormal(Vector3.Lerp(Vector3.forward, tangentSpace, keep));
                         largest[y] = Mathf.Max(largest[y], Mathf.Atan2(new Vector2(tangentSpace.x, tangentSpace.y).magnitude, tangentSpace.z) * Mathf.Rad2Deg);
+                        // The shading with the target's own normal and with the stored correction.
+                        Vector3 shaded = MathUtil.SafeNormal(t * tangentSpace.x + b * tangentSpace.y + n * tangentSpace.z);
+                        before[y] += Vector3.Angle(MathUtil.SafeNormal(n), reference);
+                        after[y] += Vector3.Angle(shaded, reference);
+                        measured[y]++;
                     }
                     baked[y]++;
                     output._pixels[i]=MathUtil.Pack(tangentSpace,Mathf.Clamp01(_pixels[i].a));
@@ -1069,12 +1105,31 @@ namespace NordicWind.TextureWrapper
             });
             output._normalized=true;
             statistics = new NormalDifferenceStatistics();
+            double beforeSum = 0.0, afterSum = 0.0; long measuredCount = 0;
             for (int y = 0; y < Height; y++)
             {
                 statistics.Baked += baked[y]; statistics.Overlapping += overlapping[y]; statistics.Limited += limited[y];
+                statistics.Kept += kept[y];
                 statistics.LargestAngle = Mathf.Max(statistics.LargestAngle, largest[y]);
+                beforeSum += before[y]; afterSum += after[y]; measuredCount += measured[y];
+            }
+            if (measuredCount > 0)
+            {
+                statistics.MeanAngleBefore = (float)(beforeSum / measuredCount);
+                statistics.MeanAngleAfter = (float)(afterSum / measuredCount);
             }
             return output;
+        }
+        /// <summary>The soft limit: angles up to half the limit as they are, larger ones
+        /// compressed smoothly toward it, never past it.</summary>
+        public static float SoftLimit(float angle, float limit)
+        {
+            if (float.IsPositiveInfinity(limit) || limit <= 0f) return limit <= 0f ? 0f : angle;
+            float half = limit * 0.5f;
+            if (angle <= half) return angle;
+            float x = (angle - half) / half;
+            float e = Mathf.Exp(-2f * x);
+            return half + half * (1f - e) / (1f + e);
         }
         /// <summary>How much of the correction to keep at a texel, from its coverage
         /// (R, G = reference by winding; B, A = target by winding): 1 = covered by one surface.</summary>

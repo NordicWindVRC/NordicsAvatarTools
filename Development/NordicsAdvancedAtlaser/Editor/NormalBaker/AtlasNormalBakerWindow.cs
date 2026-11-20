@@ -45,7 +45,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 height = SizePopup(height);
             }
             maxAngle = EditorGUILayout.Slider(new GUIContent("Max Correction Angle",
-                "Corrections larger than this fade out: they more likely come from a mismatch than from real shape."),
+                "Corrections above half of this are compressed smoothly toward it: large ones more likely come from a mismatch than from real shape."),
                 maxAngle, 10f, 90f);
 
             string orientation = AtlasNormalBaker.OrientationWarning(originalSource, currentSource);
