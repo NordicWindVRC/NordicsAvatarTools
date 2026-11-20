@@ -362,6 +362,9 @@ EditMode tests pass in Unity 2022.3.22.
   correction hit the 60° limit, which points to a mismatch between the meshes.
 
 ### Changed
+- **Glitter** is off by default on outputs without native glitter (Toon Standard): *Points in
+  the maps* is used only when chosen (`AtlasFeatureMode.OptIn`: the default passes over such
+  modes and is Off where nothing else fits).
 - **Emission textures** (*Emission*, *Live emission*, *Cycling emission 1* and *2*) start at
   half the main texture's size, like the mask textures.
 - **Reflection and specular masks:** a reflection or highlight strength that is the same

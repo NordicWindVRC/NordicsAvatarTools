@@ -25,7 +25,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             new AtlasFeatureMode
             {
                 Id = "emulated", Label = "Points in the maps", Kind = AtlasFeatureModeKind.Emulated,
-                Requires = c => !c.Glitter && (c.Provides(AtlasVirtualMap.Emission) || c.Provides(AtlasVirtualMap.Roughness))
+                Requires = c => !c.Glitter && (c.Provides(AtlasVirtualMap.Emission) || c.Provides(AtlasVirtualMap.Roughness)),
+                // Still points don't twinkle: only when chosen, so outputs without glitter
+                // default to Off.
+                OptIn = true
             },
             AtlasFeatureMode.Off
         };

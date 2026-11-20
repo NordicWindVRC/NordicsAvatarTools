@@ -38,6 +38,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasVirtualMap[] OptionalMaps = Array.Empty<AtlasVirtualMap>();
         // Other capabilities the mode needs; null: none.
         public Func<AtlasOutputCapabilities, bool> Requires;
+        // Used only when the user chooses it: the default passes it over, and is Off where no
+        // other mode fits.
+        public bool OptIn;
 
         // Every feature can be turned off.
         public static readonly AtlasFeatureMode Off = new AtlasFeatureMode { Id = "off", Label = "Off", Kind = AtlasFeatureModeKind.Off };
@@ -260,6 +263,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var modes = Available(feature, capabilities);
             if (modes.Count == 0) return null;
             return modes.FirstOrDefault(m => !string.IsNullOrEmpty(storedMode) && m.Id == storedMode)
+                ?? modes.FirstOrDefault(m => m.Kind != AtlasFeatureModeKind.Off && !m.OptIn)
+                ?? modes.FirstOrDefault(m => m.Kind == AtlasFeatureModeKind.Off)
                 ?? modes.First(m => m.Kind != AtlasFeatureModeKind.Off);
         }
     }

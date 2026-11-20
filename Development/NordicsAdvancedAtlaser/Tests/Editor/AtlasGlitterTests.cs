@@ -82,6 +82,10 @@ namespace NordicWind.AdvancedAtlaser.Tests
         public void ToonStandardDrawsTheGlitterAsGlowingShinyPoints()
         {
             var job = Job(Glittery(2f));
+            Assert.AreEqual("off", AtlasOutputPipeline.Resolve(job, ToonStandard).Modes[AtlasGlitterFeature.FeatureId].Id,
+                "without native glitter, the default is off");
+            var choice = new AtlasFeatureChoice { FeatureId = AtlasGlitterFeature.FeatureId, ModeId = "emulated" };
+            job.Features.Add(choice);
             var plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
             Assert.AreEqual("emulated", plan.Modes[AtlasGlitterFeature.FeatureId].Id);
             var emission = AtlasEmissionFeature.Of(plan.Output);
@@ -97,9 +101,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             StringAssert.Contains("drawn as still points", Notes(plan));
 
             // No glow: no emission.
-            var choice = new AtlasFeatureChoice { FeatureId = AtlasGlitterFeature.FeatureId };
             choice.Values[AtlasFeatureOption.ValueId(AtlasGlitterFeature.EmissionOption)] = (0f, "");
-            job.Features.Add(choice);
             plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
             Assert.IsNull(AtlasEmissionFeature.Of(plan.Output));
             Assert.IsTrue(plan.Maps.Any(m => m.Map == AtlasVirtualMap.Roughness));

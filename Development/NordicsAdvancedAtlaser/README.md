@@ -217,7 +217,8 @@ its UV space. For the details, see `UNIFIED_MATERIAL.md` (the description of a m
      - Features the output shader has nothing for are listed in the build log.
      - **Glitter**: on Poiyomi, one glitter setup for the atlas (*Glitter from*), each
        material keeping its own particle size and strength. Mobile Toon Standard has no
-       glitter: its particles are drawn as still points that glow (*Glow*), shine in the
+       glitter, so it's off by default; *Points in the maps* draws its particles as still
+       points that glow (*Glow*), shine in the
        light and reflections (*Shine*) and take the glitter's color (*Color*), each with its
        own strength; they don't twinkle.
      - **Subsurface Scattering** and **Proximity Color** (Poiyomi): one setup for the atlas
