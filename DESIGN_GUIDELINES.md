@@ -152,9 +152,9 @@ them.
   supported input and output shader.
 - **CHANGELOG.md** holds each tool's history, newest first. The current version is one
   entry, `## <version> — unreleased` until it ships (then the release date), with
-  **Added / Changed / Fixed / Removed** sections. Its first line is the verification status:
-  `Verified: Unity 2022.3.x, SDK 3.x, NDMF 1.x — EditMode tests + Manual Bake on <avatar>` or
-  `Unverified: not compiled in Unity`. Older versions may be condensed to a one-line summary.
+  **Added / Changed / Fixed / Removed** sections. Its first line says how it was verified, for
+  example `EditMode tests pass in Unity 2022.3.22. Verified on a build of a test avatar`, or
+  that it wasn't compiled in Unity. Older versions may be condensed to a one-line summary.
 - **Design documents** are named in capitals with underscores, such as `UNIFIED_MATERIAL.md`,
   and describe the current design in detail, one topic in one place. They say "since 0.24.0",
   never "Revision 24".
@@ -182,11 +182,12 @@ them.
 
 ## 4a. Packaging for VCC
 
-- **Distribution:** one VCC package, *NordicWind - Avatar Tools*
-  (`app.nordicwind.avatar-tools`). It contains the finished tools, each still in its own
-  folder with its own assemblies, docs and tests. The Texture Wrapper stays a separate
-  library package (`app.nordicwind.texture-wrapper`) that the bundle depends on once the
-  Atlaser ships. The Advanced Atlaser joins the bundle when it generates output.
+- **Distribution:** small, finished tools share one VCC package, the bundle *NordicWind -
+  Avatar Tools* (`app.nordicwind.avatar-tools`), each still in its own folder with its own
+  assemblies, docs and tests. The Texture Wrapper is a separate library package
+  (`app.nordicwind.texture-wrapper`), installed as a dependency. The Advanced Atlaser is a
+  separate package (`app.nordicwind.advanced-atlaser`): it's large, changes often and is
+  released as a beta, which a bundle can't be on its own.
 - **License:** MIT. Every package carries `LICENSE.md` and `"license": "MIT"`.
 - Every package folder is a VPM package. Its `package.json` contains `name`,
   `displayName`, `version`, `unity`, `description`, `author`, `vpmDependencies` and

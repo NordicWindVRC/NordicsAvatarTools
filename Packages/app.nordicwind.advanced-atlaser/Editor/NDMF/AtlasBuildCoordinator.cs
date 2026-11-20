@@ -11,6 +11,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var avatarRoot = build?.AvatarRootObject;
             if (avatarRoot == null) return;
+            // An avatar without the Atlaser gets nothing from it, not even a report; an output
+            // component left without one is still removed from the build copy.
+            if (avatarRoot.GetComponentInChildren<NordicsAdvancedAtlaser>(true) == null)
+            {
+                AtlasBuildCleanup.RemoveBuildComponents(avatarRoot);
+                return;
+            }
             using(var context=new AtlasBuildContext(avatarRoot))
             {
                 if (!captureCompleted)

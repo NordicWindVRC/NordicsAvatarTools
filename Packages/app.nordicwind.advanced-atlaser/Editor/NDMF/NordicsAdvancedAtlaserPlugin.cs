@@ -12,6 +12,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             InPhase(BuildPhase.Resolving)
                 .Run("Capture original Atlaser geometry", context =>
                 {
+                    // Nothing to do on an avatar without the Atlaser.
+                    if (context.AvatarRootObject.GetComponentInChildren<NordicsAdvancedAtlaser>(true) == null) return;
                     var state = context.GetState<AtlasGeometryBuildState>();
                     state.Original = AtlasOriginalGeometryCapture.Capture(context.AvatarRootObject);
                     state.Slots = AtlasMaterialSlots.Capture(context.AvatarRootObject);

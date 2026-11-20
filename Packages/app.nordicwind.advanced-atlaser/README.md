@@ -85,5 +85,5 @@ Logging*.
 ## AI transparency
 
 This tool was designed, specified and tested by NordicWind. Its code and documentation were
-written together with AI. See [AI use and transparency](../../Packages/app.nordicwind.avatar-tools/README.md#ai-use-and-transparency)
+written together with AI. See [AI use and transparency](../app.nordicwind.avatar-tools/README.md#ai-use-and-transparency)
 for the full statement.

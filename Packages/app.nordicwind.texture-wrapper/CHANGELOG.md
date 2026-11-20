@@ -2,7 +2,9 @@
 
 Newest first. Versions follow [SemVer](https://semver.org).
 
-## 0.10.0 — unreleased
+## 0.10.0 — 2026-11-20
+
+EditMode tests pass in Unity 2022.3.22.
 
 ### Changed
 - **`BakeNormalDifference`'s angle limit is soft.** Corrections above half of `MaxAngle` are
