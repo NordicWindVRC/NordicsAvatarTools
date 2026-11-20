@@ -28,7 +28,32 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             else SpecularSection(m, d);
             ClearCoat(m, d);
+            HighlightScale(m, d, section && d.Lighting.Cloth == null);
             Ltcgi(m, d);
+        }
+
+        // The unified highlight strength is the scale Poiyomi lit highlights with before 10.0.26
+        // (GGX × N·L); 10.0.26 to 10.0.29 multiply them by π, so their strengths are read × π.
+        private void HighlightScale(Material m, AtlasUnifiedMaterial d, bool specular)
+        {
+            var response = d.Surface.Response;
+            var coat = response.ClearCoat;
+            if (!specular && coat == null) return;
+            var version = AtlasPoiyomiVersionDetector.DetectFull(m);
+            if (version == null && major == 10)
+                d.Report(AtlasIssueKind.Note, "brdf.highlight-scale",
+                    "Poiyomi 10's exact version isn't known without its shader. Its highlights are read as before 10.0.26; from 10.0.26 Poiyomi makes them π times as strong.");
+            if (version != null && version.Major == 11 && version > AtlasPoiyomiVersionDetector.NewestCheckedEleven)
+                d.Report(AtlasIssueKind.Note, "brdf.highlight-scale",
+                    "Poiyomi 11 after " + AtlasPoiyomiVersionDetector.NewestCheckedEleven + " isn't checked for its highlights' scale; they're read as " +
+                    AtlasPoiyomiVersionDetector.NewestCheckedEleven + "'s.");
+            if (!AtlasPoiyomiVersionDetector.HighlightsTimesPi(version)) return;
+            if (specular)
+            {
+                response.Highlights.Strength *= Mathf.PI;
+                response.Highlights.SecondLobeStrength *= Mathf.PI;
+            }
+            if (coat != null) coat.Highlights.Strength *= Mathf.PI;
         }
 
         // The Mochie BRDF: metallic, smoothness, reflection and specular masks from one packed map.

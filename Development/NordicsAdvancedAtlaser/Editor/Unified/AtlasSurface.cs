@@ -255,6 +255,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public sealed class AtlasHighlights
     {
         public bool Enabled = true;
+        // On the scale of GGX (D × V × F) × N·L, as Poiyomi lit highlights before 10.0.26 and
+        // again in 11 (10.0.26 to 10.0.29 multiply by π).
         public float Strength = 1f;
         // Linear.
         public UnityEngine.Color Tint = UnityEngine.Color.white;

@@ -402,6 +402,15 @@ EditMode tests pass in Unity 2022.3.22.
     (`AtlasMatcapFeature.FitGlow`, `AtlasOutputPlan.BeforeWrite`); a slot with a constant mask
     glows by that constant.
   - The build log lists fitted glows and glow-only matcaps that show a slot's blend.
+- **Highlights came out π times too strong (or weak) between Poiyomi versions.** Poiyomi 10.0.26
+  multiplies the direct highlights of Reflections & Specular and Clear Coat by π; the versions
+  before it and Poiyomi 11 don't (checked in the released and installed shaders: 8.1 to 10.0.25
+  and 11.0.50 without, 10.0.26 to 10.0.29 with), and Poiyomi's upgrader doesn't adjust old
+  materials. A source locked on 10.0.25 written for 10.0.29 shone three times as much. The
+  unified highlight strength keeps the scale without π; the parser reads 10.0.26 to 10.0.29's
+  × π and the writer writes ÷ π for them, by the full version in the shader's master label
+  (`AtlasPoiyomiVersionDetector.HighlightsTimesPi`). Without the shader, Poiyomi 10's exact
+  version is unknown and noted.
 - **Multilayer Math lost its light map** (Poiyomi's Light Data map mode): the parser replaced it
   with the bands' own half-Lambert term and the writer always wrote half-Lambert, which is
   brighter on the shadow side than Poiyomi's default. What reads the light map, such as the

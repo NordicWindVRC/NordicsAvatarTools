@@ -183,6 +183,22 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(0f, ramp.LitAmbient);
         }
 
+        // Poiyomi 10.0.26 to 10.0.29 multiply the direct highlights by π; the versions before and
+        // Poiyomi 11 don't. The full version comes from the master label, which locking keeps.
+        [Test]
+        public void TheHighlightScaleFollowsThePoiyomiVersion()
+        {
+            Assert.AreEqual(new System.Version(10, 0, 25), AtlasPoiyomiVersionDetector.FullVersionFromLabel("<color=#E75898ff>Poiyomi 10.0.25</color>"));
+            Assert.AreEqual(new System.Version(7, 3, 50), AtlasPoiyomiVersionDetector.FullVersionFromLabel("Poiyomi Toon V7.3.050"));
+            Assert.IsNull(AtlasPoiyomiVersionDetector.FullVersionFromLabel(null));
+            Assert.IsFalse(AtlasPoiyomiVersionDetector.HighlightsTimesPi(new System.Version(10, 0, 25)));
+            Assert.IsTrue(AtlasPoiyomiVersionDetector.HighlightsTimesPi(new System.Version(10, 0, 26)));
+            Assert.IsTrue(AtlasPoiyomiVersionDetector.HighlightsTimesPi(new System.Version(10, 0, 29)));
+            Assert.IsFalse(AtlasPoiyomiVersionDetector.HighlightsTimesPi(new System.Version(9, 3, 67)));
+            Assert.IsFalse(AtlasPoiyomiVersionDetector.HighlightsTimesPi(new System.Version(11, 0, 50)));
+            Assert.IsFalse(AtlasPoiyomiVersionDetector.HighlightsTimesPi(null));
+        }
+
         [Test]
         public void MultilayerMathBecomesBands()
         {

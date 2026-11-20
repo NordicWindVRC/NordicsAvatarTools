@@ -18,6 +18,30 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         // "Poiyomi 10.0.29", "Poiyomi Toon V7.3.050".
         private static readonly Regex LabelVersion = new Regex(@"Poiyomi\D*(\d+)\.\d", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        private static readonly Regex LabelFullVersion = new Regex(@"Poiyomi\D*(\d+)\.(\d+)\.(\d+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        /// <summary>The full version from the shader's master label, which locking keeps; null
+        /// without the shader or a label.</summary>
+        public static Version DetectFull(Material material) =>
+            FullVersionFromLabel(AtlasMaterialReader.PropertyLabel(material, "shader_master_label"));
+
+        public static Version FullVersionFromLabel(string label)
+        {
+            if (string.IsNullOrEmpty(label)) return null;
+            var match = LabelFullVersion.Match(label);
+            return match.Success ? new Version(int.Parse(match.Groups[1].Value), int.Parse(match.Groups[2].Value), int.Parse(match.Groups[3].Value)) : null;
+        }
+
+        /// <summary>Whether the version multiplies its direct highlights by π (GetSpecFresTerm, for
+        /// Reflections & Specular and Clear Coat): Poiyomi 10 from 10.0.26. Checked in the released
+        /// and installed shaders: 8.1.167, 9.0.62 to 9.3.67 and 10.0.21 to 10.0.25 without,
+        /// 10.0.26 to 10.0.29 with, 11.0.50 (Toon and Pro) without.</summary>
+        public static bool HighlightsTimesPi(Version version) =>
+            version != null && version.Major == 10 && version >= FirstHighlightsTimesPi;
+
+        public static readonly Version FirstHighlightsTimesPi = new Version(10, 0, 26);
+        // The newest Poiyomi 11 checked for it.
+        public static readonly Version NewestCheckedEleven = new Version(11, 0, 50);
         // A version folder in a shader name ("Old Versions/8.1/", "Poiyomi 7.3/") or in the shaders'
         // asset path ("/Shaders/9.3/").
         private static readonly Regex NameVersion = new Regex(@"(?:^|[/ ])(\d+)\.\d+(?=/)", RegexOptions.CultureInvariant);

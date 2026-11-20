@@ -1187,6 +1187,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The clear coat, as the Poiyomi parser reads it (AtlasPoiyomiSpecular): strength and
         // smoothness from the packed map (or their constants), the masks in B and A, or none
         // (channel 4: white), the highlight mask sharing B when it reads the reflection mask's map.
+        // The installed Poiyomi's highlight scale against the unified one: π from 10.0.26 to
+        // 10.0.29 (AtlasPoiyomiVersionDetector.HighlightsTimesPi), 1 otherwise.
+        private static float HighlightScale(Material m) =>
+            AtlasPoiyomiVersionDetector.HighlightsTimesPi(AtlasPoiyomiVersionDetector.DetectFull(m)) ? Mathf.PI : 1f;
+
         private static void WriteClearCoat(AtlasClearCoat coat, Material m)
         {
             m.SetFloat("_ClearCoatBRDF", coat != null ? 1 : 0);
@@ -1214,7 +1219,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             m.SetFloat("_ClearCoatReflectionMaskInvert", 0);
             m.SetFloat("_ClearCoatSpecularMaskInvert", 0);
             m.SetFloat("_ClearCoatReflectionStrength", reflections.Enabled ? Mathf.Clamp01(reflections.Strength) : 0f);
-            m.SetFloat("_ClearCoatSpecularStrength", highlights.Enabled ? highlights.Strength : 0f);
+            m.SetFloat("_ClearCoatSpecularStrength", highlights.Enabled ? highlights.Strength / HighlightScale(m) : 0f);
             m.SetColor("_ClearCoatReflectionTint", reflections.Tint.gamma);
             m.SetFloat("_ClearCoatReflectionTintThemeIndex", 0);
             m.SetColor("_ClearCoatSpecularTint", highlights.Tint.gamma);
@@ -1486,7 +1491,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 material.SetFloat("_MochieReflectionMaskInvert", 0);
                 material.SetFloat("_MochieSpecularMaskInvert", 0);
                 material.SetFloat("_MochieReflectionStrength", response.Reflections.Enabled ? Mathf.Clamp01(response.Reflections.Strength) : 0f);
-                material.SetFloat("_MochieSpecularStrength", response.Highlights.Enabled ? Mathf.Clamp(response.Highlights.Strength, 0f, 5f) : 0f);
+                material.SetFloat("_MochieSpecularStrength", response.Highlights.Enabled ? Mathf.Clamp(response.Highlights.Strength / HighlightScale(material), 0f, 5f) : 0f);
             }
             else material.DisableKeyword("MOCHIE_PBR");
 
