@@ -9,23 +9,9 @@ you next touch it. Each rule names its exceptions.
 
 ## 0. What each tool is for
 
-| Tool | Purpose | Dependencies |
-|---|---|---|
-| **Submesh Splitter** | Splits a skinned mesh renderer into one renderer per submesh, keeping the original but disabled. Parts exist only for **explicit per-part actions**: Meshia settings per part, disabling a part to cut it, MA Mesh Cutter, a Blendshape Toggle on a slot. Everything general (materials, bounds, blendshapes, animations, AAO, VRCFury) acts on the original renderer, and those tools never see the parts. At build time the parts are recombined into the original renderer and removed. | NDMF, VRChat SDK |
-| **Blendshape Toggle** | Emulates object toggles after renderers are merged or atlased. A generated blendshape shrinks a submesh and hides it inside the avatar. | NDMF |
-| **Avatar Statistics** | Shows VRChat performance metrics and optimization statistics in the NDMF console that match what the game shows. Values come from the SDK, or are calculated where the SDK only gives estimates. Stays backwards compatible across SDK versions and supports face-tracking metrics. | NDMF, VRChat SDK |
-| **Texture Wrapper** | Standalone CPU texture library, multithreaded with GPU acceleration possible later. Reads, creates and edits textures, builds UV island masks and bakes normal maps, for example normal correction after mesh reduction. **Its public API must stay compatible with existing callers.** | none |
-| **Advanced Atlaser** | Work-in-progress material processor for atlasing, material optimization, normal baking, Quest or optimized variants, and non-destructive edits such as decals. Mapping is per material, not per submesh. Input parsers convert source shaders into one shader-agnostic material model. Output generators read only that model. | NDMF, Texture Wrapper |
-
-Splitter decisions (2026-11-03):
-- Splits can be made in Prefab Mode or on saved scene objects that aren't part of a
-  prefab. Prefab instances in a scene must be edited in their prefab (the inspector offers
-  **Open Prefab**).
-- A split that is out of date with its source mesh stops the build with an error.
-- Part names follow the current material and update when the split is regenerated.
-- The original renderer owns materials, bounds, the blendshape list and enabled state.
-- Components left unapplied on parts, and animations that target parts, stop the build.
-- Vertices shared between submeshes are allowed, with an inspector warning about seams.
+Each tool's README says what it does and decides; the [repository README](README.md) lists the
+packages. Every tool depends only on NDMF and the VRChat SDK where it can, and on another
+NordicWind package only through its public API (each `package.json` lists the dependencies).
 
 ## 1. Naming
 
@@ -65,9 +51,6 @@ mesh containers before 0.2.19.
 **Exceptions:**
 - **Texture Wrapper** uses one namespace, `NordicWind.TextureWrapper`, for its whole API,
   including the editor exporters, so callers need a single `using`.
-- **Advanced Atlaser** serialized fields are still `PascalCase` public fields. Convert them to
-  `camelCase`, using `[FormerlySerializedAs]` and updating every `FindProperty` string, at
-  the next structural change to its configuration model.
 
 **Renaming serialized fields or script files:** use `[FormerlySerializedAs]` and keep
 the script's `.meta` GUID. Without both, existing avatars lose their settings or the
@@ -138,7 +121,7 @@ package in `Packages/` is read-only. Debug output, which is Atlaser only, goes o
    - When a combination genuinely can't work, block it with a clear explanation, the way
      the Splitter blocks VRCFury's Blendshape Optimizer. Never break the result silently.
    - Test each tool on its own, then with each of these tools, then with all of them together.
-7. **Don't tie behaviour to a specific version.** Find SDK and tool features at runtime
+7. **Don't tie behavior to a specific version.** Find SDK and tool features at runtime
    by checking whether a member exists, not by comparing version numbers. Fall back
    gracefully when a member is missing. Version numbers can appear in comments as
    context, never as conditions.
@@ -146,7 +129,7 @@ package in `Packages/` is read-only. Debug output, which is Atlaser only, goes o
    once the question is answered. Only the Advanced Atlaser keeps diagnostic output, and
    it stays opt-in through a Tools-menu toggle stored in `EditorPrefs` and runs only on
    avatars that use the component.
-9. **Call estimates what they are.** When a value approximates the behaviour of VRChat
+9. **Call estimates what they are.** When a value approximates the behavior of VRChat
    or a shader, the UI says "estimate" and the docs explain how it may differ.
 10. **Model meaning, not sources.** Shared data types describe the meaning of a value,
    for example `Lighting.Mode`, not where it came from, for example "Poiyomi 8 lighting".
@@ -158,40 +141,53 @@ package in `Packages/` is read-only. Debug output, which is Atlaser only, goes o
 
 ## 4. Documentation
 
-- **README.md** describes the *current* behaviour only, in this order: one-paragraph
-  summary, Requirements, Install, Usage, How it works (NDMF phases), Limitations,
-  Verification status. Keep it short enough to read in five minutes.
+**Every fact has one home.** Other documents link to it instead of repeating it, so a change
+updates one place. Overview documents stay short and leave details to the document that owns
+them.
+
+- **README.md** is the overview of what the tool does now: a short summary, requirements,
+  install, getting started, limitations, and links to the detailed documents. It describes
+  settings only as far as a user needs to find them; the inspector's tooltips explain each one.
+  No history, no design detail, no test status. The Advanced Atlaser's README also lists every
+  supported input and output shader.
 - **CHANGELOG.md** holds each tool's history, newest first. The current version is one
   entry, `## <version> — unreleased` until it ships (then the release date), with
-  **Added / Changed / Fixed / Removed** sections. Older versions may be condensed to a
-  one-line summary. Don't write history into the README.
-- **Other docs** are named in capitals with underscores, such as `UNIFIED_MATERIAL.md`, and
-  describe the current design. They say "since 0.24.0", never "Revision 24".
-- **Versioning: SemVer at two levels.** Each tool has its own version and CHANGELOG, used
-  for tracking its changes. The *NordicWind - Avatar Tools* bundle has its own version, which
-  changes whenever any included tool changes. Don't use "Revision N".
-- **Verification status** is a single line at the top of every CHANGELOG entry, either
-  `Verified: Unity 2022.3.x, SDK 3.x, NDMF 1.x — EditMode tests + Manual Bake on <avatar>`
-  or `Unverified: not compiled in Unity`.
+  **Added / Changed / Fixed / Removed** sections. Its first line says how it was verified, for
+  example `EditMode tests pass in Unity 2022.3.22. Verified on a build of a test avatar`, or
+  that it wasn't compiled in Unity. Older versions may be condensed to a one-line summary.
+- **Design documents** are named in capitals with underscores, such as `UNIFIED_MATERIAL.md`,
+  and describe the current design in detail, one topic in one place. They say "since 0.24.0",
+  never "Revision 24".
+- **Plans** list what's next and later. What's done is recorded in the changelog and the
+  design, not kept in the plan.
+- **API references** (the Texture Wrapper's `API.md`) own every member's behavior; the README
+  links to them.
+- **Versioning: SemVer at two levels.** Each tool has its own version and CHANGELOG. The
+  *NordicWind - Avatar Tools* bundle has its own version, which changes whenever any included
+  tool changes. Don't use "Revision N".
+- **American English spelling** everywhere: documentation, code comments, identifiers, log
+  messages and inspector text ("color", "center", "behavior", "normalize", "gray").
 - **Code comments explain *why*.** Leave version numbers out of code comments and log
-  strings ("v0.2.3 …"), because git and the CHANGELOG track history.
+  strings ("v0.2.3 …"), because git and the CHANGELOG track history. Comments point to design
+  sections by name, not to plan phases.
 - `/// <summary>` is required on public types and members of runtime assemblies and on
   any API that another NordicWind package consumes (for example Texture Wrapper).
   Serialized fields that users see get a `[Tooltip]`.
 - **AI transparency.** The bundle user guide
   (`Packages/app.nordicwind.avatar-tools/README.md`) holds the *AI use and transparency*
-  statement: the policy and how AI was used. The repository README summarizes it and links
-  there. Every tool README ends with a short *AI transparency* note that links to it.
-  Separately shipped packages (such as the Texture Wrapper) carry a self-contained note. Keep the "How AI was used" table accurate when
-  the way of working changes, and never describe AI-written code or docs as hand-written.
+  statement. Every other README links to it with a short *AI transparency* note; separately
+  shipped packages (such as the Texture Wrapper) carry a self-contained note. Keep the "How AI
+  was used" table accurate when the way of working changes, and never describe AI-written code
+  or docs as hand-written.
 
 ## 4a. Packaging for VCC
 
-- **Distribution:** one VCC package, *NordicWind - Avatar Tools*
-  (`app.nordicwind.avatar-tools`). It contains the finished tools, each still in its own
-  folder with its own assemblies, docs and tests. The Texture Wrapper stays a separate
-  library package (`app.nordicwind.texture-wrapper`) that the bundle depends on once the
-  Atlaser ships. The Advanced Atlaser joins the bundle when it generates output.
+- **Distribution:** small, finished tools share one VCC package, the bundle *NordicWind -
+  Avatar Tools* (`app.nordicwind.avatar-tools`), each still in its own folder with its own
+  assemblies, docs and tests. The Texture Wrapper is a separate library package
+  (`app.nordicwind.texture-wrapper`), installed as a dependency. The Advanced Atlaser is a
+  separate package (`app.nordicwind.advanced-atlaser`): it's large, changes often and is
+  released as a beta, which a bundle can't be on its own.
 - **License:** MIT. Every package carries `LICENSE.md` and `"license": "MIT"`.
 - Every package folder is a VPM package. Its `package.json` contains `name`,
   `displayName`, `version`, `unity`, `description`, `author`, `vpmDependencies` and
@@ -222,7 +218,7 @@ package in `Packages/` is read-only. Debug output, which is Atlaser only, goes o
   2. The core transformation has numeric tests on synthetic meshes or textures.
   3. A build-pass test runs the pass on a synthetic avatar and then checks the result,
      that the components were removed, and that the source assets are unchanged.
-- Test names are sentences in PascalCase that state the expected behaviour, for example
+- Test names are sentences in PascalCase that state the expected behavior, for example
   `DilationCopiesValidNormalAcrossUnusedPixels`. Group them into one test class per
   production class.
 - Tests create every object they need and destroy it in `finally` or `[TearDown]`.

@@ -1,0 +1,214 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+namespace NordicWind.AdvancedAtlaser.Editor
+{
+    internal static class AtlasBuildCoordinator
+    {
+        internal static void Execute(nadena.dev.ndmf.BuildContext build, AtlasOriginalGeometry original, bool captureCompleted = true)
+        {
+            var avatarRoot = build?.AvatarRootObject;
+            if (avatarRoot == null) return;
+            // An avatar without the Atlaser gets nothing from it, not even a report; an output
+            // component left without one is still removed from the build copy.
+            if (avatarRoot.GetComponentInChildren<NordicsAdvancedAtlaser>(true) == null)
+            {
+                AtlasBuildCleanup.RemoveBuildComponents(avatarRoot);
+                return;
+            }
+            using(var context=new AtlasBuildContext(avatarRoot))
+            {
+                if (!captureCompleted)
+                    context.Diagnostics.Add("Early Resolving geometry capture pass did not complete; flat normal fallback may be used.");
+                else if (original == null)
+                    context.Diagnostics.Add("Early capture completed but geometry snapshot is null.");
+                else if (original.CapturedSectionCount == 0)
+                    context.Diagnostics.Add("Early capture produced zero geometry sections. Check the early capture logs for discovery and material matching details.");
+                var atlasers=avatarRoot.GetComponentsInChildren<NordicsAdvancedAtlaser>(true);
+                for(int atlaserIndex=0;atlaserIndex<atlasers.Length;atlaserIndex++)
+                    PrepareGroup(context,atlasers[atlaserIndex],atlaserIndex,original);
+                // Every output is prepared: make their materials and textures and remap the meshes.
+                AtlasOutputBuild.Apply(context, build);
+                AtlasBuildReporting.Publish(context, original);
+                AtlasBuildCleanup.RemoveBuildComponents(avatarRoot);
+            }
+        }
+
+        private static void PrepareGroup(AtlasBuildContext context,NordicsAdvancedAtlaser component,int atlaserIndex, AtlasOriginalGeometry original)
+        {
+            var group=new AtlasBuildGroup { Component=component };
+            context.Groups.Add(group);
+            // After AAO, Merge Skinned Mesh may already be consumed and its renderer destroyed.
+            // Inspect the actual current avatar renderers rather than the prebuild AAO component.
+            var renderers=context.AvatarRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true)
+                .Where(r=>r!=null).ToList();
+            group.Renderers.AddRange(renderers);
+            var currentlyPresent=new HashSet<Material>();
+            foreach(var r in renderers)
+                foreach(var m in r.sharedMaterials)
+                    if(m!=null) currentlyPresent.Add(m);
+            group.DiscoveredMaterials.AddRange(currentlyPresent);
+            FollowCopies(context, component, currentlyPresent);
+
+            var sources=new Dictionary<Material,AtlasInputMaterialJob>();
+            var assigned=new HashSet<Material>();
+            var outputs=component.GetComponents<NordicsAtlasOutput>();
+            for(int outputIndex=0;outputIndex<outputs.Length;outputIndex++)
+            {
+                var output=outputs[outputIndex];
+                var config=output.configuration;
+                var job=new AtlasOutputJob {
+                    Component=output, Configuration=config, Shader=AtlasShaderRegistry.Output(config.shaderId) };
+                if(string.IsNullOrEmpty(config.shaderId))
+                    context.Diagnostics.Add("[Error] "+output.name+": no output shader is chosen, so this output is skipped. Choose one in its inspector.");
+                else if(job.Shader==null)
+                    context.Diagnostics.Add(output.name+": unregistered output shader "+config.shaderId);
+                else if(!AtlasShaderRegistry.IsInstalled(job.Shader))
+                {
+                    // The new materials are made with the output shader, so it must be installed.
+                    context.Diagnostics.Add(output.name+": "+job.Shader.DisplayName+" isn't installed; this output is skipped.");
+                    job.Shader=null;
+                }
+                group.Outputs.Add(job);
+                if(config.sources==null) continue;
+                for(int sourceIndex=0;sourceIndex<config.sources.Count;sourceIndex++)
+                {
+                    var source=config.sources[sourceIndex];
+                    if(source==null||source.material==null) continue;
+                    if(!assigned.Add(source.material))
+                    throw new InvalidOperationException("[Nordic's Advanced Atlaser] "+config.outputName+
+                        ": material '"+source.material.name+"' is assigned more than once across outputs.");
+                    AtlasInputMaterialJob input;
+                    if(!sources.TryGetValue(source.material,out input))
+                    {
+                        input=new AtlasInputMaterialJob { SourceMaterial=source.material,
+                            SourceShader=source.material.shader,
+                            Parser=AtlasShaderRegistry.Detect(source.material) };
+                        sources.Add(source.material,input);
+                        group.Inputs.Add(input);
+                        if(!currentlyPresent.Contains(source.material))
+                            context.Diagnostics.Add(source.material.name+": no current renderer uses this material; an empty bake will be supplied. "+
+                                "The renderers hold: "+Holding(renderers)+".");
+                    }
+                    job.Sources.Add(new AtlasOutputSourceJob { Input=input,UVRegion=source.uvRegion,
+                        SourceKey=AtlasOriginalGeometry.SourceKey(atlaserIndex,outputIndex,sourceIndex),
+                        NormalCorrection=source.normalCorrection, PrebakedNormalMap=source.prebakedNormalMap });
+                }
+            }
+            // Normalize each unique source material once, irrespective of how many outputs use it.
+            foreach(var input in group.Inputs)
+            {
+                using (context.Time("parse: " + input.SourceMaterial.name))
+                    AtlasMaterialNormalizer.Prepare(input);
+                // Atlasing is best effort, so how each source was read is debug information:
+                // its report lines are listed only with Verbose Logging.
+                if (input.Unified == null || !AtlasDebugSettings.VerboseLogging) continue;
+                foreach (var issue in input.Unified.Issues)
+                    context.Diagnostics.Add($"{input.SourceMaterial.name} [{issue.Kind}: {issue.Feature}]: {issue.Message}");
+            }
+
+            // Validate *before* allocating any texture buffers, even when baking is disabled.
+            // Only configured source materials are considered. Unrelated materials are ignored.
+            foreach(var input in group.Inputs)
+            {
+                int surviving=AtlasSubmeshBaker.CountCurrent(input.SourceMaterial,renderers);
+                if(surviving>1)
+                    throw new InvalidOperationException("[Nordic's Advanced Atlaser] '"+input.SourceMaterial.name+
+                        "' occurs on "+surviving+" surviving submeshes. Exactly one is required after merging.");
+            }
+            // Each source is baked at a size derived from its region in its atlas (see
+            // AtlasOutputLayout.BakeSize). When disabled, no geometry textures are allocated; null
+            // Bakes means unavailable, not an enabled bake whose submesh has been removed.
+            if(component.enableGeometryBaking)
+            {
+                foreach(var job in group.Outputs)
+                {
+                    if(job.Shader==null) continue;
+                    foreach(var source in job.Sources)
+                    {
+                        var size=AtlasOutputLayout.BakeSize(source.UVRegion,job.Configuration.mainTexture);
+                        string key=size.x+"x"+size.y;
+                        AtlasBakedInputSet baked;
+                        if(!source.Input.Bakes.TryGetValue(key,out baked))
+                        {
+                            List<AtlasMeshSection> originalSections=null;
+                            if(original!=null && !original.SourceSections.TryGetValue(source.SourceKey,out originalSections))
+                            {
+                                // Reference lookup is only a compatibility fallback when the
+                                // source slots were changed by another build processor.
+                                original.Sections.TryGetValue(source.Input.SourceMaterial,out originalSections);
+                                context.Diagnostics.Add(source.Input.SourceMaterial.name+
+                                    ": source slot '"+source.SourceKey+"' was not captured; material-key fallback " +
+                                    (originalSections==null?"failed.":"succeeded."));
+                            }
+                            if(originalSections!=null)
+                                context.Diagnostics.Add(source.Input.SourceMaterial.name+": source slot '"+
+                                    source.SourceKey+"' resolved "+originalSections.Count+" original section(s).");
+                            string debugFolder=null;
+                            if(AtlasDebugSettings.ExportIntermediateMaps)
+                            {
+                                try { debugFolder=AtlasDebugExporter.DirectoryFor(component.name,
+                                    source.Input.SourceMaterial.name,source.SourceKey); }
+                                catch(Exception e) { context.Diagnostics.Add("Debug directory creation failed: "+e.Message); }
+                            }
+                            using (context.Time($"geometry bake: {source.Input.SourceMaterial.name} ({size.x}×{size.y})"))
+                                baked=AtlasSubmeshBaker.Bake(source.Input.SourceMaterial,size.x,size.y,
+                                    originalSections,renderers,context.AvatarRoot.transform,context.Diagnostics,debugFolder,
+                                    source.NormalCorrection,component.excludeHiddenGeometry);
+                            source.Input.Bakes.Add(key,baked);
+                        }
+                        source.Bakes=baked;
+                    }
+                }
+            }
+            foreach(var job in group.Outputs) AtlasOutputProcessor.Prepare(job,context);
+        }
+
+        // Tools that copy materials during the build record the original in NDMF's object
+        // registry (AAO copies every material it may change). A configured material that no
+        // renderer holds takes the one renderer material with the same original, and the
+        // settings follow it.
+        private static void FollowCopies(AtlasBuildContext context, NordicsAdvancedAtlaser component, HashSet<Material> present)
+        {
+            var byOrigin = present.GroupBy(Origin).ToDictionary(g => g.Key, g => g.ToList());
+            var swaps = new Dictionary<Material,Material>();
+            foreach(var output in component.GetComponents<NordicsAtlasOutput>())
+            {
+                if(output.configuration.sources==null) continue;
+                foreach(var source in output.configuration.sources)
+                {
+                    var material=source?.material;
+                    if(material==null || present.Contains(material) || swaps.ContainsKey(material)) continue;
+                    if(byOrigin.TryGetValue(Origin(material),out var copies) && copies.Count==1)
+                        swaps[material]=copies[0];
+                }
+            }
+            if(swaps.Count==0) return;
+            AtlasMaterialSlots.Replace(component.gameObject,swaps);
+            if(AtlasDebugSettings.VerboseLogging)
+                foreach(var swap in swaps)
+                    context.Diagnostics.Add(swap.Key.name+": the renderers hold a copy made during the build; the settings follow it.");
+        }
+
+        private static UnityEngine.Object Origin(Material material) =>
+            nadena.dev.ndmf.ObjectRegistry.GetReference(material)?.Object ?? material;
+
+        // The materials the renderers hold (with the original NDMF records for a copy), for
+        // a source that none of them holds.
+        private static string Holding(List<SkinnedMeshRenderer> renderers)
+        {
+            var names=renderers.SelectMany(r=>r.sharedMaterials.Select(m=>(Renderer:r,Material:m)))
+                .Where(e=>e.Material!=null)
+                .Select(e=>
+                {
+                    var origin=Origin(e.Material);
+                    return e.Renderer.name+": "+e.Material.name+" #"+e.Material.GetInstanceID()+
+                           (origin!=e.Material?" (copy of "+origin.name+" #"+origin.GetInstanceID()+")":"");
+                })
+                .Distinct().ToList();
+            return names.Count==0?"nothing":string.Join(", ",names.Take(16))+(names.Count>16?", …":"");
+        }
+    }
+}

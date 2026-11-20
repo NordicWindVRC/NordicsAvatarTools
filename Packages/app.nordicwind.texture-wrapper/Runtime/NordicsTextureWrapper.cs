@@ -7,7 +7,7 @@ using UnityEngine.Experimental.Rendering;
 
 namespace NordicWind.TextureWrapper
 {
-    public sealed class NordicsTextureWrapper : IDisposable
+    public sealed partial class NordicsTextureWrapper : IDisposable
     {
         private Color[] _pixels;
         private byte[] _usage;
@@ -33,20 +33,20 @@ namespace NordicWind.TextureWrapper
             if(width<=0 || height<=0 || (long)width*height>int.MaxValue) throw new ArgumentOutOfRangeException(nameof(width),"Dimensions must be positive and fit in an array.");
             Settings=(settings??new TextureSettings()).Clone(); Settings.Validate();
             Width=width;Height=height;IsReadOnly=readOnly;
-            _pixels=new Color[checked(width*height)];_usage=new byte[_pixels.Length];
+            PixelBuffers.Rent(checked(width*height),true,out _pixels,out _usage);
             _normalized=true;
         }
         /// <summary>Loads a texture as color or data. See the overload with a data type.</summary>
         public NordicsTextureWrapper(Texture2D source,bool readOnly=true) : this(source,TextureDataType.Color,readOnly) { }
-        /// <summary>Loads a texture. Textures without Read/Write are read through the GPU.
-        /// sRGB textures are decoded to linear. Normal data types decode the stored packing
-        /// into signed vectors.</summary>
+        /// <summary>Loads a texture. Textures without Read/Write, and crunch-compressed ones
+        /// (which the CPU can't decode), are read through the GPU. sRGB textures are decoded
+        /// to linear. Normal data types decode the stored packing into signed vectors.</summary>
         public NordicsTextureWrapper(Texture2D source,TextureDataType dataType,bool readOnly=true)
             : this(source!=null?source.width:throw new ArgumentNullException(nameof(source)),source.height,InferSettings(source,dataType),readOnly)
         {
             bool srgb=GraphicsFormatUtility.IsSRGBFormat(source.graphicsFormat);
             Color[] colors;
-            if(!source.isReadable)
+            if(!source.isReadable || IsCrunched(source.format))
             {
                 // The GPU decodes sRGB textures when sampling, but only in a linear-color-space
                 // project. Decode here otherwise, so the result is the same either way.
@@ -70,6 +70,10 @@ namespace NordicWind.TextureWrapper
             for(int i=0;i<_usage.Length;i++)_usage[i]=1;
             _normalized=!Normal;
         }
+        // GetPixels and GetPixels32 don't support crunched formats, even with Read/Write on.
+        private static bool IsCrunched(TextureFormat format) =>
+            format==TextureFormat.DXT1Crunched || format==TextureFormat.DXT5Crunched ||
+            format==TextureFormat.ETC_RGB4Crunched || format==TextureFormat.ETC2_RGBA8Crunched;
         private static TextureSettings InferSettings(Texture2D tex,TextureDataType dataType)
         {
             return new TextureSettings { DataType=dataType, WrapMode=tex.wrapMode,FilterMode=tex.filterMode,AnisoLevel=tex.anisoLevel, Mipmaps=tex.mipmapCount>1,
@@ -172,6 +176,28 @@ namespace NordicWind.TextureWrapper
         {
             Writable();ValidateUV(uv);int x=Address(Mathf.FloorToInt(uv.x*Width),Width,Settings.WrapMode);int y=Address(Mathf.FloorToInt(uv.y*Height),Height,Settings.WrapMode);SetPixel(x,y,color);
         }
+        /// <summary>A copy of every pixel's raw value, row by row from the bottom (index y × Width + x).</summary>
+        public Color[] GetPixels(){Check();if(Normal)EnsureNormalized();return (Color[])_pixels.Clone();}
+        /// <summary>Copies every pixel's raw value into <paramref name="destination"/>, which needs one element per pixel.</summary>
+        public void GetPixels(Color[] destination)
+        {
+            Check();if(destination==null||destination.Length!=_pixels.Length)throw new ArgumentException("GetPixels needs one element per pixel.",nameof(destination));
+            if(Normal)EnsureNormalized();Array.Copy(_pixels,destination,_pixels.Length);
+        }
+        /// <summary>Frees the pixel buffers kept from disposed wrappers (see <see cref="TextureProcessingSettings.PooledBytes"/>).</summary>
+        public static void ReleasePooledBuffers()=>PixelBuffers.Clear();
+        /// <summary>Writes every pixel's value, row by row from the bottom, and marks every pixel used.</summary>
+        public void SetPixels(Color[] colors)
+        {
+            Writable();
+            if(colors==null||colors.Length!=_pixels.Length)throw new ArgumentException("SetPixels needs one color per pixel.",nameof(colors));
+            bool finite=true;
+            ForRows(Width,Height,y=>{int row=y*Width;for(int x=0;x<Width;x++)if(!MathUtil.Finite(colors[row+x]))finite=false;});
+            if(!finite)throw new ArgumentException("Color components must be finite.",nameof(colors));
+            Array.Copy(colors,_pixels,_pixels.Length);
+            for(int i=0;i<_usage.Length;i++)_usage[i]=1;
+            Changed();
+        }
         public bool IsPixelUsed(int x,int y){Check();return _usage[Index(x,y)]!=0;}
         public bool IsPixelUsed(Vector2 uv){Check();ValidateUV(uv);return IsPixelUsed(Address(Mathf.FloorToInt(uv.x*Width),Width,Settings.WrapMode),Address(Mathf.FloorToInt(uv.y*Height),Height,Settings.WrapMode));}
         public void SetPixelUsed(int x,int y,bool used){Writable();_usage[Index(x,y)]=(byte)(used?1:0);}
@@ -202,7 +228,7 @@ namespace NordicWind.TextureWrapper
             float fx=uv.x*Width-.5f,fy=uv.y*Height-.5f;
             if(sampling==TextureSamplingMode.Nearest)return Tap(Mathf.FloorToInt(fx+.5f),Mathf.FloorToInt(fy+.5f),wrap);
             int x=Mathf.FloorToInt(fx),y=Mathf.FloorToInt(fy);float u=fx-x,v=fy-y;
-            if(sampling==TextureSamplingMode.Bilinear||sampling==TextureSamplingMode.Area)
+            if(sampling==TextureSamplingMode.Bilinear||sampling==TextureSamplingMode.Area||sampling==TextureSamplingMode.AreaFlatten)
             {
                 return MathUtil.Lerp(MathUtil.Lerp(Tap(x,y,wrap),Tap(x+1,y,wrap),u),MathUtil.Lerp(Tap(x,y+1,wrap),Tap(x+1,y+1,wrap),u),v);
             }
@@ -224,12 +250,32 @@ namespace NordicWind.TextureWrapper
         private static Rect Bounds(Rect? region)=>region??new Rect(0,0,1,1);
         private void PixelBounds(Rect? region,out int x0,out int y0,out int x1,out int y1)
         {
-            ValidateRect(region);Rect r=Bounds(region);
-            x0=Mathf.Clamp(Mathf.CeilToInt(r.xMin*Width-.00001f),0,Width);
-            y0=Mathf.Clamp(Mathf.CeilToInt(r.yMin*Height-.00001f),0,Height);
-            x1=Mathf.Clamp(Mathf.FloorToInt(r.xMax*Width+.00001f),0,Width);
-            y1=Mathf.Clamp(Mathf.FloorToInt(r.yMax*Height+.00001f),0,Height);
+            ValidateRect(region);
+            PixelBounds(Bounds(region),Width,Height,out x0,out y0,out x1,out y1);
+        }
+        // The whole pixels inside a UV rectangle on a texture of this size.
+        private static void PixelBounds(Rect r,int width,int height,out int x0,out int y0,out int x1,out int y1)
+        {
+            x0=Mathf.Clamp(Mathf.CeilToInt(r.xMin*width-.00001f),0,width);
+            y0=Mathf.Clamp(Mathf.CeilToInt(r.yMin*height-.00001f),0,height);
+            x1=Mathf.Clamp(Mathf.FloorToInt(r.xMax*width+.00001f),0,width);
+            y1=Mathf.Clamp(Mathf.FloorToInt(r.yMax*height+.00001f),0,height);
             if(x1<x0||y1<y0)throw new ArgumentException("Invalid pixel region.");
+        }
+        /// <summary>The UV rectangle <see cref="Blit"/> fills with content for <paramref name="region"/>
+        /// and <paramref name="padding"/> on a texture of <paramref name="width"/> × <paramref name="height"/>:
+        /// the region's whole pixels, inset by the padding on every side. A caller can use the same
+        /// rectangle elsewhere, for example to remap a mesh's UVs onto blitted content.</summary>
+        public static Rect ContentRegion(Rect region,int width,int height,int padding)
+        {
+            if(width<1)throw new ArgumentOutOfRangeException(nameof(width));
+            if(height<1)throw new ArgumentOutOfRangeException(nameof(height));
+            if(padding<0)throw new ArgumentOutOfRangeException(nameof(padding));
+            ValidateRect(region);
+            PixelBounds(region,width,height,out int x0,out int y0,out int x1,out int y1);
+            int innerW=x1-x0-2*padding,innerH=y1-y0-2*padding;
+            if(innerW<=0||innerH<=0)throw new ArgumentException("Region must contain at least one content pixel after padding.");
+            return new Rect((x0+padding)/(float)width,(y0+padding)/(float)height,innerW/(float)width,innerH/(float)height);
         }
         private static Vector2 MapUV(Vector2 local,Rect sourceRegion,Vector2 scale,Vector2 offset,float degrees)
         {
@@ -258,8 +304,11 @@ namespace NordicWind.TextureWrapper
                     Vector2 local=new Vector2((x+.5f)/width,(y+.5f)/height);
                     Vector2 uv=MapUV(local,r,s,o,rotation);
                     Color c;
-                    if(sampling==TextureSamplingMode.Area&&(Mathf.Abs(s.x*r.width)*Width>width || Mathf.Abs(s.y*r.height)*Height>height))
+                    bool area=sampling==TextureSamplingMode.Area||sampling==TextureSamplingMode.AreaFlatten;
+                    bool averaged=false;
+                    if(area&&(Mathf.Abs(s.x*r.width)*Width>width || Mathf.Abs(s.y*r.height)*Height>height))
                     {
+                        averaged=true;
                         // Deterministic supersampling approximation to area integration.
                         int nx=Mathf.Clamp(Mathf.CeilToInt(Mathf.Abs(s.x*r.width)*Width/width),1,16);
                         int ny=Mathf.Clamp(Mathf.CeilToInt(Mathf.Abs(s.y*r.height)*Height/height),1,16);
@@ -271,10 +320,17 @@ namespace NordicWind.TextureWrapper
                         }
                         c*=1f/(nx*ny);
                     }
-                    else c=SampleRaw(uv,sampling==TextureSamplingMode.Area?TextureSamplingMode.Bilinear:sampling,w);
+                    else c=SampleRaw(uv,area?TextureSamplingMode.Bilinear:sampling,w);
                     if(Normal)
                     {
                         Vector3 n=MathUtil.Normal(c);
+                        // The average of unit normals is shorter the more they disagree: tilt
+                        // the result back toward flat by that much.
+                        if(averaged&&sampling==TextureSamplingMode.AreaFlatten&&Settings.DataType==TextureDataType.NormalTangent)
+                        {
+                            float agreement=Mathf.Clamp01(n.magnitude);
+                            n=Vector3.Lerp(Vector3.forward,MathUtil.SafeNormal(n),agreement);
+                        }
                         if(Settings.DataType==TextureDataType.NormalTangent && rotation!=0f)n=RotateNormal(n,rotation);
                         c=MathUtil.Pack(MathUtil.SafeNormal(n),c.a);
                     }
@@ -311,8 +367,11 @@ namespace NordicWind.TextureWrapper
         {
             if(operations==null)return original;
             Color c=original;
-            foreach(var op in operations)
+            // An index loop: foreach over the interface would allocate an enumerator per pixel,
+            // and allocations in parallel loops serialize on the garbage collector.
+            for(int k=0;k<operations.Count;k++)
             {
+                var op=operations[k];
                 float influence=1f;
                 if(op.Mask!=null)
                 {
@@ -386,6 +445,8 @@ namespace NordicWind.TextureWrapper
                 Vector3 mixed=MathUtil.SafeNormal(Vector3.LerpUnclamped(MathUtil.Normal(dst),outN,influence));
                 return MathUtil.Pack(mixed,Mathf.LerpUnclamped(dst.a,src.a,influence));
             }
+            // For color blends the strength scales the influence (for normals it scaled the vector).
+            influence*=strength;
             if(from.HasValue || to.HasValue)
             {
                 TextureChannel source=from??TextureChannel.AverageRGB;
@@ -417,8 +478,16 @@ namespace NordicWind.TextureWrapper
             int p=padding??0;int innerW=x1-x0-2*p,innerH=y1-y0-2*p;
             if(innerW<=0||innerH<=0)throw new ArgumentException("Region must contain at least one content pixel after padding.");
             Rect inner=new Rect((x0+p)/(float)Width,(y0+p)/(float)Height,innerW/(float)Width,innerH/(float)Height);
-            using(var transformed=source.Resize(innerW,innerH,sourceRegion,scale,offset,rotation,sampling,wrap,operations))
+            // A same-size source copied without a transform is read as it is: resampling it at its
+            // own texel centers gives the same values, so the copy is skipped. Not for self-blits,
+            // normal maps (Resize renormalizes them), padding or the usage channel, which read
+            // Resize's sampled usage.
+            bool direct=!ReferenceEquals(source,this)&&!source.Normal&&source.Width==innerW&&source.Height==innerH&&sourceRegion==null&&
+                (scale??Vector2.one)==Vector2.one&&(offset??Vector2.zero)==Vector2.zero&&rotation==0f&&(operations==null||operations.Count==0)&&
+                !padding.HasValue&&sourceChannel!=TextureChannel.Usage&&destinationChannel!=TextureChannel.Usage;
+            using(var resized=direct?null:source.Resize(innerW,innerH,sourceRegion,scale,offset,rotation,sampling,wrap,operations))
             {
+                var transformed=resized??source;
                 if(mask!=null){mask.Check();if(ReferenceEquals(mask,this))throw new ArgumentException("A destination cannot be its own mask during mutation. Clone the mask first.");if(mask.Normal)mask.EnsureNormalized();}
                 if(NormalMode(blend))EnsureNormalized();
                 // Snapshotting source through Resize makes self-blits well defined.
@@ -474,6 +543,11 @@ namespace NordicWind.TextureWrapper
             // An empty coverage domain is not geometry. In particular, do not make
             // an empty normal map opaque or mark its pixels used.
             if(!any)return;
+            if(!all&&w==Width&&h==Height&&TextureGpu.ShouldUse((long)w*h))
+            {
+                DilateGpu();
+                return;
+            }
             if(all)
             {
                 if(normal)
@@ -591,37 +665,279 @@ namespace NordicWind.TextureWrapper
         public void PaintTriangle(Vector2 uv0,Vector2 uv1,Vector2 uv2,Color color0,Color color1,Color color2,TrianglePaintOptions options=null)
         {
             Writable();ValidateUV(uv0);ValidateUV(uv1);ValidateUV(uv2);ValidateColor(color0);ValidateColor(color1);ValidateColor(color2);
-            options=options??new TrianglePaintOptions();if(options.SamplesPerAxis<1||options.SamplesPerAxis>32)throw new ArgumentOutOfRangeException(nameof(options.SamplesPerAxis));
-            Vector2 a=new Vector2(uv0.x*Width,uv0.y*Height),b=new Vector2(uv1.x*Width,uv1.y*Height),c=new Vector2(uv2.x*Width,uv2.y*Height);
-            float cross=(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);if(Mathf.Abs(cross)<1e-10f)return;
-            int x0=Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.x,Mathf.Min(b.x,c.x))),0,Width),x1=Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.x,Mathf.Max(b.x,c.x))),0,Width);
-            int y0=Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.y,Mathf.Min(b.y,c.y))),0,Height),y1=Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.y,Mathf.Max(b.y,c.y))),0,Height);
-            int samples=options.Mode==TriangleRasterizationMode.Fast?1:options.SamplesPerAxis;
-            ForRows(x1-x0,y1-y0,dy=>
-            {
-                int y=y0+dy;
-                for(int x=x0;x<x1;x++)
-                {
-                    Color sum=Color.clear;int hits=0;
-                    for(int j=0;j<samples;j++)for(int i=0;i<samples;i++)
-                    {
-                        Vector2 p=new Vector2(x+(i+.5f)/samples,y+(j+.5f)/samples);
-                        float wb=((p.x-a.x)*(c.y-a.y)-(p.y-a.y)*(c.x-a.x))/cross;
-                        float wc=((b.x-a.x)*(p.y-a.y)-(b.y-a.y)*(p.x-a.x))/cross;
-                        float wa=1f-wb-wc;
-                        if(wa < -1e-6f||wb < -1e-6f||wc < -1e-6f)continue;
-                        sum+=color0*wa+color1*wb+color2*wc;hits++;
-                    }
-                    if(hits==0)continue;
-                    int index=y*Width+x;Color existing=_pixels[index];Color add=sum*(1f/(samples*samples));
-                    // Preserve the complete floating-point accumulation. Clamping here
-                    // would lose information if later triangles/operations add to it.
-                    // The Unity output boundary clamps values for bounded formats.
-                    _pixels[index]=existing+add;
-                    _usage[index]=1;
-                }
-            });
+            int samples=Samples(options);
+            if(!Setup(uv0,uv1,uv2,color0,color1,color2,out var t))return;
+            ForRows(t.X1-t.X0,t.Y1-t.Y0,dy=>PaintRow(t,t.Y0+dy,t.X0,t.X1,samples));
             Changed();
+        }
+        /// <summary>Paints many triangles: <paramref name="uv"/> and <paramref name="color"/> hold
+        /// three corners per triangle. The result is the same as calling <see cref="PaintTriangle"/>
+        /// for each triangle in order. On the CPU, the texture is split into tiles painted on every
+        /// core; large batches on large textures may run on the GPU (see
+        /// <see cref="TextureProcessingSettings.UseGpu"/>), where a sample exactly on an edge two
+        /// triangles share may go to the other triangle.</summary>
+        public void PaintTriangles(IReadOnlyList<Vector2> uv,IReadOnlyList<Color> color,TrianglePaintOptions options=null)
+        {
+            PaintTriangles(uv,color,options,null);
+        }
+        /// <summary>Like <see cref="PaintTriangles(IReadOnlyList{Vector2}, IReadOnlyList{Color}, TrianglePaintOptions)"/>,
+        /// leaving out surfaces hidden close behind another surface with the same UVs (see
+        /// <see cref="HiddenSurfaceOptions"/>). Null <paramref name="hidden"/> paints every triangle.</summary>
+        public void PaintTriangles(IReadOnlyList<Vector2> uv,IReadOnlyList<Color> color,TrianglePaintOptions options,HiddenSurfaceOptions hidden)
+        {
+            Writable();
+            if(uv==null)throw new ArgumentNullException(nameof(uv));
+            if(color==null)throw new ArgumentNullException(nameof(color));
+            if(uv.Count!=color.Count||uv.Count%3!=0)throw new ArgumentException("Every triangle needs three UVs and three colors.");
+            int samples=Samples(options);
+            for(int i=0;i<uv.Count;i++){ValidateUV(uv[i]);ValidateColor(color[i]);}
+            if(hidden!=null)
+            {
+                if(hidden.Positions==null||hidden.Normals==null||hidden.Positions.Count!=uv.Count||hidden.Normals.Count!=uv.Count)
+                    throw new ArgumentException("Hidden surfaces need a position and a normal for every corner.",nameof(hidden));
+                if(!(hidden.Margin>0f)||float.IsInfinity(hidden.Margin))
+                    throw new ArgumentOutOfRangeException(nameof(hidden),"The hidden-surface margin must be above zero and finite.");
+                for(int i=0;i<uv.Count;i++)
+                    if(!MathUtil.Finite(hidden.Positions[i])||!MathUtil.Finite(hidden.Normals[i]))
+                        throw new ArgumentException("Hidden-surface positions and normals must be finite.",nameof(hidden));
+            }
+            int count=uv.Count/3;
+            if(count==0)return;
+            if(count>=TextureGpu.MinTriangles&&TextureGpu.ShouldUse((long)Width*Height)
+               &&(long)Width*samples<=SystemInfo.maxTextureSize&&(long)Height*samples<=SystemInfo.maxTextureSize
+               &&TextureGpu.PaintFlip!=0f)
+            {
+                PaintTrianglesGpu(uv,color,samples,hidden);
+                return;
+            }
+            PaintTrianglesTiled(uv,color,samples,hidden);
+        }
+        private static int Samples(TrianglePaintOptions options)
+        {
+            options=options??new TrianglePaintOptions();
+            if(options.SamplesPerAxis<1||options.SamplesPerAxis>32)throw new ArgumentOutOfRangeException(nameof(options.SamplesPerAxis));
+            return options.Mode==TriangleRasterizationMode.Fast?1:options.SamplesPerAxis;
+        }
+        /// <summary>One triangle in pixel space, with its fill-rule edges and pixel bounds.</summary>
+        private struct TriangleSetup
+        {
+            public Vector2 A,B,C;
+            public Color Color0,Color1,Color2;
+            public float Cross;
+            public FillEdge E0,E1,E2;
+            public int X0,X1,Y0,Y1;
+            // +1 for counter-clockwise UVs, -1 for clockwise.
+            public int Winding;
+            // Only for hidden surfaces: positions and normals at the corners, and how far the
+            // surface moves over one pixel.
+            public Vector3 P0,P1,P2,N0,N1,N2;
+            public float Footprint;
+        }
+        /// <summary>How far a triangle's surface moves over one pixel of this texture, both axes
+        /// together (a, b, c in pixel space): a sample in a pixel lies within this of the
+        /// surface at the pixel's center, so depth can't be told apart more finely.</summary>
+        internal static float Footprint(Vector2 a,Vector2 b,Vector2 c,float cross,Vector3 pa,Vector3 pb,Vector3 pc)
+        {
+            Vector3 e1=pb-pa,e2=pc-pa;
+            Vector3 dx=(e1*(c.y-a.y)-e2*(b.y-a.y))/cross;
+            Vector3 dy=(e2*(b.x-a.x)-e1*(c.x-a.x))/cross;
+            return Mathf.Sqrt(dx.sqrMagnitude+dy.sqrMagnitude);
+        }
+        private bool Setup(Vector2 uv0,Vector2 uv1,Vector2 uv2,Color color0,Color color1,Color color2,out TriangleSetup t)
+        {
+            t=default;
+            Vector2 a=new Vector2(uv0.x*Width,uv0.y*Height),b=new Vector2(uv1.x*Width,uv1.y*Height),c=new Vector2(uv2.x*Width,uv2.y*Height);
+            float cross=(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);if(Mathf.Abs(cross)<1e-10f)return false;
+            int orient=cross>0f?1:-1;
+            t.Winding=orient;
+            t.A=a;t.B=b;t.C=c;t.Color0=color0;t.Color1=color1;t.Color2=color2;t.Cross=cross;
+            // The fill rule's edges are set up once per triangle; each sample then needs only a
+            // few multiplications per edge.
+            t.E0=new FillEdge(a,b,orient);t.E1=new FillEdge(b,c,orient);t.E2=new FillEdge(c,a,orient);
+            t.X0=Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.x,Mathf.Min(b.x,c.x))),0,Width);t.X1=Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.x,Mathf.Max(b.x,c.x))),0,Width);
+            t.Y0=Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.y,Mathf.Min(b.y,c.y))),0,Height);t.Y1=Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.y,Mathf.Max(b.y,c.y))),0,Height);
+            return t.X0<t.X1&&t.Y0<t.Y1;
+        }
+        /// <summary>Paints pixels x0–x1 of row y with one triangle's samples.</summary>
+        private void PaintRow(in TriangleSetup t,int y,int x0,int x1,int samples,HiddenTile hidden=null)
+        {
+            for(int x=x0;x<x1;x++)
+            {
+                Color sum=Color.clear;int hits=0;
+                for(int j=0;j<samples;j++)for(int i=0;i<samples;i++)
+                {
+                    Vector2 p=new Vector2(x+(i+.5f)/samples,y+(j+.5f)/samples);
+                    if(!Inside(t,p))continue;
+                    Weights(t,p,out float wa,out float wb,out float wc);
+                    if(hidden!=null&&hidden.Hides(t,x,y,wa,wb,wc))continue;
+                    sum+=t.Color0*wa+t.Color1*wb+t.Color2*wc;hits++;
+                }
+                if(hits==0)continue;
+                int index=y*Width+x;Color existing=_pixels[index];Color add=sum*(1f/(samples*samples));
+                // Preserve the complete floating-point accumulation. Clamping here
+                // would lose information if later triangles/operations add to it.
+                // The Unity output boundary clamps values for bounded formats.
+                _pixels[index]=existing+add;
+                _usage[index]=1;
+            }
+        }
+        // Whether a point in pixel space is inside the triangle, by its fill rule.
+        private static bool Inside(in TriangleSetup t,Vector2 p)
+        {
+            double px=p.x,py=p.y;
+            double v0=(t.E0.Dx*(py-t.E0.Fy)-t.E0.Dy*(px-t.E0.Fx))*t.E0.Side;if(v0<0||(v0==0&&t.E0.Side<0))return false;
+            double v1=(t.E1.Dx*(py-t.E1.Fy)-t.E1.Dy*(px-t.E1.Fx))*t.E1.Side;if(v1<0||(v1==0&&t.E1.Side<0))return false;
+            double v2=(t.E2.Dx*(py-t.E2.Fy)-t.E2.Dy*(px-t.E2.Fx))*t.E2.Side;if(v2<0||(v2==0&&t.E2.Side<0))return false;
+            return true;
+        }
+        // The corners' barycentric weights at a point in pixel space.
+        private static void Weights(in TriangleSetup t,Vector2 p,out float wa,out float wb,out float wc)
+        {
+            Vector2 a=t.A,b=t.B,c=t.C;
+            wb=((p.x-a.x)*(c.y-a.y)-(p.y-a.y)*(c.x-a.x))/t.Cross;
+            wc=((b.x-a.x)*(p.y-a.y)-(b.y-a.y)*(p.x-a.x))/t.Cross;
+            wa=1f-wb-wc;
+        }
+        /// <summary>Hidden surfaces within one tile (<see cref="HiddenSurfaceOptions"/>): per pixel
+        /// and UV winding, the average normal at the pixel's center, and how far out along it the
+        /// outermost surface lies there.</summary>
+        private sealed class HiddenTile
+        {
+            private readonly int x0,y0,width,height;
+            private readonly float margin;
+            private readonly Vector3[] normals;
+            private readonly float[] outer;
+            public HiddenTile(int x0,int y0,int x1,int y1,float margin)
+            {
+                this.x0=x0;this.y0=y0;width=x1-x0;height=y1-y0;this.margin=margin;
+                normals=new Vector3[2*width*height];
+                outer=new float[2*width*height];
+                for(int i=0;i<outer.Length;i++)outer[i]=float.NegativeInfinity;
+            }
+            private int Index(int winding,int x,int y)=>(winding>0?0:width*height)+(y-y0)*width+(x-x0);
+            // First: every pixel center a triangle covers adds its normal there.
+            public void AddNormals(in TriangleSetup t,int cx0,int cx1,int cy0,int cy1)
+            {
+                for(int y=cy0;y<cy1;y++)
+                    for(int x=cx0;x<cx1;x++)
+                    {
+                        var p=new Vector2(x+.5f,y+.5f);
+                        if(!Inside(t,p))continue;
+                        Weights(t,p,out float wa,out float wb,out float wc);
+                        normals[Index(t.Winding,x,y)]+=t.N0*wa+t.N1*wb+t.N2*wc;
+                    }
+            }
+            // Then the sums become directions (zero where nothing covered the center).
+            public void Normalize()
+            {
+                for(int i=0;i<normals.Length;i++)
+                {
+                    var n=normals[i];float length=Mathf.Sqrt(n.sqrMagnitude);
+                    normals[i]=length>1e-10f?n/length:Vector3.zero;
+                }
+            }
+            // Then the outermost surface at each pixel center, along that direction.
+            public void AddOuter(in TriangleSetup t,int cx0,int cx1,int cy0,int cy1)
+            {
+                for(int y=cy0;y<cy1;y++)
+                    for(int x=cx0;x<cx1;x++)
+                    {
+                        var p=new Vector2(x+.5f,y+.5f);
+                        if(!Inside(t,p))continue;
+                        int i=Index(t.Winding,x,y);var n=normals[i];
+                        if(n.x==0f&&n.y==0f&&n.z==0f)continue;
+                        Weights(t,p,out float wa,out float wb,out float wc);
+                        float d=Vector3.Dot(t.P0*wa+t.P1*wb+t.P2*wc,n);
+                        if(d>outer[i])outer[i]=d;
+                    }
+            }
+            public bool Hides(in TriangleSetup t,int x,int y,float wa,float wb,float wc)
+            {
+                int i=Index(t.Winding,x,y);var n=normals[i];
+                if(n.x==0f&&n.y==0f&&n.z==0f)return false;
+                return outer[i]-Vector3.Dot(t.P0*wa+t.P1*wb+t.P2*wc,n)>margin+t.Footprint;
+            }
+        }
+        // Tiles of this many pixels per side are painted in parallel; each tile paints its
+        // triangles in their order, so every pixel adds up exactly as with one call per triangle.
+        private const int PaintTile=64;
+        private void PaintTrianglesTiled(IReadOnlyList<Vector2> uv,IReadOnlyList<Color> color,int samples,HiddenSurfaceOptions hidden=null)
+        {
+            int count=uv.Count/3;
+            var setups=new TriangleSetup[count];var valid=new bool[count];
+            int tilesX=(Width+PaintTile-1)/PaintTile,tilesY=(Height+PaintTile-1)/PaintTile;
+            var tiles=new List<int>[tilesX*tilesY];
+            for(int k=0;k<count;k++)
+            {
+                if(!Setup(uv[3*k],uv[3*k+1],uv[3*k+2],color[3*k],color[3*k+1],color[3*k+2],out setups[k]))continue;
+                valid[k]=true;
+                if(hidden!=null)
+                {
+                    setups[k].P0=hidden.Positions[3*k];setups[k].P1=hidden.Positions[3*k+1];setups[k].P2=hidden.Positions[3*k+2];
+                    setups[k].N0=hidden.Normals[3*k];setups[k].N1=hidden.Normals[3*k+1];setups[k].N2=hidden.Normals[3*k+2];
+                    setups[k].Footprint=Footprint(setups[k].A,setups[k].B,setups[k].C,setups[k].Cross,setups[k].P0,setups[k].P1,setups[k].P2);
+                }
+                var t=setups[k];
+                for(int ty=t.Y0/PaintTile;ty<=(t.Y1-1)/PaintTile;ty++)
+                    for(int tx=t.X0/PaintTile;tx<=(t.X1-1)/PaintTile;tx++)
+                        (tiles[ty*tilesX+tx]??(tiles[ty*tilesX+tx]=new List<int>())).Add(k);
+            }
+            void Tile(int index)
+            {
+                var list=tiles[index];if(list==null)return;
+                int tx=index%tilesX,ty=index/tilesX;
+                int x0=tx*PaintTile,x1=Math.Min(Width,x0+PaintTile),y0=ty*PaintTile,y1=Math.Min(Height,y0+PaintTile);
+                HiddenTile tile=null;
+                if(hidden!=null)
+                {
+                    // Every triangle of the tile counts before any paints.
+                    tile=new HiddenTile(x0,y0,x1,y1,hidden.Margin);
+                    foreach(int k in list)
+                    {
+                        var t=setups[k];
+                        tile.AddNormals(t,Math.Max(x0,t.X0),Math.Min(x1,t.X1),Math.Max(y0,t.Y0),Math.Min(y1,t.Y1));
+                    }
+                    tile.Normalize();
+                    foreach(int k in list)
+                    {
+                        var t=setups[k];
+                        tile.AddOuter(t,Math.Max(x0,t.X0),Math.Min(x1,t.X1),Math.Max(y0,t.Y0),Math.Min(y1,t.Y1));
+                    }
+                }
+                foreach(int k in list)
+                {
+                    var t=setups[k];
+                    int cx0=Math.Max(x0,t.X0),cx1=Math.Min(x1,t.X1),cy0=Math.Max(y0,t.Y0),cy1=Math.Min(y1,t.Y1);
+                    for(int y=cy0;y<cy1;y++)PaintRow(t,y,cx0,cx1,samples,tile);
+                }
+            }
+            if((long)Width*Height<TextureProcessingSettings.MinParallelPixels||TextureProcessingSettings.MaxThreads==1)
+                for(int i=0;i<tiles.Length;i++)Tile(i);
+            else
+            {
+                int max=TextureProcessingSettings.MaxThreads==0?Environment.ProcessorCount:TextureProcessingSettings.MaxThreads;
+                Parallel.For(0,tiles.Length,new ParallelOptions{MaxDegreeOfParallelism=max},Tile);
+            }
+            Changed();
+        }
+        /// <summary>Fill rule for one triangle edge p0→p1, for a triangle with orientation
+        /// <c>orient</c> (+1 counter-clockwise). Every triangle sharing an edge evaluates it in the
+        /// same canonical direction, so they compute exactly the same value, and a sample exactly
+        /// on the edge belongs to the one triangle on the left of that direction. So each sample of
+        /// a mesh belongs to exactly one triangle, also on shared edges and vertices, and nothing
+        /// is painted twice. A sample p is inside when v = (Dx·(p.y−Fy) − Dy·(p.x−Fx))·Side is
+        /// positive, or zero with Side positive.</summary>
+        private readonly struct FillEdge
+        {
+            public readonly double Fx,Fy,Dx,Dy;
+            public readonly int Side;   // +1: the triangle lies left of the canonical direction
+            public FillEdge(Vector2 p0,Vector2 p1,int orient)
+            {
+                bool swap=p1.x<p0.x||(p1.x==p0.x&&p1.y<p0.y);
+                Vector2 from=swap?p1:p0,to=swap?p0:p1;
+                Fx=from.x;Fy=from.y;Dx=(double)to.x-from.x;Dy=(double)to.y-from.y;
+                Side=swap?-orient:orient;
+            }
         }
         /// <summary>Sets RGBA only on currently unused pixels. By default, preserves
         /// the usage mask, allowing coverage to be exported separately from a fully
@@ -683,11 +999,19 @@ namespace NordicWind.TextureWrapper
                 if (coverage.Width != Width || coverage.Height != Height)
                     throw new ArgumentException("The coverage map must match the bake's dimensions.", nameof(options));
             }
-            // Corrections fade to flat over the last FadeAngle degrees before the limit.
-            const float FadeAngle = 10f;
+            // Corrections are compressed smoothly toward the limit above half of it.
             float maxAngle = options == null ? float.PositiveInfinity : Mathf.Min(options.MaxAngle, 90f);
-            var baked = new int[Height]; var overlapping = new int[Height]; var limited = new int[Height];
+            var keepMap = options?.Keep;
+            if (keepMap != null)
+            {
+                keepMap.Check();
+                if (keepMap.Width != Width || keepMap.Height != Height)
+                    throw new ArgumentException("The keep map must match the bake's dimensions.", nameof(options));
+                if (keepMap.Normal) keepMap.EnsureNormalized();
+            }
+            var baked = new int[Height]; var overlapping = new int[Height]; var limited = new int[Height]; var kept = new int[Height];
             var largest = new float[Height];
+            var before = new double[Height]; var after = new double[Height]; var measured = new int[Height];
             if (targetNormals == null) throw new ArgumentNullException(nameof(targetNormals));
             if (basis == null) throw new ArgumentNullException(nameof(basis));
             if (basis.Tangent == null || basis.Bitangent == null || basis.Normal == null)
@@ -736,7 +1060,7 @@ namespace NordicWind.TextureWrapper
                     {
                         // Overlapping surfaces' frames often cancel out (mirrored halves). Store
                         // no correction there rather than leaving the texel for dilation to fill
-                        // from a neighbouring island.
+                        // from a neighboring island.
                         if (overlap < 1f)
                         {
                             output._pixels[i]=MathUtil.Pack(Vector3.forward,1f);output._usage[i]=1;
@@ -748,13 +1072,31 @@ namespace NordicWind.TextureWrapper
                         Vector3.Dot(reference,bn), Vector3.Dot(reference,nt), Vector3.Dot(reference,tb))/det);
                     if (options != null)
                     {
+                        float angle = Mathf.Atan2(new Vector2(tangentSpace.x, tangentSpace.y).magnitude, tangentSpace.z) * Mathf.Rad2Deg;
+                        if (angle > maxAngle) limited[y]++;
+                        float limitedAngle = SoftLimit(angle, maxAngle);
+                        if (limitedAngle < angle - 1e-4f)
+                        {
+                            // The same direction around the normal, at the compressed angle.
+                            Vector2 side = new Vector2(tangentSpace.x, tangentSpace.y);
+                            side = side.sqrMagnitude > 1e-12f ? side.normalized : Vector2.right;
+                            float radians = limitedAngle * Mathf.Deg2Rad;
+                            tangentSpace = new Vector3(side.x * Mathf.Sin(radians), side.y * Mathf.Sin(radians), Mathf.Cos(radians));
+                        }
                         float keep = 1f;
                         if (overlap < 1f) { keep *= overlap; overlapping[y]++; }
-                        float angle = Mathf.Atan2(new Vector2(tangentSpace.x, tangentSpace.y).magnitude, tangentSpace.z) * Mathf.Rad2Deg;
-                        float angleKeep = 1f - Mathf.Clamp01((angle - (maxAngle - FadeAngle)) / FadeAngle);
-                        if (angleKeep < 1f) { keep *= angleKeep; limited[y]++; }
+                        if (keepMap != null && keepMap._usage[i] != 0)
+                        {
+                            float rule = Mathf.Clamp01(keepMap._pixels[i].r);
+                            if (rule < 1f) { keep *= rule; kept[y]++; }
+                        }
                         if (keep < 1f) tangentSpace = MathUtil.SafeNormal(Vector3.Lerp(Vector3.forward, tangentSpace, keep));
                         largest[y] = Mathf.Max(largest[y], Mathf.Atan2(new Vector2(tangentSpace.x, tangentSpace.y).magnitude, tangentSpace.z) * Mathf.Rad2Deg);
+                        // The shading with the target's own normal and with the stored correction.
+                        Vector3 shaded = MathUtil.SafeNormal(t * tangentSpace.x + b * tangentSpace.y + n * tangentSpace.z);
+                        before[y] += Vector3.Angle(MathUtil.SafeNormal(n), reference);
+                        after[y] += Vector3.Angle(shaded, reference);
+                        measured[y]++;
                     }
                     baked[y]++;
                     output._pixels[i]=MathUtil.Pack(tangentSpace,Mathf.Clamp01(_pixels[i].a));
@@ -763,12 +1105,31 @@ namespace NordicWind.TextureWrapper
             });
             output._normalized=true;
             statistics = new NormalDifferenceStatistics();
+            double beforeSum = 0.0, afterSum = 0.0; long measuredCount = 0;
             for (int y = 0; y < Height; y++)
             {
                 statistics.Baked += baked[y]; statistics.Overlapping += overlapping[y]; statistics.Limited += limited[y];
+                statistics.Kept += kept[y];
                 statistics.LargestAngle = Mathf.Max(statistics.LargestAngle, largest[y]);
+                beforeSum += before[y]; afterSum += after[y]; measuredCount += measured[y];
+            }
+            if (measuredCount > 0)
+            {
+                statistics.MeanAngleBefore = (float)(beforeSum / measuredCount);
+                statistics.MeanAngleAfter = (float)(afterSum / measuredCount);
             }
             return output;
+        }
+        /// <summary>The soft limit: angles up to half the limit as they are, larger ones
+        /// compressed smoothly toward it, never past it.</summary>
+        public static float SoftLimit(float angle, float limit)
+        {
+            if (float.IsPositiveInfinity(limit) || limit <= 0f) return limit <= 0f ? 0f : angle;
+            float half = limit * 0.5f;
+            if (angle <= half) return angle;
+            float x = (angle - half) / half;
+            float e = Mathf.Exp(-2f * x);
+            return half + half * (1f - e) / (1f + e);
         }
         /// <summary>How much of the correction to keep at a texel, from its coverage
         /// (R, G = reference by winding; B, A = target by winding): 1 = covered by one surface.</summary>
@@ -778,8 +1139,8 @@ namespace NordicWind.TextureWrapper
         }
         private static float Unambiguous(float counterClockwise, float clockwise)
         {
-            // One winding covered more than once: stacked copies. Up to about 1.25 can come
-            // from sub-samples exactly on an edge shared by two triangles, so fade from 1.3 to 1.7.
+            // One winding covered more than once: stacked copies. PaintTriangle's fill rule never
+            // counts a sub-sample twice within one mesh, so fading from 1.3 to 1.7 leaves margin.
             float stacked = 1f - Mathf.Clamp01((Mathf.Max(counterClockwise, clockwise) - 1.3f) / .4f);
             // Both windings at one texel, even partly: mirrored copies. Already at the islands'
             // edges both may touch only a sub-sample or two (1/16 each with 4×4 sampling), so
@@ -873,7 +1234,7 @@ namespace NordicWind.TextureWrapper
         }
         public void Dispose()
         {
-            if(_disposed)return;_disposed=true;_pixels=null;_usage=null;
+            if(_disposed)return;_disposed=true;PixelBuffers.Return(_pixels,_usage);_pixels=null;_usage=null;
             if(_ownsCache&&_cached!=null)
             {
 #if UNITY_EDITOR

@@ -56,12 +56,12 @@ namespace NordicWind.TextureWrapper.Tests
             Near(1, result.a);
         }
 
-        [Test] public void Colorize_GreyColorMakesGreyAndAlphaMixes()
+        [Test] public void Colorize_GrayColorMakesGreyAndAlphaMixes()
         {
             var input = new Color(.6f, .2f, .1f, 1f);
-            Color grey = Apply(input, ColorOperationCode.Colorize, new ColorOperationParameters { Color = new Color(.5f, .5f, .5f, 1f) });
-            Near(grey.r, grey.g, 1e-3); Near(grey.g, grey.b, 1e-3);
-            Near(OKLab(input).x, OKLab(grey).x, 1e-3);
+            Color gray = Apply(input, ColorOperationCode.Colorize, new ColorOperationParameters { Color = new Color(.5f, .5f, .5f, 1f) });
+            Near(gray.r, gray.g, 1e-3); Near(gray.g, gray.b, 1e-3);
+            Near(OKLab(input).x, OKLab(gray).x, 1e-3);
             Color none = Apply(input, ColorOperationCode.Colorize, new ColorOperationParameters { Color = new Color(0, 0, 1, 0) });
             Near(input.r, none.r); Near(input.g, none.g); Near(input.b, none.b);
         }
@@ -87,9 +87,9 @@ namespace NordicWind.TextureWrapper.Tests
             var input = new Color(.6f, .3f, .1f, 1f);
             Color unchanged = Apply(input, ColorOperationCode.Saturation, new ColorOperationParameters { Amount = 1f });
             Near(input.r, unchanged.r); Near(input.b, unchanged.b);
-            Color grey = Apply(input, ColorOperationCode.Saturation, new ColorOperationParameters { Amount = 0f });
+            Color gray = Apply(input, ColorOperationCode.Saturation, new ColorOperationParameters { Amount = 0f });
             float luminance = .6f * .30f + .3f * .59f + .1f * .11f;
-            Near(luminance, grey.r); Near(luminance, grey.g); Near(luminance, grey.b);
+            Near(luminance, gray.r); Near(luminance, gray.g); Near(luminance, gray.b);
             Color brighter = Apply(input, ColorOperationCode.Brightness, new ColorOperationParameters { Amount = 1.5f });
             Near(.9, brighter.r); Near(.45, brighter.g);
         }

@@ -84,6 +84,29 @@ namespace NordicWind.TextureWrapper.Tests
                 Assert.IsTrue(tex.IsPixelUsed(0,0));Assert.Greater(tex.GetPixel(0,0).r,0f);
             }
         }
+        [Test] public void ContentRegionIsTheRectangleBlitFills()
+        {
+            using(var src=new NordicsTextureWrapper(3,3))using(var dst=new NordicsTextureWrapper(64,32))
+            {
+                var region=new Rect(0.25f,0.1f,0.5f,0.6f);
+                foreach(int padding in new[]{0,1,3})
+                    Assert.AreEqual(dst.Blit(src,region:region,padding:padding),NordicsTextureWrapper.ContentRegion(region,64,32,padding),"padding "+padding);
+                Assert.Throws<ArgumentException>(()=>NordicsTextureWrapper.ContentRegion(new Rect(0f,0f,0.05f,0.05f),64,32,3));
+            }
+        }
+        [Test] public void BlitStrengthScalesTheInfluenceOfColorBlends()
+        {
+            using(var src=new NordicsTextureWrapper(2,2,ColorSettings()))using(var dst=new NordicsTextureWrapper(2,2,ColorSettings()))
+            {
+                src.Fill(Color.white);
+                dst.Fill(Color.black);
+                dst.Blit(src,strength:0.25f);
+                Assert.AreEqual(0.25f,dst.GetPixel(0,0).r,1e-5f,"replace at a quarter");
+                dst.Fill(new Color(0.1f,0.1f,0.1f,1f));
+                dst.Blit(src,blend:TextureBlendMode.Add,strength:2f);
+                Assert.AreEqual(2.1f,dst.GetPixel(0,0).r,1e-5f,"add twice");
+            }
+        }
         [Test] public void InvalidPaddingThrows()
         {
             using(var src=new NordicsTextureWrapper(2,2))using(var dst=new NordicsTextureWrapper(4,4))
@@ -123,6 +146,48 @@ namespace NordicWind.TextureWrapper.Tests
                 Assert.AreEqual(TextureFormat.RGBA32,tex.GetTexture2D().format);
                 tex.Settings.OutputChannels=TextureOutputChannels.RGB;
                 Assert.AreEqual(TextureFormat.RGB24,tex.GetTexture2D().format);
+            }
+        }
+        [Test] public void GetAndSetPixels_RowByRowFromTheBottom()
+        {
+            using(var tex=new NordicsTextureWrapper(2,2,ColorSettings()))
+            {
+                tex.SetPixel(1,0,Color.red);
+                var pixels=tex.GetPixels();
+                Assert.AreEqual(Color.red,pixels[1]);
+                Assert.IsFalse(tex.IsPixelUsed(0,1));
+                pixels[2]=Color.blue;
+                tex.SetPixels(pixels);
+                Assert.AreEqual(Color.blue,tex.GetPixel(0,1));
+                Assert.IsTrue(tex.IsPixelUsed(0,1));
+                pixels[0]=new Color(float.NaN,0f,0f,1f);
+                Assert.Throws<ArgumentException>(()=>tex.SetPixels(pixels));
+                Assert.Throws<ArgumentException>(()=>tex.SetPixels(new Color[3]));
+            }
+        }
+        [Test] public void ReusedBuffers_StartEmpty()
+        {
+            using(var first=new NordicsTextureWrapper(3,3,ColorSettings()))first.Fill(Color.red);
+            using(var second=new NordicsTextureWrapper(3,3,ColorSettings()))
+            {
+                Assert.AreEqual(Color.clear,second.GetPixel(1,1));
+                Assert.IsFalse(second.IsPixelUsed(1,1));
+            }
+            NordicsTextureWrapper.ReleasePooledBuffers();
+        }
+        [Test] public void SameSizeBlit_CopiesExactly()
+        {
+            using(var destination=new NordicsTextureWrapper(4,4,ColorSettings()))
+            using(var source=new NordicsTextureWrapper(4,4,ColorSettings()))
+            using(var mask=new NordicsTextureWrapper(4,4,ColorSettings()))
+            {
+                destination.Fill(new Color(.5f,.5f,.5f,1f));
+                for(int y=0;y<4;y++)for(int x=0;x<4;x++)source.SetPixel(x,y,new Color(x/4f,y/4f,.25f,1f));
+                mask.Fill(new Color(.5f,.5f,.5f,1f));
+                destination.Blit(source,mask:mask,maskOptions:new TextureMaskOptions{Channel=TextureChannel.R},blend:TextureBlendMode.Multiply);
+                Color expected=Color.Lerp(new Color(.5f,.5f,.5f,1f),new Color(.5f*3/4f,.5f*2/4f,.125f,1f),.5f);
+                Color actual=destination.GetPixel(3,2);
+                Assert.AreEqual(expected.r,actual.r,1e-6f);Assert.AreEqual(expected.g,actual.g,1e-6f);Assert.AreEqual(expected.b,actual.b,1e-6f);
             }
         }
         [Test] public void OutputChannels_InvalidEnumRejected()

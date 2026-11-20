@@ -154,19 +154,30 @@ namespace NordicWind.TextureWrapper.Tests
             }
         }
 
-        [Test] public void LargeCorrections_FadeOutAtTheAngleLimit()
+        // A soft limit: kept up to half the limit, then compressed smoothly toward it, so a larger
+        // raw correction never gives a smaller result (a cutoff leaves steps in the shading).
+        [Test] public void LargeCorrections_AreCompressedSmoothlyTowardTheLimit()
         {
-            var reference = new[] { Tilted(30f), Tilted(55f), Tilted(65f), Tilted(120f) };
+            var reference = new[] { Tilted(20f), Tilted(45f), Tilted(55f), Tilted(65f), Tilted(120f) };
             using (var correction = BakeIdentity(reference, null, new NormalDifferenceOptions { MaxAngle = 60f }, out var stats))
             {
-                Assert.AreEqual(30f, AngleFromFlat(correction.GetPixel(0, 0)), .05f); // kept
-                float faded = AngleFromFlat(correction.GetPixel(1, 0));              // halfway through the fade
-                Assert.That(faded, Is.GreaterThan(1f).And.LessThan(54f));
-                AssertFlat(correction.GetPixel(2, 0));                                 // beyond the limit
-                AssertFlat(correction.GetPixel(3, 0));                                 // would point into the surface
-                Assert.AreEqual(3, stats.Limited);
-                Assert.AreEqual(30f, stats.LargestAngle, .05f);
+                Assert.AreEqual(20f, AngleFromFlat(correction.GetPixel(0, 0)), .05f); // below half the limit: kept
+                float previous = 20f;
+                for (int i = 1; i < reference.Length; i++)
+                {
+                    Color c = correction.GetPixel(i, 0);
+                    float angle = AngleFromFlat(c);
+                    Assert.That(angle, Is.GreaterThan(previous), "case " + i + ": larger raw corrections give larger results");
+                    Assert.That(angle, Is.LessThan(60f), "case " + i + ": never past the limit");
+                    Assert.That(c.r, Is.GreaterThan(0f), "case " + i + ": the same direction");
+                    previous = angle;
+                }
+                Assert.AreEqual(NordicsTextureWrapper.SoftLimit(45f, 60f), AngleFromFlat(correction.GetPixel(1, 0)), .05f);
+                Assert.AreEqual(2, stats.Limited, "beyond 60°, including the one into the surface");
+                Assert.AreEqual(previous, stats.LargestAngle, .05f);
             }
+            Assert.AreEqual(30f, NordicsTextureWrapper.SoftLimit(30f, 60f), 1e-5f);
+            Assert.AreEqual(30f + 30f * (float)Math.Tanh(.5), NordicsTextureWrapper.SoftLimit(45f, 60f), 1e-4f);
         }
 
         [Test] public void DefaultOptions_NeverStoreACorrectionIntoTheSurface()
@@ -175,12 +186,54 @@ namespace NordicWind.TextureWrapper.Tests
             using (var safe = BakeIdentity(reference, null, new NormalDifferenceOptions(), out var stats))
             {
                 Assert.AreEqual(45f, AngleFromFlat(safe.GetPixel(0, 0)), .05f);
-                AssertFlat(safe.GetPixel(1, 0));
+                Assert.That(safe.GetPixel(1, 0).b, Is.GreaterThan(0f), "compressed below 90°");
+                Assert.That(AngleFromFlat(safe.GetPixel(1, 0)), Is.GreaterThan(45f));
                 Assert.AreEqual(1, stats.Limited);
             }
             // Without options, no rules apply.
             using (var raw = BakeIdentity(reference, null, null, out _))
                 Assert.That(raw.GetPixel(1, 0).b, Is.LessThan(0f));
+        }
+
+        // The keep map fades the correction per texel; the statistics say how far the shading is
+        // from the reference without and with the correction.
+        [Test] public void TheKeepMap_FadesTheCorrectionPerTexel()
+        {
+            var reference = new[] { Tilted(20f), Tilted(20f), Tilted(20f) };
+            using (var keep = new NordicsTextureWrapper(3, 1, new TextureSettings { DataType = TextureDataType.LinearData, SRGB = false, Mipmaps = false }))
+            {
+                keep.SetPixel(0, 0, Color.white); keep.SetPixel(1, 0, new Color(.5f, .5f, .5f, 1f)); keep.SetPixel(2, 0, Color.black);
+                using (var correction = BakeIdentity(reference, null, new NormalDifferenceOptions { MaxAngle = 60f, Keep = keep }, out var stats))
+                {
+                    Assert.AreEqual(20f, AngleFromFlat(correction.GetPixel(0, 0)), .05f);
+                    float half = AngleFromFlat(correction.GetPixel(1, 0));
+                    Assert.AreEqual(10f, half, .1f, "halfway toward flat");
+                    AssertFlat(correction.GetPixel(2, 0));
+                    Assert.AreEqual(2, stats.Kept);
+                    Assert.AreEqual(20f, stats.MeanAngleBefore, .05f, "the target's own normal is 20° off");
+                    Assert.AreEqual((0f + (20f - half) + 20f) / 3f, stats.MeanAngleAfter, .1f);
+                }
+            }
+        }
+
+        // Shrinking a normal map: where the normals a texel covers disagree, AreaFlatten tilts it
+        // back toward flat by how much (the length of their average); agreeing ones barely change.
+        [Test] public void AreaFlatten_FlattensWhereTheNormalsItAveragesDisagree()
+        {
+            using (var map = new NordicsTextureWrapper(4, 1, new TextureSettings { DataType = TextureDataType.NormalTangent, SRGB = false, Mipmaps = false }))
+            {
+                Vector3 left = Tilted(-40f), right = Tilted(40f);
+                map.SetPixel(0, 0, V(left)); map.SetPixel(1, 0, V(right)); map.SetPixel(2, 0, V(Tilted(10f))); map.SetPixel(3, 0, V(Tilted(70f)));
+                using (var area = map.Resize(2, 1, sampling: TextureSamplingMode.Area))
+                using (var flat = map.Resize(2, 1, sampling: TextureSamplingMode.AreaFlatten))
+                {
+                    Assert.AreEqual(0f, AngleFromFlat(flat.GetPixel(0, 0)), .5f, "opposite tilts average to flat");
+                    float areaTilt = AngleFromFlat(area.GetPixel(1, 0)), flatTilt = AngleFromFlat(flat.GetPixel(1, 0));
+                    Assert.AreEqual(40f, areaTilt, .5f, "Area keeps the average direction");
+                    // 10° and 70° are 60° apart: their average is cos(30°) long.
+                    Assert.AreEqual(40f * Mathf.Cos(30f * Mathf.Deg2Rad), flatTilt, 2f, "flattened by their agreement");
+                }
+            }
         }
 
         [Test] public void FlatFrame_IsSkippedWithoutInvalidValues()

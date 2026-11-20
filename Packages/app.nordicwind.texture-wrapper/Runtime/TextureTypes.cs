@@ -5,7 +5,10 @@ using UnityEngine;
 namespace NordicWind.TextureWrapper
 {
     public enum TextureDataType { Color, LinearData, Mask, NormalTangent, NormalObject, NormalWorld }
-    public enum TextureSamplingMode { Nearest, Bilinear, Bicubic, Area }
+    // AreaFlatten: Area, and for tangent-space normal maps each texel's tilt scaled by how much
+    // the normals it covers agree (the length of their average), so detail finer than a texel
+    // flattens instead of turning into noise.
+    public enum TextureSamplingMode { Nearest, Bilinear, Bicubic, Area, AreaFlatten }
     public enum TextureChannel { R, G, B, A, AverageRGB, Usage }
     public enum TextureBlendMode { Replace, Darken, Multiply, Lighten, Screen, Subtract, Add, Overlay, Mixed, Divide, Average, NormalLerp, NormalRNM, NormalWhiteout }
     public enum TextureMaskBlendMode { Replace, Subtract, Multiply, Divide, Min, Max, Average, Add }
@@ -46,8 +49,29 @@ namespace NordicWind.TextureWrapper
     {
         private static int _minimum = 65536;
         private static int _threads = Environment.ProcessorCount;
+        private static int _minimumGpu = 512 * 512;
         public static int MinParallelPixels { get => _minimum; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _minimum = value; } }
         public static int MaxThreads { get => _threads; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _threads = value; } }
+        private static long _pooled = 1L << 30;
+        /// <summary>How many bytes of disposed wrappers' pixel buffers are kept for reuse by the
+        /// next wrapper of the same size (default 1 GiB; 0: none). Free them with
+        /// <see cref="NordicsTextureWrapper.ReleasePooledBuffers"/>.</summary>
+        public static long PooledBytes { get => _pooled; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _pooled = value; } }
+        /// <summary>
+        /// Lets operations that have a GPU version use it. Off: everything runs on the CPU. The
+        /// results agree within each operation's documented tolerance.
+        /// </summary>
+        public static bool UseGpu { get; set; } = true;
+        /// <summary>
+        /// Operations on fewer pixels than this run on the CPU, where moving the data to the GPU
+        /// and back would cost more than it saves.
+        /// </summary>
+        public static int MinGpuPixels { get => _minimumGpu; set { if (value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _minimumGpu = value; } }
+        /// <summary>
+        /// Whether there is a GPU that can render to float textures: false in batch mode without
+        /// graphics (<c>-nographics</c>), where everything runs on the CPU.
+        /// </summary>
+        public static bool GpuAvailable => TextureGpu.Available;
     }
     public sealed class TextureMaskOptions
     {
@@ -88,6 +112,23 @@ namespace NordicWind.TextureWrapper
         public TriangleRasterizationMode Mode = TriangleRasterizationMode.Quality;
         public int SamplesPerAxis = 4;
     }
+    /// <summary>Leaves out surfaces hidden close behind another surface with the same UVs, for
+    /// <see cref="NordicsTextureWrapper.PaintTriangles(IReadOnlyList{Vector2}, IReadOnlyList{Color}, TrianglePaintOptions, HiddenSurfaceOptions)"/>.
+    /// Every corner has a position and a normal, in any one space. At each pixel, the triangles
+    /// of one UV winding are compared along their average normal at the pixel's center: a
+    /// sample lying more than <see cref="Margin"/> behind the outermost of them there is hidden
+    /// and isn't painted. Triangles of opposite UV winding, such as mirrored halves, never hide
+    /// each other. Only the triangles of the same call are compared.</summary>
+    public sealed class HiddenSurfaceOptions
+    {
+        /// <summary>Per corner, like the colors.</summary>
+        public IReadOnlyList<Vector3> Positions;
+        /// <summary>Per corner, pointing out of the surface; any length above zero.</summary>
+        public IReadOnlyList<Vector3> Normals;
+        /// <summary>How far behind, in the positions' units, a sample must lie to be hidden.
+        /// Above zero, so that a curved surface never hides itself within a pixel.</summary>
+        public float Margin = 0.001f;
+    }
     /// <summary>Safety rules for <c>BakeNormalDifference</c>, so a correction never makes
     /// shading worse than no correction. Where a rule applies, the correction fades to flat
     /// (0, 0, 1), which keeps the target mesh's own shading.</summary>
@@ -100,10 +141,17 @@ namespace NordicWind.TextureWrapper
         /// surface (overlapping UVs, such as mirrored halves or stacked copies) get no correction,
         /// because one texel can't hold the right value for both.</summary>
         public NordicsTextureWrapper Coverage;
-        /// <summary>Largest correction kept, in degrees from no correction. Larger ones more
-        /// likely come from a mismatch than from real shape, so they fade out over the last 10°.
-        /// Never above 90°: a normal map can't store a correction pointing into the surface.</summary>
+        /// <summary>The soft limit for corrections, in degrees from no correction. Corrections
+        /// up to half of it are kept as they are; larger ones are compressed smoothly toward it
+        /// (`half + half × tanh((angle − half) / half)`), so a larger raw correction never gives
+        /// a smaller result and the map has no steps. Large corrections more likely come from a
+        /// mismatch than from real shape. Never above 90°: a normal map can't store a correction
+        /// pointing into the surface.</summary>
         public float MaxAngle = 90f;
+        /// <summary>Optional map of the bake's size: how much of the correction to keep per texel
+        /// (R, 0–1), for rules the caller knows, such as places where the two surfaces don't line
+        /// up. The correction fades toward flat by it. Unused texels keep it all.</summary>
+        public NordicsTextureWrapper Keep;
 
         /// <summary>The color to paint a triangle with into <see cref="Coverage"/>.</summary>
         public static Color CoverageColor(Vector2 uv0, Vector2 uv1, Vector2 uv2, bool target)
@@ -120,11 +168,17 @@ namespace NordicWind.TextureWrapper
         public int Baked;
         /// <summary>Texels whose correction was reduced or removed because surfaces overlap.</summary>
         public int Overlapping;
-        /// <summary>Texels whose correction was reduced or removed by <c>MaxAngle</c>, including
-        /// ones that would point into the surface.</summary>
+        /// <summary>Texels whose raw correction was beyond <c>MaxAngle</c>, including ones that
+        /// would point into the surface (compressed toward the limit).</summary>
         public int Limited;
+        /// <summary>Texels whose correction was reduced by the <c>Keep</c> map.</summary>
+        public int Kept;
         /// <summary>The largest correction kept, in degrees.</summary>
         public float LargestAngle;
+        /// <summary>How far the target's shading is from the reference's, in degrees, averaged
+        /// over the texels with a valid frame: with its own normals, and with the correction as
+        /// stored (decoded as shaders do).</summary>
+        public float MeanAngleBefore, MeanAngleAfter;
     }
     // TBN vectors may be baked from mesh vertices by a higher-level caller.
     public sealed class TangentBasisData
@@ -137,6 +191,7 @@ namespace NordicWind.TextureWrapper
     {
         internal static bool Finite(float f) => !float.IsNaN(f) && !float.IsInfinity(f);
         internal static bool Finite(Vector2 v) => Finite(v.x) && Finite(v.y);
+        internal static bool Finite(Vector3 v) => Finite(v.x) && Finite(v.y) && Finite(v.z);
         internal static bool Finite(Vector4 v) => Finite(v.x) && Finite(v.y) && Finite(v.z) && Finite(v.w);
         internal static bool Finite(Color c) => Finite(c.r) && Finite(c.g) && Finite(c.b) && Finite(c.a);
         internal static float Saturate(float v) => Mathf.Clamp01(v);

@@ -64,7 +64,7 @@ GitHub Pages  https://vpm.nordicwind.app/index.json   ← VCC reads this
    add the NDMF listing (`https://vpm.nadena.dev/vpm.json`).
 
 The listing id `app.nordicwind.vpm` and the URL in `vpm.json` must never change once people
-have added the listing. VCC uses them to recognise it.
+have added the listing. VCC uses them to recognize it.
 
 ## Releasing a version
 
@@ -73,6 +73,8 @@ have added the listing. VCC uses them to recognise it.
      included tool changes. Bump each changed tool's own version in its `CHANGELOG.md`.
    - Texture Wrapper (`Packages/app.nordicwind.texture-wrapper`): its version is its API
      version. Any breaking API change is a major bump (a minor bump while below 1.0.0).
+   - Advanced Atlaser (`Packages/app.nordicwind.advanced-atlaser`): its own version, released
+     as betas (`0.40.0-beta.1`, …) until it's ready.
 2. **Update the changelogs.**
    - Change the package's entry from `## 0.1.0 — unreleased` to `## 0.1.0 — 2026-11-04`
      (the release date). The release workflow refuses a full release without a date.

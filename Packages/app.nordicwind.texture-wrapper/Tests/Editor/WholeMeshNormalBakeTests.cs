@@ -6,7 +6,7 @@ namespace NordicWind.TextureWrapper.Tests
     // Whole-mesh normal correction: a curved, finely divided original and a flat two-triangle
     // reduced mesh share the same UVs. Both are painted with PaintTriangle, the correction is
     // baked with the safety rules, and every texel is decoded with the reduced mesh's
-    // interpolated frame, computed independently at the texel centre, and compared with the
+    // interpolated frame, computed independently at the texel center, and compared with the
     // original's interpolated normal.
     public class WholeMeshNormalBakeTests
     {
@@ -95,7 +95,7 @@ namespace NordicWind.TextureWrapper.Tests
         {
             float u = (x + .5f) / Size, v = (y + .5f) / Size;
             s = mirroredUVs ? (U1 - u) / (U1 - U0) : (u - U0) / (U1 - U0); t = (v - U0) / (U1 - U0);
-            return s > 0f && s < 1f && t > 0f && t < 1f; // texel centre on the mesh
+            return s > 0f && s < 1f && t > 0f && t < 1f; // texel center on the mesh
         }
 
         [TestCase(false)]

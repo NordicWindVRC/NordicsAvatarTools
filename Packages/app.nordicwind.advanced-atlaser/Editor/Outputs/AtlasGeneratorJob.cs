@@ -1,0 +1,66 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace NordicWind.AdvancedAtlaser.Editor
+{
+    /// <summary>
+    /// Output-generation API boundary: no Material, Shader, parser, source property IDs,
+    /// original renderer or input build context reaches an output implementation.
+    /// Every shader generator consumes the same normalized union.
+    /// </summary>
+    public sealed class AtlasGeneratorJob
+    {
+        public string OutputName;
+        public string OutputShaderId;
+        // Already 0 when the output has fewer than two sources.
+        public int RegionPadding;
+        public AtlasTextureSize MainTexture;
+        // The compression block, in pixels, of the normal map's format on the platform being
+        // built (1: uncompressed). Normal corrections are smoothed to half of it.
+        public int NormalBlock = 1;
+        // The virtual light rig and the strengths of the bakes that use it.
+        public AtlasBakeSettings Baking = new AtlasBakeSettings();
+        public readonly List<AtlasFeatureChoice> Features = new List<AtlasFeatureChoice>();
+        public readonly List<AtlasGeneratorSource> Sources = new List<AtlasGeneratorSource>();
+    }
+
+    // The user's choices for one feature, with sources as indices into Sources.
+    public sealed class AtlasFeatureChoice
+    {
+        public string FeatureId;
+        // Empty: the feature's default.
+        public string ModeId = "";
+        // -1: the source with the largest region.
+        public int ReferenceSource = -1;
+        public readonly HashSet<int> DisabledSources = new HashSet<int>();
+        // The values the user set for the feature's conflict switches, by switch ID.
+        public readonly Dictionary<string, bool> Switches = new Dictionary<string, bool>();
+        // Every value the user set for the feature, by ID (as stored, number and text included).
+        public readonly Dictionary<string, (float Number, string Text)> Values = new Dictionary<string, (float Number, string Text)>();
+    }
+    public sealed class AtlasGeneratorSource
+    {
+        public AtlasUnifiedMaterial Material;
+        public Rect UVRegion;
+        public bool GeometryBakingAvailable;
+        // Optional normal map baked for this mesh by the author, applied at strength 1.
+        //
+        // A writer combines a source's normal maps into the output's main normal map in this
+        // order, each on top of the previous one:
+        //   1. PrebakedNormalMap (author-supplied, for example for a lower-detail mesh)
+        //   2. Bakes' TangentNormalCorrection (changes made to the mesh during the build)
+        //   3. the material's primary normal map (Material.Surface.Normal)
+        //   4. its surface layers that target the normal, in layer order (secondary and detail
+        //      normal maps)
+        // Strengths are normalized to the largest strength among the atlas's sources.
+        public Texture2D PrebakedNormalMap;
+        // Null when disabled; missing submeshes instead have an explicit empty/flat bake.
+        public AtlasBakedInputSet Bakes;
+        // The UV triangles of the meshes that use the source, for its coverage; empty when
+        // unknown, and then the source's whole texture is used.
+        public readonly List<AtlasUVTriangles> Coverage = new List<AtlasUVTriangles>();
+        // The current meshes' surface in avatar-root space, for bakes that light it, read when
+        // such a bake asks for it; null when the meshes aren't known.
+        public System.Func<IReadOnlyList<AtlasMeshSection>> Surface;
+    }
+}

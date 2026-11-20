@@ -12,6 +12,7 @@ on:
         options:
           - app.nordicwind.avatar-tools
           - app.nordicwind.texture-wrapper
+          - app.nordicwind.advanced-atlaser
 
 permissions:
   contents: write   # create the tag and the release

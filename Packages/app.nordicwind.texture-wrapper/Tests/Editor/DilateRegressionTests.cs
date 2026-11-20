@@ -128,7 +128,9 @@ namespace NordicWind.TextureWrapper.Tests
                 t.PaintTriangle(new Vector2(0,0),new Vector2(.5f,0),new Vector2(0,.5f),
                     new Color(0,0,1,1),new Color(0,0,1,1),new Color(0,0,1,1));
                 Assert.IsTrue(t.IsPixelUsed(0,0));
-                Assert.AreEqual(.625f,t.GetPixel(0,0).a,.00001f);
+                // 6 of 16 sub-samples: the 4 lying exactly on the long edge belong to whatever is
+                // on the other side of it (fill rule), so they aren't counted here.
+                Assert.AreEqual(.375f,t.GetPixel(0,0).a,.00001f);
                 t.Dilate();
                 for(int y=0;y<2;y++)for(int x=0;x<2;x++)
                 {Assert.IsTrue(t.IsPixelUsed(x,y));Assert.AreEqual(1,t.GetPixel(x,y).a,.00001f);}

@@ -14,6 +14,20 @@ Conventions used throughout:
   operations), are the linear values a shader reads. Convert colors read from a material or
   picked in the editor with `Color.linear`. sRGB is applied only when loading and saving
   sRGB textures. Alpha is never converted.
+- **Pixels and alpha are data.** Blending strength comes from masks and the `strength`
+  argument, never implicitly from the source alpha.
+- **Usage is coverage.** Usage is 0 or 1 per pixel. Painting, `Fill` and padded `Blit`s mark
+  pixels used; `FillUnused` and `Dilate` work only on unused pixels. Capture coverage before
+  dilating, because dilation marks every pixel used.
+- **Normal maps are vectors.** For the `Normal*` data types, RGB holds a signed XYZ vector,
+  normalized lazily before reads and export, and encoded as `(n + 1) / 2` only on export.
+- **Compose with `Resize`.** To tile, offset or rotate a mask independently of its source,
+  `Resize` it first and pass the result to `Blit`.
+- **Threads:** large operations are split across rows (`TextureProcessingSettings`). Unity API
+  calls stay on the main thread. Don't change one wrapper from several threads at once.
+- **Behavior described here is a contract,** covered by tests: results don't depend on the
+  number of threads, painting never clamps (clamping happens only when encoding output), and
+  each member's stated rules hold.
 - Methods validate their input. Non-finite numbers, out-of-range pixels, negative padding
   and undefined enum values throw `ArgumentException` or `ArgumentOutOfRangeException`.
   Writing to a read-only wrapper throws `InvalidOperationException`, and using a disposed
@@ -50,6 +64,10 @@ A texture held in memory as float RGBA plus a per-pixel *usage* flag.
 | `Color GetPixel(int x, int y)` | Raw linear value, which may be outside 0–1. Normal maps are normalized first. |
 | `Color GetPixel(Vector2 uv)` | Nearest-pixel value at a UV position. |
 | `void SetPixel(int x, int y, Color color)` / `SetPixel(Vector2 uv, Color color)` | Writes a value and marks the pixel used. |
+| `Color[] GetPixels()` | A copy of every pixel's raw value, row by row from the bottom (index `y × Width + x`). Normal maps are normalized first. For processing whole textures in your own (for example parallel) loops. |
+| `void SetPixels(Color[] colors)` | Writes every pixel's value in the same order and marks every pixel used. The array must have one finite color per pixel. |
+| `void GetPixels(Color[] destination)` | The same as `GetPixels()`, into an array you keep and reuse (one element per pixel). |
+| `static void ReleasePooledBuffers()` | Frees the pixel buffers kept from disposed wrappers for reuse (see `TextureProcessingSettings.PooledBytes`). |
 | `bool IsPixelUsed(int x, int y)` / `IsPixelUsed(Vector2 uv)` | Reads the usage flag. |
 | `void SetPixelUsed(int x, int y, bool used)` | Sets the usage flag without changing the color. |
 | `Color Sample(Vector2 uv, TextureSamplingMode sampling = Bilinear, TextureWrapMode? wrap = null)` | Filtered sample. `wrap` defaults to `Settings.WrapMode`. |
@@ -60,6 +78,7 @@ A texture held in memory as float RGBA plus a per-pixel *usage* flag.
 |---|---|
 | `NordicsTextureWrapper Resize(int width, int height, Rect? sourceRegion = null, Vector2? scale = null, Vector2? offset = null, float rotation = 0, TextureSamplingMode sampling = Bilinear, TextureWrapMode? wrap = null, IReadOnlyList<ColorOperation> operations = null)` | Returns a **new** wrapper of the given size containing `sourceRegion` of this texture. `scale` tiles (2 = repeat twice), `offset` shifts in region units, and `rotation` rotates around the region center. `Area` sampling averages up to 16×16 samples when shrinking. `operations` are applied to the result. For tangent-space normals, rotation also rotates the vectors. |
 | `Rect Blit(NordicsTextureWrapper source, Rect? region = null, Rect? sourceRegion = null, Vector2? scale = null, Vector2? offset = null, float rotation = 0, NordicsTextureWrapper mask = null, TextureMaskOptions maskOptions = null, TextureChannel? sourceChannel = null, TextureChannel? destinationChannel = null, TextureBlendMode blend = Replace, float strength = 1, int? padding = null, TextureSamplingMode sampling = Bilinear, TextureWrapMode? wrap = null, IReadOnlyList<ColorOperation> operations = null)` | Draws `source` (transformed like `Resize`) into `region` of this texture and returns the UV rectangle of the content, **excluding** padding. `mask` and `maskOptions` control influence per pixel, sampled in the content's own 0–1 space. `strength` (≥ 0) scales the influence. **Padding:** `null` = no padding and usage is left unchanged; `0` = copy the source's usage; `n > 0` = extend the content's edge pixels `n` pixels outward and copy usage. Blit details into the returned rectangle with `padding: null`. |
+| `static Rect ContentRegion(Rect region, int width, int height, int padding)` | The rectangle `Blit` returns for this region and padding on a texture of `width` × `height`, without blitting: the region's whole pixels, inset by the padding on every side. Use it where the same rectangle is needed elsewhere, such as remapping a mesh's UVs onto blitted content. |
 | `void ApplyColor(ColorOperation operation, Rect? region = null)` | Applies one color operation in place. |
 | `void ApplyColor(IReadOnlyList<ColorOperation> operations, Rect? region = null)` | Applies operations in order. Each can have its own mask. |
 | `void Fill(Color color, Rect? region = null, NordicsTextureWrapper mask = null, TextureMaskOptions maskOptions = null)` | Blends `color` in by the mask influence (full when there's no mask) and marks the pixels used. |
@@ -74,10 +93,12 @@ modes require both to be unset.
 
 | Member | Description |
 |---|---|
-| `void PaintTriangle(Vector2 uv0, Vector2 uv1, Vector2 uv2, Color color0, Color color1, Color color2, TrianglePaintOptions options = null)` | Rasterizes a UV-space triangle, interpolating the corner values. Each pixel **adds** value × covered fraction (no clamping), and is marked used if any part is covered. For normal maps, paint every triangle before reading, because reading normalizes. |
+| `void PaintTriangle(Vector2 uv0, Vector2 uv1, Vector2 uv2, Color color0, Color color1, Color color2, TrianglePaintOptions options = null)` | Rasterizes a UV-space triangle, interpolating the corner values. Each pixel **adds** value × covered fraction (no clamping), and is marked used if any part is covered. A fill rule makes every sub-sample of a mesh belong to exactly one triangle, also on shared edges and vertices, so painting a mesh never counts anything twice. For normal maps, paint every triangle before reading, because reading normalizes. |
+| `void PaintTriangles(IReadOnlyList<Vector2> uv, IReadOnlyList<Color> color, TrianglePaintOptions options = null)` | Paints many triangles: three corners per triangle in both lists. The same result as calling `PaintTriangle` for each in order. On the CPU, the texture is split into tiles painted on every core, with exactly the same result; batches of at least 1,024 triangles on textures of at least `MinGpuPixels` may run on the GPU, where the GPU snaps corners to a sub-pixel grid: values drift slightly (well under one 8-bit step), and a sample on or very near an edge may fall the other way. Prefer it to many `PaintTriangle` calls: those run mostly on one core, since a single triangle rarely reaches `MinParallelPixels`. |
+| `void PaintTriangles(IReadOnlyList<Vector2> uv, IReadOnlyList<Color> color, TrianglePaintOptions options, HiddenSurfaceOptions hidden)` | The same, leaving out surfaces hidden close behind another surface with the same UVs (see `HiddenSurfaceOptions`); null paints every triangle. Hidden samples add nothing and don't mark their pixel used. |
 | `NordicsTextureWrapper BakeNormalDifference(NordicsTextureWrapper targetNormals, TangentBasisData basis)` | `this` and `targetNormals` must be `NormalWorld` maps of the same size. Returns a new `NormalTangent` map: this texture's normals expressed in `basis`, the **target** mesh's tangent frame. The result decodes back exactly the way shaders combine an interpolated frame, `normalize(T·x + B·y + N·z)`, with `basis` used as given: it inverts the frame instead of projecting onto it, so the frame doesn't need to be unit length or orthogonal. Pixels whose frame is (nearly) flat are left unused. Only pixels used in all maps are used in the result. No safety rules apply. |
-| `NordicsTextureWrapper BakeNormalDifference(NordicsTextureWrapper targetNormals, TangentBasisData basis, NormalDifferenceOptions options, out NormalDifferenceStatistics statistics)` | The same, with safety rules so the correction never makes shading worse: where a rule applies, the correction fades to flat (0, 0, 1), which keeps the target's own shading. With a coverage map, texels covered by more than one surface (overlapping UVs) get no correction, even where their frames cancel out. Corrections beyond `MaxAngle`, and any that would point into the surface, fade out. `statistics` counts what happened, for one summary line per bake. `null` options apply no rules. |
-| `void Dilate(Rect? region = null)` | Fills every unused pixel in the region with the nearest used pixel and marks it used. Normal maps get alpha 1. When two source pixels are equally near, the lower x wins, then the lower y. A region with no used pixels is left unchanged. |
+| `NordicsTextureWrapper BakeNormalDifference(NordicsTextureWrapper targetNormals, TangentBasisData basis, NormalDifferenceOptions options, out NormalDifferenceStatistics statistics)` | The same, with safety rules so the correction never makes shading worse: where a rule applies, the correction fades to flat (0, 0, 1), which keeps the target's own shading. With a coverage map, texels covered by more than one surface (overlapping UVs) get no correction, even where their frames cancel out. Corrections above half of `MaxAngle` are compressed smoothly toward it, including any that would point into the surface, so the map has no steps. A `Keep` map fades the correction per texel. `statistics` counts what happened, for one summary line per bake, and says how far the target's shading is from the reference's with and without the correction. `null` options apply no rules. |
+| `void Dilate(Rect? region = null)` | Fills every unused pixel in the region with the nearest used pixel and marks it used. Normal maps get alpha 1. When two source pixels are equally near, the lower x wins, then the lower y. A region with no used pixels is left unchanged. On the whole texture, from `MinGpuPixels` up, it may run on the GPU (jump flooding): there, a tie may go to another equally near pixel, and very rarely a pixel takes a slightly farther one. |
 | `void FillUnused(Color color, bool markUsed = false, Rect? region = null)` | Writes `color` only to unused pixels, without marking them used unless `markUsed` is set. For example, use `(0, 0, 1, 1)` for flat normals outside UV islands. |
 
 ### Output
@@ -116,6 +137,11 @@ out-of-range values.
 |---|---|---|
 | `int MinParallelPixels` | `65536` | Operations on fewer pixels than this run on one thread. |
 | `int MaxThreads` | Processor count | `0` = automatic, `1` = single-threaded. |
+| `bool UseGpu` | `true` | Operations that have a GPU version may use it. Off: everything runs on the CPU. Results agree within each operation's documented tolerance. |
+| `int MinGpuPixels` | `262144` (512²) | Operations on fewer pixels than this run on the CPU: moving the data to the GPU and back would cost more than it saves. |
+| `bool GpuAvailable` | — | Read only. A GPU that renders to float textures is present; false in batch mode without graphics (`-nographics`). |
+
+`Dilate` and `PaintTriangles` have GPU versions; see [GPU_ACCELERATION.md](GPU_ACCELERATION.md).
 
 ## `TextureMaskOptions` (class)
 
@@ -142,13 +168,13 @@ that take a `Color`.
 |---|---|---|
 | `HueShift` | `Amount`, `ColorSpace` | Rotates hue by `Amount` turns (1 = 360°), in HSV or OKLab. |
 | `HueReplace` | `Amount`, `ColorSpace` | Sets hue to `Amount` turns. |
-| `Saturation` | `Amount` | Mixes toward luminance (0.30, 0.59, 0.11). 1 = unchanged, 0 = grey, above 1 = more saturated. |
+| `Saturation` | `Amount` | Mixes toward luminance (0.30, 0.59, 0.11). 1 = unchanged, 0 = gray, above 1 = more saturated. |
 | `Brightness` | `Amount` | Multiplies RGB by `Amount`. 1 = unchanged. |
 | `Contrast` | `Amount` | Scales around 0.5. 1 = unchanged. |
 | `Gamma` | `Amount` | Signed power: `sign(c) × abs(c) ^ Amount`. |
 | `Exposure` | `Amount` | Multiplies by `2 ^ Amount`. |
 | `Tint` | `Color`, `ColorMap` | Multiplies RGB by the color. |
-| `Colorize` | `Color`, `ColorMap` | Perceptual tint in OKLab: keeps the pixel's lightness, takes the hue from the color, and scales the pixel's chroma by the color's saturation (`1 - min/max` of its RGB), so a grey color gives grey. Mixed in by the color's alpha. Negative results are clipped to 0. |
+| `Colorize` | `Color`, `ColorMap` | Perceptual tint in OKLab: keeps the pixel's lightness, takes the hue from the color, and scales the pixel's chroma by the color's saturation (`1 - min/max` of its RGB), so a gray color gives gray. Mixed in by the color's alpha. Negative results are clipped to 0. |
 | `Multiply` | `Color`, `ColorMap` | Multiplies RGBA by the color. |
 | `Add` | `Color`, `ColorMap` | Adds the color to RGBA. |
 | `Invert` | — | `1 - c` for RGB. |
@@ -163,8 +189,9 @@ that take a `Color`.
 | Type | Members |
 |---|---|
 | `TrianglePaintOptions` | `TriangleRasterizationMode Mode` (`Quality` default, or `Fast`); `int SamplesPerAxis` (default 4, so 4×4 sub-samples per pixel in `Quality` mode). |
-| `NormalDifferenceOptions` | `Coverage`: optional `Mask` map of the bake's size, counting coverage per UV winding: R and G for the reference mesh's counter-clockwise and clockwise triangles, B and A for the target's. Paint each triangle into it with `PaintTriangle` and `NormalDifferenceOptions.CoverageColor(uv0, uv1, uv2, target)`. Covered more than once by one winding (stacked copies, from about 1.3) or by both windings at all (mirrored copies, from 1/16) means overlapping. `MaxAngle` (default 90°, never more): corrections fade out over the last 10° before it. |
-| `NormalDifferenceStatistics` | `Baked`, `Overlapping` and `Limited` texel counts, and `LargestAngle`, the largest correction kept in degrees. |
+| `HiddenSurfaceOptions` | `IReadOnlyList<Vector3> Positions` and `Normals`, one per corner like the colors, in any one space (normals point out of the surface); `float Margin` (default 0.001, in the positions' units, above zero). At each pixel, the triangles of one UV winding are compared along their average normal at the pixel's center; a sample more than `Margin` plus its triangle's footprint (how far its surface moves over one pixel) behind the outermost of them there is hidden, so depth is never told apart more finely than a pixel resolves. Triangles of opposite UV winding (mirrored halves) never hide each other; same-winding copies elsewhere in space do, the outermost along that normal winning. Only triangles of the same call are compared. |
+| `NormalDifferenceOptions` | `Coverage`: optional `Mask` map of the bake's size, counting coverage per UV winding: R and G for the reference mesh's counter-clockwise and clockwise triangles, B and A for the target's. Paint each triangle into it with `PaintTriangle` and `NormalDifferenceOptions.CoverageColor(uv0, uv1, uv2, target)`. Covered more than once by one winding (stacked copies, from 1.3) or by both windings at all (mirrored copies, already from one sub-sample) means overlapping. `MaxAngle` (default 90°, never more): the soft limit, `half + half × tanh((angle − half) / half)` above half of it (`NordicsTextureWrapper.SoftLimit`). `Keep`: optional map of the bake's size, how much of the correction to keep per texel (R, 0–1). |
+| `NormalDifferenceStatistics` | `Baked`, `Overlapping`, `Limited` (raw correction beyond the limit) and `Kept` (reduced by the keep map) texel counts, `LargestAngle`, the largest correction kept in degrees, and `MeanAngleBefore` and `MeanAngleAfter`, how far the target's shading is from the reference's without and with the correction. |
 | `TangentBasisData` | `Tangent`, `Bitangent`, `Normal`: three wrappers holding the target mesh's tangent frame as the shader interpolates it, for example painted with `PaintTriangle` from vertex values. Don't normalize them per pixel (reading them with `GetPixel` or exporting them does), and let the bitangent carry the handedness. |
 | `INordicsTextureExporter` | `Texture2D Synchronize(NordicsTextureWrapper wrapper, string name, bool pixelsChanged, bool settingsChanged)`: implement this to add your own export target. |
 
@@ -173,7 +200,7 @@ that take a `Color`.
 | Enum | Values |
 |---|---|
 | `TextureDataType` | `Color`, `LinearData`, `Mask`, `NormalTangent`, `NormalObject`, `NormalWorld` |
-| `TextureSamplingMode` | `Nearest`, `Bilinear`, `Bicubic`, `Area` |
+| `TextureSamplingMode` | `Nearest`, `Bilinear`, `Bicubic`, `Area`, `AreaFlatten` (`Area`; for tangent-space normal maps, each texel's tilt is scaled by how much the normals it covers agree, the length of their average, so detail finer than a texel flattens instead of turning into noise) |
 | `TextureChannel` | `R`, `G`, `B`, `A`, `AverageRGB`, `Usage` |
 | `TextureBlendMode` | `Replace`, `Darken`, `Multiply`, `Lighten`, `Screen`, `Subtract`, `Add`, `Overlay`, `Mixed`, `Divide`, `Average`, `NormalLerp`, `NormalRNM`, `NormalWhiteout`. `Mixed` brightens by the blend scaled by the base: `base + base × blend`, so black stays black. |
 | `TextureMaskBlendMode` | `Replace`, `Subtract`, `Multiply`, `Divide`, `Min`, `Max`, `Average`, `Add` |

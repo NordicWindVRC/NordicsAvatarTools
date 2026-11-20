@@ -8,11 +8,15 @@
   },
   "packages": {
     "app.nordicwind.avatar-tools": "Packages/app.nordicwind.avatar-tools",
-    "app.nordicwind.texture-wrapper": "Packages/app.nordicwind.texture-wrapper"
+    "app.nordicwind.texture-wrapper": "Packages/app.nordicwind.texture-wrapper",
+    "app.nordicwind.advanced-atlaser": "Packages/app.nordicwind.advanced-atlaser"
   },
   "releaseOverrides": {
     "app.nordicwind.texture-wrapper": {
       "displayName": "NordicWind - Texture Wrapper"
+    },
+    "app.nordicwind.advanced-atlaser": {
+      "displayName": "NordicWind - Advanced Atlaser"
     }
   },
   "excludeFolders": ["Tests"]

@@ -1,0 +1,18 @@
+{
+  "name": "app.nordicwind.advanced-atlaser",
+  "displayName": "Nordic's Advanced Atlaser",
+  "version": "0.40.0-beta.1",
+  "unity": "2022.3",
+  "description": "Non-destructive NDMF material processor: atlases an avatar's materials into Poiyomi Toon or VRChat Mobile Toon Standard materials, feature by feature (beta).",
+  "author": {
+    "name": "NordicWind"
+  },
+  "vpmDependencies": {
+    "nadena.dev.ndmf": ">=1.7.0",
+    "app.nordicwind.texture-wrapper": ">=0.10.0"
+  },
+  "legacyFolders": {
+    "Assets\\NordicWind\\NordicsAdvancedAtlaser": "6622652757773e24cbb5e0614164dd7c"
+  },
+  "license": "MIT"
+}
