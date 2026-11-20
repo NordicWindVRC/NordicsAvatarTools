@@ -18,6 +18,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The compression block, in pixels, of the normal map's format on the platform being
         // built (1: uncompressed). Normal corrections are smoothed to half of it.
         public int NormalBlock = 1;
+        // The virtual light rig and the strengths of the bakes that use it.
+        public AtlasBakeSettings Baking = new AtlasBakeSettings();
         public readonly List<AtlasFeatureChoice> Features = new List<AtlasFeatureChoice>();
         public readonly List<AtlasGeneratorSource> Sources = new List<AtlasGeneratorSource>();
     }
@@ -57,5 +59,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The UV triangles of the meshes that use the source, for its coverage; empty when
         // unknown, and then the source's whole texture is used.
         public readonly List<AtlasUVTriangles> Coverage = new List<AtlasUVTriangles>();
+        // The current meshes' surface in avatar-root space, for bakes that light it, read when
+        // such a bake asks for it; null when the meshes aren't known.
+        public System.Func<IReadOnlyList<AtlasMeshSection>> Surface;
     }
 }

@@ -9,6 +9,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // The shared vocabulary of feature modes (ATLAS_OUTPUT.md, "Features and modes").
     public enum AtlasFeatureModeKind { Native, Merged, Single, Baked, Emulated, Off }
 
+    // The bakes that use the virtual light rig (ATLAS_OUTPUT.md, "Virtual light rigs"), each with
+    // its strength in the inspector's Baking section.
+    public enum AtlasLitBake { NormalShading }
+
+    // A feature with modes that bake with the virtual light rig; the Baking section is shown
+    // while one of them is in use.
+    public interface IAtlasLitBakeFeature : IAtlasOutputFeature
+    {
+        // The lit bake a mode makes; null: none.
+        AtlasLitBake? LitBake(AtlasFeatureMode mode);
+    }
+
     // The inspector section a feature is listed in.
     public enum AtlasFeatureSection { Surface, Lighting, Layers, Effects, Render }
 

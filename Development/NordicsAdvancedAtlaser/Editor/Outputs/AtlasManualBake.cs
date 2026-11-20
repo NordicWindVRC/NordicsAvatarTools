@@ -37,7 +37,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var total = new AtlasStageTimer("total", timings);
             AtlasGeneratorJob job;
             using (new AtlasStageTimer("parse", timings))
-                job = Job(config, AtlasMaterialDiscovery.Discover(output.gameObject).Renderers);
+                job = Job(config, AtlasMaterialDiscovery.Discover(output.gameObject).Renderers,
+                    AtlasSurfaceGeometry.AvatarRoot(output.transform));
             if (job.Sources.Count == 0)
                 throw new InvalidOperationException($"[Nordic's Advanced Atlaser] {output.name}: no source material can be read.");
             var plan = AtlasOutputPipeline.Resolve(job, shader.Capabilities);
@@ -91,14 +92,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // The generator job for edit mode: every assigned source, parsed now, with its coverage
-        // from the renderers, without geometry bakes (the build supplies those).
-        public static AtlasGeneratorJob Job(AtlasOutputConfiguration config, IEnumerable<Renderer> renderers = null)
+        // from the renderers, without geometry bakes (the build supplies those). With `root`, the
+        // sources' surfaces are read from the renderers in its space for the lit bakes.
+        public static AtlasGeneratorJob Job(AtlasOutputConfiguration config, IEnumerable<Renderer> renderers = null, Transform root = null)
         {
             var job = new AtlasGeneratorJob
             {
                 OutputName = config.outputName, OutputShaderId = config.shaderId,
                 RegionPadding = AtlasOutputLayout.EffectivePadding(config),
                 NormalBlock = AtlasTextureMemory.NormalBlock(config),
+                Baking = config.baking ?? new AtlasBakeSettings(),
                 MainTexture = config.mainTexture == null ? null : new AtlasTextureSize { width = config.mainTexture.width, height = config.mainTexture.height }
             };
             var materials = new List<Material>();
@@ -115,6 +118,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         GeometryBakingAvailable = false, PrebakedNormalMap = entry.prebakedNormalMap
                     };
                     source.Coverage.AddRange(AtlasCoverage.Triangles(entry.material, renderers));
+                    if (root != null && renderers != null)
+                    {
+                        var material = entry.material;
+                        source.Surface = () => AtlasSurfaceGeometry.Sections(material, renderers, root);
+                    }
                     job.Sources.Add(source);
                 }
             AtlasOutputPipeline.AddChoices(config, materials, job);

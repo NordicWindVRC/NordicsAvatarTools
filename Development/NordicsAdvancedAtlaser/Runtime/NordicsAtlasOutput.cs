@@ -121,6 +121,59 @@ namespace NordicWind.AdvancedAtlaser
         public int height = 1024;
     }
 
+    /// <summary>The directions of the virtual lights that bakes use (ATLAS_OUTPUT.md, "Virtual
+    /// light rigs").</summary>
+    public enum AtlasLightRigKind
+    {
+        /// <summary>The key light from one side, the fill from the other. Sources with
+        /// overlapping UVs use the symmetric rig.</summary>
+        Classic,
+        /// <summary>Every light centered, so mirrored halves get the same light.</summary>
+        Symmetric
+    }
+
+    /// <summary>One light of the virtual rig. Its direction is set by the rig.</summary>
+    [Serializable]
+    public sealed class AtlasBakeLight
+    {
+        /// <summary>Multiplies the light's role weights.</summary>
+        [Min(0)] public float intensity = 1f;
+        /// <summary>The light's color temperature, in kelvin.</summary>
+        [Range(1500, 15000)] public float temperature = 6500f;
+        /// <summary>0: a sharp light; 1: a very wide one. Softens the edge between the lit
+        /// and the shadow side, and widens highlights.</summary>
+        [Range(0, 1)] public float softness = 0.5f;
+
+        public AtlasBakeLight() { }
+
+        public AtlasBakeLight(float temperature, float softness)
+        {
+            this.temperature = temperature;
+            this.softness = softness;
+        }
+    }
+
+    /// <summary>The settings of the bakes that use the virtual light rig (the inspector's
+    /// Baking section).</summary>
+    [Serializable]
+    public sealed class AtlasBakeSettings
+    {
+        public AtlasLightRigKind rig = AtlasLightRigKind.Classic;
+        /// <summary>Scales every lit bake.</summary>
+        [Range(0, 1)] public float strength = 1f;
+        /// <summary>How much of the lights' color is baked: 0, their brightness alone; 1, their
+        /// full color.</summary>
+        [Range(0, 1)] public float colorInfluence = 0.25f;
+        /// <summary>Normal-map shading baked into the base color.</summary>
+        [Range(0, 1)] public float normalShading = 1f;
+        /// <summary>The main light: the form and the main highlight.</summary>
+        public AtlasBakeLight key = new AtlasBakeLight(5000f, 0.4f);
+        /// <summary>Lifts the shadow side without a second highlight.</summary>
+        public AtlasBakeLight fill = new AtlasBakeLight(7500f, 0.9f);
+        /// <summary>A crisp edge on the silhouette and highlights on hair tops.</summary>
+        public AtlasBakeLight back = new AtlasBakeLight(6500f, 0.15f);
+    }
+
     // The same serialization container is used by every output shader.
     [Serializable]
     public sealed class AtlasOutputConfiguration
@@ -152,6 +205,8 @@ namespace NordicWind.AdvancedAtlaser
             color = AtlasTextureFormat.ASTC6x6, colorAlpha = AtlasTextureFormat.ASTC6x6,
             normal = AtlasTextureFormat.ASTC4x4, data = AtlasTextureFormat.ASTC6x6
         };
+        /// <summary>The virtual light rig and the strengths of the bakes that use it.</summary>
+        public AtlasBakeSettings baking = new AtlasBakeSettings();
 
         public AtlasFeatureSetting Feature(string featureId)
         {

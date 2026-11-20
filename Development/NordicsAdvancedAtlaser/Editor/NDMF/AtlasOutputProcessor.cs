@@ -10,14 +10,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static void Prepare(AtlasOutputJob job, AtlasBuildContext context)
         {
             if (job == null || job.Shader == null || job.Configuration == null) return;
-            var generatorJob = CreateJob(job.Configuration, job, context.AvatarRoot.GetComponentsInChildren<Renderer>(true));
+            var generatorJob = CreateJob(job.Configuration, job, context.AvatarRoot.GetComponentsInChildren<Renderer>(true),
+                context.AvatarRoot.transform);
             job.GeneratorJob = generatorJob;
             job.Plan = AtlasOutputPipeline.Resolve(generatorJob, job.Shader.Capabilities);
             foreach (var note in job.Plan.Notes)
                 context.Diagnostics.Add(job.Configuration.outputName + ": " + note);
         }
 
-        public static AtlasGeneratorJob CreateJob(AtlasOutputConfiguration config, AtlasOutputJob job, IEnumerable<Renderer> renderers)
+        // `root`: the avatar root, the space of the sources' surfaces; null: none.
+        public static AtlasGeneratorJob CreateJob(AtlasOutputConfiguration config, AtlasOutputJob job, IEnumerable<Renderer> renderers,
+            Transform root = null)
         {
             var generatorJob = new AtlasGeneratorJob
             {
@@ -25,6 +28,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 OutputShaderId = config.shaderId,
                 RegionPadding = AtlasOutputLayout.EffectivePadding(config),
                 NormalBlock = AtlasTextureMemory.NormalBlock(config),
+                Baking = config.baking ?? new AtlasBakeSettings(),
                 MainTexture = config.mainTexture == null ? null : new AtlasTextureSize
                 {
                     width = config.mainTexture.width, height = config.mainTexture.height
@@ -42,6 +46,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     PrebakedNormalMap = source.PrebakedNormalMap
                 };
                 generatorSource.Coverage.AddRange(AtlasCoverage.Triangles(source.Input.SourceMaterial, renderers));
+                // Read when a bake asks for it, before the meshes are remapped.
+                if (root != null)
+                {
+                    var material = source.Input.SourceMaterial;
+                    generatorSource.Surface = () => AtlasSurfaceGeometry.Sections(material, renderers, root);
+                }
                 generatorJob.Sources.Add(generatorSource);
             }
             AtlasOutputPipeline.AddChoices(config, materials, generatorJob);

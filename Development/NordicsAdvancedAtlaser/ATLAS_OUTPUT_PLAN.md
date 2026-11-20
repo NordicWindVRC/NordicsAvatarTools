@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is done; 2.9 is done; 2.8 is next and completes milestone 2 (done after 2.9: both outputs light and have the maps 2.8's bakes stand in for, so 2.8 matters first where the user turns maps off). It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is done; 2.9 is done; 2.8a and 2.8b are done, 2.8c is next, and 2.8 completes milestone 2 (done after 2.9: both outputs light and have the maps 2.8's bakes stand in for, so 2.8 matters first where the user turns maps off). It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -315,10 +315,32 @@ normal bakes skip what's kept live (`AtlasLiveLayers`); *off* leaves it out of t
 
 ### 2.8 Baking toolkit
 
-- Geometry buffers: the world normal and the overlap map, within the memory budget.
+**2.8a Groundwork (done).** Each source's current surface in avatar-root space, read when a
+lit bake asks for it (`AtlasSurfaceGeometry`, the build's meshes or the output's renderers in
+the manual bake); its tangent frames painted per UV winding at the evaluation size and
+released after; overlapping UVs from the UV triangles. The light rig (`AtlasLightRig`: key,
+fill, back and a sky and ground ambient, classic and symmetric, roles, temperatures, softness
+as wrap and angular size, color influence) and the virtual view (`AtlasVirtualView`). The
+output's baking settings (`AtlasBakeSettings`) and the inspector's *Baking* section, shown
+while a feature bakes with the rig (`IAtlasLitBakeFeature`).
+
+**2.8b Normal-map shading into color (done).** *Normal Maps: Baked into color*: no normal map;
+the base color × `lerp(1, shade(N mapped) / shade(N mesh), strength)` under the key and fill
+diffuse terms, the rig turned with each texel's view and tilted onto its surface, symmetric for sources with overlapping
+UVs, mirrored halves shaded apart and averaged (`AtlasNormalShading`).
+
+**2.8c Occlusion into color.** The occlusion map turned off: the ambient term and reflections
+darkened by it, direct light by the source's *occlusion: direct*.
+
+**2.8d Full light and form shading (design first).** The lit color for unlit outputs and the
+form shading for flatly lit ones, with each source's lighting family and surface response;
+then matcaps and rims into color or emission and rims emulated as matcaps where they keep the
+artist's intent better than leaving them out.
+
+- Geometry buffers: the surface and the overlap, within the memory budget (2.8a).
 - The light rigs with roles, color influence and the strength sliders; the virtual view;
-  overlapping UVs (symmetric rig, averaging).
-- Bake-ins: full light and form shading, normal-map shading, occlusion maps into color,
+  overlapping UVs (symmetric rig, averaging) (2.8a).
+- Bake-ins: full light and form shading, normal-map shading (2.8b), occlusion maps into color,
   matcaps and rims into color or emission, rims emulated as matcaps.
 - Where it applies on Poiyomi and Toon Standard: a map the user turns off to save memory
   (normal maps → normal-map shading, the occlusion map → occlusion into color), and outputs

@@ -140,6 +140,16 @@ its UV space. For the details, see `UNIFIED_MATERIAL.md` (the description of a m
        pre-baked one; the build also includes a source whose mesh was reduced, for its
        correction. The output's normal strength is the largest of the
        sources'; the weaker ones are baked at their share of it, so each looks as before.
+       *Baked into color* saves the normal map's memory: the shading the normals would add is
+       baked into the base color instead, under a set of virtual lights (see **Baking**). It's
+       the default on an output shader without normal maps.
+     - **Baking** (shown while a feature bakes with the virtual lights, folded): the light rig
+       (*Classic*: the key light from one side, the fill from the other; *Symmetric*: every
+       light centered, so both halves of the avatar match; materials whose UVs overlap, such
+       as mirrored halves, always use it), an overall strength, how much of the lights' color
+       is baked, a strength per bake (*Normal-Map Shading*), and each light's intensity, color
+       temperature and softness. Baked shading follows the surface around the avatar, so
+       detail on the sides and back reads like detail on the front.
      - **Reflection and Specular**: each source's metallic and roughness in maps, and how
        strong its highlights and reflections are, in masks (Poiyomi; relative to the
        strongest; no mask where they're the same everywhere). Sources without them stay

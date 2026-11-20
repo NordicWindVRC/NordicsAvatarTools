@@ -8,6 +8,23 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Baking toolkit, groundwork:** the virtual light rig (`AtlasLightRig`: key, fill and back
+  lights and a sky and ground ambient, classic or symmetric, each light's role weights, color
+  temperature, softness as diffuse wrap and angular size, and the color influence), the
+  virtual view (`AtlasVirtualView`), and each source's current surface read when a lit bake
+  asks for it (`AtlasSurfaceGeometry`: the build's meshes, or the output's renderers in Bake
+  to Assets) with its tangent frames painted per UV winding at the evaluation size and
+  released after. Overlapping UVs are found from the UV triangles. The output stores its
+  baking settings (`AtlasBakeSettings`), edited in the new *Baking* section, shown while a
+  feature bakes with the rig (`IAtlasLitBakeFeature`).
+- **Normal maps baked into color:** *Normal Maps* has a *Baked into color* mode. No normal map
+  is made; each source's base color is multiplied by its normal-map shading,
+  `shade(N mapped) / shade(N mesh)` under the key and fill lights, with the rig turned toward
+  each texel's virtual view and tilted onto its surface, so every surface gets the lights at
+  the same angles and the detail reads evenly all around, also on surfaces facing down
+  (`AtlasNormalShading`).
+  Sources whose UVs overlap use the symmetric rig, and mirrored halves are shaded apart and
+  averaged. It's the default on outputs without normal maps.
 - **World AO Blocker:** Poiyomi's blocker (9.2 and later) is typed and read instead of ignored
   (`AtlasAOBlocker`: its UV channel and flip normal). The new *World AO Blocker* feature keeps it
   live where the output has one (on UV0 the remap leaves its triangles in their tile, on another

@@ -177,6 +177,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 analyses.Select(a => a?.Unified).ToList());
             AtlasOutputUI.Textures(config, overview);
             AtlasOutputUI.Features(config, overview, materials);
+            AtlasOutputUI.Baking(config, overview, materials, discovery.Renderers);
             for (int i = 0; i < materials.Count; i++)
                 if (analyses[i]?.Error != null)
                     EditorGUILayout.HelpBox($"{materials[i].name}: {analyses[i].Error}", MessageType.Info);

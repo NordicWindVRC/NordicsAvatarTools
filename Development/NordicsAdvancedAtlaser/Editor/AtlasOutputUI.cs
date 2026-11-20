@@ -271,6 +271,87 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
         }
 
+        // The Baking section (ATLAS_OUTPUT.md, "Virtual light rigs"), shown while a feature bakes
+        // with the virtual light rig: the rig, the overall strength, the light color, one strength
+        // per lit bake in use, and the lights. Folded by default.
+        public static void Baking(SerializedProperty config, AtlasOutputOverview overview, IReadOnlyList<Material> materials,
+            IEnumerable<Renderer> renderers)
+        {
+            var bakes = overview.Features
+                .Where(s => s.Active.Count > 0 && s.Mode != null && s.Feature is IAtlasLitBakeFeature)
+                .Select(s => ((IAtlasLitBakeFeature)s.Feature).LitBake(s.Mode))
+                .Where(b => b.HasValue).Select(b => b.Value).Distinct().OrderBy(b => b).ToList();
+            if (bakes.Count == 0) return;
+            EditorGUILayout.Space();
+            if (!Fold("baking", "Baking", false, true)) return;
+            using (new EditorGUI.IndentLevelScope())
+            {
+                Description("The virtual lights that baked shading is made with. The avatar faces them from the front.");
+                var baking = config.FindPropertyRelative("baking");
+                var rig = baking.FindPropertyRelative("rig");
+                EditorGUILayout.PropertyField(rig, new GUIContent("Light Rig",
+                    "Classic: the key light from one side and the fill from the other. Symmetric: every light centered, " +
+                    "so both halves of the avatar get the same light."));
+                if (rig.enumValueIndex == (int)AtlasLightRigKind.Classic)
+                {
+                    var overlapping = materials.Where(m => Overlaps(m, renderers)).Select(m => m.name).ToList();
+                    if (overlapping.Count > 0)
+                        Description("Overlapping UVs, baked with the symmetric rig so mirrored halves match: " + string.Join(", ", overlapping) + ".");
+                }
+                EditorGUILayout.PropertyField(baking.FindPropertyRelative("strength"), new GUIContent("Strength",
+                    "Scales every baked shading."));
+                EditorGUILayout.PropertyField(baking.FindPropertyRelative("colorInfluence"), new GUIContent("Light Color",
+                    "How much of the lights' color is baked. A baked color stays in every world, so a little is usually enough."));
+                foreach (var bake in bakes)
+                    switch (bake)
+                    {
+                        case AtlasLitBake.NormalShading:
+                            EditorGUILayout.PropertyField(baking.FindPropertyRelative("normalShading"), new GUIContent("Normal-Map Shading",
+                                "How strongly the shading of normal maps baked into color shows."));
+                            break;
+                    }
+                if (Fold("baking.lights", "Lights", false))
+                    using (new EditorGUI.IndentLevelScope())
+                    {
+                        BakeLight(baking.FindPropertyRelative("key"), "Key Light", "The main light: the form and the main highlight.");
+                        BakeLight(baking.FindPropertyRelative("fill"), "Fill Light", "Lifts the shadow side without a second highlight.");
+                        BakeLight(baking.FindPropertyRelative("back"), "Back Light", "A crisp edge on the silhouette and highlights on hair tops.");
+                    }
+            }
+        }
+
+        private static void BakeLight(SerializedProperty light, string label, string tooltip)
+        {
+            EditorGUILayout.LabelField(new GUIContent(label, tooltip), EditorStyles.miniBoldLabel);
+            using (new EditorGUI.IndentLevelScope())
+            {
+                EditorGUILayout.PropertyField(light.FindPropertyRelative("intensity"), new GUIContent("Intensity"));
+                EditorGUILayout.PropertyField(light.FindPropertyRelative("temperature"), new GUIContent("Temperature (K)",
+                    "The light's color temperature: lower is warmer, higher is cooler."));
+                EditorGUILayout.PropertyField(light.FindPropertyRelative("softness"), new GUIContent("Softness",
+                    "Softens the edge between the lit and the shadow side, and widens highlights."));
+            }
+        }
+
+        // Whether a source's UVs overlap, per material and meshes, kept until the meshes change.
+        private static readonly Dictionary<(int Material, int Meshes), bool> overlaps = new Dictionary<(int, int), bool>();
+
+        private static bool Overlaps(Material material, IEnumerable<Renderer> renderers)
+        {
+            if (material == null || renderers == null) return false;
+            int meshes = 17;
+            foreach (var renderer in renderers)
+            {
+                var mesh = renderer is SkinnedMeshRenderer skinned ? skinned.sharedMesh : renderer != null ? renderer.GetComponent<MeshFilter>()?.sharedMesh : null;
+                if (mesh != null && renderer.sharedMaterials.Contains(material))
+                    meshes = meshes * 31 + mesh.GetInstanceID() * 7 + mesh.vertexCount;
+            }
+            var key = (material.GetInstanceID(), meshes);
+            if (!overlaps.TryGetValue(key, out bool result))
+                overlaps[key] = result = AtlasSurfaceGeometry.Overlaps(AtlasCoverage.Triangles(material, renderers));
+            return result;
+        }
+
         private static void Feature(SerializedProperty features, AtlasFeatureState state, IReadOnlyList<Material> materials)
         {
             var feature = state.Feature;

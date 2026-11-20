@@ -11,8 +11,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // whiteout. The output's strength is the largest among the sources, and each one is baked at
     // its share of it, so the writer's one strength reproduces every source's. Sources without
     // normals are flat.
-    public sealed class AtlasNormalFeature : IAtlasSourceAwareFeature
+    // Baked into color: no normal map; the shading it would add under the virtual light rig is
+    // baked into the base color (AtlasNormalShading), for outputs without normal maps or to save
+    // the texture's memory.
+    public sealed class AtlasNormalFeature : IAtlasSourceAwareFeature, IAtlasLitBakeFeature
     {
+        public static readonly AtlasFeatureMode Baked = new AtlasFeatureMode
+        {
+            Id = "baked", Label = "Baked into color", Kind = AtlasFeatureModeKind.Baked,
+            RequiredMaps = new[] { AtlasVirtualMap.BaseColor }
+        };
+
         private static readonly AtlasFeatureMode[] ModeList =
         {
             new AtlasFeatureMode
@@ -20,8 +29,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Id = "native", Label = "Normal map", Kind = AtlasFeatureModeKind.Native,
                 RequiredMaps = new[] { AtlasVirtualMap.Normal }
             },
+            Baked,
             AtlasFeatureMode.Off
         };
+
+        public AtlasLitBake? LitBake(AtlasFeatureMode mode) => mode == Baked ? AtlasLitBake.NormalShading : (AtlasLitBake?)null;
 
         public string Id => "normal";
         public string DisplayName => "Normal Maps";
@@ -42,6 +54,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var job = context.Job;
             var active = new HashSet<int>(context.Sources);
+            if (context.Mode == Baked)
+            {
+                BakeIntoColor(context, active);
+                return;
+            }
             float strength = 0f;
             foreach (int i in active) strength = Mathf.Max(strength, LargestStrength(job.Sources[i]));
             if (strength <= 0f) return;
@@ -68,6 +85,67 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (materials.Any(m => NormalLayers(m).Any(l => !AtlasMapEvaluator.CanBakeNormalLayer(l, m))))
                 context.Notes.Add("A normal layer that is placed, masked by a global mask written by layers or the second pass, on another UV, or lerped isn't baked yet; it's left out.");
         }
+
+        // Wraps the base color's evaluation: each source's color × its normal-map shading under
+        // the rig, symmetric for sources whose UVs overlap. The normals are evaluated at their
+        // own strengths, with the corrections faded at the UV seams as in the normal map.
+        private static void BakeIntoColor(AtlasFeatureContext context, HashSet<int> active)
+        {
+            var job = context.Job;
+            var request = AtlasLiveMasks.Request(context, AtlasVirtualMap.BaseColor);
+            if (request == null)
+            {
+                context.Notes.Add("Normal maps are baked into the base color, which is off; they're left out.");
+                return;
+            }
+            var settings = job.Baking ?? new AtlasBakeSettings();
+            float strength = Mathf.Clamp01(settings.strength) * Mathf.Clamp01(settings.normalShading);
+            if (strength <= 0f) return;
+            var unknown = active.Where(i => job.Sources[i].Surface == null).ToList();
+            if (unknown.Count > 0)
+                context.Notes.Add($"Normal-map shading needs the meshes, which aren't known here; it's left out on {AtlasLiveMasks.Numbers(unknown)}.");
+            var symmetric = new HashSet<int>(active.Where(i => UsesSymmetricRig(settings, job.Sources[i])));
+            var classicRig = AtlasLightRig.Create(settings, false);
+            var symmetricRig = AtlasLightRig.Create(settings, true);
+            var main = job.MainTexture;
+            var inner = request.Evaluate ?? ((i, m, w, h) => AtlasMapEvaluator.Evaluate(AtlasVirtualMap.BaseColor, m, w, h));
+            request.Evaluate = (i, material, w, h) =>
+            {
+                var result = inner(i, material, w, h);
+                var source = job.Sources[i];
+                if (!active.Contains(i) || source.Surface == null) return result;
+                var sections = source.Surface();
+                if (sections == null || sections.Count == 0) return result;
+                // Placed in the main texture, the base color's, like the normal map would be.
+                Vector2Int? placed = main != null && main.width > 0 && main.height > 0
+                    ? AtlasOutputLayout.IslandSize(source.UVRegion, main) : (Vector2Int?)null;
+                using (var normals = AtlasMapEvaluator.Normal(source, w, h, 1f, placed))
+                    AtlasNormalShading.Apply(result, normals, sections, symmetric.Contains(i) ? symmetricRig : classicRig, strength);
+                return result;
+            };
+            // Brighter than 1 where the detail faces the light more than the mesh does: the map is
+            // divided by its brightest value, which goes into the shared color.
+            if (request.Finish == null)
+            {
+                var baseColor = context.Output.Surface.BaseColor;
+                request.Finish = map =>
+                {
+                    float peak = AtlasColorFeature.Peak(map);
+                    if (peak <= 1f) return;
+                    map.ApplyColor(new ColorOperation
+                    {
+                        Opcode = ColorOperationCode.Tint, Parameters = { Color = new Color(1f / peak, 1f / peak, 1f / peak, 1f) }
+                    });
+                    var c = baseColor.Color;
+                    baseColor.Color = new Color(c.r * peak, c.g * peak, c.b * peak, c.a);
+                };
+            }
+        }
+
+        // Sources with overlapping UVs use the symmetric rig, so mirrored halves get the same
+        // light (ATLAS_OUTPUT.md, "Overlapping UVs").
+        public static bool UsesSymmetricRig(AtlasBakeSettings settings, AtlasGeneratorSource source) =>
+            settings?.rig == AtlasLightRigKind.Symmetric || AtlasSurfaceGeometry.Overlaps(source?.Coverage);
 
         // The surface layers that change the normal.
         public static IEnumerable<AtlasSurfaceLayer> NormalLayers(AtlasUnifiedMaterial source) =>

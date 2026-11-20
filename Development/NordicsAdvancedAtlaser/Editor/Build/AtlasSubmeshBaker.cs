@@ -367,6 +367,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             return list;
         }
+        /// <summary>
+        /// Paints one part of the sections' tangent frames (0: tangent, 1: bitangent with its
+        /// handedness, 2: normal), × coverage with the coverage in alpha, from the triangles
+        /// whose UV winding is counterclockwise or not, so mirrored halves never mix their
+        /// frames. One part at a time keeps one map alive. Surfaces hidden close behind another
+        /// surface with the same UVs are left out, as in the normal correction. False when no
+        /// triangle was painted.
+        /// </summary>
+        internal static bool PaintFrame(IReadOnlyList<AtlasMeshSection> sections,NordicsTextureWrapper map,int part,bool counterClockwise)
+            => Rasterize(sections,null,null,part==0?map:null,part==1?map:null,part==2?map:null,null,true,true,null,null,
+                counterClockwise?1:-1)>0;
         private static readonly TrianglePaintOptions Quality = new TrianglePaintOptions { Mode=TriangleRasterizationMode.Quality,SamplesPerAxis=2 };
         private static readonly TrianglePaintOptions Fast = new TrianglePaintOptions { Mode=TriangleRasterizationMode.Fast };
         // Surfaces more than this far (in avatar-root units: meters on a normally scaled avatar)
@@ -382,15 +393,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // `hidden`, surfaces hidden close behind another surface with the same UVs are left out
         // of every map but the usage mask. `positionMap` gets the surface's position and `sizeMap`
         // the triangles' size around it (VertexSizes), both × coverage, with coverage in alpha.
-        private static void Rasterize(IReadOnlyList<AtlasMeshSection> sections,NordicsTextureWrapper normals,NordicsTextureWrapper mask,
+        // `winding` 1 or −1 paints only the triangles whose UVs run counterclockwise or clockwise.
+        // Returns the triangles painted.
+        private static int Rasterize(IReadOnlyList<AtlasMeshSection> sections,NordicsTextureWrapper normals,NordicsTextureWrapper mask,
             NordicsTextureWrapper tangent,NordicsTextureWrapper bitangent,NordicsTextureWrapper basisNormal,
             NordicsTextureWrapper coverage=null,bool target=false,bool hidden=false,
-            NordicsTextureWrapper positionMap=null,NordicsTextureWrapper sizeMap=null)
+            NordicsTextureWrapper positionMap=null,NordicsTextureWrapper sizeMap=null,int winding=0)
         {
             var positionValues=positionMap!=null ? new List<Color>() : null;
             var sizeValues=sizeMap!=null ? new List<Color>() : null;
             float[] vertexSizes=null;
-            bool frames=tangent!=null && bitangent!=null && basisNormal!=null;
+            bool frames=tangent!=null || bitangent!=null || basisNormal!=null;
             var uvs=new List<Vector2>();
             var normalValues=normals!=null||frames ? new List<Color>() : null;
             var coverValues=coverage!=null ? new List<Color>() : null;
@@ -412,6 +425,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         a>=section.UV.Length||b>=section.UV.Length||c>=section.UV.Length) continue;
                     var uv0=section.UV[a];var uv1=section.UV[b];var uv2=section.UV[c];
                     if(!Finite(uv0)||!Finite(uv1)||!Finite(uv2)) continue;
+                    if(winding!=0)
+                    {
+                        float area=(uv1.x-uv0.x)*(uv2.y-uv0.y)-(uv1.y-uv0.y)*(uv2.x-uv0.x);
+                        if(area==0f || (area>0f)!=(winding>0)) continue;
+                    }
                     Vector3 face=Vector3.Cross(section.Vertices[b]-section.Vertices[a],section.Vertices[c]-section.Vertices[a]);
                     if(face.sqrMagnitude<1e-12f) continue;
                     face.Normalize();
@@ -468,10 +486,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
             coverage?.PaintTriangles(uvs,coverValues,Quality,depth);
             positionMap?.PaintTriangles(uvs,positionValues,Quality,depth);
             sizeMap?.PaintTriangles(uvs,sizeValues,Quality,depth);
-            if(!frames) return;
-            tangent.PaintTriangles(uvs,tangentValues,Quality,depth);
-            bitangent.PaintTriangles(uvs,bitangentValues,Quality,depth);
-            basisNormal.PaintTriangles(uvs,normalValues,Quality,depth);
+            if(frames && uvs.Count>0)
+            {
+                tangent?.PaintTriangles(uvs,tangentValues,Quality,depth);
+                bitangent?.PaintTriangles(uvs,bitangentValues,Quality,depth);
+                basisNormal?.PaintTriangles(uvs,normalValues,Quality,depth);
+            }
+            return uvs.Count/3;
         }
         // Each vertex's size: the mean edge length of the triangles around it, merged over
         // vertices at the same position (split at UV seams or hard edges), so the size changes
