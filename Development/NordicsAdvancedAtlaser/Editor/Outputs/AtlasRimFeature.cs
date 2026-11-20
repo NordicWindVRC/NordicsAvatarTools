@@ -44,6 +44,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         public bool CanPlaceAsMatcap(AtlasOutputCapabilities capabilities) => capabilities.MatcapSlots > 0;
 
+        public bool CanBake(AtlasOutputCapabilities capabilities) => false;
+
         private sealed class Instance
         {
             public int Source;

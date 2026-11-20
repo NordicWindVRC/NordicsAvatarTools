@@ -108,6 +108,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var classicRig = AtlasLightRig.Create(settings, false);
             var symmetricRig = AtlasLightRig.Create(settings, true);
             var main = job.MainTexture;
+            // After every feature's edits to the base color: the shading lights all of it.
+            context.Plan.AfterResolve.Add(() => Wrap(request, context, active, symmetric, classicRig, symmetricRig, strength, main));
+        }
+
+        private static void Wrap(AtlasMapRequest request, AtlasFeatureContext context, HashSet<int> active, HashSet<int> symmetric,
+            AtlasLightRig classicRig, AtlasLightRig symmetricRig, float strength, AtlasTextureSize main)
+        {
+            var job = context.Job;
             var inner = request.Evaluate ?? ((i, m, w, h) => AtlasMapEvaluator.Evaluate(AtlasVirtualMap.BaseColor, m, w, h));
             request.Evaluate = (i, material, w, h) =>
             {

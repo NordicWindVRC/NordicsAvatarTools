@@ -39,6 +39,26 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 .ThenBy(i => i).First();
         }
 
+        // Drawn by the output's rim (outputs with a rim that adds after lighting and can be lit by
+        // the scene, but without this feature of their own).
+        public static bool RimCanTakeIt(AtlasOutputCapabilities c) => c.RimSlots > 0 && c.RimAddsAfterLighting;
+
+        // Whether the rims already in the output fill its rim slots (rim lighting resolves first).
+        public static bool RimTaken(AtlasFeatureContext context) =>
+            context.Output.Layers.OfType<AtlasAngleLayer>().Count(l => l.Source == AtlasAngleSource.ViewAngle && l.ColorSource == AtlasAngleColorSource.Color) >=
+            context.Capabilities.RimSlots;
+
+        public static string TakenNote(string name) =>
+            $"The output's rim is already taken, so the {name} is left out; turning off what takes it (rim lighting or placing its rims as matcaps, or the environmental rim) frees it.";
+
+        // Sources whose layer isn't the one the output's rim shows, with no mask to keep it apart.
+        public static void EveryPartNote(AtlasFeatureContext context, string name, System.Func<AtlasUnifiedMaterial, AtlasAngleLayer> layer)
+        {
+            var without = Enumerable.Range(0, context.Job.Sources.Count).Where(i => !context.Sources.Contains(i) || layer(context.Job.Sources[i].Material) == null).ToList();
+            if (without.Count > 0)
+                context.Notes.Add($"The output's rim has no mask, so the {name} also shows on {AtlasLiveMasks.Numbers(without)}, which don't have it.");
+        }
+
         public static bool Differ(IEnumerable<AtlasAngleLayer> layers, params string[] skip) =>
             layers.Where(l => l != null).Select(l => AtlasFieldwise.Signature(l, skip)).Distinct().Count() > 1;
 
@@ -62,6 +82,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public const string FeatureId = "environmentalrim";
         private static readonly string[] PerSource = { "Mask", "Opacity", "Enabled" };
 
+        // Drawn by the output's rim, × the scene's light and ambient instead of the reflection
+        // probe (Toon Standard's Environmental rim).
+        public static readonly AtlasFeatureMode InRim = new AtlasFeatureMode
+        {
+            Id = "rim", Label = "In the rim (lit by the scene)", Kind = AtlasFeatureModeKind.Emulated,
+            Requires = c => !c.EnvironmentalRim && AtlasEdgeLight.RimCanTakeIt(c)
+        };
+
         private static readonly AtlasFeatureMode[] ModeList =
         {
             new AtlasFeatureMode
@@ -70,6 +98,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 OptionalMaps = new[] { AtlasVirtualMap.Mask1 },
                 Requires = c => c.EnvironmentalRim
             },
+            InRim,
             AtlasFeatureMode.Off
         };
 
@@ -98,6 +127,27 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var template = Layer(job.Sources[reference].Material);
             float strongest = context.Sources.Max(i => Layer(job.Sources[i].Material).Opacity);
             if (strongest <= 0f) return;
+            if (context.Mode == InRim)
+            {
+                if (AtlasEdgeLight.RimTaken(context))
+                {
+                    context.Notes.Add(AtlasEdgeLight.TakenNote("environmental rim"));
+                    return;
+                }
+                // The same rim over the facing (the writer fits its band), its color the scene's
+                // light and ambient × its tint instead of the probe's.
+                var rim = new AtlasAngleLayer();
+                AtlasFieldwise.Copy(template, rim);
+                rim.ColorSource = AtlasAngleColorSource.Color;
+                rim.Color.Map = null;
+                rim.LightResponse = AtlasLightResponse.ScaleByLight;
+                rim.Mask = null;
+                context.Output.Layers.Add(rim);
+                context.Notes.Add("The environmental rim is drawn by the output's rim, lit by the scene's light and ambient instead of the reflection probe.");
+                AtlasEdgeLight.EveryPartNote(context, "environmental rim", Layer);
+                AtlasEdgeLight.DifferNote(context, reference, "environmental rim", Layer, "Enabled");
+                return;
+            }
             AtlasAngleLayer Of(int i) => active.Contains(i) ? Layer(job.Sources[i].Material) : null;
             var allocated = AtlasMaskAllocator.Allocate(context, new AtlasMaskRequest
             {
@@ -132,6 +182,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public const string FeatureId = "backlight";
         private static readonly string[] PerSource = { "Mask", "Color", "Enabled" };
 
+        // Drawn by the output's rim: a band fitted to the backlight under the rig's back light,
+        // × the scene's light. It shows on every lit edge, not only against a light behind.
+        public static readonly AtlasFeatureMode InRim = new AtlasFeatureMode
+        {
+            Id = "rim", Label = "In the rim (every lit edge)", Kind = AtlasFeatureModeKind.Emulated,
+            Requires = c => !c.Backlight && AtlasEdgeLight.RimCanTakeIt(c)
+        };
+
         private static readonly AtlasFeatureMode[] ModeList =
         {
             new AtlasFeatureMode
@@ -140,6 +198,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 OptionalMaps = new[] { AtlasVirtualMap.BacklightColor },
                 Requires = c => c.Backlight
             },
+            InRim,
             AtlasFeatureMode.Off
         };
 
@@ -159,6 +218,59 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool SharedValuesDiffer(IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasOutputCapabilities capabilities) =>
             AtlasEdgeLight.Differ(sources.Select(Layer), PerSource);
 
+        // The output's rim as the backlight: a band with the backlight's strength at each facing
+        // under the rig's back light, seen from the front, where it shows (the brightest direction
+        // around the view: the rim can't light one side only, and the average would barely
+        // show), × the scene's light.
+        private static void InTheRim(AtlasFeatureContext context, AtlasAngleLayer template, int reference)
+        {
+            if (AtlasEdgeLight.RimTaken(context))
+            {
+                context.Notes.Add(AtlasEdgeLight.TakenNote("backlight"));
+                return;
+            }
+            var settings = context.Job.Baking ?? new AtlasBakeSettings();
+            var light = AtlasLightRig.Create(settings, settings.rig == AtlasLightRigKind.Symmetric).Back.Direction;
+            if (!AtlasRimCurve.FitBand(f => Strength(template, f, light), out float range, out float softness, out float peak))
+            {
+                context.Notes.Add("The backlight never shows under the virtual back light; it's left out.");
+                return;
+            }
+            var rim = new AtlasAngleLayer
+            {
+                Source = AtlasAngleSource.ViewAngle, Profile = AtlasAngleProfile.Band, Width = range, Softness = softness,
+                Placement = AtlasPlacement.Overlay, Blend = AtlasBlend.Add, Opacity = peak,
+                BaseColorMix = template.BaseColorMix, LightResponse = AtlasLightResponse.ScaleByLight
+            };
+            rim.Color.Color = template.Color.Color;
+            context.Output.Layers.Add(rim);
+            context.Notes.Add("The backlight is drawn by the output's rim, on every lit edge rather than only against a light behind" +
+                              (template.Color.Map != null ? ", in its color without its texture" : "") + ".");
+            AtlasEdgeLight.EveryPartNote(context, "backlight", Layer);
+            AtlasEdgeLight.DifferNote(context, reference, "backlight", Layer, "Enabled");
+        }
+
+        /// <summary>The backlight's strength at the facing f = N·V, the brightest around the view: e =
+        /// (normalize(L − V × view strength) · N) × 0.5 + 0.5 between Low and High (linear), ×
+        /// saturate(0.5 − (V·L) × 0.5)^directivity, for a view along +Z and a light from
+        /// <paramref name="light"/> (unshadowed).</summary>
+        public static float Strength(AtlasAngleLayer layer, float f, Vector3 light)
+        {
+            var view = Vector3.forward;
+            float directivity = Mathf.Pow(Mathf.Clamp01(0.5f - Vector3.Dot(view, light) * 0.5f), Mathf.Max(0f, layer.Directivity));
+            var toward = (light - view * layer.ViewStrength).normalized;
+            float s = Mathf.Sqrt(Mathf.Max(0f, 1f - f * f)), brightest = 0f;
+            const int around = 64;
+            for (int k = 0; k < around; k++)
+            {
+                float a = (k + 0.5f) / around * 2f * Mathf.PI;
+                var n = new Vector3(s * Mathf.Cos(a), s * Mathf.Sin(a), f);
+                float e = Vector3.Dot(toward, n) * 0.5f + 0.5f;
+                brightest = Mathf.Max(brightest, layer.High > layer.Low ? Mathf.Clamp01((e - layer.Low) / (layer.High - layer.Low)) : e >= layer.Low ? 1f : 0f);
+            }
+            return brightest * directivity;
+        }
+
         // A color texture the map can bake: a still texture on UV0.
         private static bool Bakeable(AtlasTextureReference map) =>
             map?.Texture is Texture2D && map.Space == AtlasTextureSpace.UV0 && map.Scroll == Vector2.zero && map.Spin == 0f &&
@@ -171,6 +283,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
             int reference = AtlasEdgeLight.Reference(context, FeatureId);
             var template = Layer(job.Sources[reference].Material);
             AtlasAngleLayer Of(int i) => active.Contains(i) ? Layer(job.Sources[i].Material) : null;
+            if (context.Mode == InRim)
+            {
+                InTheRim(context, template, reference);
+                return;
+            }
             var copy = new AtlasAngleLayer();
             AtlasFieldwise.Copy(template, copy);
             copy.Mask = null;

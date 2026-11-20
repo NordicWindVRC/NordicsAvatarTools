@@ -405,18 +405,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
                 if (active.Any(i => job.Sources[i].Material.Surface.Response.OcclusionTint?.Map?.Texture != null))
                     context.Notes.Add("An occlusion tint texture isn't baked; its color is used.");
-                var inner = request.Evaluate ?? ((i, m, w, h) => AtlasMapEvaluator.Evaluate(AtlasVirtualMap.BaseColor, m, w, h));
-                request.Evaluate = (i, material, w, h) =>
+                // After every feature's edits to the base color: occlusion darkens all of it.
+                context.Plan.AfterResolve.Add(() =>
                 {
-                    var result = inner(i, material, w, h);
-                    if (!shares.TryGetValue(i, out var share)) return result;
-                    var response = material.Surface.Response;
-                    using (var occlusion = AtlasMapEvaluator.Scalar(response.Occlusion, w, h, material))
-                    using (var metallic = response.MultiBounceOcclusion ? AtlasMapEvaluator.Scalar(response.Metallic, w, h, material) : null)
-                        AtlasOcclusionShading.Apply(result, occlusion, metallic, share,
-                            response.OcclusionTint?.Color ?? Color.black, response.MultiBounceOcclusion, strength);
-                    return result;
-                };
+                    var inner = request.Evaluate ?? ((i, m, w, h) => AtlasMapEvaluator.Evaluate(AtlasVirtualMap.BaseColor, m, w, h));
+                    request.Evaluate = (i, material, w, h) =>
+                    {
+                        var result = inner(i, material, w, h);
+                        if (!shares.TryGetValue(i, out var share)) return result;
+                        var response = material.Surface.Response;
+                        using (var occlusion = AtlasMapEvaluator.Scalar(response.Occlusion, w, h, material))
+                        using (var metallic = response.MultiBounceOcclusion ? AtlasMapEvaluator.Scalar(response.Metallic, w, h, material) : null)
+                            AtlasOcclusionShading.Apply(result, occlusion, metallic, share,
+                                response.OcclusionTint?.Color ?? Color.black, response.MultiBounceOcclusion, strength);
+                        return result;
+                    };
+                });
             }
             BakeIntoReflections(context, active, strength);
         }

@@ -8,6 +8,26 @@ Newest first. Versions follow [SemVer](https://semver.org). Early versions were 
 EditMode tests pass in Unity 2022.3.22.
 
 ### Added
+- **Matcaps baked:** a matcap can be placed *Baked into color*, and *Matcaps* has a *Baked into
+  color* mode, the default on outputs without matcap slots. The matcap is drawn into the
+  textures as the virtual view sees it (`AtlasMatcapBake`): looked up per texel by its
+  projection, from the mesh normal or the normal map, into the base color by its blend, and
+  of its glow and overlay adds the share that shows without light (by its light color mix and
+  light mask) into the emission, the rest added to the color, where the light shades it. The
+  matcaps are seen from a camera set in the *Baking* section (*Matcap View Side* and *Height*,
+  starting slightly to the viewer's left and up; centered for overlapping UVs); the view stays
+  frontal to it over the whole front half,
+  so the sides reach the matcap's edge, where shading matcaps darken, and turns only on the
+  back. A matcap's light mask is used at its average under the rig, since the output's own
+  shadow darkens the shadow side. Highlight matcaps (effects that brighten) aren't baked by *Automatic*; matcaps that
+  mostly multiply are, even through a reflection lookup.
+  A *Matcaps* strength in the *Baking* section. The lit bakes (normal-map shading, occlusion)
+  now light the base color after every feature's edits (`AtlasOutputPlan.AfterResolve`).
+- **Environmental rim and backlight on Toon Standard:** both features have an *In the rim* mode
+  on outputs without them whose rim is lit by the scene: the environmental rim's curve, × the
+  scene's light instead of the reflection probe; the backlight as a band fitted to it under
+  the rig's back light. Where rim lighting (or the environmental rim) takes the rim, the note
+  says so.
 - **Ambient occlusion baked into color:** *Ambient Occlusion* has a *Baked into color* mode. No
   occlusion map is made; each source's base color is darkened by its occlusion × the share of
   the light its shader lets occlusion darken (the rig's direct and ambient light by the

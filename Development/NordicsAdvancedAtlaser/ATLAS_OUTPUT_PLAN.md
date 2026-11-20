@@ -1,6 +1,6 @@
 # Nordic's Advanced Atlaser — Output implementation plan
 
-**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is done; 2.9 is done; 2.8a to 2.8c are done, 2.8d is next, and 2.8 completes milestone 2 (done after 2.9: both outputs light and have the maps 2.8's bakes stand in for, so 2.8 matters first where the user turns maps off). It implements the design in
+**Status:** milestone 1 reached (phases 1.1 to 1.5); auto setup (A1, A2) and 2.1 are done; 2.2 is done; 2.3 is done; 2.4 is done (its output masks moved to 2.7); 2.5 is done (tiled layers kept live moved to 2.7); 2.6 is done (cloth lighting moved to Later); 2.7 is done; 2.9 is done; 2.8 is done (milestone 2 reached), and 2.8 completes milestone 2 (done after 2.9: both outputs light and have the maps 2.8's bakes stand in for, so 2.8 matters first where the user turns maps off). It implements the design in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names are used here.
 
 ## How the plan works
@@ -335,10 +335,42 @@ direct and ambient light the source's occlusion darkens, averaged over every dir
 surface can face (multi-bounce on the ambient part where the source has it); reflections ×
 occlusion in the reflection mask, highlights kept apart (`AtlasOcclusionShading`).
 
-**2.8d Full light and form shading (design first).** The lit color for unlit outputs and the
-form shading for flatly lit ones, with each source's lighting family and surface response;
-then matcaps and rims into color or emission and rims emulated as matcaps where they keep the
-artist's intent better than leaving them out.
+**2.8d Matcaps baked (done).** Two uses: outputs without matcap slots, and matcaps that
+look wrong merged into a shared slot, which the user bakes instead.
+- *Baked* is one more placement for a matcap group, next to its own slot, combined and off,
+  wherever the output has a base color map. *Matcaps* gets a *Baked* mode for outputs without
+  matcap slots, so the feature is offered there.
+- Each texel evaluates the matcap under the virtual view: the view-space normal (the mesh
+  normal, or the normal map by the layer's surface normal amount, from the 2.8a frames)
+  turned into the lookup by the layer's projection, as its shader computes it (read from the
+  sources when built), through the texture's scale and offset; the light half-vector
+  projection uses the rig's key light. × the layer's color, its base color mix and mask, in
+  layer order.
+- Where it goes: a surface matcap blends into the base color by its own blend
+  (`AtlasBlendMath`), before the lit bakes (normal-map shading, occlusion) multiply it. An
+  overlay matcap that adds, screens or brightens, and a matcap's glow, go into the emission
+  map, which is added after lighting as they are. An overlay matcap that multiplies or
+  replaces goes into the base color, lit instead of after lighting (listed).
+- Mirrored halves are evaluated per UV winding and averaged, as in normal-map shading.
+- *Automatic*: on an output without slots, environment matcaps are baked; effects (shine,
+  glints) are left out and listed, since a baked highlight stays in place from every view;
+  the user can place one *Baked*. On an output with slots, *Automatic* is unchanged.
+- A *Matcaps* strength in the *Baking* section.
+
+**2.8e Environmental rim and backlight on Toon Standard (done).** Toon Standard has one
+rim, and its *Environmental* switch multiplies it by the light and the ambient color
+(`rim × (light + ambient)`, no light direction). Where no rim from *Rim Lighting* takes it:
+- Poiyomi's environmental rim (the reflection probe at grazing angles) goes into it with
+  *Environmental* on: its width and sharpness fitted to the band (range and softness, as rims
+  are fitted), its intensity and the reference source's settings (*Environmental Rim from*);
+  without a mask, it shows on every part, listed where sources don't have it.
+- Poiyomi's backlight can take it instead: its color and border fitted the same way. It then
+  shows on every lit edge, not only on edges against a light behind the avatar (listed).
+- One slot: a rim from *Rim Lighting* takes it first, then the environmental rim, then the
+  backlight. What doesn't get it is listed with what takes it, so turning that off (or placing
+  rims *As matcap*) frees it; no separate setting is needed.
+- The backlight's band is fitted where it shows (the brightest direction around the view):
+  averaged around the silhouette, it would barely show.
 
 - Geometry buffers: the surface and the overlap, within the memory budget (2.8a).
 - The light rigs with roles, color influence and the strength sliders; the virtual view;
@@ -484,6 +516,10 @@ Not planned in detail yet, in rough order:
 - **depth rims** (from 2.7b): Poiyomi's depth rim lighting natively, one setup from the
   reference source;
 - **rim color textures** (from 2.7b): a rim's texture on UV0 baked into a color map;
+- **full light and form shading** (from 2.8): the lit color baked for outputs that don't light
+  and the form shading for outputs that light flatly, with each source's lighting family and
+  surface response under the rig. Today's outputs light with their own ramps, where either
+  would light twice; built with the first unlit or flat output;
 - **cloth lighting** (from 2.6c): Poiyomi's cloth type, with every source's metallic, cloth
   mask, reflectance and smoothness baked into its packed map;
 - **bake speed**, measured on a 5-material avatar (11 s per output, 2.7 s of it Unity's

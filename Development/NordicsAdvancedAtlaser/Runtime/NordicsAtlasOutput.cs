@@ -168,6 +168,12 @@ namespace NordicWind.AdvancedAtlaser
         [Range(0, 1)] public float normalShading = 1f;
         /// <summary>Ambient occlusion baked into the base color.</summary>
         [Range(0, 1)] public float occlusion = 1f;
+        /// <summary>Matcaps baked into the base color and the emission.</summary>
+        [Range(0, 1)] public float matcaps = 1f;
+        /// <summary>Where baked matcaps are seen from, in degrees from straight in front: to the
+        /// side (positive: the viewer's left, the avatar's right) and up.</summary>
+        [Range(-60, 60)] public float matcapViewSide = 20f;
+        [Range(-45, 45)] public float matcapViewHeight = 15f;
         /// <summary>The main light: the form and the main highlight.</summary>
         public AtlasBakeLight key = new AtlasBakeLight(5000f, 0.4f);
         /// <summary>Lifts the shadow side without a second highlight.</summary>

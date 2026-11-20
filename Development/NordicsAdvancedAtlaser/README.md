@@ -147,7 +147,8 @@ its UV space. For the details, see `UNIFIED_MATERIAL.md` (the description of a m
        (*Classic*: the key light from one side, the fill from the other; *Symmetric*: every
        light centered, so both halves of the avatar match; materials whose UVs overlap, such
        as mirrored halves, always use it), an overall strength, how much of the lights' color
-       is baked, a strength per bake (*Normal-Map Shading*, *Occlusion*), and each light's intensity, color
+       is baked, a strength per bake (*Normal-Map Shading*, *Occlusion*, *Matcaps*, with where
+       baked matcaps are seen from: *Matcap View Side* and *Height*), and each light's intensity, color
        temperature and softness. Baked shading follows the surface around the avatar, so
        detail on the sides and back reads like detail on the front.
      - **Reflection and Specular**: each source's metallic and roughness in maps, and how
@@ -195,8 +196,12 @@ its UV space. For the details, see `UNIFIED_MATERIAL.md` (the description of a m
        same parts, then gives the largest their own slots and combines the rest into the most
        similar slot. Blends the output shader lacks (Mobile Toon Standard only adds or
        multiplies) are approximated with the nearest, and a matcap mixed with the base color
-       is limited by the base color's brightness. The build log lists what was combined,
-       approximated or left out.
+       is limited by the base color's brightness. *Baked into color* draws a matcap into the
+       textures as seen from the front instead, for a matcap that looks wrong combined; on an
+       output shader without matcaps, *Baked into color* is the mode, and highlight matcaps
+       (shine, glints) are left out unless you place them *Baked into color*, since a baked
+       highlight stays in place from every angle. The build log lists what was combined,
+       approximated, baked or left out.
      - **Rim Lighting**: each material's rims in the output's rim slots (Poiyomi 2, Mobile
        Toon Standard 1), placed like matcaps, with *As matcap* added: the rim drawn into a
        generated matcap in a free matcap slot, which keeps it to its own parts. Mobile Toon
@@ -206,6 +211,9 @@ its UV space. For the details, see `UNIFIED_MATERIAL.md` (the description of a m
      - **Environmental Rim** and **Backlight** (Poiyomi): one setup for the atlas, from one
        material (*Environmental Rim from*, *Backlight from*: *Automatic* takes the one with
        the largest area); each material's strength, or backlight color, is kept per part.
+       Mobile Toon Standard has neither: *In the rim* draws one of them with its rim, lit by
+       the scene, when rim lighting leaves the rim free (the environmental rim first). The
+       backlight then shows on every lit edge, not only against a light behind.
      - Features the output shader has nothing for are listed in the build log.
      - **Glitter**: on Poiyomi, one glitter setup for the atlas (*Glitter from*), each
        material keeping its own particle size and strength. Mobile Toon Standard has no

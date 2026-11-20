@@ -11,7 +11,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     // The bakes that use the virtual light rig (ATLAS_OUTPUT.md, "Virtual light rigs"), each with
     // its strength in the inspector's Baking section.
-    public enum AtlasLitBake { NormalShading, Occlusion }
+    public enum AtlasLitBake { NormalShading, Occlusion, Matcaps }
 
     // A feature with modes that bake with the virtual light rig; the Baking section is shown
     // while one of them is in use.
@@ -114,7 +114,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     // Where the user puts an item: Automatic (the feature's choice), its own place, combined
     // with another item (the stored text names it), or off.
-    public enum AtlasInstancePlacement { Automatic = 0, Own = 1, Combined = 2, Off = 3, AsMatcap = 4 }
+    public enum AtlasInstancePlacement { Automatic = 0, Own = 1, Combined = 2, Off = 3, AsMatcap = 4, Baked = 5 }
 
     public static class AtlasInstancePlacements
     {
@@ -128,6 +128,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         IReadOnlyList<AtlasFeatureInstance> Instances(AtlasGeneratorJob job, IReadOnlyList<int> sources);
         // Whether an item can also go into a matcap slot as a generated matcap.
         bool CanPlaceAsMatcap(AtlasOutputCapabilities capabilities);
+        // Whether an item can be baked into the textures instead.
+        bool CanBake(AtlasOutputCapabilities capabilities);
     }
 
     // A setting a feature offers in some of its modes (a strength, 0–1 by default), stored in its

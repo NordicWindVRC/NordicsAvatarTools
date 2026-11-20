@@ -280,7 +280,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var bakes = overview.Features
                 .Where(s => s.Active.Count > 0 && s.Mode != null && s.Feature is IAtlasLitBakeFeature)
                 .Select(s => ((IAtlasLitBakeFeature)s.Feature).LitBake(s.Mode))
-                .Where(b => b.HasValue).Select(b => b.Value).Distinct().OrderBy(b => b).ToList();
+                .Where(b => b.HasValue).Select(b => b.Value).ToList();
+            // Items placed Baked in a feature with slots bake too.
+            var features = config.FindPropertyRelative("features");
+            foreach (var state in overview.Features.Where(s => s.Active.Count > 0 && s.Mode != null && s.Mode.Kind != AtlasFeatureModeKind.Off &&
+                                                               s.InstancesCanBake && s.Instances.Count > 0))
+            {
+                var setting = FindFeature(features, state.Feature.Id);
+                if (setting != null && state.Instances.Any(i => StoredValue(setting, AtlasInstancePlacements.Id(i.Key)) is SerializedProperty v &&
+                                                                Mathf.RoundToInt(v.FindPropertyRelative("number").floatValue) == (int)AtlasInstancePlacement.Baked))
+                    bakes.Add(AtlasLitBake.Matcaps);
+            }
+            bakes = bakes.Distinct().OrderBy(b => b).ToList();
             if (bakes.Count == 0) return;
             EditorGUILayout.Space();
             if (!Fold("baking", "Baking", false, true)) return;
@@ -305,6 +316,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 foreach (var bake in bakes)
                     switch (bake)
                     {
+                        case AtlasLitBake.Matcaps:
+                            EditorGUILayout.PropertyField(baking.FindPropertyRelative("matcaps"), new GUIContent("Matcaps",
+                                "How strongly matcaps baked into color show."));
+                            EditorGUILayout.PropertyField(baking.FindPropertyRelative("matcapViewSide"), new GUIContent("Matcap View Side",
+                                "Where baked matcaps are seen from, in degrees to the side: positive is to your left as you face the avatar. " +
+                                "Materials whose UVs overlap are seen from the middle, so mirrored halves match."));
+                            EditorGUILayout.PropertyField(baking.FindPropertyRelative("matcapViewHeight"), new GUIContent("Matcap View Height",
+                                "Where baked matcaps are seen from, in degrees above straight in front."));
+                            break;
                         case AtlasLitBake.NormalShading:
                             EditorGUILayout.PropertyField(baking.FindPropertyRelative("normalShading"), new GUIContent("Normal-Map Shading",
                                 "How strongly the shading of normal maps baked into color shows."));
@@ -322,6 +342,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         BakeLight(baking.FindPropertyRelative("back"), "Back Light", "A crisp edge on the silhouette and highlights on hair tops.");
                     }
             }
+        }
+
+        private static SerializedProperty FindFeature(SerializedProperty features, string featureId)
+        {
+            for (int i = 0; i < features.arraySize; i++)
+            {
+                var item = features.GetArrayElementAtIndex(i);
+                if (item.FindPropertyRelative("featureId").stringValue == featureId) return item;
+            }
+            return null;
         }
 
         private static void BakeLight(SerializedProperty light, string label, string tooltip)
@@ -394,11 +424,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
             foreach (var conflictSwitch in state.Switches)
                 using (new EditorGUI.IndentLevelScope())
                     Switch(setting, conflictSwitch);
-            // With one item there is nothing to place: the mode and the per-material toggles decide.
-            if (state.Instances.Count > 1)
+            // With one item in slots there is nothing to place: the mode and the per-material
+            // toggles decide. Baked, each item is baked, left out or left to Automatic.
+            bool bakedMode = state.Mode != null && state.Mode.Kind == AtlasFeatureModeKind.Baked;
+            if (state.Instances.Count > 1 || (bakedMode && state.Instances.Count > 0))
                 using (new EditorGUI.IndentLevelScope())
                     foreach (var instance in state.Instances)
-                        Placement(setting, instance, state.Instances, state.InstancesAsMatcap);
+                        Placement(setting, instance, state.Instances, state.InstancesAsMatcap, state.InstancesCanBake, bakedMode);
             if (open)
                 using (new EditorGUI.IndentLevelScope())
                     Sources(setting, state, materials);
@@ -482,15 +514,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Where one item goes: Automatic, its own slot, off, or combined with another item.
-        private static void Placement(SerializedProperty setting, AtlasFeatureInstance instance, List<AtlasFeatureInstance> instances, bool asMatcap)
+        private static void Placement(SerializedProperty setting, AtlasFeatureInstance instance, List<AtlasFeatureInstance> instances, bool asMatcap,
+            bool canBake, bool bakedMode)
         {
             var stored = StoredValue(setting, AtlasInstancePlacements.Id(instance.Key));
-            var others = instances.Where(i => i != instance).ToList();
-            var placements = new List<AtlasInstancePlacement> { AtlasInstancePlacement.Automatic, AtlasInstancePlacement.Own };
-            if (asMatcap) placements.Add(AtlasInstancePlacement.AsMatcap);
+            // Baked, there are no slots to share.
+            var others = bakedMode ? new List<AtlasFeatureInstance>() : instances.Where(i => i != instance).ToList();
+            var placements = new List<AtlasInstancePlacement> { AtlasInstancePlacement.Automatic };
+            if (!bakedMode) placements.Add(AtlasInstancePlacement.Own);
+            if (asMatcap && !bakedMode) placements.Add(AtlasInstancePlacement.AsMatcap);
+            if (canBake) placements.Add(AtlasInstancePlacement.Baked);
             placements.Add(AtlasInstancePlacement.Off);
             var options = placements.Select(p => p == AtlasInstancePlacement.Automatic ? "Automatic" : p == AtlasInstancePlacement.Own ? "Own slot"
-                : p == AtlasInstancePlacement.AsMatcap ? "As matcap" : "Off").ToList();
+                : p == AtlasInstancePlacement.AsMatcap ? "As matcap" : p == AtlasInstancePlacement.Baked ? "Baked into color" : "Off").ToList();
             options.AddRange(others.Select(o => "Combine with " + o.Label));
             int index = 0;
             if (stored != null)
@@ -501,9 +537,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (mode == AtlasInstancePlacement.Combined) index = others.FindIndex(o => o.Key == target) is int at && at >= 0 ? placements.Count + at : 0;
                 else index = Math.Max(0, placements.IndexOf(mode));
             }
-            var label = new GUIContent(instance.Label,
-                instance.Label + ". Automatic combines it with others on the same parts, or gives it a slot while one is free, " +
-                "and otherwise combines it with the most similar one; the build log says which.");
+            var label = new GUIContent(instance.Label, bakedMode
+                ? instance.Label + ". Automatic bakes it into the color as seen from the front, unless it's a highlight that brightens (shine, glints), " +
+                  "which would stay in place from every view; the build log says which."
+                : instance.Label + ". Automatic combines it with others on the same parts, or gives it a slot while one is free, " +
+                  "and otherwise combines it with the most similar one; the build log says which." +
+                  (canBake ? " Baked into color draws it into the textures as seen from the front, instead of sharing a slot." : ""));
             int next = PopupRow(label, index, options.ToArray());
             if (next == index) return;
             if (stored == null) stored = AddValue(setting, AtlasInstancePlacements.Id(instance.Key));

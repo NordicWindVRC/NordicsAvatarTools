@@ -52,10 +52,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // - An output whose slot takes one blend at a time (Toon Standard) gets a matcap with
     //   several weights merged into one, or fitted.
     // - Each slot's mask goes through the mask allocator.
-    public sealed class AtlasMatcapFeature : IAtlasInstanceFeature
+    // - Baked (AtlasMatcapBake): a group placed Baked, or every group in the Baked mode (outputs
+    //   without slots), is drawn into the base color and the emission as the virtual view sees
+    //   it, instead of taking a slot. Automatic in the Baked mode leaves out effects that
+    //   brighten (Brightens): a baked highlight stays in place from every view.
+    public sealed class AtlasMatcapFeature : IAtlasInstanceFeature, IAtlasLitBakeFeature
     {
         public const string FeatureId = "matcaps";
         public const int CombinedSize = 512;
+
+        public static readonly AtlasFeatureMode Baked = new AtlasFeatureMode
+        {
+            Id = "baked", Label = "Baked into color", Kind = AtlasFeatureModeKind.Baked,
+            RequiredMaps = new[] { AtlasVirtualMap.BaseColor }
+        };
 
         private static readonly AtlasFeatureMode[] ModeList =
         {
@@ -65,8 +75,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 OptionalMaps = new[] { AtlasVirtualMap.Mask1 },
                 Requires = c => c.MatcapSlots > 0
             },
+            Baked,
             AtlasFeatureMode.Off
         };
+
+        public AtlasLitBake? LitBake(AtlasFeatureMode mode) => mode == Baked ? AtlasLitBake.Matcaps : (AtlasLitBake?)null;
+
+        public bool CanBake(AtlasOutputCapabilities capabilities) => capabilities.Provides(AtlasVirtualMap.BaseColor);
 
         public string Id => FeatureId;
         public string DisplayName => "Matcaps";
@@ -276,6 +291,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // An effect: half its light or more in its brightest tenth, or a reflection lookup.
+        // Whether a group mostly brightens (its heaviest blend adds, or it only glows): an
+        // effect that does is a highlight, which a bake would freeze in place. One that mostly
+        // multiplies is shading, even through a reflection lookup.
+        private static bool Brightens(Group group) => group.Members.Any(m =>
+        {
+            var shown = Shown(m.Layers.Where(l => !m.Added.Contains(l)).ToList());
+            return shown.Count == 0 ? Glow(m) > 0f : Main(shown) == AtlasBlend.Add;
+        });
+
         private static bool IsEffect(Instance instance)
         {
             var first = instance.Layers[0];
@@ -336,6 +360,24 @@ namespace NordicWind.AdvancedAtlaser.Editor
             (AtlasInstancePlacement Mode, string Target) Placed(Group g) =>
                 choice != null && choice.Values.TryGetValue(AtlasInstancePlacements.Id(g.Key), out var value)
                     ? ((AtlasInstancePlacement)Mathf.RoundToInt(value.Number), value.Text) : (AtlasInstancePlacement.Automatic, "");
+
+            if (context.Mode == Baked)
+            {
+                var leftOut = groups.Where(g => Placed(g).Mode == AtlasInstancePlacement.Off).ToList();
+                var automaticUnseen = unseen.Where(g => Placed(g).Mode == AtlasInstancePlacement.Automatic).ToList();
+                var effects = groups.Where(g => Placed(g).Mode == AtlasInstancePlacement.Automatic && g.Effect && Brightens(g) && !automaticUnseen.Contains(g)).ToList();
+                if (automaticUnseen.Count > 0)
+                    context.Notes.Add("Matcaps that change nothing where they're looked up are left out: " + string.Join(", ", automaticUnseen.Select(g => g.Label)) + ".");
+                if (effects.Count > 0)
+                    context.Notes.Add("Matcap highlights (shine, glints, reflections that brighten) aren't baked by Automatic, since a baked highlight stays in place from every view: " +
+                                      string.Join(", ", effects.Select(g => g.Label)) + ". Placing one Baked keeps it.");
+                if (leftOut.Count > 0)
+                    context.Notes.Add("Matcaps left out: " + string.Join(", ", leftOut.Select(g => g.Label)) + ".");
+                Bake(context, groups.Except(leftOut).Except(automaticUnseen).Except(effects).ToList());
+                return;
+            }
+            var baked = groups.Where(g => Placed(g).Mode == AtlasInstancePlacement.Baked && CanBake(capabilities)).ToList();
+            Bake(context, baked);
 
             var slots = new List<List<Group>>();
             var slotOf = new Dictionary<string, List<Group>>();
@@ -415,6 +457,135 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     context.Notes.Add($"Matcap slot {k + 1} combines " + string.Join(", ", slots[k].Select(g => g.Label)) + ".");
             if (approximated.Count > 0)
                 context.Notes.Add("Matcap blends the output shader doesn't have are approximated with add or multiply: " + string.Join(", ", approximated.Distinct()) + ".");
+        }
+
+        private static readonly AtlasNormalFeature Normals = new AtlasNormalFeature();
+
+        // Draws the groups' matcaps into the base color, and their glows and overlay adds into
+        // the emission where the output has one turned on (otherwise into the color, lit), as
+        // the virtual view sees them (AtlasMatcapBake).
+        private static void Bake(AtlasFeatureContext context, List<Group> groups)
+        {
+            if (groups.Count == 0) return;
+            var job = context.Job;
+            var settings = job.Baking ?? new AtlasBakeSettings();
+            float strength = Mathf.Clamp01(settings.strength) * Mathf.Clamp01(settings.matcaps);
+            context.Notes.Add("Matcaps baked into the textures as seen from the front: " + string.Join(", ", groups.Select(g => g.Label)) + ".");
+            if (strength <= 0f) return;
+            var emissionFeature = AtlasOutputFeatures.Find("emission");
+            var emissionChoice = job.Features.Find(f => f.FeatureId == "emission");
+            bool emissionOn = context.Capabilities.Provides(AtlasVirtualMap.Emission) &&
+                              (emissionFeature == null || AtlasOutputFeatures.Effective(emissionFeature, emissionChoice?.ModeId, context.Capabilities)?.Kind != AtlasFeatureModeKind.Off);
+            // Each source's baked layers in its layer order (not GlowAsColor's: the bake splits a
+            // glow between the emission and the color itself).
+            var layers = new Dictionary<int, List<AtlasLookupLayer>>();
+            var leftOut = new HashSet<string>();
+            foreach (var group in groups)
+                foreach (var member in group.Members)
+                {
+                    if (!layers.TryGetValue(member.Source, out var list)) layers[member.Source] = list = new List<AtlasLookupLayer>();
+                    var own = member.Layers.Where(l => !member.Added.Contains(l)).ToList();
+                    list.AddRange(own);
+                    foreach (var layer in own) foreach (var line in AtlasMatcapBake.LeftOut(layer)) leftOut.Add(line);
+                }
+            foreach (var entry in layers.ToList())
+            {
+                var material = job.Sources[entry.Key].Material;
+                int Index(AtlasLookupLayer l)
+                {
+                    int at = material.Layers.IndexOf(l);
+                    return at >= 0 ? at * 2 : int.MaxValue;
+                }
+                layers[entry.Key] = entry.Value.Select((l, k) => (l, k)).OrderBy(e => Index(e.l)).ThenBy(e => e.k).Select(e => e.l).ToList();
+            }
+            if (leftOut.Count > 0)
+                context.Notes.Add("Baked matcaps leave out " + string.Join(", ", leftOut) + ".");
+            var unknown = layers.Keys.Where(i => job.Sources[i].Surface == null).ToList();
+            if (unknown.Count > 0)
+                context.Notes.Add($"Baked matcaps need the meshes, which aren't known here; they're left out on {AtlasLiveMasks.Numbers(unknown)}.");
+            var rigs = layers.Keys.ToDictionary(i => i, i => AtlasLightRig.Create(settings, AtlasNormalFeature.UsesSymmetricRig(settings, job.Sources[i])));
+            // Seen from the settings' camera; centered for sources whose UVs overlap, so mirrored
+            // halves match, as with the symmetric rig.
+            var cameras = layers.Keys.ToDictionary(i => i, i => AtlasNormalFeature.UsesSymmetricRig(settings, job.Sources[i])
+                ? AtlasLightRig.Direction(0f, settings.matcapViewHeight) : AtlasMatcapBake.Camera(settings));
+
+            NordicsTextureWrapper NormalsOf(int i, List<AtlasLookupLayer> list, int w, int h) =>
+                list.Any(l => l.SurfaceNormalAmount > 0f) && Normals.IsPresent(job.Sources[i]) ? AtlasMapEvaluator.Normal(job.Sources[i], w, h, 1f) : null;
+
+            var request = AtlasLiveMasks.Request(context, AtlasVirtualMap.BaseColor);
+            if (request == null) context.Notes.Add("Matcaps are baked into the base color, which is off; their color is left out.");
+            else
+            {
+                var inner = request.Evaluate ?? ((i, m, w, h) => AtlasMapEvaluator.Evaluate(AtlasVirtualMap.BaseColor, m, w, h));
+                request.Evaluate = (i, material, w, h) =>
+                {
+                    var result = inner(i, material, w, h);
+                    if (!layers.TryGetValue(i, out var list) || job.Sources[i].Surface == null) return result;
+                    var sections = job.Sources[i].Surface();
+                    if (sections == null || sections.Count == 0) return result;
+                    using (var normals = NormalsOf(i, list, w, h))
+                        AtlasMatcapBake.ApplyColor(result, material, list, sections, normals, rigs[i], strength, emissionOn, cameras[i]);
+                    return result;
+                };
+            }
+            if (!emissionOn || !layers.Values.Any(list => list.Any(l => (AtlasMatcapBake.AddsAfterLighting(l) || l.EmissionAmount > 0f) &&
+                                                                        AtlasMatcapBake.GlowShare(l) > 0f))) return;
+            // Once the emission feature has made its map (or not): into it, relative to its strength.
+            context.Plan.AfterResolve.Add(() => BakeEmission(context, layers, rigs, cameras, strength, NormalsOf));
+        }
+
+        private static void BakeEmission(AtlasFeatureContext context, Dictionary<int, List<AtlasLookupLayer>> layers, Dictionary<int, AtlasLightRig> rigs,
+            Dictionary<int, Vector3> cameras, float strength, System.Func<int, List<AtlasLookupLayer>, int, int, NordicsTextureWrapper> normalsOf)
+        {
+            var job = context.Job;
+            var request = context.Maps.FirstOrDefault(r => r.Map == AtlasVirtualMap.Emission);
+            AtlasSurfaceLayer output;
+            if (request == null)
+            {
+                request = new AtlasMapRequest
+                {
+                    Map = AtlasVirtualMap.Emission,
+                    Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Color },
+                    Evaluate = (i, m, w, h) => AtlasMapEvaluator.Constant(AtlasVirtualMap.Emission, 0f, w, h)
+                };
+                for (int i = 0; i < job.Sources.Count; i++) request.Sources.Add(i);
+                context.Maps.Add(request);
+                output = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission };
+                output.Source.Map = request.Reference;
+                output.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Emission, AtlasBlend.Add, 1f));
+                context.Output.Layers.Add(output);
+            }
+            else output = context.Output.Layers.OfType<AtlasSurfaceLayer>().FirstOrDefault(l => l.Source.Map == request.Reference);
+            var target = output?.Targets.FirstOrDefault(t => t.Target == AtlasSurfaceTarget.Emission);
+            if (target == null) return;
+            float glowAt = Mathf.Max(target.Opacity, 1e-4f);
+            var inner = request.Evaluate;
+            request.Evaluate = (i, material, w, h) =>
+            {
+                var result = inner(i, material, w, h);
+                if (!layers.TryGetValue(i, out var list) || job.Sources[i].Surface == null) return result;
+                var sections = job.Sources[i].Surface();
+                if (sections == null || sections.Count == 0) return result;
+                bool mixes = list.Any(l => l.BaseColorMix > 0f);
+                using (var baseColor = mixes ? AtlasColorStack.Evaluate(material, w, h, multiplyColor: true) : null)
+                using (var normals = normalsOf(i, list, w, h))
+                    AtlasMatcapBake.ApplyEmission(result, baseColor, material, list, sections, normals, rigs[i], strength / glowAt, cameras[i]);
+                return result;
+            };
+            // Brighter than the emission's strength: the map is divided by its brightest value,
+            // which goes into the strength.
+            var previous = request.Finish;
+            request.Finish = map =>
+            {
+                previous?.Invoke(map);
+                float peak = AtlasColorFeature.Peak(map);
+                if (peak <= 1f) return;
+                map.ApplyColor(new ColorOperation
+                {
+                    Opcode = ColorOperationCode.Tint, Parameters = { Color = new Color(1f / peak, 1f / peak, 1f / peak, 1f) }
+                });
+                target.Opacity *= peak;
+            };
         }
 
         // How alike a slot and a group are, for combining what doesn't fit: doing the same

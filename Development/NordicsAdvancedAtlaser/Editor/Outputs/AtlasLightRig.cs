@@ -115,12 +115,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Where the view is fully frontal (N·Z at or above) and fully along the normal (at or below).
         public const float Frontal = 0.5f, AlongNormal = -0.5f;
 
-        // The unit vector from a texel facing `normal` (unit length) toward its viewer.
-        public static Vector3 Direction(Vector3 normal)
+        // The unit vector from a texel facing `normal` (unit length) toward its viewer, frontal
+        // down to N·Z = `frontal` and along the normal from N·Z = `alongNormal`.
+        public static Vector3 Direction(Vector3 normal, float frontal = Frontal, float alongNormal = AlongNormal) =>
+            Direction(normal, Vector3.forward, frontal, alongNormal);
+
+        // The same for a camera far along `camera` (unit length) instead of straight in front.
+        public static Vector3 Direction(Vector3 normal, Vector3 camera, float frontal, float alongNormal)
         {
-            float t = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(Frontal, AlongNormal, normal.z));
-            var view = Vector3.Lerp(Vector3.forward, normal, t);
-            return view.sqrMagnitude > 1e-8f ? view.normalized : Vector3.forward;
+            float t = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(frontal, alongNormal, Vector3.Dot(normal, camera)));
+            var view = Vector3.Lerp(camera, normal, t);
+            return view.sqrMagnitude > 1e-8f ? view.normalized : camera;
         }
 
         // `direction` turned as the front (+Z) turns toward `view` (unit length): tilted up or

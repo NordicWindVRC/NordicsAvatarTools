@@ -41,6 +41,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Steps that set output values from the sources' maps, run just before the material is
         // written, not when the plan is resolved (the glow of combined matcap slots).
         public readonly List<System.Action> BeforeWrite = new List<System.Action>();
+        // Steps run once every feature has resolved, in order: the lit bakes wrap the base color
+        // here, so they light it after every feature's edits (baked matcaps included).
+        public readonly List<System.Action> AfterResolve = new List<System.Action>();
 
         public AtlasSourceRemap Remap(int source)
         {
@@ -72,6 +75,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             foreach (var feature in AtlasOutputFeatures.All)
                 Resolve(job, capabilities, feature, plan);
+            foreach (var step in plan.AfterResolve) step();
             var live = new List<string>();
             for (int i = 0; i < job.Sources.Count; i++)
             {

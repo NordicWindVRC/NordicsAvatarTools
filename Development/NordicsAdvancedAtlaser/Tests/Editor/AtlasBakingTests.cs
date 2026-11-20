@@ -303,6 +303,233 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
+        public void AMatcapIsLookedUpAsItsShaderDoes()
+        {
+            var layer = new AtlasLookupLayer();
+            var front = Vector3.forward;
+            AreEqual(new Vector3(0.5f, 0.5f, 0f), AtlasMatcapBake.Lookup(layer, front, front, Vector3.up), "facing the view: the center");
+            var up = AtlasMatcapBake.Lookup(layer, new Vector3(0f, 0.6f, 0.8f), front, Vector3.up);
+            Assert.AreEqual(0.8f, up.y, 1e-4f, "tilted up: 0.6 × 0.5 + 0.5");
+            // The view's right, seen from the front of the avatar, is −X.
+            Assert.Greater(AtlasMatcapBake.Lookup(layer, new Vector3(-0.6f, 0f, 0.8f), front, Vector3.up).x, 0.5f);
+            layer.Tiling = new Vector2(0.5f, 0.5f);
+            Assert.AreEqual(0.65f, AtlasMatcapBake.Lookup(layer, new Vector3(0f, 0.6f, 0.8f), front, Vector3.up).y, 1e-4f, "× the tiling (2 × border)");
+            layer.Projection = AtlasLookupProjection.Gradient;
+            var gradient = AtlasMatcapBake.Lookup(layer, new Vector3(0f, 0.6f, 0.8f), front, Vector3.up);
+            Assert.AreEqual(0.2f, gradient.x, 1e-4f, "1 − |N·V|");
+            Assert.AreEqual(gradient.x, gradient.y);
+        }
+
+        private Texture2D Solid(Color color)
+        {
+            var texture = new Texture2D(4, 4, TextureFormat.RGBAFloat, false, true);
+            texture.SetPixels(Enumerable.Repeat(color, 16).ToArray());
+            texture.Apply();
+            created.Add(texture);
+            return texture;
+        }
+
+        private AtlasLookupLayer Matcap(Color color, AtlasBlend blend, AtlasPlacement placement = AtlasPlacement.Surface)
+        {
+            var layer = new AtlasLookupLayer { Blend = blend, Placement = placement, Opacity = 1f };
+            layer.Source.Map = new AtlasTextureReference { Texture = Solid(color), Space = AtlasTextureSpace.View };
+            return layer;
+        }
+
+        [Test]
+        public void AMatcapIsBakedIntoTheColorByItsBlend()
+        {
+            var rig = AtlasLightRig.Create(new AtlasBakeSettings(), false);
+            var tint = new Color(0.2f, 0.4f, 0.6f, 1f);
+            var added = Gray();
+            AtlasMatcapBake.ApplyColor(added, new AtlasUnifiedMaterial(), new[] { Matcap(tint, AtlasBlend.Add) }, new[] { Square() }, null, rig, 1f);
+            var c = added.GetPixel(Size / 2, Size / 2);
+            Assert.AreEqual(0.7f, c.r, 1e-3f);
+            Assert.AreEqual(1.1f, c.b, 1e-3f);
+            var multiplied = Gray();
+            AtlasMatcapBake.ApplyColor(multiplied, new AtlasUnifiedMaterial(), new[] { Matcap(tint, AtlasBlend.Multiply) }, new[] { Square() }, null, rig, 0.5f);
+            Assert.AreEqual(Mathf.Lerp(0.5f, 0.1f, 0.5f), multiplied.GetPixel(Size / 2, Size / 2).r, 1e-3f, "at half strength");
+            // A light mask at its average: the key light's wrap (0.2) lights 60% of the
+            // directions, so a light mask of 0.5 keeps 80% of the matcap.
+            var masked = Gray();
+            var shaded = Matcap(tint, AtlasBlend.Multiply);
+            shaded.HideInShadow = 0.5f;
+            AtlasMatcapBake.ApplyColor(masked, new AtlasUnifiedMaterial(), new[] { shaded }, new[] { Square() }, null, rig, 1f);
+            Assert.AreEqual(0.8f, AtlasMatcapBake.LightMask(shaded, rig), 1e-5f);
+            Assert.AreEqual(0.5f * Mathf.Lerp(1f, 0.2f, 0.8f), masked.GetPixel(Size / 2, Size / 2).r, 1e-3f);
+
+            var emission = new NordicsTextureWrapper(Size, Size, AtlasMapEvaluator.Settings(AtlasVirtualMap.Emission));
+            disposables.Add(emission);
+            emission.Fill(Color.black);
+            var glow = Matcap(tint, AtlasBlend.Add);
+            glow.Opacity = 0f;
+            glow.EmissionAmount = 2f;
+            AtlasMatcapBake.ApplyEmission(emission, null, new AtlasUnifiedMaterial(),
+                new[] { glow, Matcap(tint, AtlasBlend.Add, AtlasPlacement.Overlay) }, new[] { Square() }, null, rig, 0.5f);
+            Assert.AreEqual(0.2f * 3f * 0.5f, emission.GetPixel(Size / 2, Size / 2).r, 1e-3f, "the glow and the overlay add, × the scale");
+
+            // A glow that follows the light (light color mix, light mask): only the share that
+            // shows without light glows; the rest is added to the color, which the light shades.
+            var following = Matcap(tint, AtlasBlend.Add);
+            following.Opacity = 0f;
+            following.EmissionAmount = 1f;
+            following.LightColorMix = 0.5f;
+            following.HideInShadow = 0.5f;
+            Assert.AreEqual(0.25f, AtlasMatcapBake.GlowShare(following), 1e-5f);
+            var lit = Gray();
+            AtlasMatcapBake.ApplyColor(lit, new AtlasUnifiedMaterial(), new[] { following }, new[] { Square() }, null, rig, 1f);
+            Assert.AreEqual(0.5f + 0.2f * 0.75f, lit.GetPixel(Size / 2, Size / 2).r, 1e-3f, "the light-following three quarters, lit");
+            var dark = new NordicsTextureWrapper(Size, Size, AtlasMapEvaluator.Settings(AtlasVirtualMap.Emission));
+            disposables.Add(dark);
+            dark.Fill(Color.black);
+            AtlasMatcapBake.ApplyEmission(dark, null, new AtlasUnifiedMaterial(), new[] { following }, new[] { Square() }, null, rig, 1f);
+            Assert.AreEqual(0.2f * 0.25f, dark.GetPixel(Size / 2, Size / 2).r, 1e-3f, "the quarter that shows without light, glowing");
+            var noEmission = Gray();
+            AtlasMatcapBake.ApplyColor(noEmission, new AtlasUnifiedMaterial(), new[] { following }, new[] { Square() }, null, rig, 1f, emission: false);
+            Assert.AreEqual(0.5f + 0.2f, noEmission.GetPixel(Size / 2, Size / 2).r, 1e-3f, "without an emission: all of it, lit");
+        }
+
+        [Test]
+        public void TheSidesReachTheEdgeOfTheMatcapAsSeenFromTheFront()
+        {
+            // A matcap holding its distance from the center: 0 in the middle, 1 at the edge.
+            const int size = 64;
+            var texture = new Texture2D(size, size, TextureFormat.RGBAFloat, false, true);
+            var pixels = new Color[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float r = Mathf.Min(1f, new Vector2((x + 0.5f) / size - 0.5f, (y + 0.5f) / size - 0.5f).magnitude * 2f);
+                    pixels[y * size + x] = new Color(r, r, r, 1f);
+                }
+            texture.SetPixels(pixels);
+            texture.Apply();
+            created.Add(texture);
+            var layer = new AtlasLookupLayer { Blend = AtlasBlend.Add, Opacity = 1f };
+            layer.Source.Map = new AtlasTextureReference { Texture = texture, Space = AtlasTextureSpace.View };
+            var rig = AtlasLightRig.Create(new AtlasBakeSettings(), false);
+            float Baked(Quaternion facing, Vector3? camera = null)
+            {
+                var color = new NordicsTextureWrapper(Size, Size, AtlasMapEvaluator.Settings(AtlasVirtualMap.BaseColor));
+                disposables.Add(color);
+                color.Fill(Color.black);
+                AtlasMatcapBake.ApplyColor(color, new AtlasUnifiedMaterial(), new[] { layer }, new[] { Square(facing) }, null, rig, 1f, camera: camera);
+                return color.GetPixel(Size / 2, Size / 2).r;
+            }
+            Assert.Less(Baked(Quaternion.identity), 0.1f, "facing the front: the center");
+            Assert.Greater(Baked(Quaternion.Euler(0f, 80f, 0f)), 0.9f, "nearly edge-on from the front: the edge");
+            Assert.Less(Baked(Quaternion.Euler(0f, 180f, 0f)), 0.1f, "the back, seen from behind: the center");
+
+            // Seen from the side and above, a surface facing the front is off-center by the
+            // angle between them.
+            var settings = new AtlasBakeSettings { matcapViewSide = 30f, matcapViewHeight = 20f };
+            var camera = AtlasMatcapBake.Camera(settings);
+            Assert.Greater(camera.x, 0f, "toward the viewer's left, +X");
+            Assert.Greater(camera.y, 0f);
+            float angle = Vector3.Angle(Vector3.forward, camera) * Mathf.Deg2Rad;
+            Assert.AreEqual(Mathf.Sin(angle), Baked(Quaternion.identity, camera), 0.05f);
+        }
+
+        [Test]
+        public void MatcapsAreBakedWhereTheOutputHasNoSlotsOrWhereTheyArePlacedBaked()
+        {
+            var material = new AtlasUnifiedMaterial();
+            var layer = Matcap(new Color(0.2f, 0.4f, 0.6f, 1f), AtlasBlend.Add);
+            material.Layers.Add(layer);
+            var job = new AtlasGeneratorJob();
+            job.Sources.Add(new AtlasGeneratorSource { Material = material, UVRegion = new Rect(0f, 0f, 1f, 1f), Surface = () => new[] { Square() } });
+            var plan = AtlasOutputPipeline.Resolve(job, BaseColorOnly());
+            Assert.AreSame(AtlasMatcapFeature.Baked, plan.Modes["matcaps"], "the default without matcap slots");
+            using (var color = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Evaluate(0, material, Size, Size))
+                Assert.AreEqual(1.4f, color.GetPixel(Size / 2, Size / 2).g, 1e-3f, "white + the matcap");
+
+            // Placed Baked on an output with slots: no slot, and its glow in the emission.
+            layer.EmissionAmount = 1f;
+            var capabilities = AtlasShaderRegistry.Output("poiyomi10").Capabilities;
+            var feature = (AtlasMatcapFeature)AtlasOutputFeatures.Find(AtlasMatcapFeature.FeatureId);
+            var key = feature.Instances(job, new[] { 0 }).Single().Key;
+            var choice = new AtlasFeatureChoice { FeatureId = AtlasMatcapFeature.FeatureId };
+            choice.Values[AtlasInstancePlacements.Id(key)] = ((float)AtlasInstancePlacement.Baked, "");
+            job.Features.Add(choice);
+            var poiyomi = AtlasOutputPipeline.Resolve(job, capabilities);
+            Assert.AreEqual(0, poiyomi.MatcapSlotsUsed);
+            using (var color = poiyomi.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Evaluate(0, material, Size, Size))
+                Assert.AreEqual(1.4f, color.GetPixel(Size / 2, Size / 2).g, 1e-3f);
+            var emission = poiyomi.Maps.Single(m => m.Map == AtlasVirtualMap.Emission);
+            using (var glow = emission.Evaluate(0, material, Size, Size))
+            {
+                var target = poiyomi.Output.Layers.OfType<AtlasSurfaceLayer>().Single(l => l.Source.Map == emission.Reference)
+                    .Targets.Single(t => t.Target == AtlasSurfaceTarget.Emission);
+                Assert.AreEqual(0.4f, glow.GetPixel(Size / 2, Size / 2).g * target.Opacity, 1e-3f, "the matcap × its glow");
+            }
+        }
+
+        [Test]
+        public void AutomaticBakesShadingMatcapsAndLeavesHighlightsOut()
+        {
+            // Both look up the planar reflection, which counts as an effect; only the one that
+            // brightens is a highlight.
+            var material = new AtlasUnifiedMaterial();
+            var shading = Matcap(new Color(0.5f, 0.5f, 0.5f, 1f), AtlasBlend.Multiply);
+            shading.Projection = AtlasLookupProjection.ReflectionPlanar;
+            var highlight = Matcap(new Color(0.3f, 0.3f, 0.3f, 1f), AtlasBlend.Add);
+            highlight.Projection = AtlasLookupProjection.ReflectionPlanar;
+            material.Layers.Add(shading);
+            material.Layers.Add(highlight);
+            var job = new AtlasGeneratorJob();
+            job.Sources.Add(new AtlasGeneratorSource { Material = material, UVRegion = new Rect(0f, 0f, 1f, 1f), Surface = () => new[] { Square() } });
+            var plan = AtlasOutputPipeline.Resolve(job, BaseColorOnly());
+            using (var color = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Evaluate(0, material, Size, Size))
+                Assert.AreEqual(0.5f, color.GetPixel(Size / 2, Size / 2).g, 1e-3f, "white × the shading matcap, without the highlight");
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("highlights") && n.Contains("aren't baked")), string.Join("\n", plan.Notes));
+        }
+
+        [Test]
+        public void TheEnvironmentalRimAndTheBacklightGoIntoAFreeRimOfTheOutput()
+        {
+            var material = new AtlasUnifiedMaterial();
+            var environmental = new AtlasAngleLayer
+            {
+                Placement = AtlasPlacement.Overlay, Profile = AtlasAngleProfile.Step, StepBase = AtlasAngleBase.Facing, Low = 0f, High = 0.45f,
+                Falling = true, Smooth = true, ColorSource = AtlasAngleColorSource.EnvironmentAlongNormal, BaseColorMix = 1f, Opacity = 0.8f
+            };
+            material.Layers.Add(environmental);
+            var job = new AtlasGeneratorJob();
+            job.Sources.Add(new AtlasGeneratorSource { Material = material, UVRegion = new Rect(0f, 0f, 1f, 1f) });
+            var toonStandard = AtlasShaderRegistry.Output("mobiletoon").Capabilities;
+            var plan = AtlasOutputPipeline.Resolve(job, toonStandard);
+            Assert.AreSame(AtlasEnvironmentalRimFeature.InRim, plan.Modes[AtlasEnvironmentalRimFeature.FeatureId]);
+            var rim = plan.Output.Layers.OfType<AtlasAngleLayer>().Single();
+            Assert.AreEqual(AtlasAngleColorSource.Color, rim.ColorSource, "the writer's rim");
+            Assert.AreEqual(AtlasLightResponse.ScaleByLight, rim.LightResponse, "× the scene's light and ambient");
+            Assert.AreEqual(0.8f, rim.Opacity, 1e-5f);
+            Assert.IsTrue(AtlasRimCurve.FitBand(rim, out _, out _, out _));
+
+            // The backlight takes it where the environmental rim doesn't.
+            material.Layers.Clear();
+            var backlight = new AtlasAngleLayer
+            {
+                Source = AtlasAngleSource.Backlight, Placement = AtlasPlacement.Overlay, Profile = AtlasAngleProfile.Step,
+                Low = 0.625f, High = 0.675f, Directivity = 5f, ViewStrength = 1f, LightColorMix = 1f
+            };
+            backlight.Color.Color = new Color(0.85f, 0.8f, 0.7f, 1f);
+            material.Layers.Add(backlight);
+            var lit = AtlasOutputPipeline.Resolve(job, toonStandard);
+            Assert.AreSame(AtlasBacklightFeature.InRim, lit.Modes[AtlasBacklightFeature.FeatureId]);
+            var band = lit.Output.Layers.OfType<AtlasAngleLayer>().Single();
+            Assert.AreEqual(AtlasAngleSource.ViewAngle, band.Source);
+            Assert.AreEqual(AtlasAngleProfile.Band, band.Profile);
+            Assert.That(band.Opacity, Is.InRange(0.2f, 0.6f), "its strength where it shows under the back light");
+            Assert.AreEqual(backlight.Color.Color, band.Color.Color);
+
+            // Both: the environmental rim comes first, and the backlight is listed.
+            material.Layers.Add(environmental);
+            var both = AtlasOutputPipeline.Resolve(job, toonStandard);
+            Assert.AreEqual(1, both.Output.Layers.OfType<AtlasAngleLayer>().Count());
+            Assert.IsTrue(both.Notes.Any(n => n.Contains("backlight is left out")), string.Join("\n", both.Notes));
+        }
+
+        [Test]
         public void WithoutANormalMapTheNormalsAreBakedIntoTheBaseColor()
         {
             var material = new AtlasUnifiedMaterial();

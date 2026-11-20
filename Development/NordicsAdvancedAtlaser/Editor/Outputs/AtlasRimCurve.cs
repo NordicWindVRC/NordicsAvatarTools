@@ -62,12 +62,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 peak = 1f;
                 return true;
             }
+            return FitBand(f => Evaluate(layer, f), out range, out softness, out peak);
+        }
+
+        /// <summary>FitBand for any strength over the facing f = |N·V|.</summary>
+        public static bool FitBand(System.Func<float, float> strength, out float range, out float softness, out float peak)
+        {
             const int steps = 512;
             var values = new float[steps + 1];
             peak = 0f;
             for (int i = 0; i <= steps; i++)
             {
-                values[i] = Evaluate(layer, 1f - i / (float)steps);
+                values[i] = strength(1f - i / (float)steps);
                 peak = Mathf.Max(peak, values[i]);
             }
             range = softness = 0f;

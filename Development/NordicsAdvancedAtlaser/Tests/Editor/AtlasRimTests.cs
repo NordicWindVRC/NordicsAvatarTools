@@ -253,8 +253,10 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(0.5f, Evaluate(plan, AtlasVirtualMap.Mask1, job, 1), 1e-4f, "half the strongest");
             Assert.AreEqual(0f, Evaluate(plan, AtlasVirtualMap.Mask1, job, 2), 1e-4f);
 
+            // Toon Standard: its one rim, lit by the scene, on every part.
             var toon = AtlasOutputPipeline.Resolve(job, ToonStandard);
-            StringAssert.Contains("has no environmental rim", Notes(toon));
+            StringAssert.Contains("environmental rim is drawn by the output's rim", Notes(toon));
+            StringAssert.Contains("also shows on source 3", Notes(toon));
         }
 
         [Test]
@@ -274,7 +276,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsFalse(shared.Maps.Any(m => m.Map == AtlasVirtualMap.BacklightColor));
             Assert.AreEqual(Color.blue, shared.Output.Layers.OfType<AtlasAngleLayer>().Single().Color.Color);
 
-            StringAssert.Contains("has no backlight", Notes(AtlasOutputPipeline.Resolve(job, ToonStandard)));
+            StringAssert.Contains("backlight is drawn by the output's rim", Notes(AtlasOutputPipeline.Resolve(job, ToonStandard)));
         }
 
         private List<AtlasAngleLayer> RoundTrip(string shaderId, AtlasUnifiedMaterial output)
