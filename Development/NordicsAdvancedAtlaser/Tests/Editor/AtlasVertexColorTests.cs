@@ -7,7 +7,7 @@ using UnityEngine.Rendering;
 
 namespace NordicWind.AdvancedAtlaser.Tests
 {
-    // Vertex colors: live, baked or off (ATLAS_OUTPUT_PLAN.md, 2.5a).
+    // Vertex colors: live, baked or off (ATLAS_OUTPUT.md, "Feature inventory").
     public sealed class AtlasVertexColorTests
     {
         private readonly List<Object> created = new List<Object>();

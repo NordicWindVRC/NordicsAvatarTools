@@ -14,6 +14,20 @@ Conventions used throughout:
   operations), are the linear values a shader reads. Convert colors read from a material or
   picked in the editor with `Color.linear`. sRGB is applied only when loading and saving
   sRGB textures. Alpha is never converted.
+- **Pixels and alpha are data.** Blending strength comes from masks and the `strength`
+  argument, never implicitly from the source alpha.
+- **Usage is coverage.** Usage is 0 or 1 per pixel. Painting, `Fill` and padded `Blit`s mark
+  pixels used; `FillUnused` and `Dilate` work only on unused pixels. Capture coverage before
+  dilating, because dilation marks every pixel used.
+- **Normal maps are vectors.** For the `Normal*` data types, RGB holds a signed XYZ vector,
+  normalized lazily before reads and export, and encoded as `(n + 1) / 2` only on export.
+- **Compose with `Resize`.** To tile, offset or rotate a mask independently of its source,
+  `Resize` it first and pass the result to `Blit`.
+- **Threads:** large operations are split across rows (`TextureProcessingSettings`). Unity API
+  calls stay on the main thread. Don't change one wrapper from several threads at once.
+- **Behavior described here is a contract,** covered by tests: results don't depend on the
+  number of threads, painting never clamps (clamping happens only when encoding output), and
+  each member's stated rules hold.
 - Methods validate their input. Non-finite numbers, out-of-range pixels, negative padding
   and undefined enum values throw `ArgumentException` or `ArgumentOutOfRangeException`.
   Writing to a read-only wrapper throws `InvalidOperationException`, and using a disposed

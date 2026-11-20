@@ -9,7 +9,7 @@ using Object = UnityEngine.Object;
 namespace NordicWind.AdvancedAtlaser.Tests
 {
     // Lighting: one setup from the reference source, written by each output shader
-    // (ATLAS_OUTPUT_PLAN.md, 2.6a).
+    // (ATLAS_OUTPUT.md, "Feature inventory", Lighting).
     public sealed class AtlasLightingTests
     {
         private readonly List<Object> created = new List<Object>();

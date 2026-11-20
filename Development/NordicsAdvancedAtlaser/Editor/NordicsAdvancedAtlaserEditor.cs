@@ -14,7 +14,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             serializedObject.Update();
             var owner = ((NordicsAdvancedAtlaser)target).gameObject;
-            var discovery = AtlasMaterialDiscovery.Discover(owner);
+            var discovery = AtlasMaterialDiscovery.Cached(owner);
             var outputs = owner.GetComponents<NordicsAtlasOutput>();
             EditorGUILayout.LabelField("Source Mode", discovery.HasAAO ? "AAO Merge Skinned Mesh" : "Local SkinnedMeshRenderer");
             EditorGUILayout.LabelField("Unique Source Materials", discovery.Materials.Count.ToString());
@@ -52,7 +52,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             if (GUILayout.Button("Add Atlas Output"))
                 AtlasOutputShaderPick.ApplyIfUnset(Undo.AddComponent<NordicsAtlasOutput>(owner));
-            foreach (var warning in AtlasConfigurationValidator.Validate(owner, discovery)) EditorGUILayout.HelpBox(warning, MessageType.Warning);
+            foreach (var warning in AtlasMaterialDiscovery.Warnings(owner)) EditorGUILayout.HelpBox(warning, MessageType.Warning);
             if (discovery.Materials.Count == 0 && string.IsNullOrEmpty(discovery.Warning))
                 EditorGUILayout.HelpBox("No source materials detected.", MessageType.Info);
         }
@@ -78,7 +78,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 EditorGUILayout.LabelField("Mesh parts moved by these blend shapes are left out of the bake, so details " +
                     "from parts you remove on purpose (for example clothing hidden by a blend shape) aren't baked into " +
                     "the normal map. Your avatar's mesh isn't changed.", EditorStyles.wordWrappedMiniLabel);
-                var discoveredRenderers = AtlasMaterialDiscovery.Discover(((NordicsAdvancedAtlaser)target).gameObject).Renderers;
+                var discoveredRenderers = AtlasMaterialDiscovery.Cached(((NordicsAdvancedAtlaser)target).gameObject).Renderers;
                 {
                     for (int i = 0; i < excluded.arraySize; ++i)
                     {

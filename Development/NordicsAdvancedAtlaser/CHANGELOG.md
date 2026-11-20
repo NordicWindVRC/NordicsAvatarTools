@@ -362,6 +362,12 @@ EditMode tests pass in Unity 2022.3.22.
   correction hit the 60° limit, which points to a mismatch between the meshes.
 
 ### Changed
+- **Faster inspectors:** the Atlaser and output inspectors no longer redo their costly work on
+  every redraw (twice a frame while scrolling). The discovered renderers and materials and the
+  configuration warnings are kept until the scene, the project or an undo changes something
+  (`AtlasMaterialDiscovery.Cached`, `SceneVersion`); the output's overview (features, modes,
+  textures and memory) until its settings, output shader or a source's analysis change too;
+  the Baking section's overlap check per material until the scene changes.
 - **Glitter** is off by default on outputs without native glitter (Toon Standard): *Points in
   the maps* is used only when chosen (`AtlasFeatureMode.OptIn`: the default passes over such
   modes and is Off where nothing else fits).

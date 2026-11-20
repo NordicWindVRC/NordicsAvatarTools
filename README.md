@@ -18,13 +18,8 @@ what each tool does, and getting started.
 
 ## AI use and transparency
 
-> **In short:** I designed these tools and made every decision about what they do and how.
-> The code and documentation were written together with AI, under my direction, and I
-> reviewed and tested them myself in Unity on real avatars. The tools themselves don't use
-> AI and never send data anywhere.
-
-The full statement, including how AI was used, is in the
-[user guide](Packages/app.nordicwind.avatar-tools/README.md#ai-use-and-transparency).
+The tools' code and documentation were written together with AI, under my direction. The
+statement is in the [user guide](Packages/app.nordicwind.avatar-tools/README.md#ai-use-and-transparency).
 
 ## Repository layout
 

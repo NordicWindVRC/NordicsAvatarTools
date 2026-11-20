@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Tests
 {
-    // The base color stack (ATLAS_OUTPUT_PLAN.md, 2.3a): the color, color layers and static
+    // The base color stack (ATLAS_OUTPUT.md, "Feature inventory", Color): the color, color layers and static
     // adjustments baked into the base color.
     public sealed class AtlasColorStackTests
     {

@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Tests
 {
-    // Decals in the base color and emission (ATLAS_OUTPUT_PLAN.md, 2.3b).
+    // Decals in the base color and emission (ATLAS_OUTPUT.md, "Feature inventory").
     public sealed class AtlasDecalEmissionTests
     {
         private readonly List<Object> created = new List<Object>();

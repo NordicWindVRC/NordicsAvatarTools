@@ -17,6 +17,46 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     public static class AtlasMaterialDiscovery
     {
+        // Bumped whenever the scene, the project or an undo changes something. Inspectors redraw
+        // many times a second (twice a frame while scrolling), so they keep what's costly to
+        // work out until it changes.
+        public static int SceneVersion { get; private set; }
+
+        [InitializeOnLoadMethod]
+        private static void WatchScene()
+        {
+            EditorApplication.hierarchyChanged += () => SceneVersion++;
+            EditorApplication.projectChanged += () => SceneVersion++;
+            Undo.undoRedoPerformed += () => SceneVersion++;
+            ObjectChangeEvents.changesPublished += (ref ObjectChangeEventStream _) => SceneVersion++;
+        }
+
+        private static readonly Dictionary<int, (int Version, AtlasDiscoveryResult Result, List<string> Warnings)> Kept =
+            new Dictionary<int, (int, AtlasDiscoveryResult, List<string>)>();
+
+        // Discover, kept until SceneVersion changes.
+        public static AtlasDiscoveryResult Cached(GameObject owner)
+        {
+            if (owner == null) return new AtlasDiscoveryResult();
+            int id = owner.GetInstanceID();
+            if (Kept.TryGetValue(id, out var kept) && kept.Version == SceneVersion) return kept.Result;
+            var result = Discover(owner);
+            Kept[id] = (SceneVersion, result, null);
+            return result;
+        }
+
+        // The configuration warnings (AtlasConfigurationValidator), kept the same way.
+        public static List<string> Warnings(GameObject owner)
+        {
+            var discovery = Cached(owner);
+            if (owner == null) return new List<string>();
+            var kept = Kept[owner.GetInstanceID()];
+            if (kept.Warnings != null) return kept.Warnings;
+            var warnings = AtlasConfigurationValidator.Validate(owner, discovery);
+            Kept[owner.GetInstanceID()] = (kept.Version, kept.Result, warnings);
+            return warnings;
+        }
+
         // AAO is optional. Resolve the effective PrefabSafeSet, including prefab/scene
         // overrides, instead of reading only the serialized base mainSet array.
         public static AtlasDiscoveryResult Discover(GameObject owner)

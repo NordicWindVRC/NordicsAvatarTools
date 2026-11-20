@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Tests
 {
-    // Hidden UV tiles: kept live, removed from the mesh, or off (ATLAS_OUTPUT_PLAN.md, 2.5b).
+    // Hidden UV tiles: kept live, removed from the mesh, or off (ATLAS_OUTPUT.md, "Feature inventory").
     public sealed class AtlasHiddenTilesTests
     {
         private readonly List<Object> created = new List<Object>();

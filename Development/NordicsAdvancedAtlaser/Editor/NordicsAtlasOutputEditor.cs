@@ -10,6 +10,27 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         
         private bool previewOpen = true;
+
+        // Scrolling redraws the inspector twice a frame (layout and paint), so the overview is
+        // kept until the settings, the output shader, a source's analysis
+        // (AtlasSourceAnalysisCache) or the scene (AtlasMaterialDiscovery.SceneVersion) changes;
+        // the discovery and the warnings are kept by AtlasMaterialDiscovery.
+        private AtlasOutputOverview overview;
+        private string overviewKey;
+
+        private AtlasOutputOverview Overview(NordicsAtlasOutput output, IAtlasOutputShader shader, List<Material> materials,
+            List<AtlasUnifiedMaterial> unified)
+        {
+            string key = JsonUtility.ToJson(output.configuration) + "|" + (shader?.ShaderId ?? "") + "|" + AtlasMaterialDiscovery.SceneVersion + "|" +
+                         string.Join(",", unified.Select(u => u == null ? 0 : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(u)));
+            if (overview == null || key != overviewKey)
+            {
+                overview = AtlasOutputOverview.Build(output.configuration, shader?.Capabilities, materials, unified);
+                overviewKey = key;
+            }
+            return overview;
+        }
+
         protected override void OnHeaderGUI()
         {
             GUILayout.Label("Nordic's Atlas Output", EditorStyles.boldLabel);
@@ -35,7 +56,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Source Materials & UV Regions", EditorStyles.boldLabel);
             var sources = config.FindPropertyRelative("sources");
-            var discovery = AtlasMaterialDiscovery.Discover(owner);
+            var discovery = AtlasMaterialDiscovery.Cached(owner);
             var assignedElsewhere = new HashSet<Material>();
             foreach (var other in owner.GetComponents<NordicsAtlasOutput>())
             {
@@ -173,8 +194,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var shader = AtlasShaderRegistry.Output(config.FindPropertyRelative("shaderId").stringValue);
             var materials = SourceMaterials(output.configuration);
             var analyses = materials.Select(AtlasSourceAnalysisCache.Get).ToList();
-            var overview = AtlasOutputOverview.Build(output.configuration, shader?.Capabilities, materials,
-                analyses.Select(a => a?.Unified).ToList());
+            var overview = Overview(output, shader, materials, analyses.Select(a => a?.Unified).ToList());
             AtlasOutputUI.Textures(config, overview);
             AtlasOutputUI.Features(config, overview, materials);
             AtlasOutputUI.Baking(config, overview, materials, discovery.Renderers);
@@ -197,8 +217,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             if (main != null)
             {
-                var discovered = AtlasMaterialDiscovery.Discover(owner);
-                foreach (var warning in AtlasConfigurationValidator.Validate(owner, discovered))
+                foreach (var warning in AtlasMaterialDiscovery.Warnings(owner))
                     EditorGUILayout.HelpBox(warning, MessageType.Warning);
             }
         }

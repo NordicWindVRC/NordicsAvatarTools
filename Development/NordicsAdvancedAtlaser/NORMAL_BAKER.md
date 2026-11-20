@@ -41,8 +41,7 @@ It never uses the current selection: everything is set in the window.
   material name is shown next to each submesh.
 - **Size** defaults to 4096 × 4096 (512 to 4096). A 4096² bake uses about 2 GB while it
   runs; 8192 would need about 8 GB, so it's left out until the bake keeps fewer maps.
-- **Max correction angle** defaults to 60°: the soft limit, as in the build. Corrections above
-  half of it are compressed smoothly toward it.
+- **Max correction angle** defaults to 60°: the soft limit, as in the build.
 - **Generate…** bakes, then opens a **save dialog** where you pick the PNG's location and name.
   - Inside `Assets`, the PNG is imported as a normal map.
   - Elsewhere, it's only written; import it as a normal map yourself.
@@ -67,28 +66,11 @@ It reuses the build's bake, so the results match what the build would do.
      be in the same pose. Mixing a scene object with a mesh asset works only when the object
      isn't rotated or posed differently from the asset; the window warns when the transforms
      differ in rotation or scale.
-2. **Bake by UV correspondence**, exactly like the build: paint the original's normals and the
-   current mesh's tangent frame into UV space with the Texture Wrapper, then
-   `BakeNormalDifference` with the safety rules:
-   - overlapping UVs get no correction;
-   - **surface alignment:** both meshes' positions are painted into UV space too, with the
-     current mesh's size around each point (the mean edge length of the triangles around each
-     vertex, blended over each triangle, so it has no steps at triangle edges). Where the two surfaces at a UV are further apart than
-     a quarter of that length (after removing a constant offset, the median difference, since
-     scene objects may stand apart), the correction fades out, reaching none at three quarters.
-     A reduction moves the surface by a fraction of the triangles it makes; where it collapsed a
-     tip or flattened a ridge, the original's normal belongs to a surface that isn't there;
-   - **soft angle limit:** corrections above half the limit are compressed smoothly toward it,
-     so a larger raw correction never gives a smaller result and the map has no steps.
-3. **Dilate** the result over the whole texture, then write it as a PNG. Inside `Assets` it's
-   imported as a normal map. When the atlas shrinks it into its region, it's flattened where
-   its detail is finer than the region's texels (`AreaFlatten`), then faded to none at the
-   borders of its UV islands over a compression block of the final texture
-   (`AtlasNormalSeams`): at a UV seam, the two sides can't be made to match in a texture. The
-   map itself keeps its full detail, so it can be reused at another size.
-
-The bake is `AtlasSubmeshBaker.BakeCorrection`, shared with the build. When the current mesh's
-triangles are unchanged from the original, the map is flat without baking.
+2. **Bake** with the build's own bake and rules, `AtlasSubmeshBaker.BakeCorrection` (see
+   [ATLAS_OUTPUT.md, *Normal correction*](ATLAS_OUTPUT.md#normal-correction)). The surface
+   alignment's constant offset matters here: scene objects may stand apart.
+3. **Write** the dilated result as a PNG. The map keeps its full detail, so it can be reused at
+   another size; the atlas shrinks and seam-fades it like the build's correction.
 
 **Code:** `AtlasNormalBaker` holds the logic (slots, capture, bake, checks, saving), and
 `AtlasNormalBakerWindow` only the window.

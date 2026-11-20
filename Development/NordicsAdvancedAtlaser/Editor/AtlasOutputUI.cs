@@ -367,20 +367,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
         }
 
-        // Whether a source's UVs overlap, per material and meshes, kept until the meshes change.
-        private static readonly Dictionary<(int Material, int Meshes), bool> overlaps = new Dictionary<(int, int), bool>();
+        // Whether a source's UVs overlap, per material, kept until the scene or the project
+        // changes (AtlasMaterialDiscovery.SceneVersion).
+        private static readonly Dictionary<int, bool> overlaps = new Dictionary<int, bool>();
+        private static int overlapsVersion = -1;
 
         private static bool Overlaps(Material material, IEnumerable<Renderer> renderers)
         {
             if (material == null || renderers == null) return false;
-            int meshes = 17;
-            foreach (var renderer in renderers)
+            if (overlapsVersion != AtlasMaterialDiscovery.SceneVersion)
             {
-                var mesh = renderer is SkinnedMeshRenderer skinned ? skinned.sharedMesh : renderer != null ? renderer.GetComponent<MeshFilter>()?.sharedMesh : null;
-                if (mesh != null && renderer.sharedMaterials.Contains(material))
-                    meshes = meshes * 31 + mesh.GetInstanceID() * 7 + mesh.vertexCount;
+                overlaps.Clear();
+                overlapsVersion = AtlasMaterialDiscovery.SceneVersion;
             }
-            var key = (material.GetInstanceID(), meshes);
+            int key = material.GetInstanceID();
             if (!overlaps.TryGetValue(key, out bool result))
                 overlaps[key] = result = AtlasSurfaceGeometry.Overlaps(AtlasCoverage.Triangles(material, renderers));
             return result;

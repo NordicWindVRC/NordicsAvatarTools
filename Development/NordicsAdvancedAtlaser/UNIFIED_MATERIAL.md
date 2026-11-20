@@ -14,12 +14,12 @@ They're merged into one feature set in
 specification. How outputs turn unified materials into atlas materials is in
 [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md).
 
-| Shader family | Document | Status |
-|---|---|---|
-| VRChat Mobile (Toon Lit, Standard Lite, Toon Standard) | [UNIFIED_MATERIAL_VRCHAT_MOBILE.md](UNIFIED_MATERIAL_VRCHAT_MOBILE.md) | Inventory and parser |
-| Unity Standard (metallic and specular setup) | [UNIFIED_MATERIAL_UNITY_STANDARD.md](UNIFIED_MATERIAL_UNITY_STANDARD.md) | Inventory and parser |
-| Mochie Uber (and Outline) | [UNIFIED_MATERIAL_MOCHIE_UBER.md](UNIFIED_MATERIAL_MOCHIE_UBER.md) | Inventory and parser |
-| Poiyomi Toon 10 (and its avatar variants) | [UNIFIED_MATERIAL_POIYOMI.md](UNIFIED_MATERIAL_POIYOMI.md) | Inventory and parser |
+| Shader family | Document |
+|---|---|
+| VRChat Mobile (Toon Lit, Standard Lite, Toon Standard) | [UNIFIED_MATERIAL_VRCHAT_MOBILE.md](UNIFIED_MATERIAL_VRCHAT_MOBILE.md) |
+| Unity Standard (metallic and specular setup) | [UNIFIED_MATERIAL_UNITY_STANDARD.md](UNIFIED_MATERIAL_UNITY_STANDARD.md) |
+| Mochie Uber (and Outline) | [UNIFIED_MATERIAL_MOCHIE_UBER.md](UNIFIED_MATERIAL_MOCHIE_UBER.md) |
+| Poiyomi Toon and Pro, every version (and their variants) | [UNIFIED_MATERIAL_POIYOMI.md](UNIFIED_MATERIAL_POIYOMI.md) |
 
 ## Guidelines
 
@@ -195,20 +195,11 @@ source was read is debug information.
 
 ## Input parsers
 
-Every supported shader has its own parser; any other shader's materials go to the fallback
-parser. Each inventory document describes its parser in detail.
-
-| Input parser | What it reads | Reported or out of scope |
-|---|---|---|
-| VRChat Mobile Toon Lit | Base color texture × vertex color, flat lighting without received shadows, the ambient color standing in for a missing main light, opaque | — |
-| Unity Standard (metallic and specular) | Rendering modes, albedo, metallic or specular, smoothness, normal, parallax, occlusion, emission, detail, highlights and reflections, physically based lighting | — |
-| VRChat Mobile Standard Lite | Base color × vertex color, metallic and smoothness map times sliders, normal, occlusion, emission, detail, highlights, reflections, specular anti-aliasing, physically based lighting without shadows | — |
-| VRChat Mobile Toon Standard (and Outline) | Every section by its keyword: ramp toon lighting, specular, matcap, emission, detail, occlusion, rim, hue shift, color mask, outline, AudioLink | AudioLink's rim mask and UV-based mode |
-| Mochie Uber (and Outline) | Render and alpha, base color and cube mode, shading off as flat, workflows and map filters, detail, masks, ramp or physically based lighting, reflections, highlights, matcaps, rims, subsurface, refraction, iridescence, emission with pulse and light reactivity, filtering, dissolve, flipbooks, UV distortion, vertex manipulation, outline, hard edges, clear coat, static light direction, light volumes, mirror and near clip, AudioLink, the oscilloscope, stencil | Flipbook alpha, AudioLink rim pulse, AudioLink on vertex rotation and UV distortion; Uber X is unsupported |
-| Poiyomi Toon 10 and 11 (and their avatar variants) | Every section: textures and UV options, main color and color adjust, alpha, normals, rendering, all lighting types and Light Data, reflections and specular, clear coat, LTCGI, surface layers (detail, back face, color masking, decals, emissions, skin tone), matcaps and cubemap, rims and the other angle layers, anisotropics and stylized reflections, post processing, the mask bus and contacts, theme colors, modulators (time, light, AudioLink), outlines, dissolve, flipbooks, visibility, UV tile discard, the procedural patterns, vertex options, fur; the Two Pass, Grab Pass and Lil Fur variants | A few details, each reported (for example hextile sampling, the newer UV distortion modes, lilToon-style stylized reflections); the stats overlay is out of scope |
-| Poiyomi Pro 10 and 11 (and their variants) | Everything Poiyomi Toon reads, plus SSAO, contact shadows, TPS, squish, constellation, the lava lamp, GT7 tone mapping and neutral emission, the outline bake, shell fur, Triple Outline, Self Grab, Triplanar Projection and tessellation | Geometric Dissolve, ShatterWave and the particle variants; the world variants are read as their avatar shaders, with one ignored line |
-| Poiyomi Toon 7.3, 8.x and 9.x | Read on the Poiyomi 10 parser with version tables for renamed and re-meaning settings | Features Poiyomi 10 rewrote are read with 10's meaning and noted; 7.3's specular, metallics, BRDF, clear coat, SSS and panosphere sections are reported |
-| Fallback | Common property names with Unity's conventions: base color, alpha mask, normal, metallic or specular color, roughness or smoothness, occlusion, emission, culling, depth write and surface mode from blend factors | One warning per material says the result is a guess; a matcap is reported |
+Every supported shader (listed in the [README](README.md#supported-shaders)) has its own parser,
+described in its inventory document above. Any other shader's materials go to the **fallback
+parser**, which reads common property names with Unity's conventions: base color, alpha mask,
+normal, metallic or specular color, roughness or smoothness, occlusion, emission, culling, depth
+write and the surface mode from the blend factors.
 
 ## Future input shaders
 

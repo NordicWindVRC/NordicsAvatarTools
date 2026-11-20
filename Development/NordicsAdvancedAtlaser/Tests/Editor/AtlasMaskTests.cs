@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Tests
 {
-    // Mask levels and the mask bus baked (ATLAS_OUTPUT_PLAN.md, 2.4a).
+    // Mask levels and the mask bus baked (ATLAS_OUTPUT.md, "Masks").
     public sealed class AtlasMaskTests
     {
         private readonly List<Object> created = new List<Object>();
