@@ -596,7 +596,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var rim = plan.Output.Layers.OfType<AtlasAngleLayer>().Single();
             Assert.AreEqual(AtlasAngleColorSource.Color, rim.ColorSource, "the writer's rim");
             Assert.AreEqual(AtlasLightResponse.ScaleByLight, rim.LightResponse, "× the scene's light and ambient");
-            Assert.AreEqual(0.8f, rim.Opacity, 1e-5f);
+            Assert.That(rim.Opacity, Is.InRange(0.05f, 0.5f), "weaker: the scene's light is brighter than what its probe shows");
             Assert.IsTrue(AtlasRimCurve.FitBand(rim, out _, out _, out _));
 
             // The backlight takes it where the environmental rim doesn't.

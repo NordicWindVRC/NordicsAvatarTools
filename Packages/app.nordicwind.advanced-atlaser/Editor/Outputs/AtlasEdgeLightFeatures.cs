@@ -83,7 +83,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static readonly string[] PerSource = { "Mask", "Opacity", "Enabled" };
 
         // Drawn by the output's rim, × the scene's light and ambient instead of the reflection
-        // probe (Toon Standard's Environmental rim).
+        // probe (Toon Standard's Environmental rim), at the strength that looks most like it.
         public static readonly AtlasFeatureMode InRim = new AtlasFeatureMode
         {
             Id = "rim", Label = "In the rim (lit by the scene)", Kind = AtlasFeatureModeKind.Emulated,
@@ -142,8 +142,25 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 rim.Color.Map = null;
                 rim.LightResponse = AtlasLightResponse.ScaleByLight;
                 rim.Mask = null;
+                // The scene's light and ambient are brighter than what its probe shows less the
+                // threshold: the strength and base color mix are the ones that look most like
+                // the probe's rim on the sources that have it (AtlasRimResponse).
+                string fit = "";
+                if (AtlasRimCurve.FitBand(rim, out _, out _, out float peak) && peak > 0f)
+                {
+                    var sources = context.Sources
+                        .Select(i => ((IReadOnlyList<Color>)AtlasSourceSamples.Bases(job.Sources[i].Material),
+                            job.Sources[i].UVRegion.width * job.Sources[i].UVRegion.height))
+                        .ToList();
+                    var fitted = AtlasRimResponse.Fit(template, peak, sources, context.Output.Lighting, true);
+                    rim.Opacity = fitted.Strength;
+                    rim.BaseColorMix = fitted.BaseColorMix;
+                    var culture = System.Globalization.CultureInfo.InvariantCulture;
+                    fit = $", at the strength that looks most like it (strength {fitted.Strength.ToString("0.##", culture)}, " +
+                          $"base color mix {fitted.BaseColorMix.ToString("0.##", culture)})";
+                }
                 context.Output.Layers.Add(rim);
-                context.Notes.Add("The environmental rim is drawn by the output's rim, lit by the scene's light and ambient instead of the reflection probe.");
+                context.Notes.Add("The environmental rim is drawn by the output's rim, lit by the scene's light and ambient instead of the reflection probe" + fit + ".");
                 AtlasEdgeLight.EveryPartNote(context, "environmental rim", Layer);
                 AtlasEdgeLight.DifferNote(context, reference, "environmental rim", Layer, "Enabled");
                 return;

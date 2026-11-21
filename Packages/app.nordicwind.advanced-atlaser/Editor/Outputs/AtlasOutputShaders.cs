@@ -113,6 +113,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             MatcapEmission = true,
             MatcapWeights = true,
             MatcapTextureTransform = true,
+            MatcapLookup = true,
             // Rim Lighting 0 and 1, each with a mask (by channel, inverted); the environmental rim
             // with a mask (by channel); Backlight 0 with its color texture.
             RimSlots = 2,

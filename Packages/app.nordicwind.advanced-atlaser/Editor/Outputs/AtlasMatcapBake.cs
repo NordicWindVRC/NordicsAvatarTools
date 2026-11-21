@@ -247,7 +247,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // Turns the lookup around its center as Poiyomi's RotateUV does: (x, y) × [[cos, −sin],
         // [sin, cos]], by degrees.
-        private static Vector2 Rotate(Vector2 uv, float degrees)
+        internal static Vector2 Rotate(Vector2 uv, float degrees)
         {
             if (degrees == 0f) return uv;
             float a = degrees * Mathf.Deg2Rad, c = Mathf.Cos(a), s = Mathf.Sin(a);

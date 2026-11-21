@@ -107,7 +107,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // steps around.
         private const int Rings = 24, Steps = 48;
         // The world's light for lookups by the light's half vector: above and in front.
-        private static readonly Vector3 Light = new Vector3(0.3f, 0.6f, 0.74f).normalized;
+        internal static readonly Vector3 Light = new Vector3(0.3f, 0.6f, 0.74f).normalized;
 
         private static readonly Vector3[] Sphere = MakeSphere();
         private static readonly Dictionary<string, AtlasMatcapMeasure> Measures = new Dictionary<string, AtlasMatcapMeasure>();

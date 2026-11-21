@@ -8,7 +8,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // (light + ambient) when environmental, unlit otherwise). The source's rim follows its own
     // placement and blend: on the surface it changes the base color before lighting and is lit
     // with it, a lit or overlay rim blends with the lit color by its light response, an emission
-    // rim adds unlit, and its emission amount glows as well. The output's strength, base color mix
+    // rim adds unlit, and its emission amount glows as well. A rim colored by the environment
+    // shows the reflection probe along the normal, less its threshold: taken as the scene's
+    // ambient light, which the light probes hold of the same surroundings. The output's strength, base color mix
     // and lighting are the ones whose displayed (sRGB) results differ least, on the sources' base
     // colors (AtlasSourceSamples), in the standard scenes (AtlasLook) over the angle to the light,
     // weighted by area (ATLAS_OUTPUT.md, "Matching the look"). The surface is lit by the atlas's
@@ -54,9 +56,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         /// <summary>The added rim that looks most like <paramref name="layer"/> at its peak
         /// strength <paramref name="peak"/> (its rim curve's largest value) on the sources' base
         /// colors, each source weighted by its area, under <paramref name="lighting"/> (the
-        /// atlas's; null: plain Lambert).</summary>
+        /// atlas's; null: plain Lambert). <paramref name="litOutput"/> says whether the output's rim is
+        /// lit by the scene, where that isn't the fit's to choose.</summary>
         public static Fitted Fit(AtlasAngleLayer layer, float peak, IReadOnlyList<(IReadOnlyList<Color> Bases, float Weight)> sources,
-            AtlasLighting lighting = null)
+            AtlasLighting lighting = null, bool? litOutput = null)
         {
             lighting = lighting ?? new AtlasLighting();
             var ramp = AtlasLightingResponse.RampOf(lighting);
@@ -65,6 +68,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             float strength = Mathf.Max(0f, layer.Opacity) * alpha * peak;
             float glow = Mathf.Max(0f, layer.EmissionAmount) * alpha * peak;
             float mix = Mathf.Clamp01(layer.BaseColorMix);
+            bool environment = layer.ColorSource != AtlasAngleColorSource.Color;
             var samples = new List<Sample>();
             foreach (var (bases, weight) in sources)
             {
@@ -78,7 +82,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             // The light the lighting makes of the scene, and the surface under it.
                             AtlasLightingResponse.Light(lighting, scene, nDotL, out float direct, out float ambient);
                             var lit = AtlasLightingResponse.Lit(lighting, b, nDotL, scene, ramp);
-                            var tinted = Tint(color, b, mix);
+                            // The environment's color: the scene's ambient light, less the threshold.
+                            float seen = environment ? Mathf.Max(0f, scene.Ambient - layer.EnvironmentThreshold) : 1f;
+                            var tinted = Tint(color, b, mix) * seen;
                             float response = layer.LightResponse == AtlasLightResponse.ScaleByLight ? direct + ambient
                                 : layer.LightResponse == AtlasLightResponse.ScaleByDirectLight ? direct : 1f;
                             Color result;
@@ -98,7 +104,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             samples.Add(new Sample { Base = b, Lit = lit, Light = direct + ambient, Target = Display(result), Weight = each });
                         }
             }
-            var best = new Fitted { Strength = 0f, BaseColorMix = mix, Lit = false };
+            var best = new Fitted { Strength = 0f, BaseColorMix = mix, Lit = litOutput ?? false };
             if (samples.Count == 0) return best;
             double lowest = double.MaxValue;
             double Cost(bool litByScene, float t, float amount)
@@ -119,7 +125,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             mixes.Sort((a, b) => Mathf.Abs(a - mix).CompareTo(Mathf.Abs(b - mix)));
             float step = MaxStrength / StrengthSteps;
             foreach (float t in mixes)
-                foreach (bool litByScene in new[] { false, true })
+                foreach (bool litByScene in litOutput.HasValue ? new[] { litOutput.Value } : new[] { false, true })
                 {
                     float amount = 0f;
                     double cost = double.MaxValue;

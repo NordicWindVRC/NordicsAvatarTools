@@ -19,8 +19,6 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The active sources need different values for the feature's shared value
         // (IAtlasSharedValueFeature), so the user can pick the source it is taken from.
         public bool SharedValuesDiffer;
-        // What the source in use changes for the others, in words; null: nothing to say.
-        public string SharedValueEffect;
         // The feature's switches whose sources disagree (IAtlasConflictSwitchFeature).
         public readonly List<AtlasConflictSwitch> Switches = new List<AtlasConflictSwitch>();
         // The items the user places one by one (IAtlasInstanceFeature), when its mode isn't off.
@@ -103,19 +101,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     if (plan.LiveSetups.TryGetValue(state.Feature.Id, out var setups)) state.LiveSetups.AddRange(setups);
                     // How far a matcap slot's fit may shift the base color, while one does.
                     if (state.Feature is AtlasMatcapFeature && plan.BaseColorShifts) state.Options.Add(AtlasMatcapFeature.ShiftOption);
+                    // The view a world-fixed matcap is redrawn for, while one is.
+                    if (state.Feature is AtlasMatcapFeature && plan.MatcapViews) state.Options.Add(AtlasMatcapFeature.ViewOption);
                     if (!(state.Feature is AtlasLightingFeature)) continue;
                     // Level compensation, while a material would be scaled.
-                    bool compensated = plan.LevelScales.Count > 0;
-                    if (compensated) state.Switches.Add(AtlasLevelCompensation.Switch);
-                    // The materials the lighting in use shows differently from their own.
-                    if (state.SharedValuesDiffer)
-                    {
-                        var different = AtlasLook.LightingDifferences(unified, plan.KeptLighting ?? plan.Output.Lighting,
-                            compensated && AtlasLevelCompensation.Enabled(probe ?? (probe = Probe(config, materials, unified))) ? plan.LevelScales : null);
-                        if (different.Count > 0)
-                            state.SharedValueEffect = "With this lighting these look different from their own, as displayed brightness: " +
-                                                      string.Join(", ", different) + ".";
-                    }
+                    if (plan.LevelScales.Count > 0) state.Switches.Add(AtlasLevelCompensation.Switch);
                 }
             overview.AddTextures(config, capabilities, plan);
             if (plan != null) overview.AddOtherTextures(plan, config, capabilities);

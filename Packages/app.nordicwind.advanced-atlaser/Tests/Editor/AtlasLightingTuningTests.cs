@@ -73,6 +73,38 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(0.2f, ambient, 1e-5f);
         }
 
+        // A texture whose left half is unused and black, and whose right half is the mesh's gray.
+        [Test]
+        public void BaseColorsAreSampledWhereTheMeshUsesTheTexture()
+        {
+            const int size = 16;
+            var texture = new Texture2D(size, size, TextureFormat.RGBAFloat, false, true);
+            var pixels = new Color[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                    pixels[y * size + x] = x < size / 2 ? Color.black : new Color(0.5f, 0.5f, 0.5f, 1f);
+            texture.SetPixels(pixels);
+            texture.Apply();
+            created.Add(texture);
+            var material = new AtlasUnifiedMaterial();
+            material.Surface.BaseColor.Map = new AtlasTextureReference { Texture = texture };
+            Assert.Less(AtlasSourceSamples.Bases(material).Min(AtlasSourceSamples.Luminance), 0.01f, "the whole texture: the black half too");
+
+            // The mesh's triangles, within the gray half.
+            var mesh = new AtlasUVTriangles
+            {
+                UV = new[] { new Vector2(0.6f, 0.1f), new Vector2(0.95f, 0.1f), new Vector2(0.95f, 0.9f), new Vector2(0.6f, 0.9f) },
+                Triangles = new[] { 0, 1, 2, 0, 2, 3 }
+            };
+            AtlasSourceSamples.Cover(material, new[] { mesh });
+            var used = AtlasSourceSamples.Bases(material);
+            Assert.IsNotEmpty(used);
+            foreach (var color in used) Assert.AreEqual(0.5f, color.r, 0.01f, "only what the mesh shows");
+
+            AtlasSourceSamples.Cover(material, null);
+            Assert.Less(AtlasSourceSamples.Bases(material).Min(AtlasSourceSamples.Luminance), 0.01f, "without triangles: the whole texture again");
+        }
+
         [Test]
         public void TheKeptLightingIsTheWrittenMaterialsLighting()
         {

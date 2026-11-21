@@ -266,6 +266,28 @@ namespace NordicWind.AdvancedAtlaser.Tests
             StringAssert.Contains("also shows on source 3", Notes(toon));
         }
 
+        // Toon Standard's rim is × the scene's light and ambient, brighter than what a reflection
+        // probe shows: its strength is the one that looks most like the probe's rim.
+        [Test]
+        public void TheEnvironmentalRimInTheOutputsRimIsAsStrongAsItLooks()
+        {
+            AtlasAngleLayer Rim(float threshold)
+            {
+                var layer = EnvironmentalRim(0.8f);
+                layer.EnvironmentThreshold = threshold;
+                var material = Material(layer);
+                material.Surface.BaseColor.Color = new Color(0.3f, 0.3f, 0.3f, 1f);
+                var plan = AtlasOutputPipeline.Resolve(Job(material), ToonStandard);
+                StringAssert.Contains("at the strength that looks most like it", Notes(plan));
+                return plan.Output.Layers.OfType<AtlasAngleLayer>().Single();
+            }
+
+            var rim = Rim(0f);
+            Assert.AreEqual(AtlasLightResponse.ScaleByLight, rim.LightResponse);
+            Assert.That(rim.Opacity, Is.InRange(0.05f, 0.4f), "the scene's light is brighter than what its probe shows");
+            Assert.Less(Rim(0.2f).Opacity, rim.Opacity * 0.75f, "less the threshold");
+        }
+
         [Test]
         public void TheBacklightColorPerPartGoesIntoItsMap()
         {

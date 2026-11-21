@@ -48,6 +48,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // A matcap slot is fitted through the base color (a base color shift) where viewers who
         // block the shader see the base color alone, so the inspector offers how far it may go.
         public bool BaseColorShifts;
+        // A matcap whose lookup is fixed to the world is redrawn for a slot that follows the
+        // view, so the inspector offers the view it is redrawn for.
+        public bool MatcapViews;
         // Steps that set output values from the sources' maps, run just before the material is
         // written, not when the plan is resolved (the glow of combined matcap slots).
         public readonly List<System.Action> BeforeWrite = new List<System.Action>();
@@ -96,6 +99,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 AtlasVertexColors.Detach(source.Material);
                 AtlasLiveLayers.Clear(source.Material);
+                // The look is judged on the base color texels the source's meshes use.
+                AtlasSourceSamples.Cover(source.Material, source.Coverage);
             }
             foreach (var feature in AtlasOutputFeatures.All)
                 Resolve(job, capabilities, feature, plan);

@@ -372,6 +372,72 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual((1f - faintShare) * 1f + faintShare * 0.68f, pixel.r, 1e-3f);
         }
 
+        // Brighter toward the right: its value is its horizontal coordinate.
+        private Texture2D Ramp(string name)
+        {
+            const int size = 64;
+            var texture = new Texture2D(size, size, TextureFormat.RGBAFloat, false, true) { name = name };
+            var pixels = new Color[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float v = (x + 0.5f) / size;
+                    pixels[y * size + x] = new Color(v, v, v, 1f);
+                }
+            texture.SetPixels(pixels);
+            texture.Apply();
+            created.Add(texture);
+            return texture;
+        }
+
+        // Toon Standard's slot looks up by the view-space normal over the whole texture. A
+        // matcap looked up otherwise gets its texture redrawn for that lookup.
+        [Test]
+        public void AMatcapLookedUpOtherwiseThanTheSlotIsRedrawnForIt()
+        {
+            float At(AtlasOutputPlan plan, float u)
+            {
+                var pixels = plan.GeneratedTextures.Single(t => t.Name == "Matcap1").Pixels();
+                int size = AtlasMatcapFeature.CombinedSize;
+                return pixels[size / 2 * size + Mathf.Clamp(Mathf.RoundToInt(u * size - 0.5f), 0, size - 1)].r;
+            }
+
+            // A border of 0.43 (tiling 0.86): the slot's right edge reads the texture at 0.93.
+            var bordered = WithMatcap(Ramp("bordered"), null, Color.white, (AtlasBlend.Add, 1f));
+            ((AtlasLookupLayer)bordered.Layers[0]).Tiling = new Vector2(0.86f, 0.86f);
+            var plan = AtlasOutputPipeline.Resolve(Job(bordered), ToonStandard);
+            Assert.AreEqual(0.93f, At(plan, 1f), 0.02f);
+            Assert.AreEqual(0.5f, At(plan, 0.5f), 0.02f, "the center stays the center");
+            Assert.AreEqual(Vector2.one, Lookups(plan).Single().Tiling, "the slot's own lookup");
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("redrawn") && n.Contains("bordered")), string.Join(" | ", plan.Notes));
+
+            // Looked up by the reflection: halfway to the edge the normal is tilted 30°, its
+            // reflection 60°, which reads 0.87 of the way out on the other side of the texture.
+            var mirrored = WithMatcap(Ramp("mirrored"), null, Color.white, (AtlasBlend.Add, 1f));
+            ((AtlasLookupLayer)mirrored.Layers[0]).Projection = AtlasLookupProjection.ReflectionPlanar;
+            plan = AtlasOutputPipeline.Resolve(Job(mirrored), ToonStandard);
+            Assert.AreEqual(0.5f - 0.5f * Mathf.Sin(60f * Mathf.Deg2Rad), At(plan, 0.75f), 0.02f);
+            Assert.AreEqual(AtlasLookupProjection.ViewStabilized, Lookups(plan).Single().Projection);
+
+            // That lookup is fixed to the world and looks different from each side, so the
+            // view is the user's choice. Averaged all around, the ramp's two sides even out.
+            Assert.IsTrue(plan.MatcapViews);
+            Assert.IsFalse(AtlasOutputPipeline.Resolve(Job(bordered), ToonStandard).MatcapViews, "a border follows the view");
+            var around = Job(mirrored);
+            var choice = new AtlasFeatureChoice { FeatureId = AtlasMatcapFeature.FeatureId };
+            choice.Values[AtlasFeatureOption.ValueId(AtlasMatcapFeature.ViewOptionId)] = ((int)AtlasMatcapView.Around, "");
+            around.Features.Add(choice);
+            Assert.AreEqual(0.5f, At(AtlasOutputPipeline.Resolve(around, ToonStandard), 0.75f), 0.02f);
+            var overview = AtlasOutputOverview.Build(new AtlasOutputConfiguration(), ToonStandard, new Material[] { null }, new[] { mirrored });
+            Assert.AreEqual(2, overview.Features.Single(s => s.Feature is AtlasMatcapFeature).Options
+                .Single(o => o.Id == AtlasMatcapFeature.ViewOptionId).Choices.Length);
+
+            // Poiyomi's slot keeps the matcap's lookup: its texture is used as it is.
+            var poiyomi = AtlasOutputPipeline.Resolve(Job(mirrored), Poiyomi);
+            Assert.IsEmpty(poiyomi.GeneratedTextures);
+            Assert.AreEqual(AtlasLookupProjection.ReflectionPlanar, Lookups(poiyomi).Single().Projection);
+        }
+
         // A glint: black with one small bright spot, all its light in a few texels.
         private Texture2D Glint(string name)
         {

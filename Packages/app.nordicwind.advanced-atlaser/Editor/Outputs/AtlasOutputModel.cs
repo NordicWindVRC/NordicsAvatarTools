@@ -214,6 +214,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // A slot applies its texture's scale and offset to the lookup coordinate; without, a
         // matcap with them gets a generated texture.
         public bool MatcapTextureTransform;
+        // A slot looks its texture up as the matcap does: by its projection, tiling (border) and
+        // rotation. Without, the slot looks up by the view-space normal over the whole texture,
+        // and a matcap looked up otherwise gets a generated texture redrawn for that lookup.
+        public bool MatcapLookup;
         // Rims (4.4): how many view-angle rim slots; whether a slot has a mask; whether a slot only
         // has the band profile (others are fitted to it).
         public int RimSlots;

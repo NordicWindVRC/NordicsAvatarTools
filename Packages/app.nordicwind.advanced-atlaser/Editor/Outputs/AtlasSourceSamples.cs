@@ -15,13 +15,59 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static readonly Dictionary<(int Id, Hash128 Hash, int Width, int Height), Color[]> Copies =
             new Dictionary<(int, Hash128, int, int), Color[]>();
 
-        /// <summary>A material's base colors: its color × a 4 × 4 copy of its base color texture
-        /// (linear), or the color alone. Layers and vertex colors aren't part of them.</summary>
+        // The base color texels a source's meshes use, by its unified material: up to 16 colors
+        // from the darkest to the brightest. A texture's unused parts (often black, and often
+        // most of it) would otherwise make the material look darker than it shows.
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<AtlasUnifiedMaterial, List<Color>> Used =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<AtlasUnifiedMaterial, List<Color>>();
+        private const int UsedSize = 16;
+
+        /// <summary>Tells the samples where a source's meshes use its base color texture (its
+        /// UV0 triangles), so its base colors are taken there. Without triangles, or for a
+        /// texture on another UV channel or with a scale or offset, they are taken from the
+        /// whole texture.</summary>
+        public static void Cover(AtlasUnifiedMaterial material, IReadOnlyList<AtlasUVTriangles> coverage)
+        {
+            if (material == null) return;
+            Used.Remove(material);
+            var map = material.Surface.BaseColor.Map;
+            if (coverage == null || coverage.Count == 0 || !(map?.Texture is Texture2D texture) || map.Space != AtlasTextureSpace.UV0 ||
+                map.Tiling != Vector2.one || map.Offset != Vector2.zero)
+                return;
+            using (var mask = AtlasCoverage.Paint(coverage, UsedSize, UsedSize))
+            {
+                if (mask == null) return;
+                var pixels = Small(texture, UsedSize, UsedSize);
+                var colors = new List<Color>();
+                for (int y = 0; y < UsedSize; y++)
+                    for (int x = 0; x < UsedSize; x++)
+                        if (mask.IsPixelUsed(x, y)) colors.Add(pixels[y * UsedSize + x]);
+                if (colors.Count == 0) return;
+                // As many samples as the whole texture gives, each the average of a share of
+                // the used texels in order of brightness.
+                colors.Sort((a, b) => Luminance(a).CompareTo(Luminance(b)));
+                int count = Mathf.Min(Size * Size, colors.Count);
+                var samples = new List<Color>(count);
+                for (int i = 0; i < count; i++)
+                {
+                    int from = i * colors.Count / count, to = (i + 1) * colors.Count / count;
+                    var sum = new Color(0f, 0f, 0f, 0f);
+                    for (int k = from; k < to; k++) sum += colors[k];
+                    samples.Add(sum / (to - from));
+                }
+                Used.Add(material, samples);
+            }
+        }
+
+        /// <summary>A material's base colors: its color × the base color texture where its
+        /// meshes use it (Cover), otherwise × a 4 × 4 copy of the whole texture (linear), or the
+        /// color alone. Layers and vertex colors aren't part of them.</summary>
         public static List<Color> Bases(AtlasUnifiedMaterial material)
         {
             var color = material.Surface.BaseColor.Color;
             if (!(material.Surface.BaseColor.Map?.Texture is Texture2D texture)) return new List<Color> { color };
-            return Small(texture, Size, Size).Select(p => new Color(p.r * color.r, p.g * color.g, p.b * color.b, 1f)).ToList();
+            var pixels = Used.TryGetValue(material, out var used) ? (IEnumerable<Color>)used : Small(texture, Size, Size);
+            return pixels.Select(p => new Color(p.r * color.r, p.g * color.g, p.b * color.b, 1f)).ToList();
         }
 
         /// <summary>A mask's average over a 4 × 4 copy of its map, through its channel, levels,

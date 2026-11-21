@@ -132,7 +132,7 @@ the output design). What remains planned:
 ### Look values
 
 A lighting's level and contrast are computed where they are needed, from the material's own
-values: for the build's log, and for the inspector's line under *Lighting from*. What remains
+values, for the build's log. What remains
 planned: per view layer its role, impact and direction (*What a matcap is for*, below),
 derived the same way by the reference look and kept with the source analysis cache where
 computing them takes long. A parser never writes look values: a shader that looks different
@@ -231,7 +231,9 @@ Rims use the same cost for their fits (`AtlasRimResponse` today).
    front and from around the avatar in 45° steps, so the inspector and the build agree. The
    mesh's own normals would be closer, but the inspector doesn't have them.
 2. **The new scenes' values.** In place as starting values: *Probes only* at 0.5 on average
-   with 0.25 more along the dominant direction, *Dark* at 0.02. To be confirmed.
+   with 0.25 more along the dominant direction, *Dark* at 0.02. To be confirmed. A rim
+   colored by the reflection probe takes the scene's ambient light as the probe's color; a
+   scene could carry an environment level of its own instead.
 3. **The blocked view's weight.** In place: under *Automatic* it counts as much as the look
    with the shader, which stops a shift at the average look. With a lower weight, a matcap
    that is bright on average would shift in full.
