@@ -99,6 +99,26 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
+        public void TheOverviewNamesTheMaterialsTheChosenLightingShowsDifferently()
+        {
+            var capabilities = AtlasShaderRegistry.Output("poiyomi10").Capabilities;
+            var plain = new AtlasUnifiedMaterial();
+            var floored = new AtlasUnifiedMaterial();
+            floored.Lighting.MinimumBrightness = 0.5f;
+            // Equal areas: automatic takes the first source's lighting.
+            var overview = AtlasOutputOverview.Build(new AtlasOutputConfiguration(), capabilities, new Material[] { null, null },
+                new[] { plain, floored });
+            var lighting = overview.Features.Single(s => s.Feature is AtlasLightingFeature);
+            Assert.IsTrue(lighting.SharedValuesDiffer);
+            StringAssert.Contains("source 2", lighting.SharedValueEffect);
+            StringAssert.DoesNotContain("source 1", lighting.SharedValueEffect);
+
+            overview = AtlasOutputOverview.Build(new AtlasOutputConfiguration(), capabilities, new Material[] { null, null },
+                new[] { new AtlasUnifiedMaterial(), new AtlasUnifiedMaterial() });
+            Assert.IsNull(overview.Features.Single(s => s.Feature is AtlasLightingFeature).SharedValueEffect, "the same lighting: nothing to say");
+        }
+
+        [Test]
         public void ALayerShownDifferentlyCostsWhatItLosesPlusTwiceWhatItAdds()
         {
             // The source's layer brightens by 0.4.

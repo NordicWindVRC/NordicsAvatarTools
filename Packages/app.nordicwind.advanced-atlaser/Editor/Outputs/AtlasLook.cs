@@ -139,17 +139,28 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static IEnumerable<string> LightingNotes(AtlasGeneratorJob job, AtlasUnifiedMaterial kept)
         {
             if (job == null || kept == null) yield break;
+            var sources = LightingDifferences(job.Sources.Select(s => s.Material).ToList(), kept.Lighting);
+            if (sources.Count > 0)
+                yield return "The output's lighting looks different from these sources' own, as displayed brightness of their base colors: " +
+                             string.Join(", ", sources) + ".";
+        }
+
+        /// <summary>The sources that a lighting shows differently from their own, on their own
+        /// base colors: each with the scenes it differs in, its level and its contrast there
+        /// against its own.</summary>
+        public static List<string> LightingDifferences(IReadOnlyList<AtlasUnifiedMaterial> materials, AtlasLighting lighting)
+        {
             var sources = new List<string>();
-            for (int i = 0; i < job.Sources.Count; i++)
+            for (int i = 0; i < materials.Count; i++)
             {
-                var material = job.Sources[i].Material;
+                var material = materials[i];
                 if (material == null) continue;
                 var bases = AtlasSourceSamples.Bases(material);
                 var parts = new List<string>();
                 foreach (var scene in Scenes)
                 {
                     var own = Lighting(material.Lighting, bases, scene);
-                    var shown = Lighting(kept.Lighting, bases, scene);
+                    var shown = Lighting(lighting, bases, scene);
                     var changes = new List<string>();
                     if (Mathf.Abs(shown.Level - own.Level) > Tolerance)
                         changes.Add((shown.Level > own.Level ? "brighter" : "darker") + $" ({Number(shown.Level)} for {Number(own.Level)})");
@@ -159,9 +170,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
                 if (parts.Count > 0) sources.Add($"source {i + 1} ({string.Join("; ", parts)})");
             }
-            if (sources.Count > 0)
-                yield return "The output's lighting looks different from these sources' own, as displayed brightness of their base colors: " +
-                             string.Join(", ", sources) + ".";
+            return sources;
         }
     }
 }

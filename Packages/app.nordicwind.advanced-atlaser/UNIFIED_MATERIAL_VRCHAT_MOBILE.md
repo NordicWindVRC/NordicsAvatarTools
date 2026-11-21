@@ -213,13 +213,14 @@ light.
   - **Shadow Tint:** colors shadows with the albedo: 0 gives black shadows, 1 gives shadows
     in the albedo's color, so the darkening is a saturated version of the surface color.
   - **Min Brightness:** a floor of up to 0.1 × albedo, added like emission.
-  - **Limit Brightness:** clamps incoming light to 1, so bright worlds don't blow out colors.
-    Default on.
+  - **Limit Brightness:** clamps the light on the surface to 1 (the main light through the
+    ramp + the ambient light), so bright worlds don't blow out colors. Default on.
 - **Live or baked:** live.
 - **Unified:** the ramp toon lighting family, with:
   - a ramp (texture or gradient); the presets could become named ramp shapes, so a writer
     can pick its own equivalent;
-  - shadow lift, shadow color from albedo, minimum brightness, light clamp;
+  - shadow lift, shadow color from albedo, minimum brightness, the limit on *the shaded
+    light*;
   - ambient model *flat* (average color, no direction);
   - without a main light: *ambient as main light* 1 with the *brightest* stand-in.
 

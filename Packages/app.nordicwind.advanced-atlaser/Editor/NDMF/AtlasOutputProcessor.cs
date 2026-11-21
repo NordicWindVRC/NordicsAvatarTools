@@ -13,7 +13,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var generatorJob = CreateJob(job.Configuration, job, context.AvatarRoot.GetComponentsInChildren<Renderer>(true),
                 context.AvatarRoot.transform);
             job.GeneratorJob = generatorJob;
-            job.Plan = AtlasOutputPipeline.Resolve(generatorJob, job.Shader.Capabilities);
+            job.Plan = AtlasOutputPipeline.Resolve(generatorJob, job.Shader);
             foreach (var note in job.Plan.Notes)
                 context.Diagnostics.Add(job.Configuration.outputName + ": " + note);
         }

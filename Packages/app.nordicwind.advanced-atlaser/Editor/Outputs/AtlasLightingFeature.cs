@@ -244,6 +244,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (!c.LimitBrightness)
             {
                 c.BrightnessCeiling = defaults.BrightnessCeiling;
+                c.LimitTotal = defaults.LimitTotal;
                 c.LimitByLuminance = defaults.LimitByLuminance;
                 c.LimitKeepsHue = defaults.LimitKeepsHue;
             }

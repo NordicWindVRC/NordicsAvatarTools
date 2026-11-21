@@ -1705,16 +1705,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
             m.SetFloat("_LimitBrightness", l.LimitBrightness ? 1 : 0);
         }
 
-        // The VRChat SDK's ramp texture for a preset; null: none (white, fully lit).
+        // The VRChat SDK's ramp texture for a preset, found once; null: none (white, fully lit).
+        private static readonly Dictionary<AtlasRampPreset, Texture2D> PresetTextures = new Dictionary<AtlasRampPreset, Texture2D>();
+
         private static Texture PresetTexture(AtlasRampPreset preset)
         {
+            if (PresetTextures.TryGetValue(preset, out var found) && found != null) return found;
             foreach (var (candidate, name) in RampTextures)
             {
                 if (candidate != preset) continue;
                 foreach (string guid in UnityEditor.AssetDatabase.FindAssets(name + " t:Texture2D"))
                 {
                     var texture = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(UnityEditor.AssetDatabase.GUIDToAssetPath(guid));
-                    if (texture != null && texture.name == name) return texture;
+                    if (texture != null && texture.name == name) return PresetTextures[preset] = texture;
                 }
             }
             return null;

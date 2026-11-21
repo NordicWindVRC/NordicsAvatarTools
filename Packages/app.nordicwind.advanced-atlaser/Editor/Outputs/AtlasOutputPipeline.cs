@@ -61,6 +61,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // feature's sources and resolve it in its mode into one unified material.
     public static class AtlasOutputPipeline
     {
+        /// <summary>The plan for an output shader: resolved by its capabilities, then its
+        /// lighting tuned by look where the shader shows it differently (AtlasLightingTuning).</summary>
+        public static AtlasOutputPlan Resolve(AtlasGeneratorJob job, IAtlasOutputShader shader)
+        {
+            var plan = Resolve(job, shader.Capabilities);
+            AtlasLightingTuning.Tune(job, plan, shader);
+            return plan;
+        }
+
         public static AtlasOutputPlan Resolve(AtlasGeneratorJob job, AtlasOutputCapabilities capabilities)
         {
             var plan = new AtlasOutputPlan();

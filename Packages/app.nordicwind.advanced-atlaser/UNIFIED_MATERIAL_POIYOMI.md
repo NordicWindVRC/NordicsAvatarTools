@@ -840,6 +840,8 @@ Thry's locking keeps.
   different additive detail strengths are reported.
 - Received casted shadows, softness, clean shadows, grayscale lighting, limit brightness (with
   its ceiling and luminance limit), min brightness as *minimum light*, forced light color.
+  The shader raises the direct and the indirect light to the minimum, limits each, and then
+  applies the PP Animations' multiplier and addition.
 - **Additional lights:** pixel and vertex lights on or off, their lighting type and gradient,
   limit, received shadows, grayscale, passthrough, attenuation curve, ignored directional
   lights, mirror vertex lights.

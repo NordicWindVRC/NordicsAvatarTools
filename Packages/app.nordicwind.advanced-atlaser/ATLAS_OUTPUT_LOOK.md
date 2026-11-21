@@ -76,7 +76,8 @@ contribution.
 Built so far (see *The look model* in the output design): the four scenes, two of them
 without a main light, a lighting's level and contrast, the kept material read back from the
 written material, the sources listed where the kept lighting looks different from their own,
-and a layer's cost as a measure. What remains planned:
+the lighting's shared values tuned where the output shader shows the chosen lighting
+differently, and a layer's cost as a measure. What remains planned:
 
 ### The reference look
 
@@ -96,7 +97,8 @@ roughness, metallic), in each scene, over the angles to the light and the view.
 
 ### The kept material
 
-The kept material is read back after writing today, and only its lighting is compared.
+The kept material is read back after writing today, and only its lighting is compared. For
+tuning, the kept lighting is read from a scratch material before the atlas's material exists.
 
 - **Every feature.** The output's look is the reference look of the kept material, compared
   with each source's reference look.
@@ -105,9 +107,9 @@ The kept material is read back after writing today, and only its lighting is com
   parser sets and the reference look reads. Capabilities keep counts and availability (slots,
   maps, UV channels). Every output shader needs a parser for this; each current and planned
   output is an input too.
-- **Without writing.** A fit evaluates many candidates, so each writer also gives the kept
-  material directly, without writing a material (`Kept`). A test holds it equal to the
-  read-back for every feature the writer maps.
+- **Beyond the lighting.** The scratch material holds the lighting alone. A fit of another
+  feature (a matcap, a rim) reads its kept part the same way, with that feature's part of the
+  output unified material written to it.
 
 ### Differences
 
@@ -116,16 +118,14 @@ choose by it (*Matcaps*, below).
 
 ### Tuning
 
-1. The writer maps the output unified material by parameters, as today.
-2. The difference between each source's reference look and the output's is measured per
-   scene. Where it is within tolerance nothing is changed, so an exact mapping stays exact.
-3. Otherwise the values the writer declares **tunable** are fitted, starting from the mapped
-   ones: shared values across the sources (the ramp, shadow lift and tint, floors and limits,
-   reflectance, slot strengths), and values in maps per source (mask levels, level
-   compensation).
-4. A fitted value replaces the mapped one only when it looks closer by a margin, so a result
-   doesn't flip on a small change.
-5. The difference left per source and scene is logged and shown in the overview.
+The lighting's shared values are tuned (*Tuning the lighting* in the output design). What
+remains planned:
+
+- **The ramp's shape.** For an output that shades through a generated ramp texture, the
+  ramp's keys are fitted to the chosen lighting's shading over the angle to the light (a
+  wrapped or physically based source on Toon Standard), instead of the nearest preset.
+- **Other shared values:** reflectance and slot strengths, with the features that own them.
+- **Values in maps per source:** mask levels and level compensation.
 
 **Level compensation** gives a source its level back through its base color, where the output
 can't: a shift for a source that shares another's lighting (bounded as *Base color shifts*,
@@ -133,13 +133,12 @@ below, says), a bake for a layer that loses part of its effect (*Average in colo
 
 ### Look values
 
-A lighting's level and contrast are computed where they are needed today. Each source's
-unified material carries its look values: its level and contrast per scene, and per view
-layer its role, impact and direction (*What a matcap is for*, below). They are derived by the
-reference look from the material's own values and kept with the source analysis cache.
-Automatic choices, the overview, the log and the tests read them. A parser never writes them:
-a shader that looks different from its unified material needs a parser fix or a field in the
-model.
+A lighting's level and contrast are computed where they are needed, from the material's own
+values: for the build's log, and for the inspector's line under *Lighting from*. What remains
+planned: per view layer its role, impact and direction (*What a matcap is for*, below),
+derived the same way by the reference look and kept with the source analysis cache where
+computing them takes long. A parser never writes look values: a shader that looks different
+from its unified material needs a parser fix or a field in the model.
 
 ---
 

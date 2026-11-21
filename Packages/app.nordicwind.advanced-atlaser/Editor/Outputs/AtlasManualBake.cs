@@ -41,7 +41,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     AtlasSurfaceGeometry.AvatarRoot(output.transform));
             if (job.Sources.Count == 0)
                 throw new InvalidOperationException($"[Nordic's Advanced Atlaser] {output.name}: no source material can be read.");
-            var plan = AtlasOutputPipeline.Resolve(job, shader.Capabilities);
+            var plan = AtlasOutputPipeline.Resolve(job, shader);
             var maps = plan.Maps.Select(r => r.Map).Distinct().ToList();
             var uses = AtlasOutputOverview.TextureUses(config, shader.Capabilities, maps, Array.Empty<AtlasVirtualMap>());
             var enabled = uses.Where(u => u.Enabled).ToList();

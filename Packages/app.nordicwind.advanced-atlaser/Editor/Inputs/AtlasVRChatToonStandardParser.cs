@@ -100,7 +100,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             lighting.Ramp.UntintedAmbient = 1f;
             lighting.Ramp.LitAmbient = 1f;
             lighting.MinimumBrightness = Float(m, "_MinBrightness", 0f);
+            // The limit: saturate(the shaded direct light + the ambient light).
             lighting.LimitBrightness = Float(m, "_LimitBrightness", 1f) > 0.5f;
+            lighting.LimitTotal = true;
         }
 
         // Specular: metallic and gloss maps (each a channel) times their strengths; reflectance is

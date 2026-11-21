@@ -48,6 +48,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(1f, d.Lighting.Contributions.AmbientWithoutMainLight, "their average stays the ambient light");
             Assert.AreEqual(0f, d.Lighting.ReceiveShadows);
             Assert.IsTrue(d.Lighting.LimitBrightness);
+            Assert.IsTrue(d.Lighting.LimitTotal, "the shaded light is clamped, not each light color");
             Assert.AreEqual(0.5f, d.Lighting.Ramp.ShadowTint.Color.r, 1e-5f);
             Assert.AreEqual(1f, d.Lighting.Ramp.ShadowColorFromBase);
             Assert.AreEqual(1f, d.Lighting.Ramp.UntintedAmbient);

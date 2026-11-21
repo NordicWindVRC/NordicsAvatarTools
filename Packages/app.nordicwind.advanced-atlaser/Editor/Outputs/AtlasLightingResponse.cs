@@ -9,9 +9,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // unified formulas (AtlasLighting) for the main light and the ambient light: the light color
     // model, with what stands in for the main light where a scene has none; the ramp toon
     // family's L = lerp(S, D, b), the physically based family's diffuse with its shadow strength
-    // and tint, flat and unlit; the light's multiplier, floor and limit; the minimum light and
-    // the minimum brightness. Received shadows, occlusion, additional lights, masks and anything
-    // drawn on the surface aren't part of it, and pre-integrated skin is read as half-Lambert.
+    // and tint, flat and unlit; the minimum light, the limit (on each light color or on the
+    // shaded light), the light's multiplier and addition; and the minimum brightness. Received
+    // shadows, occlusion, additional lights, masks and anything drawn on the surface aren't
+    // part of it, and pre-integrated skin is read as half-Lambert.
     public static class AtlasLightingResponse
     {
         private const int Angles = AtlasLook.Angles;
@@ -44,44 +45,42 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             if (lighting.Family == AtlasLightingFamily.Unlit) return baseColor;
             Light(lighting, scene, nDotL, out float d, out float a);
-            if (lighting.LimitBrightness)
-            {
-                d = Mathf.Min(d, lighting.BrightnessCeiling);
-                a = Mathf.Min(a, lighting.BrightnessCeiling);
-            }
             float halfLambert = nDotL * 0.5f + 0.5f;
             float term = Term(lighting.Ramp, nDotL, d);
             Color lit;
             switch (lighting.Family)
             {
                 case AtlasLightingFamily.Flat:
-                    lit = baseColor * Mathf.Max(d + a, lighting.MinimumLight);
+                    lit = baseColor * (d + a);
                     break;
                 case AtlasLightingFamily.RampToon:
                     // Bands with their own term shade by half-Lambert, whatever the light map is.
                     lit = RampToon(lighting.Ramp, baseColor, lighting.Ramp.BandsOwnTerm && lighting.Ramp.Bands.Count > 0 ? halfLambert : term,
                         d, a, ramp);
-                    for (int c = 0; c < 3; c++) lit[c] = Mathf.Max(lit[c], baseColor[c] * lighting.MinimumLight);
                     break;
                 default:
                 {
-                    // The light × lerp(1, term, strength) × the diffuse, the ambient added, the
-                    // minimum light, then lerp(1, tint, (1 − term) × strength).
+                    // The light × lerp(1, term, strength) × the diffuse, the ambient added, then
+                    // lerp(1, tint, (1 − term) × strength).
                     float strength = lighting.ShadowStrength;
                     float diffuse = lighting.Diffuse == AtlasDiffuseModel.PreintegratedSkin ? halfLambert : Mathf.Clamp01(nDotL);
-                    float light = Mathf.Max(d * Mathf.Lerp(1f, term, strength) * diffuse + a, lighting.MinimumLight);
+                    float light = d * Mathf.Lerp(1f, term, strength) * diffuse + a;
                     var tint = Color.Lerp(Color.white, lighting.ShadowTint, Mathf.Clamp01((1f - term) * strength));
                     lit = new Color(baseColor.r * light * tint.r, baseColor.g * light * tint.g, baseColor.b * light * tint.b, 1f);
                     break;
                 }
             }
+            // The limit on the shaded light: the surface shows at most its base color × the ceiling.
+            if (lighting.LimitBrightness && lighting.LimitTotal)
+                for (int c = 0; c < 3; c++) lit[c] = Mathf.Min(lit[c], baseColor[c] * lighting.BrightnessCeiling);
             for (int c = 0; c < 3; c++) lit[c] += baseColor[c] * lighting.MinimumBrightness;
             lit.a = 1f;
             return lit;
         }
 
         /// <summary>The direct and ambient light a setup makes of a scene's main light and probes
-        /// (3.4), at N·L: through its light color model, then its multiplier and addition.</summary>
+        /// (3.4), at N·L: through its light color model, then its minimum light, its limit on
+        /// each light color, and its multiplier and addition.</summary>
         public static void Light(AtlasLighting lighting, AtlasLookScene scene, float nDotL, out float direct, out float ambient)
         {
             float main = scene.Direct, average = scene.Ambient;
@@ -123,6 +122,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         a = atNormal * contributions.AmbientWithoutMainLight;
                     }
                     break;
+            }
+            d = Mathf.Max(d, lighting.MinimumLight);
+            a = Mathf.Max(a, lighting.MinimumLight);
+            if (lighting.LimitBrightness && !lighting.LimitTotal)
+            {
+                d = Mathf.Min(d, lighting.BrightnessCeiling);
+                a = Mathf.Min(a, lighting.BrightnessCeiling);
             }
             direct = Mathf.Max(0f, d * lighting.LightMultiplier + lighting.LightAddition) * lighting.Contributions.MainLight;
             ambient = Mathf.Max(0f, a * lighting.LightMultiplier + lighting.LightAddition);

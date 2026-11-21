@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -25,5 +26,50 @@ namespace NordicWind.AdvancedAtlaser.Editor
             foreach (var note in AtlasLightingFeature.Unkept(output, kept)) yield return note;
             foreach (var note in AtlasLook.LightingNotes(job, kept)) yield return note;
         }
+    }
+
+    // The lighting an output shader keeps, read before an atlas's material exists: the
+    // lighting alone is written to a scratch material and read back by the shader's parser.
+    // Tuning asks for many candidates, so the scratch material is reused.
+    public sealed class AtlasKeptLighting : IDisposable
+    {
+        private readonly IAtlasOutputShader shader;
+        private readonly IAtlasSourceShaderParser parser;
+        private readonly Material scratch;
+        private readonly AtlasUnifiedMaterial holder = new AtlasUnifiedMaterial();
+
+        private AtlasKeptLighting(IAtlasOutputShader shader, IAtlasSourceShaderParser parser, Material scratch)
+        {
+            this.shader = shader;
+            this.parser = parser;
+            this.scratch = scratch;
+        }
+
+        /// <summary>A reader for the output shader; null where the shader isn't installed or
+        /// has no parser.</summary>
+        public static AtlasKeptLighting For(IAtlasOutputShader shader)
+        {
+            var unity = shader?.FindShader();
+            if (unity == null) return null;
+            var scratch = new Material(unity) { hideFlags = HideFlags.HideAndDontSave };
+            var parser = AtlasShaderRegistry.Detect(scratch);
+            if (parser != null) return new AtlasKeptLighting(shader, parser, scratch);
+            UnityEngine.Object.DestroyImmediate(scratch);
+            return null;
+        }
+
+        /// <summary>The lighting as the output shader shows it.</summary>
+        public AtlasLighting Of(AtlasLighting lighting)
+        {
+            AtlasFieldwise.Copy(lighting, holder.Lighting);
+            shader.Write(holder, scratch);
+            var kept = parser.Parse(scratch).Lighting;
+            // A ramp the build generates from keys isn't a texture yet: the written material
+            // will read it back as the keys describe it.
+            if (AtlasLightingFeature.NeedsGeneratedRamp(holder, shader.Capabilities)) kept.Ramp.Keys.AddRange(lighting.Ramp.Keys);
+            return kept;
+        }
+
+        public void Dispose() => UnityEngine.Object.DestroyImmediate(scratch);
     }
 }

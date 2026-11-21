@@ -584,12 +584,13 @@ Poiyomi.*
 | without a main light: ambient as main light | ≥ 0 | 0 | in a world lit by probes alone, in the *separate* light color model: the ambient light × this stands in for the main light (Toon Lit: 0.2; Poiyomi's Standard light color: 0.6; Toon Standard: 1; Uber's baked direct contribution). The other light color models make their direct light of the probes themselves |
 | without a main light: stand-in | ambient, brightest | ambient | which ambient light stands in. *Ambient*: as the surface gets it (the ambient model's). *Brightest*: the probes along their dominant direction (Toon Standard) |
 | without a main light: ambient | 0–1 | 1 | the ambient contribution then, instead of *contribution: ambient* (Poiyomi's Standard light color: 0.5; Uber's baked indirect contribution) |
-| limit brightness | bool, ceiling | off, 1 | clamps the light (direct + ambient) per channel to the ceiling, so bright worlds don't blow out colors |
+| limit brightness | bool, ceiling | off, 1 | clamps the direct and the ambient light, each per channel, to the ceiling, so bright worlds don't blow out colors |
+| limit applies to | each light, the shaded light | each light | *the shaded light*: the limit clamps the direct light through the shading + the ambient light instead, so the lit side never passes the ceiling (Toon Standard) |
 | limit by luminance | 0–1 | 0 | the direct light's limit blends from per channel to scaling by luminance, keeping the hue |
 | limit keeps hue | bool | off | the limit scales the color so its brightest channel is at the ceiling |
-| minimum light | 0–1 | 0 | raises the light's luminance (direct and ambient) to at least this, keeping the hue |
+| minimum light | 0–1 | 0 | raises the luminance of the direct and of the ambient light to at least this, keeping the hue, before the limit |
 | minimum brightness | 0–1 | 0 | `base × value` is added after lighting, like emission, so the surface never goes fully dark |
-| light multiplier, light addition | floats | 1, 0 | every light color (direct, ambient, additional) × multiplier + addition, at least 0 |
+| light multiplier, light addition | floats | 1, 0 | every light color (direct, ambient, additional) × multiplier + addition, at least 0, after the minimum light and the limit on each light |
 | flat light map | bool | off | *flat* family: features reading the shading's light map see `smoothstep(0.4, 0.6, half-Lambert)` (the vertex normal's for additional lights) instead of 1 |
 
 **Additional lights** (point, spot, and directional lights beyond the main one):

@@ -19,6 +19,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The active sources need different values for the feature's shared value
         // (IAtlasSharedValueFeature), so the user can pick the source it is taken from.
         public bool SharedValuesDiffer;
+        // What the source in use changes for the others, in words; null: nothing to say.
+        public string SharedValueEffect;
         // The feature's switches whose sources disagree (IAtlasConflictSwitchFeature).
         public readonly List<AtlasConflictSwitch> Switches = new List<AtlasConflictSwitch>();
         // The items the user places one by one (IAtlasInstanceFeature), when its mode isn't off.
@@ -88,7 +90,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var plan = unified.Count > 0 && unified.All(u => u != null) ? Resolved(config, capabilities, materials, unified) : null;
             if (plan != null)
                 foreach (var state in overview.Features)
+                {
                     if (plan.LiveSetups.TryGetValue(state.Feature.Id, out var setups)) state.LiveSetups.AddRange(setups);
+                    // The materials the chosen lighting shows differently from their own.
+                    if (state.Feature is AtlasLightingFeature && state.SharedValuesDiffer)
+                    {
+                        var different = AtlasLook.LightingDifferences(unified, plan.Output.Lighting);
+                        if (different.Count > 0)
+                            state.SharedValueEffect = "With this lighting these look different from their own, as displayed brightness: " +
+                                                      string.Join(", ", different) + ".";
+                    }
+                }
             overview.AddTextures(config, capabilities, plan);
             if (plan != null) overview.AddOtherTextures(plan, config, capabilities);
             return overview;
@@ -206,7 +218,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static AtlasGeneratorJob Probe(AtlasOutputConfiguration config, IReadOnlyList<Material> materials, IReadOnlyList<AtlasUnifiedMaterial> unified)
         {
             var job = new AtlasGeneratorJob();
-            foreach (var material in unified) job.Sources.Add(new AtlasGeneratorSource { Material = material });
+            // With each source's area in the layout, so the automatic choices are the build's.
+            for (int i = 0; i < unified.Count; i++)
+            {
+                var material = i < materials.Count ? materials[i] : null;
+                var entry = material == null ? null : config.sources?.Find(e => e != null && e.material == material);
+                job.Sources.Add(new AtlasGeneratorSource { Material = unified[i], UVRegion = entry?.uvRegion ?? default });
+            }
             AtlasOutputPipeline.AddChoices(config, materials, job);
             return job;
         }

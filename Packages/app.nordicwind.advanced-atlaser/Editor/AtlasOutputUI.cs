@@ -452,6 +452,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 (feature is IAtlasAutomaticReference rule ? rule.AutomaticRule : "Automatic takes it from the material with the largest area in the atlas."));
             int next = PopupRow(label, index, options.ToArray());
             if (next != index) reference.objectReferenceValue = next == 0 ? null : choices[next - 1];
+            Description(state.SharedValueEffect);
         }
 
         // Which material's live global masks stay live, where the materials' differ: automatic

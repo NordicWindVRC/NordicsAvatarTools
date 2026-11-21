@@ -66,7 +66,7 @@ Where each part of this design lives:
 | Overview | `Editor/Outputs/AtlasOutputOverview.cs`, `AtlasTextureMemory.cs` | What an output uses: features with their modes and sources, the textures they need with sizes and memory |
 | Evaluator | `Editor/Outputs/AtlasMapEvaluator.cs`, `AtlasColorStack.cs` | The bakeable subset over a source's UV 0–1: textures with their placement, color layers, decals, adjustments, masks and the mask bus |
 | Map requests | `Editor/Outputs/AtlasMapRequest.cs` | A virtual map's content, views and contributions by stage, its shared color and its range step (see [*Map contributions*](#map-contributions)) |
-| Look model | `Editor/Outputs/AtlasLook.cs`, `AtlasKeptMaterial.cs` | The standard scenes, a lighting's level and contrast, a layer's cost, and the written material read back and compared with the sources' own looks (see [*The look model*](#the-look-model)) |
+| Look model | `Editor/Outputs/AtlasLook.cs`, `AtlasKeptMaterial.cs`, `AtlasLightingTuning.cs` | The standard scenes, a lighting's level and contrast, a layer's cost, the written material read back and compared with the sources' own looks, and the lighting tuned where the output shader shows it differently (see [*The look model*](#the-look-model)) |
 | Map baker | `Editor/Outputs/AtlasMapBaker.cs` | One texture, source by source: each virtual map evaluated at the source's bake size, its UV islands grown over the unused texels, placed in its region |
 | Coverage | `Editor/Outputs/AtlasCoverage.cs` | Each source's UV0 triangles (from the output's renderers in the manual bake, the avatar's in the build), painted at bake size; a triangle in another UV tile counts by whole tiles |
 | Packing | `Editor/Outputs/AtlasTexturePacker.cs` | One output texture from its virtual maps: which channels each map fills (inverted where the texture stores it so), and the neutral value of the rest |
@@ -350,11 +350,44 @@ What the fits and the build's checks share (`AtlasLook`):
   minus the shadow side's, in each scene.
 - **The kept material.** The written material, read back by the output shader's own parser
   (`AtlasKeptMaterial`): what the shader will show, in unified terms. An output shader is
-  described once, by its parser.
+  described once, by its parser. Before an atlas's material exists, the kept lighting is
+  read the same way from a scratch material that holds the lighting alone
+  (`AtlasKeptLighting`).
 - **What a source loses.** After writing, each source's own lighting is compared with the
   kept lighting on the source's own base colors. Where the level or the contrast differs by
   more than about 8 of the 256 displayed levels in a scene, the build lists the source and the
-  scene, in one line per output. *Lighting from* picks another source's lighting.
+  scene, in one line per output. *Lighting from* picks another source's lighting, and the
+  inspector shows the same comparison under it, for the lighting in use against each
+  material's own.
+
+#### Tuning the lighting
+
+The chosen lighting is mapped to the output shader by its values. Where the shader keeps it
+as mapped, nothing else happens, so a source the output can reproduce keeps its exact values.
+Where the kept lighting looks different, the build tunes it (`AtlasLightingTuning`):
+
+1. **The difference** is the mean difference in displayed color between the chosen lighting
+   and the kept one, on each source's darkest, average and brightest base color, over the
+   four scenes and the angles to the light, weighted by the sources' areas. Below a third of
+   the visible tolerance the mapped lighting stays.
+2. **The values searched** are those that set how bright the surface is and how much darker
+   its shadow side: the light color model, the light multiplier and addition, the brightness
+   ceiling, the minimum light and brightness, the directional ambient amount, the shadow
+   lift, the ramp and shadow strengths, and the shadow color's brightness (its hue stays).
+   The family, the ramp's shape, the shading term and the hues are the artist's and aren't
+   searched.
+3. **The search** takes one value at a time: points across its range, then steps that halve
+   around the best, with the kept lighting read back for each candidate. A value the shader
+   doesn't have changes nothing in the kept lighting and stays as mapped, so the search
+   knows no shader.
+4. **The result** replaces the mapped lighting only when it is closer by the same margin, so
+   it doesn't flip on a small change. The build then names the tuned values and the
+   difference before and after, in one line.
+
+The target is the chosen lighting, not each source's own: which lighting the atlas gets is
+the user's choice (*Lighting from*), and tuning only makes the output shader show that
+choice. The inspector's overview resolves without tuning; its plan is for the textures and
+the choices.
 
 #### Comparing layers
 
@@ -990,7 +1023,7 @@ allocator (see [*Masks*](#masks)). *Merge* uses the strategies above.
 
 | Feature | Unified | Modes | Maps | Merge and notes |
 |---|---|---|---|---|
-| **Shading, lighting and shadows** | 3.1–3.4 | 1. Native (the writer maps the family and parameters to its own modes)<br>2. Baked full light (outputs that don't light)<br>3. Baked form shading (outputs that light flatly) | shadow color → reference values<br>ramp masks → reference values | Exclusive: one lighting setup, from the reference source. *Automatic* takes the setup that changes the sources' look least (`AtlasLightingResponse`): each source's base colors (its color × a 4 × 4 copy of its base color texture) are lit by white light in two scenes (a bright and a dim main light, each with ambient) over the angle to the light, by its own lighting and by each candidate's, following the unified formulas for the main and ambient light; the cost is the sum of area × the mean difference of the displayed (sRGB) colors, so dark sources count for little. Among equal costs, the largest region. The writer maps unified families to its shader's lighting modes, for example the ramp toon special cases (3.2) to Poiyomi's modes. Spatial values (shadow tint, ramp strength) become maps when the output has them |
+| **Shading, lighting and shadows** | 3.1–3.4 | 1. Native (the writer maps the family and parameters to its own modes)<br>2. Baked full light (outputs that don't light)<br>3. Baked form shading (outputs that light flatly) | shadow color → reference values<br>ramp masks → reference values | Exclusive: one lighting setup, from the reference source. *Automatic* takes the setup that changes the sources' look least (`AtlasLightingResponse`): each source's base colors (its color × a 4 × 4 copy of its base color texture) are lit by white light in the standard scenes (*The look model*) over the angle to the light, by its own lighting and by each candidate's, following the unified formulas for the main and ambient light; the cost is the sum of area × the mean difference of the displayed (sRGB) colors, so dark sources count for little. Among equal costs, the largest region. The writer maps unified families to its shader's lighting modes, for example the ramp toon special cases (3.2) to Poiyomi's modes. Spatial values (shadow tint, ramp strength) become maps when the output has them |
 | **Light volumes** | 3.5 | 1. Native<br>2. Off | — | Part of the lighting setup: the reference source's |
 | **LTCGI** | 3.5 | 1. Native<br>2. Off | — | As light volumes |
 
@@ -1287,6 +1320,9 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
 - **The look model:** a lighting's level and contrast in a scene, the sources listed where
   the kept lighting looks different from their own, and a layer's cost for a weaker, a stronger
   and an opposite effect.
+- **Tuning:** the kept lighting read from a scratch material equals the written material's;
+  an output of the source's own shader keeps the mapped lighting; a value that looks closer
+  replaces the mapped one; and tuning never leaves the lighting farther from the chosen one.
 - **Fits:** a source the output can reproduce gets its exact value back; a fit with nothing
   missing finds that same value; a weaker setting gives the expected direction (weaker
   highlights, a lower reflectance); shared values follow the source whose look changes most.
