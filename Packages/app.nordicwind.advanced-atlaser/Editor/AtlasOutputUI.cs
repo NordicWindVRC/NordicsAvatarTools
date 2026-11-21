@@ -430,7 +430,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (state.Instances.Count > 1 || (bakedMode && state.Instances.Count > 0))
                 using (new EditorGUI.IndentLevelScope())
                     foreach (var instance in state.Instances)
-                        Placement(setting, instance, state.Instances, state.InstancesAsMatcap, state.InstancesCanBake, bakedMode);
+                        Placement(setting, instance, state.Instances, state.InstancesAsMatcap, state.InstancesCanBake, bakedMode, materials);
             if (open)
                 using (new EditorGUI.IndentLevelScope())
                     Sources(setting, state, materials);
@@ -525,7 +525,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // Where one item goes: Automatic, its own slot, off, or combined with another item.
         private static void Placement(SerializedProperty setting, AtlasFeatureInstance instance, List<AtlasFeatureInstance> instances, bool asMatcap,
-            bool canBake, bool bakedMode)
+            bool canBake, bool bakedMode, IReadOnlyList<Material> materials)
         {
             var stored = StoredValue(setting, AtlasInstancePlacements.Id(instance.Key));
             // Baked, there are no slots to share.
@@ -547,14 +547,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (mode == AtlasInstancePlacement.Combined) index = others.FindIndex(o => o.Key == target) is int at && at >= 0 ? placements.Count + at : 0;
                 else index = Math.Max(0, placements.IndexOf(mode));
             }
-            string what = instance.Label + ". " + (string.IsNullOrEmpty(instance.Detail) ? "" : instance.Detail + " ");
+            string what = instance.Label + ". ";
             var label = new GUIContent(instance.Label, bakedMode
                 ? what + "Automatic bakes it into the color as seen from the front, unless it's a highlight that brightens (shine, glints), " +
                   "which would stay in place from every view; the build log says which."
                 : what + "Automatic combines it with others on the same parts, or gives it a slot while one is free, " +
                   "and otherwise combines it with the most similar one; the build log says which." +
                   (canBake ? " Baked into color draws it into the textures as seen from the front, instead of sharing a slot." : ""));
-            int next = PopupRow(label, index, options.ToArray());
+            int next = instance.HasPreview ? PreviewRow(label, instance, materials, index, options.ToArray()) : PopupRow(label, index, options.ToArray());
             if (next == index) return;
             if (stored == null) stored = AddValue(setting, AtlasInstancePlacements.Id(instance.Key));
             var placement = next < placements.Count ? placements[next] : AtlasInstancePlacement.Combined;
@@ -586,6 +586,50 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // A labeled drop-down whose field lines up with the feature rows' mode drop-downs.
+        private const float PreviewSize = 36f;
+
+        // An item's row with its texture next to it (tinted by its color, or the color alone):
+        // its name and the choice on the first line; below, what the item is and the materials
+        // it is on, wrapped onto as many lines as it needs. A click on the texture shows where it
+        // is in the Project window.
+        private static int PreviewRow(GUIContent label, AtlasFeatureInstance instance, IReadOnlyList<Material> materials, int index, string[] options)
+        {
+            float line = EditorGUIUtility.singleLineHeight;
+            var names = instance.Sources.Where(i => i >= 0 && i < materials.Count && materials[i] != null).Select(i => materials[i].name).ToList();
+            string on = names.Count == 0 ? ""
+                : "On " + (names.Count <= 2 ? string.Join(" and ", names) : names[0] + ", " + names[1] + " and " + (names.Count - 2) + " more") + ".";
+            var kind = new GUIContent(string.IsNullOrEmpty(instance.Kind) ? on : instance.Kind + ". " + on, string.Join(", ", names));
+            // The second line's height at the width it gets, so nothing is cut off.
+            float indent = EditorGUI.indentLevel * 15f;
+            float kindWidth = Mathf.Max(60f, EditorGUIUtility.currentViewWidth - 40f - indent - PreviewSize - 4f);
+            float kindHeight = EditorStyles.wordWrappedMiniLabel.CalcHeight(kind, kindWidth);
+            var row = EditorGUILayout.GetControlRect(false, Mathf.Max(PreviewSize, line + kindHeight));
+            var indented = EditorGUI.IndentedRect(row);
+            var preview = new Rect(indented.x, row.y, PreviewSize, PreviewSize);
+            var tint = instance.PreviewColor.gamma;
+            tint = new Color(Mathf.Clamp01(tint.r), Mathf.Clamp01(tint.g), Mathf.Clamp01(tint.b), 1f);
+            if (instance.Preview != null)
+            {
+                var previous = GUI.color;
+                GUI.color = tint;
+                GUI.DrawTexture(preview, instance.Preview, ScaleMode.ScaleToFit);
+                GUI.color = previous;
+                if (GUI.Button(preview, new GUIContent("", instance.Preview.name + ". Click to show it in the Project window."), GUIStyle.none))
+                    EditorGUIUtility.PingObject(instance.Preview);
+            }
+            else EditorGUI.DrawRect(preview, tint);
+
+            float left = indented.x + PreviewSize + 4f;
+            // The materials are named below, so the first line holds the item's own name alone.
+            var name = new GUIContent(instance.Name ?? label.text, label.tooltip);
+            using (new IndentReset())
+            {
+                EditorGUI.LabelField(new Rect(left, row.y, Mathf.Max(0f, row.x + EditorGUIUtility.labelWidth - left), line), name);
+                EditorGUI.LabelField(new Rect(left, row.y + line, Mathf.Max(0f, row.xMax - left), row.height - line), kind, EditorStyles.wordWrappedMiniLabel);
+                return EditorGUI.Popup(new Rect(row.x + EditorGUIUtility.labelWidth, row.y, row.width - EditorGUIUtility.labelWidth, line), index, options);
+            }
+        }
+
         private static int PopupRow(GUIContent label, int index, string[] options)
         {
             var row = EditorGUILayout.GetControlRect();

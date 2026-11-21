@@ -112,8 +112,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public string Key;
         public string Label;
-        // What the item is and does, in a sentence, for its tooltip; null: nothing to add.
-        public string Detail;
+        // The item's own name, without the sources it is on; null: the label.
+        public string Name;
+        // What the item is, in a few words, shown under its name; null: nothing to add.
+        public string Kind;
+        // The item is shown with its texture (or its color alone, without one) next to it, so
+        // it can be recognized and found in the project.
+        public bool HasPreview;
+        public UnityEngine.Texture Preview;
+        // Linear.
+        public UnityEngine.Color PreviewColor = UnityEngine.Color.white;
         public List<int> Sources = new List<int>();
     }
 

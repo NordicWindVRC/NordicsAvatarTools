@@ -529,15 +529,32 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 "later features add contributions; they don't replace the content");
         }
 
+        // A matcap texture that is black but for a small spot at its center.
+        private Texture2D Spot(float value)
+        {
+            const int size = 16;
+            var texture = new Texture2D(size, size, TextureFormat.RGBAFloat, false, true);
+            var pixels = Enumerable.Repeat(Color.black, size * size).ToArray();
+            for (int y = size / 2 - 1; y <= size / 2; y++)
+                for (int x = size / 2 - 1; x <= size / 2; x++)
+                    pixels[y * size + x] = new Color(value, value, value, 1f);
+            texture.SetPixels(pixels);
+            texture.Apply();
+            created.Add(texture);
+            return texture;
+        }
+
         [Test]
         public void AutomaticBakesShadingMatcapsAndLeavesHighlightsOut()
         {
-            // Both look up the planar reflection, which counts as an effect; only the one that
-            // brightens is a highlight.
+            // The shading multiplies all over; the highlight is a small bright spot that adds.
+            // Both look up the planar reflection, as Poiyomi's double-sided mode does for every
+            // kind of matcap: the lookup makes neither an effect.
             var material = new AtlasUnifiedMaterial();
             var shading = Matcap(new Color(0.5f, 0.5f, 0.5f, 1f), AtlasBlend.Multiply);
             shading.Projection = AtlasLookupProjection.ReflectionPlanar;
-            var highlight = Matcap(new Color(0.3f, 0.3f, 0.3f, 1f), AtlasBlend.Add);
+            var highlight = new AtlasLookupLayer { Blend = AtlasBlend.Add, Placement = AtlasPlacement.Surface, Opacity = 1f };
+            highlight.Source.Map = new AtlasTextureReference { Texture = Spot(0.3f), Space = AtlasTextureSpace.View };
             highlight.Projection = AtlasLookupProjection.ReflectionPlanar;
             material.Layers.Add(shading);
             material.Layers.Add(highlight);
@@ -547,6 +564,18 @@ namespace NordicWind.AdvancedAtlaser.Tests
             using (var color = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Evaluate(0, material, Size, Size))
                 Assert.AreEqual(0.5f, color.GetPixel(Size / 2, Size / 2).g, 1e-3f, "white × the shading matcap, without the highlight");
             Assert.IsTrue(plan.Notes.Any(n => n.Contains("highlights") && n.Contains("aren't baked")), string.Join("\n", plan.Notes));
+
+            // Soft light that brightens all over is baked, through the same lookup.
+            var lit = new AtlasUnifiedMaterial();
+            var light = Matcap(new Color(0.3f, 0.3f, 0.3f, 1f), AtlasBlend.Add);
+            light.Projection = AtlasLookupProjection.ReflectionPlanar;
+            lit.Layers.Add(light);
+            job = new AtlasGeneratorJob();
+            job.Sources.Add(new AtlasGeneratorSource { Material = lit, UVRegion = new Rect(0f, 0f, 1f, 1f), Surface = () => new[] { Square() } });
+            plan = AtlasOutputPipeline.Resolve(job, BaseColorOnly());
+            using (var color = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Evaluate(0, lit, Size, Size))
+                Assert.AreEqual(1.3f, color.GetPixel(Size / 2, Size / 2).g, 1e-3f, "white + the light");
+            Assert.IsFalse(plan.Notes.Any(n => n.Contains("aren't baked")), string.Join("\n", plan.Notes));
         }
 
         [Test]

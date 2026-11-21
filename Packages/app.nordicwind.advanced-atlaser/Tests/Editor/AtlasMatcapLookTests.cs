@@ -24,7 +24,10 @@ namespace NordicWind.AdvancedAtlaser.Tests
 
         // A linear texture from its value over the lookup disc: x and y from −1 to 1, the disc's
         // edge at radius 1.
-        private Texture2D Texture(Func<float, float, float> value, string name = "matcap")
+        private Texture2D Texture(Func<float, float, float> value, string name = "matcap") => Texture(value, Color.white, name);
+
+        // The same in a color.
+        private Texture2D Texture(Func<float, float, float> value, Color color, string name = "matcap")
         {
             var texture = new Texture2D(Size, Size, TextureFormat.RGBAFloat, false, true) { name = name };
             var pixels = new Color[Size * Size];
@@ -32,7 +35,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 for (int x = 0; x < Size; x++)
                 {
                     float v = value((x + 0.5f) / Size * 2f - 1f, (y + 0.5f) / Size * 2f - 1f);
-                    pixels[y * Size + x] = new Color(v, v, v, 1f);
+                    pixels[y * Size + x] = new Color(v * color.r, v * color.g, v * color.b, 1f);
                 }
             texture.SetPixels(pixels);
             texture.Apply();
@@ -56,17 +59,17 @@ namespace NordicWind.AdvancedAtlaser.Tests
             AtlasMatcapLook.Measure(material.Layers.OfType<AtlasLookupLayer>().ToList(), material);
 
         [Test]
-        public void TheSameEffectAllOverIsATint()
+        public void TheSameEffectAllOverIsLightingThatABakeKeeps()
         {
             var added = Measure(With(Texture((x, y) => 0.3f), AtlasBlend.Add));
-            Assert.AreEqual(AtlasMatcapRole.Tint, added.Role);
+            Assert.AreEqual(AtlasMatcapRole.Lighting, added.Role);
             Assert.AreEqual(1f, added.Evenness, 1e-3f);
             Assert.AreEqual(1f, added.Brightens, 1e-3f, "it only brightens");
             Assert.AreEqual(0f, added.BakeLoss, 1e-3f, "the same from every view: freezing it loses nothing");
             Assert.Greater(added.Impact, 0.05f);
 
             var multiplied = Measure(With(Texture((x, y) => 0.5f), AtlasBlend.Multiply));
-            Assert.AreEqual(AtlasMatcapRole.Tint, multiplied.Role);
+            Assert.AreEqual(AtlasMatcapRole.Lighting, multiplied.Role);
             Assert.AreEqual(0f, multiplied.Brightens, 1e-3f, "it only darkens");
 
             var weaker = Measure(With(Texture((x, y) => 0.1f), AtlasBlend.Add));
@@ -89,7 +92,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(AtlasMatcapRole.Lighting, sky.Role);
             Assert.AreEqual(AtlasMatcapRole.Lighting, Measure(With(Texture((x, y) => 0.25f + 0.25f * x), AtlasBlend.Add)).Role, "light from one side");
             Assert.Less(sky.BakeLoss, 1f, "it looks alike from around the avatar");
-            Assert.Less(sky.Evenness, AtlasMatcapLook.TintEvenness);
+            Assert.Less(sky.Evenness, 0.9f, "it varies over the disc");
         }
 
         [Test]
@@ -98,7 +101,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var rim = Measure(With(Texture((x, y) => x * x + y * y > 0.85f * 0.85f ? 0.6f : 0f), AtlasBlend.Add));
             Assert.AreEqual(AtlasMatcapRole.Rim, rim.Role);
             Assert.GreaterOrEqual(rim.EdgeWeight, AtlasMatcapLook.RimEdgeWeight);
-            Assert.GreaterOrEqual(rim.FollowsFacing, AtlasMatcapLook.RimFollowsFacing);
+            Assert.GreaterOrEqual(rim.Around, AtlasMatcapLook.RimAround);
 
             // Soft shading that darkens toward the edges is one too.
             var shading = Measure(With(Texture((x, y) => Mathf.Max(0f, 1f - 0.6f * (x * x + y * y))), AtlasBlend.Multiply));
@@ -115,20 +118,57 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(AtlasMatcapRole.Lighting, glow.Role);
         }
 
+        // Poiyomi's double-sided lookup goes by the reflection, and is used for every kind of
+        // matcap: the lookup doesn't say what a matcap is for.
         [Test]
-        public void AReflectionLookupOrDetailThatMovesWithTheViewIsAReflection()
+        public void TheLookupDoesNotDecideTheRole()
         {
-            var lookedUp = Measure(With(Texture((x, y) => 0.25f + 0.25f * y), AtlasBlend.Add, 1f, AtlasLookupProjection.ReflectionPlanar));
-            Assert.AreEqual(AtlasMatcapRole.Reflection, lookedUp.Role, "by its lookup");
-
-            // Upright stripes: every step around the avatar shows another part of them.
+            var sky = Measure(With(Texture((x, y) => 0.25f + 0.25f * y), AtlasBlend.Add, 1f, AtlasLookupProjection.ReflectionPlanar));
+            Assert.AreEqual(AtlasMatcapRole.Lighting, sky.Role);
+            // Upright stripes are neither concentrated, even, nor toward the edge: lighting too.
             var stripes = Measure(With(Texture((x, y) => Mathf.FloorToInt((x + 1f) * 2f) % 2 == 0 ? 0.6f : 0f), AtlasBlend.Add));
-            Assert.AreEqual(AtlasMatcapRole.Reflection, stripes.Role, "by what freezing it would cost");
-            Assert.GreaterOrEqual(stripes.BakeLoss, AtlasMatcapLook.ReflectionBakeLoss);
+            Assert.AreEqual(AtlasMatcapRole.Lighting, stripes.Role);
         }
 
         [Test]
-        public void TheRoleIsNamedInTheInspectorAndTheLog()
+        public void FineDetailAllOverIsAHighlightToo()
+        {
+            // Facets: a checkerboard of eight squares across. Nothing of it is in one place.
+            var facets = Measure(With(Texture((x, y) => (Mathf.FloorToInt((x + 1f) * 4f) + Mathf.FloorToInt((y + 1f) * 4f)) % 2 == 0 ? 0.6f : 0f), AtlasBlend.Add));
+            Assert.Less(facets.Spread, AtlasMatcapLook.HighlightSpread);
+            Assert.GreaterOrEqual(facets.Detail, AtlasMatcapLook.HighlightDetail);
+            Assert.AreEqual(AtlasMatcapRole.Highlight, facets.Role);
+            // A smooth gradient has none.
+            Assert.Less(Measure(With(Texture((x, y) => 0.25f + 0.25f * y), AtlasBlend.Add)).Detail, 0.2f);
+        }
+
+        [Test]
+        public void AColoredMatcapTintsWhateverItsRole()
+        {
+            var red = new Color(1f, 0.2f, 0.2f, 1f);
+            var sky = Measure(With(Texture((x, y) => 0.25f + 0.25f * y, red), AtlasBlend.Add));
+            Assert.IsTrue(sky.Tints);
+            Assert.AreEqual("Lighting, brightens, tints", sky.Summary());
+            var glint = Measure(With(Texture((x, y) => x * x + y * y < 0.04f ? 1f : 0f, red), AtlasBlend.Add));
+            Assert.AreEqual("Highlight, brightens, tints", glint.Summary());
+
+            // A warm white doesn't, and neither does a gray matcap tinted by nothing.
+            Assert.IsFalse(Measure(With(Texture((x, y) => 0.25f + 0.25f * y, new Color(1f, 0.9f, 0.8f, 1f)), AtlasBlend.Add)).Tints);
+            Assert.AreEqual(0f, Measure(With(Texture((x, y) => 0.25f + 0.25f * y), AtlasBlend.Add)).Tint, 1e-4f);
+        }
+
+        [Test]
+        public void AMatcapThatChangesNothingSaysSo()
+        {
+            // Black, added: as a texture scale of 0 makes any matcap whose corner texel is black.
+            var nothing = Measure(With(Texture((x, y) => 0f), AtlasBlend.Add));
+            Assert.IsFalse(nothing.HasEffect);
+            Assert.AreEqual("No visible effect", nothing.Summary());
+            Assert.AreEqual("Lighting, brightens", Measure(With(Texture((x, y) => 0.25f + 0.25f * y), AtlasBlend.Add)).Summary());
+        }
+
+        [Test]
+        public void TheInspectorShowsTheMatcapWithItsRoleAndTheLogListsIt()
         {
             var job = new AtlasGeneratorJob();
             job.Sources.Add(new AtlasGeneratorSource
@@ -136,12 +176,14 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 Material = With(Texture((x, y) => 0.3f, "warm"), AtlasBlend.Add), UVRegion = new Rect(0f, 0f, 1f, 1f)
             });
             var instance = new AtlasMatcapFeature().Instances(job, new[] { 0 }).Single();
-            Assert.AreEqual("warm (source 1)", instance.Label, "the label stays the matcap's name");
-            StringAssert.Contains("tint matcap", instance.Detail);
-            StringAssert.Contains("brightening", instance.Detail);
+            Assert.AreEqual("warm (source 1)", instance.Label, "the label stays the matcap's name and sources");
+            Assert.AreEqual("warm", instance.Name);
+            Assert.AreEqual("Lighting, brightens", instance.Kind);
+            Assert.IsTrue(instance.HasPreview);
+            Assert.AreEqual("warm", instance.Preview.name, "the matcap's texture, to recognize and find it by");
 
             var plan = AtlasOutputPipeline.Resolve(job, AtlasShaderRegistry.Output("poiyomi10").Capabilities);
-            StringAssert.Contains("warm (source 1): tint", plan.Notes.Single(n => n.Contains("Matcap roles")));
+            StringAssert.Contains("warm (source 1): lighting", plan.Notes.Single(n => n.Contains("Matcap roles")));
         }
     }
 }

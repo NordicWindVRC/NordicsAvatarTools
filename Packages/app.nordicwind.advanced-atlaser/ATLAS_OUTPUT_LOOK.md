@@ -151,11 +151,9 @@ showing a matcap are offered:
 
 | Role | Can share a slot | Can be baked |
 |---|---|---|
-| Tint | Yes | Yes |
 | Lighting | With other lighting matcaps | Yes |
 | Rim | On the same parts | No |
 | Highlight | On the same parts, with the same lookup | No |
-| Reflection | On the same parts, with the same lookup | No |
 
 Among the ways offered, the cost decides. The rules in use today (an effect keeps its own
 slot, a highlight isn't baked by *Automatic*) follow from the cost: a highlight frozen by a
@@ -237,9 +235,14 @@ Rims use the same cost for their fits (`AtlasRimResponse` today).
 3. **The blocked view's weight.** In place: under *Automatic* it counts as much as the look
    with the shader, which stops a shift at the average look. With a lower weight, a matcap
    that is bright on average would shift in full.
-4. **Average in color.** Which roles it is offered for (proposed: lighting, tint and
-   reflection), and whether it needs a control of its own.
-5. **Roles.** The limits that separate them are in place as starting values, to be checked
-   against real matcaps before placement follows the roles. Whether a rim matcap may use a rim
-   slot, and a highlight or reflection matcap the output's own highlights and reflections,
-   where no matcap slot is left.
+4. **Average in color.** Which roles it is offered for (proposed: lighting), and whether it
+   needs a control of its own.
+5. **Roles.** The limits are checked against one avatar's matcaps and two collections. A lit
+   sphere with a strong hot spot comes within 0.05 of the highlight's spread limit, and a
+   gold sphere stays lighting; both are judgment calls. Whether a rim
+   matcap may use a rim slot, and a highlight the output's own highlights, where no matcap
+   slot is left.
+6. **The cost of a bake.** Point by point, freezing an ordinary lit-sphere matcap costs more
+   than leaving it out, though a baked one reads as plausible shading. Before the cost
+   decides what is baked, it needs a gentler measure for matcaps that light, or a check by
+   eye that the point-by-point one is right.

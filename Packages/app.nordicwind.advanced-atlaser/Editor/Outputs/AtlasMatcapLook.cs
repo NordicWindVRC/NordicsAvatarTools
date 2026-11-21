@@ -7,18 +7,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // What a matcap is for (ATLAS_OUTPUT.md, "What a matcap is for").
     public enum AtlasMatcapRole
     {
-        // Colors the surface: the same effect all over.
-        Tint,
-        // Stands in for the world's light: soft shading, sky and ground.
+        // Stands in for the world's light: a lit sphere, sky and ground, a soft glow, or one
+        // color or shade all over.
         Lighting,
-        // Lights or darkens the edges: its effect follows how far the surface faces the
-        // viewer, and lies toward the edge.
+        // Lights or darkens the edges: its effect lies toward the edge, all the way around.
         Rim,
-        // Gloss, shine, glints: most of its effect in a small part.
-        Highlight,
-        // Shows surroundings: looked up by the reflection, or detail that moves with the view,
-        // so that freezing it costs more than leaving it out.
-        Reflection
+        // Gloss, shine, glints and reflections: most of its effect in a small part, or fine
+        // detail all over (facets, a mirrored room).
+        Highlight
     }
 
     // A matcap's effect, measured on a sphere of normals seen from around the avatar: the look
@@ -39,44 +35,58 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float Evenness;
         // The share of its effect on the outer ring (beyond three quarters of the disc's radius).
         public float EdgeWeight;
-        // The share of its variation over the disc that follows the facing (the distance from
-        // the disc's center) alone: 1 for a matcap that is alike all around.
-        public float FollowsFacing;
+        // How much of the way around the outer ring shows the effect: the share of directions
+        // with a quarter of the ring's average or more.
+        public float Around;
+        // The share of its variation that is fine: what is left after each point is averaged
+        // with its neighbors (a twelfth of the radius, 15° around).
+        public float Detail;
+        // How colored the matcap is where it shows: its saturation, weighted by its effect.
+        public float Tint;
         public AtlasMatcapRole Role;
+
+        // Whether it colors the surface besides what its role does.
+        public bool Tints => Tint >= AtlasMatcapLook.TintSaturation;
 
         public string RoleName => Role.ToString().ToLowerInvariant();
 
-        /// <summary>The role and what it does, in a sentence.</summary>
-        public string Describe()
-        {
-            string does = Role == AtlasMatcapRole.Tint ? "colors the surface"
-                : Role == AtlasMatcapRole.Lighting ? "stands in for the world's light"
-                : Role == AtlasMatcapRole.Rim ? "lights or darkens the edges"
-                : Role == AtlasMatcapRole.Highlight ? "gloss, shine or glints"
-                : "shows surroundings";
-            string direction = Brightens >= 0.9f ? "brightening" : Brightens <= 0.1f ? "darkening" : "brightening and darkening";
-            return $"A {RoleName} matcap ({does}), {direction}; it changes the displayed brightness by " +
-                   Impact.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + " on average where it shows.";
-        }
+        // Whether it changes the look at all: half a displayed level of 256 on average.
+        public bool HasEffect => Impact >= 0.002f;
+
+        /// <summary>The role, whether it brightens or darkens, and whether it tints, in a few
+        /// words: "Rim, darkens", "Highlight, brightens, tints".</summary>
+        public string Summary() => !HasEffect ? "No visible effect"
+            : Role + ", " + (Brightens >= 0.9f ? "brightens" : Brightens <= 0.1f ? "darkens" : "brightens and darkens") +
+              (Tints ? ", tints" : "");
     }
 
     public static class AtlasMatcapLook
     {
-        // The limits between the roles, each on a measure of the matcap's own effect.
-        // - A highlight carries at least half its effect in its strongest tenth.
-        public const float HighlightSpread = 0.5f;
-        // - A rim's variation follows the facing for three quarters or more, and at least three
-        //   fifths of its effect is on the outer ring, which holds 0.44 of an even matcap's.
-        public const float RimFollowsFacing = 0.75f, RimEdgeWeight = 0.6f;
-        // - A tint varies by at most a tenth of its effect.
-        public const float TintEvenness = 0.9f;
-        // - Frozen at one view, a reflection costs at least what leaving it out does, and its
-        //   variation doesn't follow the facing.
-        public const float ReflectionBakeLoss = 1f;
+        // The limits between the roles, each on a measure of the matcap's own effect, checked
+        // against the matcaps in use on an avatar and two collections of 184 (an artist's,
+        // sorted into gems, glass, metal, pearl, rubber, shine and silk, and Poiyomi's samples).
+        // How a matcap is looked up doesn't say what it is for: Poiyomi's double-sided lookup,
+        // by the reflection, is used for every kind.
+        // - A rim has at least three fifths of its effect on the outer ring, which holds 0.44 of
+        //   an even matcap's, around at least 0.65 of the ring (a ring thinner at the top and
+        //   bottom is one; a crescent on one side isn't).
+        public const float RimEdgeWeight = 0.6f, RimAround = 0.65f;
+        // - A highlight carries at least half its effect in its strongest tenth, or at least half
+        //   its variation is fine detail (gems and facets measure 0.53 and up, soft lit spheres
+        //   0.35 and below), where it varies at all (speckle on an even color isn't one).
+        public const float HighlightSpread = 0.5f, HighlightDetail = 0.5f, DetailEvenness = 0.75f;
+        // - It tints from a quarter saturation: a warm white (0.2) doesn't, a silk blue (0.3) does.
+        public const float TintSaturation = 0.25f;
+        // - Everything else is lighting, an even color or shade included: how even a matcap is
+        //   depends on the base colors it is on (a multiply mixed with a dark base color darkens
+        //   almost evenly), so evenness is a measure and not a role.
 
-        // Where the outer ring starts, as the facing N·V: three quarters of the disc's radius.
-        private static readonly float RingFacing = Mathf.Sqrt(1f - 0.75f * 0.75f);
-        private const int Normals = 400, Views = 8, Rings = 12, TextureSize = 32;
+        // Where the outer ring starts: three quarters of the disc's radius.
+        private const float RingRadius = 0.75f;
+        private const int Normals = 400, Views = 8, TextureSize = 32;
+        // The disc seen from the front, for how the effect is spread over it: rings by radius,
+        // steps around.
+        private const int Rings = 24, Steps = 48;
         // The world's light for lookups by the light's half vector: above and in front.
         private static readonly Vector3 Light = new Vector3(0.3f, 0.6f, 0.74f).normalized;
 
@@ -149,8 +159,6 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var baked = new Color[Normals][];
             double total = 0.0, brightens = 0.0, weights = 0.0;
             var cost = new AtlasLayerCost();
-            // Seen from the front: each point's weight (its facing), effect size and signed effect.
-            var front = new List<(float Weight, float Size, float Signed)>();
             for (int k = 0; k < Views; k++)
             {
                 float yaw = k * 2f * Mathf.PI / Views;
@@ -168,18 +176,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         baked[i] = new Color[combos];
                         Effects(Look(normal, AtlasVirtualView.Direction(normal, Vector3.forward, AtlasMatcapBake.Frontal, AtlasMatcapBake.AlongNormal)), baked[i]);
                     }
-                    float size = 0f, signed = 0f;
+                    float size = 0f;
                     for (int c = 0; c < combos; c++)
                     {
                         var e = seen[c];
                         size += (Mathf.Abs(e.r) + Mathf.Abs(e.g) + Mathf.Abs(e.b)) / 3f;
-                        signed += (e.r + e.g + e.b) / 3f;
                         brightens += weight * (Mathf.Max(0f, e.r) + Mathf.Max(0f, e.g) + Mathf.Max(0f, e.b)) / 3f;
                         cost.Add(e, baked[i][c], weight);
                     }
                     total += weight * size;
                     weights += weight * combos;
-                    if (k == 0) front.Add((weight, size / combos, signed / combos));
                 }
             }
 
@@ -189,58 +195,116 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Brightens = total > 1e-9 ? (float)(brightens / total) : 0f,
                 BakeLoss = cost.Impact > 1e-9f ? cost.Cost / cost.Impact : 0f
             };
-            Shape(front, measure);
-            measure.Role = Role(first, measure);
+            // The disc seen from the front, on a polar grid: each point's effect size, signed
+            // effect and the matcap's saturation there. A ring's points weigh by its radius.
+            var sizes = new float[Rings, Steps];
+            var signs = new float[Rings, Steps];
+            double tinted = 0.0, tintWeights = 0.0;
+            for (int j = 0; j < Rings; j++)
+            {
+                float radius = (j + 0.5f) / Rings;
+                for (int k = 0; k < Steps; k++)
+                {
+                    float angle = 2f * Mathf.PI * (k + 0.5f) / Steps;
+                    var normal = new Vector3(radius * Mathf.Cos(angle), radius * Mathf.Sin(angle), Mathf.Sqrt(1f - radius * radius));
+                    var look = Look(normal, Vector3.forward);
+                    Effects(look, seen);
+                    float size = 0f, signed = 0f;
+                    for (int c = 0; c < combos; c++)
+                    {
+                        var e = seen[c];
+                        size += (Mathf.Abs(e.r) + Mathf.Abs(e.g) + Mathf.Abs(e.b)) / 3f;
+                        signed += (e.r + e.g + e.b) / 3f;
+                    }
+                    sizes[j, k] = size / combos;
+                    signs[j, k] = signed / combos;
+                    float brightest = Mathf.Max(look.Color.r, Mathf.Max(look.Color.g, look.Color.b));
+                    float darkest = Mathf.Min(look.Color.r, Mathf.Min(look.Color.g, look.Color.b));
+                    tintWeights += radius * sizes[j, k];
+                    if (brightest > 1e-4f) tinted += radius * sizes[j, k] * (brightest - darkest) / brightest;
+                }
+            }
+            measure.Tint = tintWeights > 1e-9 ? (float)(tinted / tintWeights) : 0f;
+            Shape(sizes, signs, measure);
+            measure.Role = Role(measure);
             if (Measures.Count >= 256) Measures.Clear();
             Measures[key] = measure;
             return measure;
         }
 
         // How the effect is spread over the disc, seen from the front.
-        private static void Shape(List<(float Weight, float Size, float Signed)> front, AtlasMatcapMeasure measure)
+        private static void Shape(float[,] sizes, float[,] signs, AtlasMatcapMeasure measure)
         {
-            float weight = front.Sum(p => p.Weight), effect = front.Sum(p => p.Weight * p.Size);
-            measure.Evenness = measure.FollowsFacing = 1f;
-            if (effect <= 1e-9f) return;
+            float Radius(int ring) => (ring + 0.5f) / Rings;
+            double weight = 0.0, effect = 0.0, signedSum = 0.0, absolute = 0.0, edge = 0.0;
+            var points = new List<(float Weight, float Size)>(Rings * Steps);
+            for (int j = 0; j < Rings; j++)
+                for (int k = 0; k < Steps; k++)
+                {
+                    float r = Radius(j);
+                    weight += r;
+                    effect += r * sizes[j, k];
+                    signedSum += r * signs[j, k];
+                    absolute += r * Mathf.Abs(signs[j, k]);
+                    if (r >= RingRadius) edge += r * sizes[j, k];
+                    points.Add((r, sizes[j, k]));
+                }
+            measure.Evenness = 1f;
+            if (effect <= 1e-9) return;
             // The strongest tenth of the disc.
-            float tenth = weight * 0.1f, taken = 0f, strongest = 0f;
-            foreach (var p in front.OrderByDescending(p => p.Size))
+            double tenth = weight * 0.1, taken = 0.0, strongest = 0.0;
+            foreach (var p in points.OrderByDescending(p => p.Size))
             {
-                float part = Mathf.Min(p.Weight, tenth - taken);
-                if (part <= 0f) break;
+                double part = System.Math.Min(p.Weight, tenth - taken);
+                if (part <= 0.0) break;
                 strongest += part * p.Size;
                 taken += part;
             }
-            measure.Spread = strongest / effect;
-            float mean = front.Sum(p => p.Weight * p.Signed) / weight;
-            float signed = front.Sum(p => p.Weight * Mathf.Abs(p.Signed));
-            float variation = front.Sum(p => p.Weight * Mathf.Abs(p.Signed - mean));
-            measure.Evenness = signed > 1e-9f ? Mathf.Clamp01(1f - variation / signed) : 1f;
-            measure.EdgeWeight = front.Where(p => p.Weight <= RingFacing).Sum(p => p.Weight * p.Size) / effect;
-            // What is left of the variation within rings of the same facing.
-            int Ring(float facing) => Mathf.Min(Rings - 1, Mathf.FloorToInt(Mathf.Sqrt(Mathf.Max(0f, 1f - facing * facing)) * Rings));
-            var weights = new float[Rings];
-            var sums = new float[Rings];
-            foreach (var p in front)
+            measure.Spread = (float)(strongest / effect);
+            measure.EdgeWeight = (float)(edge / effect);
+
+            float mean = (float)(signedSum / weight);
+            double variation = 0.0, fine = 0.0;
+            for (int j = 0; j < Rings; j++)
+                for (int k = 0; k < Steps; k++)
+                {
+                    variation += Radius(j) * Mathf.Abs(signs[j, k] - mean);
+                    // Each point against the average of its neighbors: two rings, two steps.
+                    float sum = 0f;
+                    int count = 0;
+                    for (int dj = -2; dj <= 2; dj++)
+                    {
+                        if (j + dj < 0 || j + dj >= Rings) continue;
+                        for (int dk = -2; dk <= 2; dk++)
+                        {
+                            sum += signs[j + dj, (k + dk + Steps) % Steps];
+                            count++;
+                        }
+                    }
+                    fine += Radius(j) * Mathf.Abs(signs[j, k] - sum / count);
+                }
+            measure.Evenness = absolute > 1e-9 ? Mathf.Clamp01((float)(1.0 - variation / absolute)) : 1f;
+            measure.Detail = variation > 1e-9 ? (float)(fine / variation) : 0f;
+
+            // The directions around the outer ring that show the effect.
+            var directions = new float[Steps];
+            float average = 0f;
+            for (int k = 0; k < Steps; k++)
             {
-                weights[Ring(p.Weight)] += p.Weight;
-                sums[Ring(p.Weight)] += p.Weight * p.Signed;
+                for (int j = 0; j < Rings; j++)
+                    if (Radius(j) >= RingRadius) directions[k] += Radius(j) * sizes[j, k];
+                average += directions[k] / Steps;
             }
-            float within = front.Sum(p => p.Weight * Mathf.Abs(p.Signed - sums[Ring(p.Weight)] / weights[Ring(p.Weight)]));
-            measure.FollowsFacing = variation > 1e-9f ? Mathf.Clamp01(1f - within / variation) : 1f;
+            measure.Around = average > 1e-9f ? directions.Count(d => d >= 0.25f * average) / (float)Steps : 0f;
         }
 
-        // The role, by the first limit that holds: how it is looked up, whether it follows the
-        // facing toward the edge, how much of it is in one place, how even it is, and what
-        // freezing it would cost.
-        private static AtlasMatcapRole Role(AtlasLookupLayer layer, AtlasMatcapMeasure measure)
+        // The role, by the first limit that holds: toward the edge all around, then most of it in
+        // one place or fine detail all over.
+        private static AtlasMatcapRole Role(AtlasMatcapMeasure measure)
         {
-            if (layer.Projection == AtlasLookupProjection.ReflectionPlanar) return AtlasMatcapRole.Reflection;
-            bool followsFacing = measure.FollowsFacing >= RimFollowsFacing;
-            if (followsFacing && measure.EdgeWeight >= RimEdgeWeight) return AtlasMatcapRole.Rim;
+            if (measure.EdgeWeight >= RimEdgeWeight && measure.Around >= RimAround) return AtlasMatcapRole.Rim;
             if (measure.Spread >= HighlightSpread) return AtlasMatcapRole.Highlight;
-            if (measure.Evenness >= TintEvenness) return AtlasMatcapRole.Tint;
-            if (!followsFacing && measure.BakeLoss >= ReflectionBakeLoss) return AtlasMatcapRole.Reflection;
+            if (measure.Detail >= HighlightDetail && measure.Evenness < DetailEvenness) return AtlasMatcapRole.Highlight;
             return AtlasMatcapRole.Lighting;
         }
 

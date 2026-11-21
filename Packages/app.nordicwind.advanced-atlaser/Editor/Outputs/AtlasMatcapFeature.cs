@@ -14,12 +14,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
     //   lookup disc through its scale and offset. One that reads black where it adds, screens,
     //   mixes or glows (white where it multiplies, without base color mix) changes nothing.
     // - Each group is measured on its largest source (AtlasMatcapLook): its impact, whether it
-    //   brightens or darkens, and its role (tint, lighting, rim, highlight, reflection), which
-    //   the inspector's tooltip and the build's log name. Placement doesn't follow the role yet:
-    //   it goes by the effect rule below.
-    // - An effect (shine, glints, reflections) carries at least half its light in its brightest
-    //   tenth, or uses the reflection projection; the others are environment matcaps (shading,
-    //   soft light). A shared slot shows its one texture on every member's parts, which an effect
+    //   brightens or darkens, and its role (lighting, rim, highlight), which
+    //   the inspector shows under the matcap, next to its texture, and the build's log lists.
+    //   Placement doesn't follow the role yet: it goes by the effect rule below.
+    // - An effect (shine, glints) carries at least half its light in its brightest tenth; the
+    //   others are environment matcaps (shading, soft light). The lookup doesn't decide it:
+    //   Poiyomi's double-sided mode looks up by the reflection and is used for every kind of
+    //   matcap. A shared slot shows its one texture on every member's parts, which an effect
     //   can't share without putting its highlights where they don't belong.
     // - The user places each group: its own slot, combined with another group's slot, or off
     //   (stored by the group's key). Automatic, where the user hasn't: matcaps that change
@@ -138,7 +139,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Matcaps that look the same in several sources.
         private sealed class Group
         {
-            public string Key, Look, Lookup, Label;
+            public string Key, Look, Lookup, Label, Name;
             public float Area;
             // Area × visible strength: the order of own slots and the shares of a combined texture.
             public float Visible;
@@ -220,7 +221,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     var group = groups.Find(g => g.Look == look);
                     if (group == null)
                     {
-                        group = new Group { Look = look, Lookup = Lookup(instance), Key = Hash(look), Label = Label(instance) };
+                        group = new Group { Look = look, Lookup = Lookup(instance), Key = Hash(look), Label = Label(instance), Name = Label(instance) };
                         groups.Add(group);
                     }
                     group.Members.Add(instance);
@@ -328,21 +329,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return Color.Lerp(Color.Lerp(At(x0, y0), At(x0 + 1, y0), fx), Color.Lerp(At(x0, y0 + 1), At(x0 + 1, y0 + 1), fx), fy);
         }
 
-        // An effect: half its light or more in its brightest tenth, or a reflection lookup.
         // Whether a group mostly brightens (its heaviest blend adds, or it only glows): an
         // effect that does is a highlight, which a bake would freeze in place. One that mostly
-        // multiplies is shading, even through a reflection lookup.
+        // multiplies is shading.
         private static bool Brightens(Group group) => group.Members.Any(m =>
         {
             var shown = Shown(m.Layers.Where(l => !m.Added.Contains(l)).ToList());
             return shown.Count == 0 ? Glow(m) > 0f : Main(shown) == AtlasBlend.Add;
         });
 
-        private static bool IsEffect(Instance instance)
-        {
-            var first = instance.Layers[0];
-            return first.Projection == AtlasLookupProjection.ReflectionPlanar || ContentOf(first).Concentration >= 0.5f;
-        }
+        // An effect: half its light or more in its brightest tenth, however it is looked up.
+        private static bool IsEffect(Instance instance) => ContentOf(instance.Layers[0]).Concentration >= 0.5f;
 
         // A matcap that changes nothing where its slot looks it up: black where it adds, screens,
         // mixes or glows; white where it multiplies, without base color or light color mix.
@@ -377,7 +374,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public IReadOnlyList<AtlasFeatureInstance> Instances(AtlasGeneratorJob job, IReadOnlyList<int> sources) =>
             Groups(job, sources, null).Select(g => new AtlasFeatureInstance
             {
-                Key = g.Key, Label = g.Label, Detail = g.Measure.Describe(), Sources = g.Members.Select(m => m.Source).Distinct().ToList()
+                Key = g.Key, Label = g.Label, Name = g.Name, Kind = g.Measure.Summary(), Sources = g.Members.Select(m => m.Source).Distinct().ToList(),
+                HasPreview = true, Preview = g.Members[0].Layers[0].Source.Map?.Texture, PreviewColor = g.Members[0].Layers[0].Source.Color
             }).ToList();
 
         public void Resolve(AtlasFeatureContext context)
