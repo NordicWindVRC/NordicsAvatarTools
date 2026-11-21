@@ -200,10 +200,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // A ramp texture the setup reads, as samples along u; null otherwise.
-        public static Color[] RampOf(AtlasLighting lighting) =>
+        public static Color[] RampOf(AtlasLighting lighting, int samples = RampSamples) =>
             lighting.Family == AtlasLightingFamily.RampToon && lighting.Ramp.Bands.Count == 0 && lighting.Ramp.Keys.Count == 0 &&
             lighting.Ramp.Ramp?.Texture is Texture2D texture
-                ? AtlasSourceSamples.Small(texture, RampSamples, 1)
+                ? AtlasSourceSamples.Small(texture, samples, 1)
                 : null;
 
         /// <summary>A linear color as displayed (sRGB), clamped to 0–1.</summary>

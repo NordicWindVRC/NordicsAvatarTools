@@ -35,7 +35,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static Color Evaluate(IReadOnlyList<AtlasRampKey> keys, float t)
         {
             if (keys == null || keys.Count == 0) return Color.white;
-            var sorted = keys.OrderBy(k => k.Position).ToList();
+            // Keys are made in position order; others are sorted first.
+            var sorted = keys;
+            for (int i = 1; i < keys.Count; i++)
+                if (keys[i].Position < keys[i - 1].Position)
+                {
+                    sorted = keys.OrderBy(k => k.Position).ToList();
+                    break;
+                }
             if (t <= sorted[0].Position) return sorted[0].Color;
             for (int i = 1; i < sorted.Count; i++)
                 if (t <= sorted[i].Position)

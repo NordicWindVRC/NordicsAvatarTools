@@ -279,9 +279,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 lighting.ColorModel == AtlasLightColorModel.Floored ? 0.05f * lighting.FloorIntensity : 0f));
 
         /// <summary>Whether the build generates a ramp texture for the output: one that shades
-        /// only through a ramp, whose ramp is described by keys.</summary>
+        /// only through a ramp, whose ramp is described by keys (a ramp toon source's, or the
+        /// ones fitted to the chosen lighting, whatever its family).</summary>
         public static bool NeedsGeneratedRamp(AtlasUnifiedMaterial output, AtlasOutputCapabilities capabilities) =>
-            capabilities.GeneratedRamp && output.Lighting.Family == AtlasLightingFamily.RampToon &&
+            capabilities.GeneratedRamp && output.Lighting.Family != AtlasLightingFamily.Unlit &&
             output.Lighting.Ramp.Ramp == null && output.Lighting.Ramp.Keys.Count > 0;
 
         /// <summary>The lighting settings the written material doesn't hold the same way, read

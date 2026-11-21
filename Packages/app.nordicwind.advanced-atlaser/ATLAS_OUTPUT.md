@@ -375,15 +375,25 @@ Where the kept lighting looks different, the build tunes it (`AtlasLightingTunin
    its shadow side: the light color model, the light multiplier and addition, the brightness
    ceiling, the minimum light and brightness, the directional ambient amount, the shadow
    lift, the ramp and shadow strengths, and the shadow color's brightness (its hue stays).
-   The family, the ramp's shape, the shading term and the hues are the artist's and aren't
-   searched.
+   The family, the shading term and the hues are the artist's and aren't searched.
 3. **The search** takes one value at a time: points across its range, then steps that halve
    around the best, with the kept lighting read back for each candidate. A value the shader
    doesn't have changes nothing in the kept lighting and stays as mapped, so the search
    knows no shader.
-4. **The result** replaces the mapped lighting only when it is closer by the same margin, so
-   it doesn't flip on a small change. The build then names the tuned values and the
-   difference before and after, in one line.
+4. **The ramp's shape** is fitted for an output that shades only through a generated ramp
+   texture read by half-Lambert (Toon Standard). Such a shader has no family, shading term or
+   shadow strength of its own: the ramp is where the chosen lighting's shading over the angle
+   to the light goes. For each texel of the ramp and each color channel, the fit takes the
+   value that makes the kept lighting show the sources' colors closest to the chosen
+   lighting at that angle, over the four scenes; where the ramp makes no difference it is
+   white. It works at the ramp texture's resolution, with a source's ramp texture read twice
+   as finely, so a sharp edge stays sharp. The ramp is fitted first, then the values, then
+   the ramp again with the values found. The fitted ramp replaces the source's ramp texture
+   or the SDK's preset, and the build generates it.
+5. **The result** replaces the mapped lighting only when it is closer by the same margin, so
+   it doesn't flip on a small change: the fitted ramp against the mapped one, and the values
+   against what the ramp left. The build then names what was tuned and the difference before
+   and after, in one line.
 
 The target is the chosen lighting, not each source's own: which lighting the atlas gets is
 the user's choice (*Lighting from*), and tuning only makes the output shader show that
@@ -1348,7 +1358,8 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
   and an opposite effect.
 - **Tuning:** the kept lighting read from a scratch material equals the written material's;
   an output of the source's own shader keeps the mapped lighting; a value that looks closer
-  replaces the mapped one; and tuning never leaves the lighting farther from the chosen one.
+  replaces the mapped one; a generated ramp's edge moves to where the chosen lighting puts
+  it; and tuning never leaves the lighting farther from the chosen one.
 - **Level compensation:** a source the atlas lights darker is scaled by what its own lighting
   had over it, up to where its brightest texel reaches 1; turned off, the base colors stay;
   a scaled source is compared as the atlas shows it; and the inspector shows the control

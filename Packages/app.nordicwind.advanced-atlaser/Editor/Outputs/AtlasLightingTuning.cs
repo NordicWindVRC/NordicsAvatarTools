@@ -10,7 +10,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // kept lighting, AtlasKeptLighting), the values below are searched for the ones that make
     // the sources' colors look closest to the chosen lighting in the standard scenes. A value
     // the shader doesn't have changes nothing in the kept lighting and stays as mapped, so the
-    // list holds no knowledge of any shader.
+    // list holds no knowledge of any shader. For an output that shades through a generated ramp
+    // texture, the ramp's shape is fitted the same way, texel by texel.
     public static class AtlasLightingTuning
     {
         // The mean displayed difference below which the mapped lighting stays as it is, and by
@@ -91,11 +92,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
             public Color[] Shown;
         }
 
-        // The results so far, by the output shader, the chosen lighting and the sources' colors:
-        // the tuned values in the order of Values and the note; null values where nothing was
-        // tuned. The inspector resolves on every change of a setting, mostly with the same
-        // lighting.
-        private static readonly Dictionary<string, (float[] Values, string Note)> Results = new Dictionary<string, (float[], string)>();
+        // What a search found: the tuned values in the order of Values (null: as mapped), the
+        // fitted ramp (null: as mapped) and the note.
+        private sealed class Result
+        {
+            public float[] Values;
+            public List<AtlasRampKey> Keys;
+            public string Note;
+        }
+
+        // The results so far, by the output shader, the chosen lighting and the sources' colors;
+        // null where the mapped lighting stays. The inspector resolves on every change of a
+        // setting, mostly with the same lighting.
+        private static readonly Dictionary<string, Result> Results = new Dictionary<string, Result>();
         private const int MostResults = 64;
 
         /// <summary>Tunes the plan's lighting for the output shader, in place, and adds a note
@@ -115,20 +124,52 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (Results.Count >= MostResults) Results.Clear();
                 Results[key] = result;
             }
-            if (result.Values == null) return;
-            for (int i = 0; i < values.Count; i++) values[i].Set(result.Values[i]);
+            if (result == null) return;
+            if (result.Keys != null) SetRamp(lighting.Ramp, null, AtlasRampPreset.None, result.Keys);
+            if (result.Values != null)
+                for (int i = 0; i < values.Count; i++) values[i].Set(result.Values[i]);
             plan.Notes.Add(result.Note);
         }
 
-        // The search, which leaves the lighting as mapped: the tuned values and the note, or
-        // nothing where the mapped lighting stays.
-        private static (float[] Values, string Note) Search(AtlasLighting lighting, List<Value> values, List<Target> targets, AtlasKeptLighting kept)
+        // The search, which leaves the lighting as mapped: what it found, or null where the
+        // mapped lighting stays. The ramp's shape comes first, then the values, then the shape
+        // again with the values found, since each is fitted with the other as it is.
+        private static Result Search(AtlasLighting lighting, List<Value> values, List<Target> targets, AtlasKeptLighting kept)
         {
             float Cost() => Difference(targets, kept.Of(lighting));
             float mapped = Cost();
-            if (mapped <= Margin) return (null, null);
+            if (mapped <= Margin) return null;
             foreach (var value in values) value.Mapped = value.Get();
+            var ramp = lighting.Ramp;
+            var mappedTexture = ramp.Ramp;
+            var mappedPreset = ramp.Preset;
+            var mappedKeys = ramp.Keys.ToList();
             float best = mapped;
+
+            // The chosen lighting at the ramp's texels, taken before anything changes.
+            var texels = kept.Shader.Capabilities.GeneratedRamp ? RampTargets(lighting, targets) : null;
+            List<AtlasRampKey> keys = null;
+            void FitRamp()
+            {
+                if (texels == null) return;
+                var fitted = Fit(texels, targets, kept.Of(lighting));
+                if (fitted == null) return;
+                var texture = ramp.Ramp;
+                var preset = ramp.Preset;
+                var before = ramp.Keys.ToList();
+                SetRamp(ramp, null, AtlasRampPreset.None, fitted);
+                float cost = Cost();
+                // The first fit replaces the mapped ramp by the margin; a refit only has to be closer.
+                if (cost < best - (keys == null ? Margin : 1e-5f))
+                {
+                    best = cost;
+                    keys = fitted;
+                }
+                else SetRamp(ramp, texture, preset, before);
+            }
+
+            FitRamp();
+            float beforeValues = best;
             var effective = Effective(values, Cost).ToList();
             for (int round = 0; round < Rounds; round++)
             {
@@ -136,12 +177,137 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 foreach (var value in effective) best = Search(value, best, Cost);
                 if (before - best < 1e-4f) break;
             }
-            var found = values.Select(v => v.Get()).ToArray();
-            var tuned = values.Where(v => Mathf.Abs(v.Get() - v.Mapped) > 1e-4f).Select(v => v.Name).ToList();
+            float[] found = null;
+            var tuned = new List<string>();
+            if (beforeValues - best >= Margin)
+            {
+                found = values.Select(v => v.Get()).ToArray();
+                tuned.AddRange(values.Where(v => Mathf.Abs(v.Get() - v.Mapped) > 1e-4f).Select(v => v.Name));
+                FitRamp();
+            }
+            else
+            {
+                foreach (var value in values) value.Set(value.Mapped);
+                best = beforeValues;
+            }
+            if (keys != null) tuned.Insert(0, "the shadow ramp's shape");
             foreach (var value in values) value.Set(value.Mapped);
-            if (mapped - best < Margin) return (null, null);
-            return (found, "The output shader shows the chosen lighting differently, so these are tuned to look closer to it: " +
-                           string.Join(", ", tuned) + $" (mean difference in displayed brightness {Number(mapped)}, tuned {Number(best)}).");
+            SetRamp(ramp, mappedTexture, mappedPreset, mappedKeys);
+            if (keys == null && found == null) return null;
+            return new Result
+            {
+                Values = found, Keys = keys,
+                Note = "The output shader shows the chosen lighting differently, so these are tuned to look closer to it: " +
+                       string.Join(", ", tuned) + $" (mean difference in displayed brightness {Number(mapped)}, tuned {Number(best)})."
+            };
+        }
+
+        private static void SetRamp(AtlasRampToon ramp, AtlasTextureReference texture, AtlasRampPreset preset, List<AtlasRampKey> keys)
+        {
+            ramp.Ramp = texture;
+            ramp.Preset = preset;
+            ramp.Keys.Clear();
+            ramp.Keys.AddRange(keys);
+        }
+
+        // The source's ramp is read this finely for the fit, so a sharp edge stays sharp.
+        private const int SourceRampSamples = 256;
+        // Values tried per texel: steps of a sixteenth, then steps that halve down to 1/256.
+        private const int RampSteps = 16;
+        private const int RampRefinements = 4;
+
+        // The sources' colors as the chosen lighting shows them at each texel of a generated
+        // ramp, read as half-Lambert: per target, per color, per scene, per texel.
+        private static List<Color[]> RampTargets(AtlasLighting chosen, List<Target> targets)
+        {
+            if (chosen.Family == AtlasLightingFamily.Unlit) return null;
+            var source = AtlasLightingResponse.RampOf(chosen, SourceRampSamples);
+            var all = new List<Color[]>();
+            foreach (var target in targets)
+            {
+                var shown = new Color[target.Bases.Count * AtlasLook.Scenes.Length * AtlasRampTexture.Width];
+                int n = 0;
+                foreach (var color in target.Bases)
+                    foreach (var scene in AtlasLook.Scenes)
+                        for (int x = 0; x < AtlasRampTexture.Width; x++)
+                            shown[n++] = AtlasLightingResponse.Display(AtlasLightingResponse.Lit(chosen, color, NDotL(x), scene, source));
+                all.Add(shown);
+            }
+            return all;
+        }
+
+        // The angle to the light a ramp texel is read at, by half-Lambert.
+        private static float NDotL(int texel) => 2f * (texel + 0.5f) / AtlasRampTexture.Width - 1f;
+
+        // The ramp that makes the kept lighting show the sources' colors closest to the chosen
+        // lighting: for each texel and color channel, the value with the lowest difference over
+        // the scenes and the colors. Where the ramp makes no difference it is white. Null where
+        // the kept lighting doesn't read its ramp by half-Lambert.
+        private static List<AtlasRampKey> Fit(List<Color[]> texels, List<Target> targets, AtlasLighting kept)
+        {
+            if (kept.Family != AtlasLightingFamily.RampToon || kept.Ramp.Term != AtlasShadingTerm.HalfLambert ||
+                Mathf.Abs(kept.Ramp.Offset) > 1e-5f || kept.Ramp.Bands.Count > 0)
+                return null;
+            // The candidate is read in place of the kept ramp.
+            kept.Ramp.Keys.Clear();
+            var candidate = new Color[1];
+            var tried = new Dictionary<int, Vector3>();
+            var keys = new List<AtlasRampKey>(AtlasRampTexture.Width);
+            int scenes = AtlasLook.Scenes.Length;
+            for (int x = 0; x < AtlasRampTexture.Width; x++)
+            {
+                float nDotL = NDotL(x);
+                tried.Clear();
+                // The difference per color channel with the ramp at a value, in 256ths.
+                Vector3 Error(int value)
+                {
+                    if (tried.TryGetValue(value, out var known)) return known;
+                    float v = value / 256f;
+                    candidate[0] = new Color(v, v, v, 1f);
+                    var error = Vector3.zero;
+                    for (int t = 0; t < targets.Count; t++)
+                    {
+                        var target = targets[t];
+                        var chosen = texels[t];
+                        for (int b = 0; b < target.Bases.Count; b++)
+                            for (int s = 0; s < scenes; s++)
+                            {
+                                var shown = AtlasLightingResponse.Display(
+                                    AtlasLightingResponse.Lit(kept, target.Bases[b], nDotL, AtlasLook.Scenes[s], candidate));
+                                var wanted = chosen[(b * scenes + s) * AtlasRampTexture.Width + x];
+                                error += target.Weight * new Vector3(Mathf.Abs(shown.r - wanted.r), Mathf.Abs(shown.g - wanted.g), Mathf.Abs(shown.b - wanted.b));
+                            }
+                    }
+                    tried[value] = error;
+                    return error;
+                }
+                // From white down, so the highest value wins among equals.
+                var at = new Vector3Int(256, 256, 256);
+                var lowest = Error(256);
+                void Try(int channel, int value)
+                {
+                    value = Mathf.Clamp(value, 0, 256);
+                    float error = Error(value)[channel];
+                    if (error >= lowest[channel] - 1e-6f) return;
+                    lowest[channel] = error;
+                    at[channel] = value;
+                }
+                int step = 256 / RampSteps;
+                for (int value = 256 - step; value >= 0; value -= step)
+                    for (int c = 0; c < 3; c++) Try(c, value);
+                for (int i = 0; i < RampRefinements; i++)
+                {
+                    step /= 2;
+                    for (int c = 0; c < 3; c++)
+                    {
+                        int center = at[c];
+                        Try(c, center + step);
+                        Try(c, center - step);
+                    }
+                }
+                keys.Add(new AtlasRampKey((x + 0.5f) / AtlasRampTexture.Width, new Color(at.x / 256f, at.y / 256f, at.z / 256f, 1f)));
+            }
+            return keys;
         }
 
         private static string Key(IAtlasOutputShader shader, AtlasLighting lighting, List<Target> targets)

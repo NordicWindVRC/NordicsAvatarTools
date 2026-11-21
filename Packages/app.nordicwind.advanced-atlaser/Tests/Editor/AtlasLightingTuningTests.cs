@@ -245,6 +245,43 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsFalse(lighting.Switches.Any(s => s.Id == AtlasLevelCompensation.SwitchId), "the shader's own lighting, kept as it is");
         }
 
+        // A hard-edged ramp read by N·L: lit where N·L is above a half. Toon Standard reads its
+        // ramp by half-Lambert, so the same keys would put the edge at N·L = 0.
+        [Test]
+        public void AGeneratedRampIsFittedToWhereTheChosenLightingPutsItsEdge()
+        {
+            var shader = Installed("mobiletoon");
+            var source = Source(0.5f);
+            source.Lighting.Family = AtlasLightingFamily.RampToon;
+            var ramp = source.Lighting.Ramp;
+            ramp.Term = AtlasShadingTerm.Lambert;
+            ramp.Keys.Add(new AtlasRampKey(0f, Color.black));
+            ramp.Keys.Add(new AtlasRampKey(0.49f, Color.black));
+            ramp.Keys.Add(new AtlasRampKey(0.51f, Color.white));
+            ramp.Keys.Add(new AtlasRampKey(1f, Color.white));
+            var job = Job(source);
+            var mapped = AtlasOutputPipeline.Resolve(job, shader.Capabilities).Output.Lighting;
+            Assert.Greater(AtlasRampTexture.Evaluate(mapped.Ramp.Keys, 0.6f).r, 0.8f, "by its values: the edge at the middle of the ramp");
+
+            var plan = AtlasOutputPipeline.Resolve(job, shader);
+            var tuned = plan.Output.Lighting;
+            Assert.AreEqual(AtlasRampTexture.Width, tuned.Ramp.Keys.Count, "a key per texel");
+            Assert.Less(AtlasRampTexture.Evaluate(tuned.Ramp.Keys, 0.6f).r, 0.2f, "N·L = 0.2 is still in shadow");
+            Assert.Greater(AtlasRampTexture.Evaluate(tuned.Ramp.Keys, 0.9f).r, 0.8f, "N·L = 0.8 is lit");
+            Assert.IsTrue(AtlasLightingFeature.NeedsGeneratedRamp(plan.Output, shader.Capabilities), "the build makes the texture");
+            StringAssert.Contains("shadow ramp", plan.Notes.Single(n => n.Contains("tuned")));
+            using (var kept = AtlasKeptLighting.For(shader))
+                Assert.Less(AtlasLightingResponse.Difference(source.Lighting, kept.Of(tuned), Gray),
+                    AtlasLightingResponse.Difference(source.Lighting, kept.Of(mapped), Gray) - AtlasLightingTuning.Margin, "closer by the margin");
+        }
+
+        [Test]
+        public void RampKeysOutOfOrderAreReadInPositionOrder()
+        {
+            var keys = new List<AtlasRampKey> { new AtlasRampKey(1f, Color.white), new AtlasRampKey(0f, Color.black) };
+            Assert.AreEqual(0.25f, AtlasRampTexture.Evaluate(keys, 0.25f).r, 1e-5f);
+        }
+
         [Test]
         public void TuningNeverLeavesTheLightingFartherFromTheChosenOne()
         {
