@@ -478,6 +478,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var stored = StoredValue(setting, AtlasFeatureOption.ValueId(option.Id));
             float value = stored != null ? stored.FindPropertyRelative("number").floatValue : option.Default;
+            if (option.Choices != null)
+            {
+                int index = Mathf.Clamp(Mathf.RoundToInt(value), 0, option.Choices.Length - 1);
+                int picked = PopupRow(new GUIContent(option.Label, option.Tooltip), index, option.Choices);
+                if (picked == index) return;
+                if (stored == null) stored = AddValue(setting, AtlasFeatureOption.ValueId(option.Id));
+                stored.FindPropertyRelative("number").floatValue = picked;
+                return;
+            }
             var row = EditorGUILayout.GetControlRect();
             EditorGUI.LabelField(new Rect(row.x, row.y, EditorGUIUtility.labelWidth, row.height), new GUIContent(option.Label, option.Tooltip));
             var fieldRect = new Rect(row.x + EditorGUIUtility.labelWidth, row.y, row.width - EditorGUIUtility.labelWidth, row.height);

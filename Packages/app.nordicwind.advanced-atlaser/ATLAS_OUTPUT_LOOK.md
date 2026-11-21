@@ -192,36 +192,17 @@ keeps the part as bright as it was, which is most of what a lighting matcap does
 
 ### Base color shifts
 
-A shift is the only way to show both sides in a slot with one blend. It covers a range: no
-shift is *One side*, and the full shift raises the base color to the brightest the matcap
-makes it. Today's fit always takes the full shift. A shift has side effects, and each is
-bounded:
+A shift is the only way to show both sides in a slot with one blend. How far it goes, and
+what viewers who block the shader see of it, is built (*Base color shifts* in the output
+design). What remains planned:
 
-- **The blocked view** shows the shifted map without the slot (*The blocked view*, below).
 - **Every feature that reads the base color** reads the shifted one: the base color mixes of
   rims and emissions, shadow colors taken from the base color, outlines. They are part of the
   kept material's look, so the cost counts them.
-- **Range.** A shift above 1 goes into the shared color and takes levels from the whole atlas
-  (*Small values need range*). Under *Automatic* a shift stays within the map's range: a
-  texel is raised to 1 at most.
-
-### The blocked view
-
-VRChat draws an avatar whose shaders a viewer has blocked with a fallback shader, chosen by
-the material's `VRCFallback` tag, and copies the standard properties to it: the main texture
-and color, the emission, the normal map and others. A matcap slot isn't among them.
-
-| The output's fallback | The blocked view shows |
-|---|---|
-| The output shader itself (Toon Standard: its tag names it, and every property is copied) | The same look |
-| Toon, Unlit or Standard (the choices of a Poiyomi output) | The base color map × the color, without the view layers |
-| Hidden | Nothing |
-
-Where the blocked view shows the base color alone, a map is acceptable anywhere between the
-surface's own color and its average look with the shader. A bake stays within that range. A
-shift beyond it counts as a difference in the blocked view: the avatar shows too bright with
-a raised base, too dark with a lowered one. With the other two fallbacks a shift costs
-nothing there.
+- **A hidden fallback** shows nothing to viewers who block the shader, so a shift costs
+  nothing there; it is treated as showing the base color today.
+- **Bakes** stay between the surface's own color and its average look with the shader, as
+  shifts do under *Automatic*.
 
 ### Automatic
 
@@ -239,11 +220,7 @@ nothing there.
 
 - **Placement** per matcap, as today: *Automatic*, its own slot, combined with another,
   baked, off.
-- **Base color shift**, shown while *Automatic* would shift and the blocked view shows the
-  base color:
-  - *Automatic*: the blocked view counts as much as the look with the shader;
-  - *Keep the base color*: no shifts;
-  - *Full*: the look with the shader alone decides, and the range bound is lifted.
+- **Base color shift**, as built (*Base color shifts* in the output design).
 
 Rims use the same cost for their fits (`AtlasRimResponse` today).
 
@@ -256,12 +233,12 @@ Rims use the same cost for their fits (`AtlasRimResponse` today).
    mesh's own normals would be closer, but the inspector doesn't have them.
 2. **The new scenes' values.** In place as starting values: *Probes only* at 0.5 on average
    with 0.25 more along the dominant direction, *Dark* at 0.02. To be confirmed.
-3. **The blocked view's weight.** Proposed: under *Automatic* it counts as much as the look
-   with the shader.
-4. **Shifts within range.** Proposed: under *Automatic* no texel is raised above 1.
-5. **Average in color.** Which roles it is offered for (proposed: lighting, tint and
+3. **The blocked view's weight.** In place: under *Automatic* it counts as much as the look
+   with the shader, which stops a shift at the average look. With a lower weight, a matcap
+   that is bright on average would shift in full.
+4. **Average in color.** Which roles it is offered for (proposed: lighting, tint and
    reflection), and whether it needs a control of its own.
-6. **Roles.** The limits that separate them are in place as starting values, to be checked
+5. **Roles.** The limits that separate them are in place as starting values, to be checked
    against real matcaps before placement follows the roles. Whether a rim matcap may use a rim
    slot, and a highlight or reflection matcap the output's own highlights and reflections,
    where no matcap slot is left.

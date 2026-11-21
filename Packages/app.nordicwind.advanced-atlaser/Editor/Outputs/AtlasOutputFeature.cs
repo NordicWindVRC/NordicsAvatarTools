@@ -146,6 +146,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public string Tooltip;
         public float Default;
         public float Min, Max = 1f;
+        // A choice among these instead of a strength; the value is the chosen one's index.
+        public string[] Choices;
 
         public static string ValueId(string id) => "option:" + id;
     }

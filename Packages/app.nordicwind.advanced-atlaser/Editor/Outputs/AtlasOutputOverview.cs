@@ -101,6 +101,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 foreach (var state in overview.Features)
                 {
                     if (plan.LiveSetups.TryGetValue(state.Feature.Id, out var setups)) state.LiveSetups.AddRange(setups);
+                    // How far a matcap slot's fit may shift the base color, while one does.
+                    if (state.Feature is AtlasMatcapFeature && plan.BaseColorShifts) state.Options.Add(AtlasMatcapFeature.ShiftOption);
                     if (!(state.Feature is AtlasLightingFeature)) continue;
                     // Level compensation, while a material would be scaled.
                     bool compensated = plan.LevelScales.Count > 0;

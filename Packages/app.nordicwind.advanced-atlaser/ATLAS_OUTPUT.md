@@ -486,6 +486,43 @@ The limits are starting values, each on a measure of the matcap's own effect. Th
 names the role, the direction and the impact in the matcap's tooltip, and the build lists the
 roles in one line. Placement doesn't follow the role yet: it goes by the effect rule above.
 
+#### Base color shifts
+
+A slot with one blend at a time shows one side of a matcap: its multiply can only darken, its
+add can only brighten. A matcap that does both is shown through a **base color shift**: the
+base color is raised and the slot multiplies it down, or lowered and the slot adds to it
+(the slot fit, `AtlasMatcapFeature`). The shift is right only together with the slot.
+
+- **The blocked view.** VRChat draws an avatar whose shaders a viewer has blocked with a
+  fallback shader, chosen by the material's `VRCFallback` tag, and copies the standard
+  properties to it: the main texture and color, the emission, the normal map and others. A
+  matcap slot isn't among them.
+
+  | The output's fallback | The blocked view shows |
+  |---|---|
+  | The output shader itself (Toon Standard: its tag names it, and every property is copied) | The same look |
+  | A fallback the writer sets (a Poiyomi output: Toon, Unlit or Standard) | The base color map × the color, without the matcaps |
+
+- **How far a shift goes.** Where the blocked view shows the same look, the shift goes as far
+  as the matcap needs. Where it shows the base color alone, the base color is right for that
+  view anywhere between the surface's own color and its average look with the matcap, and
+  the user chooses (*Base color shift*, shown while a slot is fitted):
+
+  | Choice | The base color | With the shader | Blocked |
+  |---|---|---|---|
+  | *Automatic* | Shifted no further than the average look | The side the slot's blend can't show is weaker: a multiplying slot reaches the average at its brightest, an adding one at its darkest | As bright as the material is on average |
+  | *Keep the base color* | The surface's own | One side of the matcap only | The surface's own color |
+  | *Full* | Shifted as far as the matcap needs | Exact where the matcap is black or full | Too bright with a raised base, too dark with a lowered one |
+
+  *Automatic* stops at the average because every step past it costs the blocked view in
+  full, while it gives the look with the shader only the matcap's average share of it.
+- **The slot's strength** follows the base color: a multiplying slot still reaches the
+  matcaps' darkest, an adding one their brightest, as far as the base color lets it.
+- **The average look** is taken from the matcap's mean color over the lookup disc, between
+  the look with black matcaps and with full ones.
+- **Range.** A shift above 1 goes into the shared color, by the map's range step (see [*Map
+  contributions*](#map-contributions)).
+
 ### Versions
 
 A shader's settings can change meaning between versions under the same names: Poiyomi 10.0.26
@@ -1389,6 +1426,10 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
 - **The look model:** a lighting's level and contrast in a scene, the sources listed where
   the kept lighting looks different from their own, and a layer's cost for a weaker, a stronger
   and an opposite effect.
+- **Base color shifts:** where the blocked view shows the base color, a shift stops at the
+  average look, the kept base color shows the darkening side alone, and *Full* goes as far as
+  the matcap needs, as an output whose blocked view is the same look always does; the
+  inspector offers the choice while a slot is fitted.
 - **Matcap roles:** an even matcap is a tint, a small bright spot a highlight that a bake
   would freeze, sky above ground and light from a side lighting, an effect toward the edges
   all around a rim, and a reflection lookup or detail that moves with the view a reflection.

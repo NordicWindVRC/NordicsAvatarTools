@@ -44,9 +44,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
     //   multiply. Listed as approximated.
     // - Where a slot can't do a source's matcaps as they are (blends it lacks, or base color
     //   mix it doesn't have), it is fitted to them per texel (SlotFit): its strength goes into
-    //   the mask and the rest into the base color map, which may come out brighter than the
-    //   source's. Without a base color map, the base color mix goes into the mask: the mask ×
-    //   lerp(1, the base color's luminance, mix).
+    //   the mask and the rest into the base color map, a base color shift, which may come out
+    //   brighter or darker than the source's. Where viewers who block the shader see the base
+    //   color alone (the output sets a fallback shader), how far it goes is the user's (Base
+    //   color shift, shown while a slot is fitted): Automatic stays between the surface's own
+    //   color and its average look with the matcap; Keep the base color shows one side of the
+    //   matcap; Full shifts as far as the matcap needs, as an output whose blocked view is the
+    //   same look always does. Without a base color map, the base color mix goes into the
+    //   mask: the mask × lerp(1, the base color's luminance, mix).
     // - A combined slot whose matcaps mix in the base color differently has none: each one's
     //   mix goes into its mask, as where the slot has no base color mix.
     // - A slot that only glows has its texture made from the glows. The slot's one glow
@@ -60,9 +65,34 @@ namespace NordicWind.AdvancedAtlaser.Editor
     //   without slots), is drawn into the base color and the emission as the virtual view sees
     //   it, instead of taking a slot. Automatic in the Baked mode leaves out effects that
     //   brighten (Brightens): a baked highlight stays in place from every view.
+    // How far a matcap slot's fit may shift the base color (ATLAS_OUTPUT.md, "Base color shifts").
+    public enum AtlasBaseColorShift { Automatic = 0, Keep = 1, Full = 2 }
+
     public sealed class AtlasMatcapFeature : IAtlasInstanceFeature, IAtlasLitBakeFeature
     {
         public const string FeatureId = "matcaps";
+        public const string ShiftOptionId = "base-color-shift";
+
+        // The control, shown while a slot is fitted through the base color and viewers who
+        // block the shader see the base color alone.
+        public static AtlasFeatureOption ShiftOption => new AtlasFeatureOption
+        {
+            Id = ShiftOptionId, Label = "Base color shift", Default = 0f, Max = 2f,
+            Choices = new[] { "Automatic", "Keep the base color", "Full" },
+            Tooltip = "A matcap slot that can only brighten or only darken shows a matcap that does both by shifting the base color: " +
+                      "raised so the slot darkens it back, or lowered so the slot adds to it. Viewers who block the avatar's shaders " +
+                      "see the base color without the matcap. Automatic shifts no further than the material's average look with " +
+                      "the matcap, so they see it as bright as it is on average; the matcap then shows weaker. Keep the base color " +
+                      "shows only the side of the matcap the slot can. Full shifts as far as the matcap needs: exact with the " +
+                      "shader, too bright or too dark without it."
+        };
+
+        private static AtlasBaseColorShift Shift(AtlasGeneratorJob job)
+        {
+            var choice = job.Features.Find(f => f.FeatureId == FeatureId);
+            return choice != null && choice.Values.TryGetValue(AtlasFeatureOption.ValueId(ShiftOptionId), out var value)
+                ? (AtlasBaseColorShift)Mathf.Clamp(Mathf.RoundToInt(value.Number), 0, 2) : AtlasBaseColorShift.Automatic;
+        }
         public const int CombinedSize = 512;
 
         public static readonly AtlasFeatureMode Baked = new AtlasFeatureMode
@@ -462,6 +492,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
             context.Plan.MatcapSlotsUsed = slots.Count;
             for (int k = 0; k < slots.Count; k++)
                 Place(context, slots[k], k, approximated);
+            if (context.Plan.BaseColorShifts)
+            {
+                var shift = Shift(job);
+                context.Notes.Add(shift == AtlasBaseColorShift.Keep
+                    ? "The base color is kept as it is (Base color shift), so a matcap slot that lacks a matcap's blends shows only the " +
+                      "side of it that its blend can."
+                    : shift == AtlasBaseColorShift.Full
+                        ? "The base color is shifted as far as the fitted matcap slots need (Base color shift: Full); viewers who " +
+                          "block the avatar's shaders see it brighter or darker than the material."
+                        : "The base color is shifted for the fitted matcap slots no further than the material's average look with the " +
+                          "matcap, since viewers who block the avatar's shaders see the base color alone; the matcap shows weaker " +
+                          "there. Base color shift: Full shows it exactly.");
+            }
             if (off.Count > 0)
                 context.Notes.Add("Matcaps left out: " + string.Join(", ", off.Select(g => g.Label)) + ".");
             for (int k = 0; k < slots.Count; k++)
@@ -716,7 +759,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 return;
             }
             if (mask.IsConstant && mask.Constant <= 0f) return;
-            if (fits != null) FitBaseColor(baseColor, fits);
+            if (fits != null)
+            {
+                FitBaseColor(baseColor, fits);
+                context.Plan.BaseColorShifts |= capabilities.VRChatFallback;
+            }
             // Every slot has a mask object of its own, which the writers group its layers by.
             var slotMask = mask.Mask ?? new AtlasMask();
             if (live >= 0) AtlasLiveMasks.Read(slotMask, live);
@@ -975,6 +1022,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // T0 and T1.
             public float Zero;
             public Color Full = Color.white;
+            // How far the base color may shift, and the source's matcaps on average over the
+            // lookup disc (per channel, 0–1): where its average look lies between the chain
+            // with black matcaps and with full ones.
+            public AtlasBaseColorShift Shift = AtlasBaseColorShift.Full;
+            public Color Mean = Color.white;
             // Poiyomi's chain: the matcap (instance) each layer belongs to, in order.
             public readonly List<(int Matcap, AtlasBlend Blend, float Weight, Color Color, float Mix)> Layers =
                 new List<(int, AtlasBlend, float, Color, float)>();
@@ -990,6 +1042,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static Dictionary<int, SlotFit> Fits(AtlasGeneratorJob job, List<Group> slot, AtlasBlend main, bool combined,
             AtlasOutputCapabilities capabilities)
         {
+            // An output whose blocked view is the same look has nothing to bound.
+            var shift = capabilities.VRChatFallback ? Shift(job) : AtlasBaseColorShift.Full;
             var result = new Dictionary<int, SlotFit>();
             var ends = combined ? Ends(slot, main) : (Zero: 0f, Full: Color.white);
             bool lacking = combined || Lacks(slot[0].Members[0].Layers, capabilities);
@@ -1005,7 +1059,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     all = false;
                     continue;
                 }
-                var fit = new SlotFit { Mask = Member(slot, members.Key).Mask, Add = main != AtlasBlend.Multiply };
+                var fit = new SlotFit { Mask = Member(slot, members.Key).Mask, Add = main != AtlasBlend.Multiply, Shift = shift };
+                // The source's matcaps on average over the lookup disc.
+                var mean = Color.black;
+                foreach (var member in ordered) mean += MeanColor(member.Layers[0]) / ordered.Count;
+                fit.Mean = new Color(Mathf.Clamp01(mean.r), Mathf.Clamp01(mean.g), Mathf.Clamp01(mean.b), 1f);
                 for (int k = 0; k < ordered.Count; k++)
                     foreach (var layer in ordered[k].Layers.Where(Chained))
                         fit.Layers.Add((k, layer.Blend, layer.Opacity, layer.Source.Color, Mathf.Clamp01(layer.BaseColorMix)));
@@ -1118,16 +1176,47 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     ? Mathf.Max(0f, target - strength * half)
                     : Mathf.Max(0f, target) / Mathf.Max(1e-4f, 1f - strength + strength * half);
             }
-            return result;
+            if (fit.Shift == AtlasBaseColorShift.Full) return result;
+
+            // The bounds on the shift, per channel (ATLAS_OUTPUT.md, "Base color shifts"). The
+            // blocked view shows the base color alone, so the map stays where it is right for
+            // that view too.
+            // - Keep: the surface's own color.
+            // - Automatic: between the surface's own color and its average look with the
+            //   matcaps.
+            var bounded = result;
+            bool changed = false;
+            for (int c = 0; c < 3; c++)
+            {
+                float low = b[c], high = b[c];
+                if (fit.Shift == AtlasBaseColorShift.Automatic)
+                {
+                    float average = Mathf.Lerp(black[c], full[c], fit.Mean[c]);
+                    low = Mathf.Min(b[c], average);
+                    high = Mathf.Max(b[c], average);
+                }
+                bounded[c] = Mathf.Clamp(result[c], low, high);
+                changed |= Mathf.Abs(bounded[c] - result[c]) > 1e-6f;
+            }
+            if (!changed) return result;
+            // The strength for the bounded base color: an adding slot reaches the matcaps'
+            // brightest (base + T1 × s), a multiplying one their darkest (base × lerp(1, T0, s)),
+            // as far as the base color lets it.
+            float level = Luminance(bounded);
+            if (fit.Add) strength = Mathf.Clamp01((Luminance(full) - level) / Mathf.Max(1e-4f, Luminance(fit.Full)));
+            else strength = level > 1e-5f && fit.Zero < 1f - 1e-4f ? Mathf.Clamp01((1f - Luminance(black) / level) / (1f - fit.Zero)) : 0f;
+            return bounded;
         }
 
         // The base color map as the fits make it where their sources are: a shift, right only
-        // together with the slot. It can come out above 1 (the map's range step).
+        // together with the slot. It can come out above 1 (the map's range step), unless the
+        // base color is kept.
         private static void FitBaseColor(AtlasMapRequest request, Dictionary<int, SlotFit> fits)
         {
             request.Add(new AtlasMapContribution
             {
-                Feature = FeatureId, Label = "matcap slot fit", Stage = AtlasMapStage.Layers, Kind = AtlasContributionKind.Shift, CanRaise = true,
+                Feature = FeatureId, Label = "matcap slot fit", Stage = AtlasMapStage.Layers, Kind = AtlasContributionKind.Shift,
+                CanRaise = fits.Values.Any(f => f.Shift != AtlasBaseColorShift.Keep),
                 Applies = fits.ContainsKey,
                 Apply = content =>
                 {

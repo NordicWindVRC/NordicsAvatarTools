@@ -42,8 +42,9 @@ for worlds without a main light, a lighting's level and contrast, the kept mater
 back, the sources listed where the kept lighting looks different from their own, the
 lighting's shared values and a generated ramp's shape tuned where the output shader shows
 the chosen lighting differently, and the base color scaled for sources the atlas's lighting
-shows brighter or darker than their own, and each matcap's effect measured and named by its
-role (the design's *Map contributions*, *The look model* and *What a matcap is for*). Each
+shows brighter or darker than their own, each matcap's effect measured and named by its
+role, and base color shifts bounded by what viewers who block the shader see (the design's
+*Map contributions*, *The look model*, *What a matcap is for* and *Base color shifts*). Each
 remaining part of the look model is built in the phase that first uses it.
 
 ### 4.5 Matcaps by look
@@ -52,9 +53,8 @@ remaining part of the look model is built in the phase that first uses it.
   chosen lighting, with highlights and reflections, read from a map at a stage (*Map
   contributions*). The existing matcap and rim fits move onto it, and weigh the scenes
   without a main light too.
-- The role limits checked against real matcaps (open question 6), then every way of showing
-  a matcap with its cost, bounded base color shifts, the blocked view, *Average in color* and
-  the *Base color shift* control (*Matcaps*).
+- The role limits checked against real matcaps (open question 5), then every way of showing
+  a matcap with its cost, and *Average in color* (*Matcaps*).
 - **Workable:** *Automatic* places matcaps by role and cost on every writer, and the rules in
   use before (effects keep their slots, highlights aren't baked) hold as tests.
 

@@ -548,6 +548,84 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(Mathf.Lerp(gray, 1f, 0.4f), baseColor * Mathf.Lerp(1f, 1f, strength), 1e-3f, "white matcap");
         }
 
+        // Toon Standard's slot, on an output whose blocked view shows the base color alone.
+        private static AtlasOutputCapabilities WithFallback()
+        {
+            var capabilities = new AtlasOutputCapabilities();
+            AtlasFieldwise.Copy(ToonStandard, capabilities);
+            capabilities.VRChatFallback = true;
+            return capabilities;
+        }
+
+        // A matcap of 0.9 that multiplies by 0.5 and adds 0.4, on a base color of 0.5: the
+        // source shows 0.25 where the matcap is black, 0.9 where it is white, and 0.835 at the
+        // matcap's own value. A multiplying slot shows it over a raised base color.
+        private AtlasGeneratorJob BrightensAndDarkens(AtlasBaseColorShift shift)
+        {
+            var material = WithMatcap(Solid(new Color(0.9f, 0.9f, 0.9f, 1f)), null, Color.white, (AtlasBlend.Multiply, 0.5f), (AtlasBlend.Add, 0.4f));
+            material.Surface.BaseColor.Color = new Color(0.5f, 0.5f, 0.5f, 1f);
+            var job = Job(material);
+            var choice = new AtlasFeatureChoice { FeatureId = AtlasMatcapFeature.FeatureId };
+            choice.Values[AtlasFeatureOption.ValueId(AtlasMatcapFeature.ShiftOptionId)] = ((int)shift, "");
+            job.Features.Add(choice);
+            return job;
+        }
+
+        // The fitted base color (with the shared color) and the slot's strength.
+        private static (float BaseColor, float Strength) Fitted(AtlasOutputPlan plan, AtlasGeneratorJob job) =>
+            (Evaluate(plan, AtlasVirtualMap.BaseColor, job, 0) * plan.Output.Surface.BaseColor.Color.r,
+                Lookups(plan).Single().Opacity * Evaluate(plan, AtlasVirtualMap.Mask1, job, 0));
+
+        [Test]
+        public void ABaseColorShiftStopsAtTheAverageLookWhereTheBlockedViewShowsTheBaseColor()
+        {
+            var job = BrightensAndDarkens(AtlasBaseColorShift.Automatic);
+            var plan = AtlasOutputPipeline.Resolve(job, WithFallback());
+            var (baseColor, strength) = Fitted(plan, job);
+            Assert.AreEqual(0.835f, baseColor, 1e-3f, "raised to the average look, not to the brightest");
+            Assert.AreEqual(0.25f, baseColor * Mathf.Lerp(1f, 0f, strength), 1e-3f, "a black matcap still shows the darkest");
+            Assert.IsTrue(plan.BaseColorShifts, "the inspector offers the choice");
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("average look")), string.Join(" | ", plan.Notes));
+
+            job = BrightensAndDarkens(AtlasBaseColorShift.Full);
+            plan = AtlasOutputPipeline.Resolve(job, WithFallback());
+            (baseColor, strength) = Fitted(plan, job);
+            Assert.AreEqual(0.9f, baseColor, 1e-3f, "as far as the matcap needs");
+            Assert.AreEqual(0.25f, baseColor * Mathf.Lerp(1f, 0f, strength), 1e-3f);
+
+            job = BrightensAndDarkens(AtlasBaseColorShift.Keep);
+            plan = AtlasOutputPipeline.Resolve(job, WithFallback());
+            (baseColor, strength) = Fitted(plan, job);
+            Assert.AreEqual(0.5f, baseColor, 1e-3f, "the surface's own color");
+            Assert.AreEqual(0.25f, baseColor * Mathf.Lerp(1f, 0f, strength), 1e-3f, "the darkening side is kept");
+            Assert.IsFalse(plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Contributions.Any(c => c.CanRaise));
+        }
+
+        [Test]
+        public void AnOutputWhoseBlockedViewIsTheSameLookShiftsAsFarAsTheMatcapNeeds()
+        {
+            // The stored choice is another output shader's: it doesn't apply here.
+            var job = BrightensAndDarkens(AtlasBaseColorShift.Keep);
+            var plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
+            Assert.AreEqual(0.9f, Fitted(plan, job).BaseColor, 1e-3f);
+            Assert.IsFalse(plan.BaseColorShifts, "nothing to choose");
+        }
+
+        [Test]
+        public void TheInspectorOffersTheBaseColorShiftWhileASlotIsFitted()
+        {
+            var fitted = BrightensAndDarkens(AtlasBaseColorShift.Automatic).Sources[0].Material;
+            var overview = AtlasOutputOverview.Build(new AtlasOutputConfiguration(), WithFallback(), new Material[] { null }, new[] { fitted });
+            var matcaps = overview.Features.Single(s => s.Feature is AtlasMatcapFeature);
+            var option = matcaps.Options.Single(o => o.Id == AtlasMatcapFeature.ShiftOptionId);
+            Assert.AreEqual(3, option.Choices.Length);
+
+            // A matcap the slot shows as it is needs no shift.
+            var plain = WithMatcap(Solid(Color.white), null, Color.white, (AtlasBlend.Add, 0.5f));
+            overview = AtlasOutputOverview.Build(new AtlasOutputConfiguration(), WithFallback(), new Material[] { null }, new[] { plain });
+            Assert.IsFalse(overview.Features.Single(s => s.Feature is AtlasMatcapFeature).Options.Any(o => o.Id == AtlasMatcapFeature.ShiftOptionId));
+        }
+
         [Test]
         public void TheOverviewListsGeneratedAndReusedTexturesWithTheirMemory()
         {
