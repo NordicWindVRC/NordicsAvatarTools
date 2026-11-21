@@ -12,6 +12,8 @@ Related documents:
 - [NORMAL_BAKER.md](NORMAL_BAKER.md): the normal correction bake that the output reuses.
 - [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md): the implementation plan: what's done, what's
   next and what's later.
+- [ATLAS_OUTPUT_LOOK.md](ATLAS_OUTPUT_LOOK.md): the planned design for building maps from
+  contributions and matching by look, not built yet.
 
 ---
 

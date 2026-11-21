@@ -2,7 +2,8 @@
 
 What's next and later for the design in [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names
 it uses. How finished parts work is in the design; what each version added is in
-[CHANGELOG.md](CHANGELOG.md).
+[CHANGELOG.md](CHANGELOG.md). The design that M4 builds is in
+[ATLAS_OUTPUT_LOOK.md](ATLAS_OUTPUT_LOOK.md) until it is built.
 
 ## How the plan works
 
@@ -27,6 +28,8 @@ it uses. How finished parts work is in the design; what each version added is in
 | **M1 — End to end** | An avatar builds with the sources' base color textures atlased into one, on both writers, and the manual bake writes the material and its texture | Done |
 | **M2 — Initial features** | Every feature in the design's *Feature inventory*, on both writers | Done |
 | **M3 — More Poiyomi writers** | Poiyomi Toon 11, Pro 10 and Pro 11 as outputs | Next |
+| **M4 — Matching by look** | Maps built from contributions; looks measured and tuned in every scene; matcaps placed by role and cost | Planned |
+| **M5 — More output families** | VRChat Mobile Diffuse, Unity Standard, VRChat Mobile Toon Lit and Standard Lite as outputs | Planned |
 | Later | Mochie Uber as an output, the later features, animation, GPU baking | — |
 
 ---
@@ -46,6 +49,58 @@ it uses. How finished parts work is in the design; what each version added is in
   emission and the others the unified material types). Offered only where Pro is installed.
   The writer describes Pro in its own words.
 - **Workable — M3 reached:** Poiyomi Pro 10 and Pro 11 as outputs, with round trips.
+
+---
+
+## M4 — Matching by look
+
+The design is in [ATLAS_OUTPUT_LOOK.md](ATLAS_OUTPUT_LOOK.md), whose section names the phases
+use. Whether 4.1 comes before M3 is one of its open questions: it doesn't touch the writers.
+
+### 4.1 Map contributions
+
+- Map requests hold contributions (*Map contributions*). The features that wrap a map's
+  evaluation add contributions instead, and the map owns the shared color and the range step.
+- Tests: baked matcaps over a color every source shares (one that adds above 1, one on a
+  tinted color), and an architecture test that features don't replace a map's evaluation.
+- **Workable:** every output builds as before, and the two baked-matcap cases come out right.
+
+### 4.2 The look model
+
+- The shared scenes, the reference look, the kept material and layer costs (*The look
+  model*). The existing fits move onto them, and the formulas leave the capabilities for
+  unified modes the parsers set. Look values show in the overview.
+- **Workable:** the fits give the same results in the bright and dim scenes, and each
+  writer's kept material equals its read-back in tests.
+
+### 4.3 Worlds without a main light
+
+- The unified lighting records each shader's rule without a main light, for every parser,
+  with the inventories updated. The *Probes only* and *Dark* scenes join the set.
+- **Workable:** *Automatic* lighting and every fit weigh all four scenes.
+
+### 4.4 Lighting by look
+
+- Writers declare their tunable values (*Tuning*). The lighting is tuned where the mapping
+  loses something, with level compensation per source, and the difference left is reported.
+- **Workable:** an output of another family than its sources matches their level and contrast
+  in the four scenes as closely as its controls allow; same-family outputs are unchanged.
+
+### 4.5 Matcaps by look
+
+- Measures and roles, every way of showing a matcap with its cost, bounded base color shifts,
+  the blocked view, *Average in color* and the *Base color shift* control (*Matcaps*).
+- **Workable — M4 reached:** *Automatic* places matcaps by role and cost on every writer, and
+  the rules in use before (effects keep their slots, highlights aren't baked) hold as tests.
+
+---
+
+## M5 — More output families
+
+- VRChat Mobile Diffuse, Unity Standard, VRChat Mobile Toon Lit and Standard Lite as outputs.
+  Each starts from its shader's source and uses its parser for the kept material.
+- VRChat Mobile Diffuse has one color map, so every feature it keeps is a contribution to
+  that map.
 
 ---
 
