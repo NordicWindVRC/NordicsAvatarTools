@@ -150,6 +150,101 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(AtlasLightingFamily.Flat, tuned.Family, "the family is the artist's");
         }
 
+        // A gray source whose own lighting is 1.5 times as bright as a plain one's.
+        private static AtlasUnifiedMaterial Source(float level, float lightMultiplier = 1f)
+        {
+            var material = new AtlasUnifiedMaterial();
+            material.Surface.BaseColor.Color = new Color(level, level, level, 1f);
+            material.Lighting.LightMultiplier = lightMultiplier;
+            return material;
+        }
+
+        // Three sources lit by the first one's lighting: a plain one, and two whose own lighting
+        // is 1.5 times as bright, one of them almost white.
+        private static AtlasGeneratorJob Brighter(out AtlasUnifiedMaterial dim, out AtlasUnifiedMaterial nearWhite)
+        {
+            dim = Source(0.4f, 1.5f);
+            nearWhite = Source(0.9f, 1.5f);
+            var job = new AtlasGeneratorJob();
+            job.Sources.Add(new AtlasGeneratorSource { Material = Source(0.3f), UVRegion = new Rect(0f, 0f, 0.5f, 1f) });
+            job.Sources.Add(new AtlasGeneratorSource { Material = dim, UVRegion = new Rect(0.5f, 0f, 0.25f, 1f) });
+            job.Sources.Add(new AtlasGeneratorSource { Material = nearWhite, UVRegion = new Rect(0.75f, 0f, 0.25f, 1f) });
+            job.Features.Add(new AtlasFeatureChoice { FeatureId = AtlasLightingFeature.FeatureId, ReferenceSource = 0 });
+            return job;
+        }
+
+        private static AtlasOutputCapabilities Poiyomi => AtlasShaderRegistry.Output("poiyomi10").Capabilities;
+
+        [Test]
+        public void ASourceTheAtlasLightsDarkerGetsItsBaseColorScaledWithinTheMapsRange()
+        {
+            var job = Brighter(out var dim, out var nearWhite);
+            var plan = AtlasOutputPipeline.Resolve(job, Poiyomi);
+            var request = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor);
+            // As if the output shader keeps the chosen lighting as it is.
+            AtlasLevelCompensation.Apply(job, plan, plan.Output.Lighting);
+            Assert.IsFalse(plan.LevelScales.ContainsKey(0), "the lighting is this source's own");
+            Assert.AreEqual(1.5f, plan.LevelScales[1], 0.05f, "what its own lighting had over the atlas's");
+            var placed = new Vector2Int(4, 4);
+            using (var map = request.Evaluate(1, dim, 4, 4, placed))
+                Assert.AreEqual(0.4f * plan.LevelScales[1], map.GetPixel(1, 1).r, 1e-3f);
+            Assert.AreEqual(plan.LevelScales[1], plan.LevelApplied[1], 1e-4f, "applied in full");
+            using (var map = request.Evaluate(2, nearWhite, 4, 4, placed))
+                Assert.AreEqual(1f, map.GetPixel(1, 1).r, 1e-3f, "a raise stops where the brightest texel reaches 1");
+            Assert.AreEqual(1f / 0.9f, plan.LevelApplied[2], 1e-3f);
+            using (var map = request.Evaluate(0, job.Sources[0].Material, 4, 4, placed))
+                Assert.AreEqual(0.3f, map.GetPixel(1, 1).r, 1e-4f, "the others keep their colors");
+            var note = plan.Notes.Single(n => n.Contains("scaled"));
+            StringAssert.Contains("source 2", note);
+            StringAssert.Contains("source 3", note);
+            StringAssert.DoesNotContain("source 1", note);
+
+            // A source lit as it was needs no scale; one lit darker than its own gets one.
+            Assert.AreEqual(1f, AtlasLevelCompensation.Scale(Source(0.3f), new AtlasLighting()));
+            Assert.Less(AtlasLevelCompensation.Scale(Source(0.3f), new AtlasLighting { LightMultiplier = 1.5f }), 0.75f, "lit brighter: scaled down");
+        }
+
+        [Test]
+        public void TurnedOffLevelCompensationLeavesTheBaseColors()
+        {
+            var job = Brighter(out var dim, out _);
+            job.Features[0].Switches[AtlasLevelCompensation.SwitchId] = false;
+            var plan = AtlasOutputPipeline.Resolve(job, Poiyomi);
+            var request = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor);
+            AtlasLevelCompensation.Apply(job, plan, plan.Output.Lighting);
+            Assert.AreEqual(2, plan.LevelScales.Count, "what it would do, for the inspector's control");
+            Assert.IsFalse(request.Contributions.Any(c => c.Label == "level compensation"));
+            Assert.IsFalse(plan.Notes.Any(n => n.Contains("scaled")));
+            using (var map = request.Evaluate(1, dim, 4, 4, new Vector2Int(4, 4)))
+                Assert.AreEqual(0.4f, map.GetPixel(1, 1).r, 1e-4f);
+        }
+
+        [Test]
+        public void AScaledSourceIsComparedAsTheAtlasShowsIt()
+        {
+            var job = Brighter(out _, out _);
+            job.Sources.RemoveAt(2);
+            var kept = new AtlasUnifiedMaterial();
+            StringAssert.Contains("source 2", AtlasLook.LightingNotes(job, kept).Single());
+            Assert.IsEmpty(AtlasLook.LightingNotes(job, kept, new Dictionary<int, float> { [1] = 1.5f }).ToList(),
+                "scaled by what its lighting had over the atlas's, it looks as it did");
+        }
+
+        [Test]
+        public void TheInspectorShowsLevelCompensationWhileASourceWouldBeScaled()
+        {
+            var shader = Installed("poiyomi10");
+            var overview = AtlasOutputOverview.Build(new AtlasOutputConfiguration(), shader, new Material[] { null, null },
+                new[] { Source(0.3f), Source(0.4f, 1.5f) });
+            var lighting = overview.Features.Single(s => s.Feature is AtlasLightingFeature);
+            Assert.IsTrue(lighting.Switches.Any(s => s.Id == AtlasLevelCompensation.SwitchId));
+
+            overview = AtlasOutputOverview.Build(new AtlasOutputConfiguration(), shader, new Material[] { null, null },
+                new[] { Untouched(shader), Untouched(shader) });
+            lighting = overview.Features.Single(s => s.Feature is AtlasLightingFeature);
+            Assert.IsFalse(lighting.Switches.Any(s => s.Id == AtlasLevelCompensation.SwitchId), "the shader's own lighting, kept as it is");
+        }
+
         [Test]
         public void TuningNeverLeavesTheLightingFartherFromTheChosenOne()
         {

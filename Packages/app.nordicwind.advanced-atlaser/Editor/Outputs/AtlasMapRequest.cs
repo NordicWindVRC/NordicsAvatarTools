@@ -16,7 +16,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         Overlays,
         // The light baked into the map: normal-map shading and ambient occlusion, which light
         // everything the stages before put there.
-        Shading
+        Shading,
+        // The whole map scaled to the level a source's own lighting gave it (level compensation).
+        Level
     }
 
     // What a contribution does to the map as a picture of the surface.

@@ -77,7 +77,8 @@ Built so far (see *The look model* in the output design): the four scenes, two o
 without a main light, a lighting's level and contrast, the kept material read back from the
 written material, the sources listed where the kept lighting looks different from their own,
 the lighting's shared values tuned where the output shader shows the chosen lighting
-differently, and a layer's cost as a measure. What remains planned:
+differently, the base color scaled for sources the atlas's lighting shows brighter or darker
+than their own, and a layer's cost as a measure. What remains planned:
 
 ### The reference look
 
@@ -123,13 +124,13 @@ remains planned:
 
 - **The ramp's shape.** For an output that shades through a generated ramp texture, the
   ramp's keys are fitted to the chosen lighting's shading over the angle to the light (a
-  wrapped or physically based source on Toon Standard), instead of the nearest preset.
+  wrapped or physically based source on Toon Standard), instead of the nearest preset. The
+  fit works at the ramp texture's resolution, with the source's ramp read as finely, so a
+  sharp edge stays sharp.
 - **Other shared values:** reflectance and slot strengths, with the features that own them.
-- **Values in maps per source:** mask levels and level compensation.
-
-**Level compensation** gives a source its level back through its base color, where the output
-can't: a shift for a source that shares another's lighting (bounded as *Base color shifts*,
-below, says), a bake for a layer that loses part of its effect (*Average in color*, below).
+- **Values in maps per source:** mask levels, and a bake for a layer that loses part of its
+  effect (*Average in color*, below), next to the level compensation for the lighting (*Level
+  compensation* in the output design).
 
 ### Look values
 
@@ -275,8 +276,6 @@ Rims use the same cost for their fits (`AtlasRimResponse` today).
 4. **Shifts within range.** Proposed: under *Automatic* no texel is raised above 1.
 5. **Average in color.** Which roles it is offered for (proposed: lighting, tint and
    reflection), and whether it needs a control of its own.
-6. **Level compensation for lighting.** Whether a source's base color may be scaled to give
-   it the level its own lighting had, bounded like matcap shifts.
-7. **Roles.** The limits that separate them. Whether a rim matcap may use a rim slot, and a
+6. **Roles.** The limits that separate them. Whether a rim matcap may use a rim slot, and a
    highlight or reflection matcap the output's own highlights and reflections, where no matcap
    slot is left.

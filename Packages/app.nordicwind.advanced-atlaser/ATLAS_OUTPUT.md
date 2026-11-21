@@ -66,7 +66,7 @@ Where each part of this design lives:
 | Overview | `Editor/Outputs/AtlasOutputOverview.cs`, `AtlasTextureMemory.cs` | What an output uses: features with their modes and sources, the textures they need with sizes and memory |
 | Evaluator | `Editor/Outputs/AtlasMapEvaluator.cs`, `AtlasColorStack.cs` | The bakeable subset over a source's UV 0–1: textures with their placement, color layers, decals, adjustments, masks and the mask bus |
 | Map requests | `Editor/Outputs/AtlasMapRequest.cs` | A virtual map's content, views and contributions by stage, its shared color and its range step (see [*Map contributions*](#map-contributions)) |
-| Look model | `Editor/Outputs/AtlasLook.cs`, `AtlasKeptMaterial.cs`, `AtlasLightingTuning.cs` | The standard scenes, a lighting's level and contrast, a layer's cost, the written material read back and compared with the sources' own looks, and the lighting tuned where the output shader shows it differently (see [*The look model*](#the-look-model)) |
+| Look model | `Editor/Outputs/AtlasLook.cs`, `AtlasKeptMaterial.cs`, `AtlasLightingTuning.cs`, `AtlasLevelCompensation.cs` | The standard scenes, a lighting's level and contrast, a layer's cost, the written material read back and compared with the sources' own looks, the lighting tuned where the output shader shows it differently, and the base color scaled for sources the atlas's lighting shows brighter or darker than their own (see [*The look model*](#the-look-model)) |
 | Map baker | `Editor/Outputs/AtlasMapBaker.cs` | One texture, source by source: each virtual map evaluated at the source's bake size, its UV islands grown over the unused texels, placed in its region |
 | Coverage | `Editor/Outputs/AtlasCoverage.cs` | Each source's UV0 triangles (from the output's renderers in the manual bake, the avatar's in the build), painted at bake size; a triangle in another UV tile counts by whole tiles |
 | Packing | `Editor/Outputs/AtlasTexturePacker.cs` | One output texture from its virtual maps: which channels each map fills (inverted where the texture stores it so), and the neutral value of the rest |
@@ -163,7 +163,7 @@ Step 4 only runs for features whose mode bakes them; with none, steps 3–5 are 
 ### Map contributions
 
 Several features can change one map: the base color takes baked matcaps, the shifts of fitted
-matcap slots, glitter points, normal-map shading and occlusion. A map request
+matcap slots, glitter points, normal-map shading, occlusion and level compensation. A map request
 (`AtlasMapRequest`) builds each source's part of the map from three things:
 
 - **Content:** the map's own value, set once by the feature that makes the map (the color
@@ -183,6 +183,7 @@ resolved in:
 | Layers | Baked matcaps, the clear coat's gloss, the shifts of matcap slot fits |
 | Overlays | Glitter points, and the matcap glow baked into the emission |
 | Shading | Normal-map shading, baked occlusion, the occlusion of reflections: the light on everything the stages before put there |
+| Level | Level compensation: the whole of a source's part scaled to the level its own lighting gave it |
 
 The map owns what each feature would otherwise have to know:
 - **The shared color.** The base color map leaves out a color that every source shares; it
@@ -386,8 +387,33 @@ Where the kept lighting looks different, the build tunes it (`AtlasLightingTunin
 
 The target is the chosen lighting, not each source's own: which lighting the atlas gets is
 the user's choice (*Lighting from*), and tuning only makes the output shader show that
-choice. The inspector's overview resolves without tuning; its plan is for the textures and
-the choices.
+choice. The inspector resolves as the build does, with the search's results kept by the
+output shader, the chosen lighting and the sources' colors, so a changed setting elsewhere
+doesn't search again.
+
+#### Level compensation
+
+The atlas has one lighting. A source that the kept lighting shows brighter or darker than
+its own lighting did gets its part of the base color map scaled (`AtlasLevelCompensation`),
+after the lighting is tuned:
+
+- **The scale** is the one that makes the source's darkest, average and brightest base color
+  under the kept lighting look closest to its own look, over the four scenes and the angles
+  to the light, between a half and double. A source whose look is kept, or that no scale
+  brings closer by the tuning margin, isn't scaled.
+- **It applies to the whole of the source's part,** as the map's last contribution (the
+  *Level* stage), since the lighting lights everything in the map.
+- **A raise stays within the map's range.** It stops where the source's brightest texel in
+  the texture reaches 1, so it takes no levels from the other sources (see [*What reads a
+  value*](#what-reads-a-value)). A texture with a white texel can't be raised; lowering has
+  no such bound.
+- **Side effects.** Every feature that reads the base color reads the scaled one, and
+  viewers who block the avatar's shaders see it where the fallback shows the base color.
+- **The control.** *Keep each material's brightness* under the lighting, on by default,
+  shown while a source would be scaled. Off leaves the base colors as they are.
+- **Reporting.** The build names the scaled sources with their scales in one line. The
+  comparison after writing, and the inspector's line under *Lighting from*, take each source
+  as the atlas shows it, with the scale the bake applied.
 
 #### Comparing layers
 
@@ -1323,6 +1349,10 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
 - **Tuning:** the kept lighting read from a scratch material equals the written material's;
   an output of the source's own shader keeps the mapped lighting; a value that looks closer
   replaces the mapped one; and tuning never leaves the lighting farther from the chosen one.
+- **Level compensation:** a source the atlas lights darker is scaled by what its own lighting
+  had over it, up to where its brightest texel reaches 1; turned off, the base colors stay;
+  a scaled source is compared as the atlas shows it; and the inspector shows the control
+  while a source would be scaled.
 - **Fits:** a source the output can reproduce gets its exact value back; a fit with nothing
   missing finds that same value; a weaker setting gives the expected direction (weaker
   highlights, a lower reflectance); shared values follow the source whose look changes most.

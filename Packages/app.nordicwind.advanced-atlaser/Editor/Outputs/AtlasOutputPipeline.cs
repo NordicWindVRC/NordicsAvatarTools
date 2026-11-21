@@ -14,6 +14,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly Dictionary<string, AtlasFeatureMode> Modes = new Dictionary<string, AtlasFeatureMode>();
         // What the features leave out, one line each.
         public readonly List<string> Notes = new List<string>();
+        // The lighting as the output shader shows it; null when resolved without the shader.
+        public AtlasLighting KeptLighting;
+        // Level compensation: the base color scale that gives a source the level its own
+        // lighting had, by index into the job's sources (applied unless turned off), and what
+        // the bake applied of it within the map's range.
+        public readonly Dictionary<int, float> LevelScales = new Dictionary<int, float>();
+        public readonly Dictionary<int, float> LevelApplied = new Dictionary<int, float>();
         // How the remap rewrites each source's vertex colors, by index into the job's sources;
         // sources without an entry keep theirs.
         public readonly Dictionary<int, System.Func<Color, Color>> VertexColors = new Dictionary<int, System.Func<Color, Color>>();
@@ -61,12 +68,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // feature's sources and resolve it in its mode into one unified material.
     public static class AtlasOutputPipeline
     {
-        /// <summary>The plan for an output shader: resolved by its capabilities, then its
-        /// lighting tuned by look where the shader shows it differently (AtlasLightingTuning).</summary>
+        /// <summary>The plan for an output shader: resolved by its capabilities, then matched
+        /// by look against the lighting the shader keeps. The lighting is tuned where the shader
+        /// shows it differently (AtlasLightingTuning), and the sources it still shows brighter or
+        /// darker than their own get their base color scaled (AtlasLevelCompensation).</summary>
         public static AtlasOutputPlan Resolve(AtlasGeneratorJob job, IAtlasOutputShader shader)
         {
             var plan = Resolve(job, shader.Capabilities);
-            AtlasLightingTuning.Tune(job, plan, shader);
+            using (var kept = AtlasKeptLighting.For(shader))
+            {
+                if (kept == null) return plan;
+                AtlasLightingTuning.Tune(job, plan, kept);
+                plan.KeptLighting = kept.Of(plan.Output.Lighting);
+                AtlasLevelCompensation.Apply(job, plan, plan.KeptLighting);
+            }
             return plan;
         }
 

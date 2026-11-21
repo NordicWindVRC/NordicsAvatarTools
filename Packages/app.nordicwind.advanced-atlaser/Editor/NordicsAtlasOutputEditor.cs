@@ -25,7 +25,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                          string.Join(",", unified.Select(u => u == null ? 0 : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(u)));
             if (overview == null || key != overviewKey)
             {
-                overview = AtlasOutputOverview.Build(output.configuration, shader?.Capabilities, materials, unified);
+                overview = AtlasOutputOverview.Build(output.configuration, shader, materials, unified);
                 overviewKey = key;
             }
             return overview;

@@ -39,15 +39,16 @@ it uses. How finished parts work is in the design; what each version added is in
 The design is in [ATLAS_OUTPUT_LOOK.md](ATLAS_OUTPUT_LOOK.md), whose section names the phases
 use. Built so far: maps made from contributions, the four scenes with each shader's rule
 for worlds without a main light, a lighting's level and contrast, the kept material read
-back, the sources listed where the kept lighting looks different from their own, and the
-lighting's shared values tuned where the output shader shows the chosen lighting differently
-(the design's *Map contributions* and *The look model*). Each remaining part of the look
-model is built in the phase that first uses it.
+back, the sources listed where the kept lighting looks different from their own, the
+lighting's shared values tuned where the output shader shows the chosen lighting differently,
+and the base color scaled for sources the atlas's lighting shows brighter or darker than
+their own (the design's *Map contributions* and *The look model*). Each remaining part of
+the look model is built in the phase that first uses it.
 
-### 4.4 Lighting by look: the ramp and the level
+### 4.4 Lighting by look: the ramp
 
-- The ramp's shape fitted for outputs that shade through a generated ramp (*Tuning*).
-- Level compensation per source (*Tuning*), once open question 6 is decided.
+- The ramp's shape fitted for outputs that shade through a generated ramp (*Tuning*), at
+  the ramp texture's resolution so a sharp edge stays sharp.
 - **Workable:** an output of another family than its sources matches their level and contrast
   in the four scenes as closely as its controls allow; same-family outputs are unchanged.
 

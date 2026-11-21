@@ -91,41 +91,70 @@ namespace NordicWind.AdvancedAtlaser.Editor
             public Color[] Shown;
         }
 
+        // The results so far, by the output shader, the chosen lighting and the sources' colors:
+        // the tuned values in the order of Values and the note; null values where nothing was
+        // tuned. The inspector resolves on every change of a setting, mostly with the same
+        // lighting.
+        private static readonly Dictionary<string, (float[] Values, string Note)> Results = new Dictionary<string, (float[], string)>();
+        private const int MostResults = 64;
+
         /// <summary>Tunes the plan's lighting for the output shader, in place, and adds a note
         /// naming what was tuned. Unchanged where the shader keeps the lighting as mapped, or
         /// where no value brings it closer by the margin.</summary>
-        public static void Tune(AtlasGeneratorJob job, AtlasOutputPlan plan, IAtlasOutputShader shader)
+        public static void Tune(AtlasGeneratorJob job, AtlasOutputPlan plan, AtlasKeptLighting kept)
         {
-            if (job == null || plan?.Output == null) return;
+            if (job == null || plan?.Output == null || kept == null) return;
             var lighting = plan.Output.Lighting;
-            using (var kept = AtlasKeptLighting.For(shader))
+            var targets = Targets(job, lighting);
+            if (targets.Count == 0) return;
+            var values = Values(lighting);
+            string key = Key(kept.Shader, lighting, targets);
+            if (!Results.TryGetValue(key, out var result))
             {
-                if (kept == null) return;
-                var targets = Targets(job, lighting);
-                if (targets.Count == 0) return;
-                float Cost() => Difference(targets, kept.Of(lighting));
-                float mapped = Cost();
-                if (mapped <= Margin) return;
-
-                var values = Values(lighting);
-                foreach (var value in values) value.Mapped = value.Get();
-                float best = mapped;
-                var effective = Effective(values, Cost).ToList();
-                for (int round = 0; round < Rounds; round++)
-                {
-                    float before = best;
-                    foreach (var value in effective) best = Search(value, best, Cost);
-                    if (before - best < 1e-4f) break;
-                }
-                if (mapped - best < Margin)
-                {
-                    foreach (var value in values) value.Set(value.Mapped);
-                    return;
-                }
-                var tuned = values.Where(v => Mathf.Abs(v.Get() - v.Mapped) > 1e-4f).Select(v => v.Name).ToList();
-                plan.Notes.Add("The output shader shows the chosen lighting differently, so these are tuned to look closer to it: " +
-                               string.Join(", ", tuned) + $" (mean difference in displayed brightness {Number(mapped)}, tuned {Number(best)}).");
+                result = Search(lighting, values, targets, kept);
+                if (Results.Count >= MostResults) Results.Clear();
+                Results[key] = result;
             }
+            if (result.Values == null) return;
+            for (int i = 0; i < values.Count; i++) values[i].Set(result.Values[i]);
+            plan.Notes.Add(result.Note);
+        }
+
+        // The search, which leaves the lighting as mapped: the tuned values and the note, or
+        // nothing where the mapped lighting stays.
+        private static (float[] Values, string Note) Search(AtlasLighting lighting, List<Value> values, List<Target> targets, AtlasKeptLighting kept)
+        {
+            float Cost() => Difference(targets, kept.Of(lighting));
+            float mapped = Cost();
+            if (mapped <= Margin) return (null, null);
+            foreach (var value in values) value.Mapped = value.Get();
+            float best = mapped;
+            var effective = Effective(values, Cost).ToList();
+            for (int round = 0; round < Rounds; round++)
+            {
+                float before = best;
+                foreach (var value in effective) best = Search(value, best, Cost);
+                if (before - best < 1e-4f) break;
+            }
+            var found = values.Select(v => v.Get()).ToArray();
+            var tuned = values.Where(v => Mathf.Abs(v.Get() - v.Mapped) > 1e-4f).Select(v => v.Name).ToList();
+            foreach (var value in values) value.Set(value.Mapped);
+            if (mapped - best < Margin) return (null, null);
+            return (found, "The output shader shows the chosen lighting differently, so these are tuned to look closer to it: " +
+                           string.Join(", ", tuned) + $" (mean difference in displayed brightness {Number(mapped)}, tuned {Number(best)}).");
+        }
+
+        private static string Key(IAtlasOutputShader shader, AtlasLighting lighting, List<Target> targets)
+        {
+            var text = new System.Text.StringBuilder(shader.ShaderId).Append('|').Append(AtlasFieldwise.Signature(lighting));
+            // A ramp texture by its content too, which the signature doesn't hold.
+            if (lighting.Ramp.Ramp?.Texture is Texture2D ramp) text.Append('|').Append(ramp.imageContentsHash);
+            foreach (var target in targets)
+            {
+                text.Append('|').Append(target.Weight.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+                foreach (var color in target.Bases) text.Append(':').Append(ColorUtility.ToHtmlStringRGB(color)).Append(color.maxColorComponent.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
+            }
+            return text.ToString();
         }
 
         private static string Number(float value) => value.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture);
@@ -190,47 +219,26 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // Each source's darkest, average and brightest base color under the chosen lighting,
-        // weighted by its area in the atlas. Three colors show what the lighting does to a
-        // source's whole range, and keep a search of a few hundred candidates short.
+        // weighted by its area in the atlas.
         private static List<Target> Targets(AtlasGeneratorJob job, AtlasLighting chosen)
         {
             var targets = new List<Target>();
             foreach (var source in job.Sources)
             {
                 if (source.Material == null) continue;
-                var all = AtlasSourceSamples.Bases(source.Material);
-                if (all.Count == 0) continue;
-                var bases = new List<Color> { all.Aggregate((a, b) => a + b) / all.Count };
-                if (all.Count > 1)
-                {
-                    bases.Add(all.OrderBy(AtlasSourceSamples.Luminance).First());
-                    bases.Add(all.OrderBy(AtlasSourceSamples.Luminance).Last());
-                }
+                var bases = AtlasLook.Representative(AtlasSourceSamples.Bases(source.Material));
+                if (bases.Count == 0) continue;
                 targets.Add(new Target
                 {
                     Weight = source.UVRegion.width * source.UVRegion.height,
                     Bases = bases,
-                    Shown = Shown(chosen, bases)
+                    Shown = AtlasLook.Shown(chosen, bases)
                 });
             }
             // Without a layout yet, every source counts alike.
             if (targets.Sum(t => t.Weight) <= 0f)
                 foreach (var target in targets) target.Weight = 1f;
             return targets;
-        }
-
-        private static Color[] Shown(AtlasLighting lighting, List<Color> bases)
-        {
-            var ramp = AtlasLightingResponse.RampOf(lighting);
-            var scenes = AtlasLook.Scenes;
-            var shown = new Color[bases.Count * scenes.Length * AtlasLook.Angles];
-            int n = 0;
-            foreach (var color in bases)
-                foreach (var scene in scenes)
-                    for (int k = 0; k < AtlasLook.Angles; k++)
-                        shown[n++] = AtlasLightingResponse.Display(
-                            AtlasLightingResponse.Lit(lighting, color, -1f + 2f * k / (AtlasLook.Angles - 1), scene, ramp));
-            return shown;
         }
 
         // The mean difference between the sources' colors as the chosen lighting shows them and
@@ -240,15 +248,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             double sum = 0.0, weights = 0.0;
             foreach (var target in targets)
             {
-                var shown = Shown(kept, target.Bases);
-                double difference = 0.0;
-                for (int i = 0; i < shown.Length; i++)
-                {
-                    var a = target.Shown[i];
-                    var b = shown[i];
-                    difference += (Mathf.Abs(a.r - b.r) + Mathf.Abs(a.g - b.g) + Mathf.Abs(a.b - b.b)) / 3.0;
-                }
-                sum += target.Weight * difference / shown.Length;
+                sum += target.Weight * AtlasLook.Difference(target.Shown, AtlasLook.Shown(kept, target.Bases));
                 weights += target.Weight;
             }
             return weights > 0.0 ? (float)(sum / weights) : 0f;

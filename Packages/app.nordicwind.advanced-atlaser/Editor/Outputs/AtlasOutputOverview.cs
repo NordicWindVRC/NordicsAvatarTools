@@ -62,8 +62,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The enabled textures' totals.
         public long PcBytes, AndroidBytes;
 
+        // For an output shader: resolved as the build does, with the lighting matched by look.
+        public static AtlasOutputOverview Build(AtlasOutputConfiguration config, IAtlasOutputShader shader,
+            IReadOnlyList<Material> materials, IReadOnlyList<AtlasUnifiedMaterial> unified) =>
+            Build(config, shader?.Capabilities, shader, materials, unified);
+
         // `unified` holds each source's unified material, null where it couldn't be read.
         public static AtlasOutputOverview Build(AtlasOutputConfiguration config, AtlasOutputCapabilities capabilities,
+            IReadOnlyList<Material> materials, IReadOnlyList<AtlasUnifiedMaterial> unified) =>
+            Build(config, capabilities, null, materials, unified);
+
+        private static AtlasOutputOverview Build(AtlasOutputConfiguration config, AtlasOutputCapabilities capabilities, IAtlasOutputShader shader,
             IReadOnlyList<Material> materials, IReadOnlyList<AtlasUnifiedMaterial> unified)
         {
             var overview = new AtlasOutputOverview();
@@ -87,15 +96,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             // What only a resolve knows: the live global mask setups the user picks between, the
             // textures the build makes and the sources' textures it uses as they are.
-            var plan = unified.Count > 0 && unified.All(u => u != null) ? Resolved(config, capabilities, materials, unified) : null;
+            var plan = unified.Count > 0 && unified.All(u => u != null) ? Resolved(config, capabilities, shader, materials, unified) : null;
             if (plan != null)
                 foreach (var state in overview.Features)
                 {
                     if (plan.LiveSetups.TryGetValue(state.Feature.Id, out var setups)) state.LiveSetups.AddRange(setups);
-                    // The materials the chosen lighting shows differently from their own.
-                    if (state.Feature is AtlasLightingFeature && state.SharedValuesDiffer)
+                    if (!(state.Feature is AtlasLightingFeature)) continue;
+                    // Level compensation, while a material would be scaled.
+                    bool compensated = plan.LevelScales.Count > 0;
+                    if (compensated) state.Switches.Add(AtlasLevelCompensation.Switch);
+                    // The materials the lighting in use shows differently from their own.
+                    if (state.SharedValuesDiffer)
                     {
-                        var different = AtlasLook.LightingDifferences(unified, plan.Output.Lighting);
+                        var different = AtlasLook.LightingDifferences(unified, plan.KeptLighting ?? plan.Output.Lighting,
+                            compensated && AtlasLevelCompensation.Enabled(probe ?? (probe = Probe(config, materials, unified))) ? plan.LevelScales : null);
                         if (different.Count > 0)
                             state.SharedValueEffect = "With this lighting these look different from their own, as displayed brightness: " +
                                                       string.Join(", ", different) + ".";
@@ -111,14 +125,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static string resolvedKey;
         private static AtlasOutputPlan resolvedPlan;
 
-        private static AtlasOutputPlan Resolved(AtlasOutputConfiguration config, AtlasOutputCapabilities capabilities,
+        private static AtlasOutputPlan Resolved(AtlasOutputConfiguration config, AtlasOutputCapabilities capabilities, IAtlasOutputShader shader,
             IReadOnlyList<Material> materials, IReadOnlyList<AtlasUnifiedMaterial> unified)
         {
             string key = JsonUtility.ToJson(config) + "|" + System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(capabilities) + "|" +
+                         (shader?.ShaderId ?? "") + "|" +
                          string.Join(",", unified.Select(u => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(u)));
             if (key == resolvedKey) return resolvedPlan;
             AtlasOutputPlan plan;
-            try { plan = AtlasOutputPipeline.Resolve(Probe(config, materials, unified), capabilities); }
+            try
+            {
+                var job = Probe(config, materials, unified);
+                plan = shader != null ? AtlasOutputPipeline.Resolve(job, shader) : AtlasOutputPipeline.Resolve(job, capabilities);
+            }
             catch (System.Exception e)
             {
                 Debug.LogException(e);

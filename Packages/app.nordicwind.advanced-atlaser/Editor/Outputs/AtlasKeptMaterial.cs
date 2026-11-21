@@ -18,13 +18,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         /// <summary>What the written material shows differently from what the plan asked for
         /// and from the sources' own looks, one line each: the lighting settings the shader can't
-        /// set the same way, and the sources whose own lighting looks different.</summary>
-        public static IEnumerable<string> Notes(AtlasGeneratorJob job, AtlasUnifiedMaterial output, Material written)
+        /// set the same way, and the sources whose own lighting looks different, with the base
+        /// color scales the bake applied to them.</summary>
+        public static IEnumerable<string> Notes(AtlasGeneratorJob job, AtlasOutputPlan plan, Material written)
         {
             var kept = Read(written);
             if (kept == null) yield break;
-            foreach (var note in AtlasLightingFeature.Unkept(output, kept)) yield return note;
-            foreach (var note in AtlasLook.LightingNotes(job, kept)) yield return note;
+            foreach (var note in AtlasLightingFeature.Unkept(plan.Output, kept)) yield return note;
+            foreach (var note in AtlasLook.LightingNotes(job, kept, plan.LevelApplied)) yield return note;
         }
     }
 
@@ -33,6 +34,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // Tuning asks for many candidates, so the scratch material is reused.
     public sealed class AtlasKeptLighting : IDisposable
     {
+        /// <summary>The output shader the lighting is read for.</summary>
+        public IAtlasOutputShader Shader => shader;
+
         private readonly IAtlasOutputShader shader;
         private readonly IAtlasSourceShaderParser parser;
         private readonly Material scratch;
