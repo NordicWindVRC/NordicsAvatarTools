@@ -83,6 +83,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var lighting = d.Lighting;
             lighting.Family = AtlasLightingFamily.RampToon;
             lighting.Ambient = AtlasAmbientModel.Average;
+            // Without a real-time main light, the probes along their dominant direction are the
+            // light, and their average stays the ambient light.
+            lighting.Contributions.AmbientAsMainLight = 1f;
+            lighting.Contributions.AmbientStandIn = AtlasAmbientStandIn.Brightest;
             lighting.ReceiveShadows = 0f;
             lighting.Ramp.Ramp = AtlasSourceMapping.Texture(m, "_Ramp");
             lighting.Ramp.Preset = Preset(lighting.Ramp.Ramp);

@@ -73,27 +73,16 @@ contribution.
 
 ## The look model
 
-Built so far (see *The look model* in the output design): the shared scenes, a lighting's
-level and contrast, the kept material read back from the written material, the sources listed
-where the kept lighting looks different from their own, and a layer's cost as a measure. What
-remains planned:
-
-### Scenes
-
-Two scenes join the bright and the dim one:
-
-| Scene | Main light | Ambient | Why |
-|---|---|---|---|
-| Probes only | None | To be set, with a direction | Each shader turns the probes into light its own way, so shaders differ most here |
-| Dark | None | To be set, low | The floors (minimum brightness, minimum light) decide the look |
-
-The unified lighting records what each shader does without a main light, for every parser
-(two parsers record it today), so the reference look can follow it.
+Built so far (see *The look model* in the output design): the four scenes, two of them
+without a main light, a lighting's level and contrast, the kept material read back from the
+written material, the sources listed where the kept lighting looks different from their own,
+and a layer's cost as a measure. What remains planned:
 
 ### The reference look
 
 The look model covers the lighting alone today. The highlight and rim fits assume plain
-Lambert light whatever lighting was chosen, and the matcap fits use no scene.
+Lambert light whatever lighting was chosen, so they use the scenes with a main light only,
+and the matcap fits use no scene.
 
 One evaluator computes a source's look from its unified material, at sample points, in the
 unified evaluation stages (S1–S7): the surface inputs, the lighting family with highlights and
@@ -280,8 +269,8 @@ Rims use the same cost for their fits (`AtlasRimResponse` today).
 1. **Views and normals.** Proposed: a sphere of normals, seen from the virtual view and from
    around the avatar in 45° steps, so the inspector and the build agree. The mesh's own
    normals would be closer, but the inspector doesn't have them.
-2. **The new scenes' values.** The ambient level and direction for *Probes only*, and the
-   level for *Dark*.
+2. **The new scenes' values.** In place as starting values: *Probes only* at 0.5 on average
+   with 0.25 more along the dominant direction, *Dark* at 0.02. To be confirmed.
 3. **The blocked view's weight.** Proposed: under *Automatic* it counts as much as the look
    with the shader.
 4. **Shifts within range.** Proposed: under *Automatic* no texel is raised above 1.

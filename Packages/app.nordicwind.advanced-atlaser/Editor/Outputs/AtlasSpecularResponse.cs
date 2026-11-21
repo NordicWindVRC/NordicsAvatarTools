@@ -16,7 +16,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // and reflections of a uniform environment as bright as the ambient light, × F; F by the
     // output's fresnel and faded below its reflectance fade. They're added to a gray diffuse of
     // the base color's luminance, and the displayed (sRGB) results are compared over the scenes
-    // (AtlasLook), a few light angles and the view angles in the light's plane. Tints, fresnel
+    // with a main light (AtlasLook), a few light angles and the view angles in the light's plane. Tints, fresnel
     // strengths, steps, occlusion and normal maps aren't part of it.
     public static class AtlasSpecularResponse
     {
@@ -156,7 +156,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 float roughness = 1f - Mathf.Clamp01(texel.Smoothness);
                 float alpha = Mathf.Max(roughness * roughness, 0.0045f);
                 float a2 = alpha * alpha;
-                foreach (var scene in AtlasLook.Scenes)
+                foreach (var scene in AtlasLook.MainLightScenes)
                     foreach (float lightAngle in LightAngles)
                         for (int k = 0; k < ViewAngles; k++)
                         {

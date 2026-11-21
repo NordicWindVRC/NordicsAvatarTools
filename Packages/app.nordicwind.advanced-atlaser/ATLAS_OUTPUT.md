@@ -330,10 +330,21 @@ A shared value, or a setting the output lacks, is chosen by how the result looks
 
 What the fits and the build's checks share (`AtlasLook`):
 
-- **Scenes.** One set of standard scenes for every fit: a bright main light (1) with ambient
-  light (0.3), and a dim one (0.4 with 0.15). Scenes without a main light aren't in it yet:
-  where the ambient light goes depends on how a shader turns the probes into direct light,
-  which the unified lighting doesn't record for every shader.
+- **Scenes.** One set of standard scenes:
+
+  | Scene | Main light | Probes | Why |
+  |---|---|---|---|
+  | Bright | 1 | 0.3, even | A lit world |
+  | Dim | 0.4 | 0.15, even | The same at low light |
+  | Probes only | None | 0.5 on average, 0.25 more along their dominant direction | No main light: each shader turns the probes into light its own way, so shaders differ most here. About as much light as the bright scene gives a surface on average |
+  | Dark | None | 0.02, even | The floors (minimum brightness, minimum light) decide the look |
+
+  Without a main light, the angle to the light is the angle to the probes' dominant
+  direction, and the lighting's light color model says what becomes direct light (catalog
+  3.4): the probes merged, floored or split, or a share of the ambient light standing in
+  for the main light. The lighting's look and *Automatic* lighting use all four scenes. The
+  highlight and rim fits use the two with a main light, since their own light is the main
+  light alone.
 - **A lighting's look.** A lighting setup on a set of base colors has a **level**, the mean
   displayed brightness over the angles to the light, and a **contrast**, the lit side's mean
   minus the shadow side's, in each scene.

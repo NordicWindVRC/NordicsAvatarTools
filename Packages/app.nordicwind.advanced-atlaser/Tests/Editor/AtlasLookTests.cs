@@ -28,6 +28,54 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.Greater(inBright.Level, inDim.Level, "a dimmer scene shows darker");
         }
 
+        // Probes of 0.5 on average, 0.25 more along their dominant direction, and no main light.
+        [Test]
+        public void WithoutAMainLightEachLightColorModelMakesItsLightOfTheProbes()
+        {
+            var probes = AtlasLook.Scenes.Single(s => s.Name == "probes-only");
+            var lighting = new AtlasLighting { Ambient = AtlasAmbientModel.Average };
+            void Light(float expectedDirect, float expectedAmbient, string message, float nDotL = 1f)
+            {
+                AtlasLightingResponse.Light(lighting, probes, nDotL, out float direct, out float ambient);
+                Assert.AreEqual(expectedDirect, direct, 1e-5f, message + ": direct");
+                Assert.AreEqual(expectedAmbient, ambient, 1e-5f, message + ": ambient");
+            }
+            Light(0f, 0.5f, "separate: no light but the ambient");
+
+            lighting.Contributions.AmbientAsMainLight = 0.6f;
+            lighting.Contributions.AmbientWithoutMainLight = 0.5f;
+            Light(0.3f, 0.25f, "a share of the ambient light stands in for the main light");
+
+            lighting.Contributions.AmbientAsMainLight = 1f;
+            lighting.Contributions.AmbientWithoutMainLight = 1f;
+            lighting.Contributions.AmbientStandIn = AtlasAmbientStandIn.Brightest;
+            Light(0.75f, 0.5f, "the probes' brightest light stands in");
+
+            lighting.ColorModel = AtlasLightColorModel.MergedProbes;
+            Light((0.75f * 0.75f + 0.5f * 0.5f) / 1.25f, 0.5f, "merged: the brightest and the average, each by its share");
+
+            lighting.ColorModel = AtlasLightColorModel.Floored;
+            Light(0.5f, 0.5f, "floored: the direct light is at least the ambient");
+
+            lighting.ColorModel = AtlasLightColorModel.SplitProbes;
+            Light(0.5f + 0.25f * 2f / 3f, 0.5f - 0.25f * 2f / 3f, "split: along the dominant direction and against it");
+
+            lighting.ColorModel = AtlasLightColorModel.Separate;
+            lighting.Ambient = AtlasAmbientModel.Directional;
+            lighting.Contributions.AmbientAsMainLight = 0f;
+            Light(0f, 0.25f, "ambient along the normal, facing away from the probes' light", -1f);
+
+            // With a main light, the separate model's direct light is the light itself.
+            lighting.Contributions.AmbientAsMainLight = 1f;
+            AtlasLightingResponse.Light(lighting, AtlasLook.Scenes[0], 1f, out float lit, out _);
+            Assert.AreEqual(1f, lit, 1e-5f);
+
+            // In the dark, the floored model's floor is the light.
+            lighting.ColorModel = AtlasLightColorModel.Floored;
+            AtlasLightingResponse.Light(lighting, AtlasLook.Scenes.Single(s => s.Name == "dark"), 1f, out float floor, out _);
+            Assert.AreEqual(0.05f, floor, 1e-5f);
+        }
+
         [Test]
         public void SourcesWhoseOwnLightingLooksDifferentFromTheKeptOneAreListed()
         {

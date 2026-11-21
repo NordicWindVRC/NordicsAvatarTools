@@ -37,17 +37,11 @@ it uses. How finished parts work is in the design; what each version added is in
 ## M4 — Matching by look
 
 The design is in [ATLAS_OUTPUT_LOOK.md](ATLAS_OUTPUT_LOOK.md), whose section names the phases
-use. Built so far: maps made from contributions, the shared scenes, a lighting's level and
-contrast, the kept material read back, and the sources listed where the kept lighting looks
-different from their own (the design's *Map contributions* and *The look model*). Each
-remaining part of the look model is built in the phase that first uses it.
-
-### 4.3 Worlds without a main light
-
-- The unified lighting records each shader's rule without a main light, for every parser,
-  with the inventories updated. The *Probes only* and *Dark* scenes join the set.
-- **Workable:** *Automatic* lighting, every fit and the build's lighting comparison weigh all
-  four scenes.
+use. Built so far: maps made from contributions, the four scenes with each shader's rule
+for worlds without a main light, a lighting's level and contrast, the kept material read
+back, and the sources listed where the kept lighting looks different from their own (the
+design's *Map contributions* and *The look model*). Each remaining part of the look model
+is built in the phase that first uses it.
 
 ### 4.4 Lighting by look
 
@@ -64,7 +58,8 @@ remaining part of the look model is built in the phase that first uses it.
 
 - The reference look beyond the lighting (*The reference look*): matcaps and rims lit by the
   chosen lighting, with highlights and reflections, read from a map at a stage (*Map
-  contributions*). The existing matcap and rim fits move onto it.
+  contributions*). The existing matcap and rim fits move onto it, and weigh the scenes
+  without a main light too.
 - Measures and roles, every way of showing a matcap with its cost, bounded base color shifts,
   the blocked view, *Average in color* and the *Base color shift* control (*Matcaps*).
 - **Workable:** *Automatic* places matcaps by role and cost on every writer, and the rules in

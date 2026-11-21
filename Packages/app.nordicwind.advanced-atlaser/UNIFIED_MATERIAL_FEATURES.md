@@ -581,8 +581,9 @@ Poiyomi.*
 | contribution: additional lights | 0–1 | 1 | other per-pixel lights |
 | contribution: vertex lights | 0–1 | 1 | Unity's four per-vertex lights |
 | contribution: ambient | 0–1 | 1 | ambient and light probes, including lights Unity folds into them |
-| without a main light: ambient as main light | ≥ 0 | 0 | in a world lit by probes alone, the ambient color × this stands in for the main light (Toon Lit: 0.2; Uber's baked direct contribution) |
-| without a main light: ambient | 0–1 | 1 | the ambient contribution then, instead of *contribution: ambient* (Uber's baked indirect contribution) |
+| without a main light: ambient as main light | ≥ 0 | 0 | in a world lit by probes alone, in the *separate* light color model: the ambient light × this stands in for the main light (Toon Lit: 0.2; Poiyomi's Standard light color: 0.6; Toon Standard: 1; Uber's baked direct contribution). The other light color models make their direct light of the probes themselves |
+| without a main light: stand-in | ambient, brightest | ambient | which ambient light stands in. *Ambient*: as the surface gets it (the ambient model's). *Brightest*: the probes along their dominant direction (Toon Standard) |
+| without a main light: ambient | 0–1 | 1 | the ambient contribution then, instead of *contribution: ambient* (Poiyomi's Standard light color: 0.5; Uber's baked indirect contribution) |
 | limit brightness | bool, ceiling | off, 1 | clamps the light (direct + ambient) per channel to the ceiling, so bright worlds don't blow out colors |
 | limit by luminance | 0–1 | 0 | the direct light's limit blends from per channel to scaling by luminance, keeping the hue |
 | limit keeps hue | bool | off | the limit scales the color so its brightest channel is at the ceiling |

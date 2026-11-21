@@ -77,6 +77,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
         Toon
     }
 
+    // Which ambient light stands in for the main light where a world has none.
+    public enum AtlasAmbientStandIn
+    {
+        // The ambient light as the surface gets it (the ambient model's).
+        Ambient,
+        // The probes along their dominant direction: their brightest light.
+        Brightest
+    }
+
     public enum AtlasAmbientModel
     {
         // The ambient light's average color, the same in every direction.
@@ -394,10 +403,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float VertexLights = 1f;
         // Ambient and light probes, including the lights Unity folds into them.
         public float Ambient = 1f;
-        // Without a real-time main light (most worlds are lit by probes alone): the ambient color
-        // × AmbientAsMainLight stands in for the main light (0: none), and the ambient light counts
-        // by AmbientWithoutMainLight instead of Ambient.
+        // Without a real-time main light (most worlds are lit by probes alone), in the separate
+        // light color model: the ambient light of AmbientStandIn × AmbientAsMainLight stands in for
+        // the main light (0: none), and the ambient light counts by AmbientWithoutMainLight instead
+        // of Ambient. The other light color models make their direct light of the probes themselves.
         public float AmbientAsMainLight;
         public float AmbientWithoutMainLight = 1f;
+        public AtlasAmbientStandIn AmbientStandIn;
     }
 }

@@ -6,7 +6,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
 {
     // How a lighting setup looks, for choosing between setups (not for baking): a base color lit
     // by white light in the standard scenes (AtlasLook), over the angle to the light. It follows the
-    // unified formulas (AtlasLighting) for the main light and the ambient light: the ramp toon
+    // unified formulas (AtlasLighting) for the main light and the ambient light: the light color
+    // model, with what stands in for the main light where a scene has none; the ramp toon
     // family's L = lerp(S, D, b), the physically based family's diffuse with its shadow strength
     // and tint, flat and unlit; the light's multiplier, floor and limit; the minimum light and
     // the minimum brightness. Received shadows, occlusion, additional lights, masks and anything
@@ -30,8 +31,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     for (int k = 0; k < Angles; k++)
                     {
                         float nDotL = -1f + 2f * k / (Angles - 1);
-                        var x = Display(Lit(a, color, nDotL, scene.Direct, scene.Ambient, rampA));
-                        var y = Display(Lit(b, color, nDotL, scene.Direct, scene.Ambient, rampB));
+                        var x = Display(Lit(a, color, nDotL, scene, rampA));
+                        var y = Display(Lit(b, color, nDotL, scene, rampB));
                         sum += (Mathf.Abs(x.r - y.r) + Mathf.Abs(x.g - y.g) + Mathf.Abs(x.b - y.b)) / 3.0;
                         count++;
                     }
@@ -39,16 +40,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         /// <summary>A base color lit by the setup, at N·L = <paramref name="nDotL"/>.</summary>
-        public static Color Lit(AtlasLighting lighting, Color baseColor, float nDotL, float direct, float ambient, Color[] ramp = null)
+        public static Color Lit(AtlasLighting lighting, Color baseColor, float nDotL, AtlasLookScene scene, Color[] ramp = null)
         {
             if (lighting.Family == AtlasLightingFamily.Unlit) return baseColor;
-            float d = Mathf.Max(0f, direct * lighting.LightMultiplier + lighting.LightAddition) * lighting.Contributions.MainLight;
-            float a = Mathf.Max(0f, ambient * lighting.LightMultiplier + lighting.LightAddition);
-            if (lighting.ColorModel == AtlasLightColorModel.Floored)
-            {
-                a = Mathf.Max(a, 0.05f) * lighting.FloorIntensity;
-                d = Mathf.Max(d, a);
-            }
+            Light(lighting, scene, nDotL, out float d, out float a);
             if (lighting.LimitBrightness)
             {
                 d = Mathf.Min(d, lighting.BrightnessCeiling);
@@ -83,6 +78,54 @@ namespace NordicWind.AdvancedAtlaser.Editor
             for (int c = 0; c < 3; c++) lit[c] += baseColor[c] * lighting.MinimumBrightness;
             lit.a = 1f;
             return lit;
+        }
+
+        /// <summary>The direct and ambient light a setup makes of a scene's main light and probes
+        /// (3.4), at N·L: through its light color model, then its multiplier and addition.</summary>
+        public static void Light(AtlasLighting lighting, AtlasLookScene scene, float nDotL, out float direct, out float ambient)
+        {
+            float main = scene.Direct, average = scene.Ambient;
+            // The probes along their dominant direction, and as the surface gets them.
+            float brightest = average + scene.Directional;
+            float amount = lighting.Ambient == AtlasAmbientModel.Directional ? Mathf.Clamp01(lighting.DirectionalAmount) : 0f;
+            float atNormal = Mathf.Max(0f, average + scene.Directional * nDotL * amount);
+            float d, a;
+            switch (lighting.ColorModel)
+            {
+                case AtlasLightColorModel.MergedProbes:
+                {
+                    // The probes' brightest light and the main light + the average, each by its
+                    // share of their sum, so the total keeps the luminance of the larger part.
+                    float lit = main + average, sum = brightest + lit;
+                    d = sum > 1e-6f ? (brightest * brightest + lit * lit) / sum : 0f;
+                    a = atNormal;
+                    break;
+                }
+                case AtlasLightColorModel.Floored:
+                    a = Mathf.Min(1f, Mathf.Max(average, 0.05f) * lighting.FloorIntensity);
+                    d = Mathf.Max(main, a);
+                    break;
+                case AtlasLightColorModel.SplitProbes:
+                    // The probes two thirds of the way along their dominant direction join the
+                    // main light; the same against it is the ambient light.
+                    d = main + Mathf.Max(0f, average + scene.Directional * (2f / 3f));
+                    a = Mathf.Max(0f, average - scene.Directional * (2f / 3f));
+                    break;
+                default:
+                    d = main;
+                    a = atNormal;
+                    // No main light: the ambient light stands in for it.
+                    if (main <= 0f)
+                    {
+                        var contributions = lighting.Contributions;
+                        d = contributions.AmbientAsMainLight *
+                            (contributions.AmbientStandIn == AtlasAmbientStandIn.Brightest ? brightest : atNormal);
+                        a = atNormal * contributions.AmbientWithoutMainLight;
+                    }
+                    break;
+            }
+            direct = Mathf.Max(0f, d * lighting.LightMultiplier + lighting.LightAddition) * lighting.Contributions.MainLight;
+            ambient = Mathf.Max(0f, a * lighting.LightMultiplier + lighting.LightAddition);
         }
 
         // The shading term at N·L.

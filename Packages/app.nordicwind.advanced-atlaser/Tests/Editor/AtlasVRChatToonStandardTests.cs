@@ -43,6 +43,9 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var d = Parse();
             Assert.AreEqual(AtlasLightingFamily.RampToon, d.Lighting.Family);
             Assert.AreEqual(AtlasAmbientModel.Average, d.Lighting.Ambient);
+            Assert.AreEqual(1f, d.Lighting.Contributions.AmbientAsMainLight, "without a main light, the probes are the light");
+            Assert.AreEqual(AtlasAmbientStandIn.Brightest, d.Lighting.Contributions.AmbientStandIn, "along their dominant direction");
+            Assert.AreEqual(1f, d.Lighting.Contributions.AmbientWithoutMainLight, "their average stays the ambient light");
             Assert.AreEqual(0f, d.Lighting.ReceiveShadows);
             Assert.IsTrue(d.Lighting.LimitBrightness);
             Assert.AreEqual(0.5f, d.Lighting.Ramp.ShadowTint.Color.r, 1e-5f);

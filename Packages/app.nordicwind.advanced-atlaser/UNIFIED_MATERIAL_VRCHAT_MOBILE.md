@@ -201,7 +201,10 @@ are the matcap, which uses no tiling, and the detail mask, which always uses UV0
 ### Lighting
 Toon shading from a ramp, with controls for how dark and how colored the shadows get.
 Ambient light is flat: the average light-probe color, with no direction. Shadow
-attenuation feeds into the ramp, so received shadows follow the ramp's shape.
+attenuation feeds into the ramp, so received shadows follow the ramp's shape. Without a
+real-time main light, the probes are the light: their color along their dominant direction,
+which is also the direction the ramp shades from, while their average stays the ambient
+light.
 
 - **Controls:**
   - **Shading:** a preset (Flat, Realistic, Realistic Soft, Realistic Very Soft, Toon 2, 3 or 4
@@ -217,7 +220,8 @@ attenuation feeds into the ramp, so received shadows follow the ramp's shape.
   - a ramp (texture or gradient); the presets could become named ramp shapes, so a writer
     can pick its own equivalent;
   - shadow lift, shadow color from albedo, minimum brightness, light clamp;
-  - ambient model *flat* (average color, no direction).
+  - ambient model *flat* (average color, no direction);
+  - without a main light: *ambient as main light* 1 with the *brightest* stand-in.
 
 ### Specular
 GGX highlights and reflection probe reflections, with a toon option.

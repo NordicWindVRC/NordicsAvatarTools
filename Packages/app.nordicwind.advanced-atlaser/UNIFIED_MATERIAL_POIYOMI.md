@@ -825,7 +825,10 @@ Thry's locking keeps.
 **Light Data** (catalog 3.4):
 - **Light color mode:** Poi Custom as *merged probes* (with *Indirect Uses Normals* as the
   directional amount), Standard as *separate*, UTS2 as *floored* (with its unlit intensity),
-  OpenLit as *split probes*.
+  OpenLit as *split probes*. Without a real-time main light, Standard takes 60% of the
+  ambient light at the normal as its direct light and keeps 50% as ambient (*ambient as main
+  light* 0.6, *ambient* 0.5; the same in 9.3, 10 and 11). The other modes make their direct
+  light of the probes in every world, so they need no rule of their own.
 - **Light direction mode:** Poi Custom as *probe-blended*, forced local and world as *fixed*,
   UTS2 as *view fallback*, OpenLit as *split probes*, view direction with its yaw and pitch.
 - **Light map mode** as the shading term: Poi Custom as *relative brightness* (half-Lambert under

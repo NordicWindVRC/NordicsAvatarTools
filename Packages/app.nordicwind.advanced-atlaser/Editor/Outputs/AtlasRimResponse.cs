@@ -10,7 +10,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // with it, a lit or overlay rim blends with the lit color by its light response, an emission
     // rim adds unlit, and its emission amount glows as well. The output's strength, base color mix
     // and lighting are the ones whose displayed (sRGB) results differ least, on the sources' base
-    // colors (AtlasSourceSamples), in the standard scenes (AtlasLook) over the angle to the
+    // colors (AtlasSourceSamples), in the scenes with a main light (AtlasLook) over the angle to the
     // light, weighted by area (ATLAS_OUTPUT.md, "Matching the look"). Lighting is Lambert × the
     // direct light + the ambient; shadows, light sides and masks aren't part of it.
     public static class AtlasRimResponse
@@ -63,9 +63,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             foreach (var (bases, weight) in sources)
             {
                 if (bases.Count == 0 || weight <= 0f) continue;
-                float each = weight / (bases.Count * AtlasLook.Scenes.Length * Angles);
+                float each = weight / (bases.Count * AtlasLook.MainLightScenes.Length * Angles);
                 foreach (var b in bases)
-                    foreach (var scene in AtlasLook.Scenes)
+                    foreach (var scene in AtlasLook.MainLightScenes)
                         for (int k = 0; k < Angles; k++)
                         {
                             float nDotL = -1f + 2f * k / (Angles - 1);

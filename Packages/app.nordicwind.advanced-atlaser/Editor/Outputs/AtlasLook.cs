@@ -4,17 +4,24 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
 {
-    // A standard scene looks are compared in: white light from a main light and from all around.
+    // A standard scene looks are compared in: white light from a main light and from the light
+    // probes.
     public struct AtlasLookScene
     {
         public string Name;
-        public float Direct, Ambient;
+        // The main light; 0: the world has none.
+        public float Direct;
+        // The probes' average light, and how much more of it comes along their dominant direction
+        // (and how much less against it). Where there is no main light, the angle to the light is
+        // the angle to that direction.
+        public float Ambient, Directional;
 
-        public AtlasLookScene(string name, float direct, float ambient)
+        public AtlasLookScene(string name, float direct, float ambient, float directional = 0f)
         {
             Name = name;
             Direct = direct;
             Ambient = ambient;
+            Directional = directional;
         }
     }
 
@@ -70,13 +77,26 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // and how a source's lighting looks against the lighting the output shader keeps.
     public static class AtlasLook
     {
-        // A bright main light and a dim one, each with ambient light. Not ambient alone: where
-        // it goes depends on how a shader turns the probes into direct light, which the unified
-        // lighting doesn't record for every shader yet.
-        public static readonly AtlasLookScene[] Scenes =
+        // A bright main light and a dim one, each with even ambient light.
+        public static readonly AtlasLookScene[] MainLightScenes =
         {
             new AtlasLookScene("bright", 1f, 0.3f),
             new AtlasLookScene("dim", 0.4f, 0.15f)
+        };
+
+        // Those, and two worlds without a main light, where shaders differ most: each turns the
+        // probes into light its own way (AtlasLightingResponse.Light).
+        // - Probes only: about as much light as the bright scene gives a surface on average (a
+        //   quarter of its main light + its ambient light), half as much again from one side.
+        // - Dark: almost no light, where the floors (minimum brightness, minimum light) decide
+        //   the look.
+        // The levels are starting values with these reasons, not tuned to an avatar.
+        public static readonly AtlasLookScene[] Scenes =
+        {
+            MainLightScenes[0],
+            MainLightScenes[1],
+            new AtlasLookScene("probes-only", 0f, 0.5f, 0.25f),
+            new AtlasLookScene("dark", 0f, 0.02f)
         };
 
         // The angles to the light, N·L from −1 to 1.
@@ -98,7 +118,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 {
                     float nDotL = -1f + 2f * k / (Angles - 1);
                     float shown = AtlasSourceSamples.Luminance(
-                        AtlasLightingResponse.Display(AtlasLightingResponse.Lit(lighting, color, nDotL, scene.Direct, scene.Ambient, ramp)));
+                        AtlasLightingResponse.Display(AtlasLightingResponse.Lit(lighting, color, nDotL, scene, ramp)));
                     all += shown;
                     if (k > half) lit += shown;
                     else if (k < half) shadow += shown;

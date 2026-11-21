@@ -226,6 +226,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             if (c.Ambient != AtlasAmbientModel.Directional) c.DirectionalAmount = defaults.DirectionalAmount;
             if (c.ColorModel != AtlasLightColorModel.Floored) c.FloorIntensity = defaults.FloorIntensity;
+            // What stands in for a missing main light counts in the separate model alone.
+            if (c.ColorModel != AtlasLightColorModel.Separate)
+            {
+                c.Contributions.AmbientAsMainLight = defaults.Contributions.AmbientAsMainLight;
+                c.Contributions.AmbientWithoutMainLight = defaults.Contributions.AmbientWithoutMainLight;
+            }
+            if (c.ColorModel != AtlasLightColorModel.Separate || c.Contributions.AmbientAsMainLight <= 0f)
+                c.Contributions.AmbientStandIn = defaults.Contributions.AmbientStandIn;
             if (c.Direction != AtlasLightDirectionModel.Fixed)
             {
                 c.LightDirection = defaults.LightDirection;
