@@ -472,6 +472,7 @@ the avatar in 45° steps:
 | Edge weight | The share of its effect on the outer ring, beyond three quarters of the disc's radius. An even matcap has 0.44 there |
 | Around | How much of the way around the outer ring shows the effect: the share of directions with a quarter of the ring's average or more |
 | Detail | The share of its variation that is fine: what is left after each point is averaged with its neighbors |
+| Standout | How far its sharpest features stand out: what its neighbors' average leaves of the sharpest fiftieth of the disc, over how much the matcap varies (at least a quarter of its effect) |
 | Tint | How colored the matcap is where it shows: its saturation, weighted by its effect |
 
 The **role** is the first that holds:
@@ -482,8 +483,13 @@ The **role** is the first that holds:
 | Highlight | Gloss, shine, glints, and reflections, which usually come with them | A spread of 0.5 or more, or a detail of 0.5 or more on a matcap that varies (an evenness below 0.75) |
 | Lighting | Stands in for the world's light: a lit sphere, sky and ground, light from a side, a soft glow, one color or shade all over | The rest |
 
-**Tints** is a modifier on any role: a matcap with a tint of 0.25 or more colors the surface
-besides what its role does (a red glint, a blue silk sheen). A warm white (0.2) doesn't.
+Two modifiers say what a matcap does besides its role:
+- **With a highlight**, on lighting: its sharpest features stand out by 0.95 or more. A pearl
+  and a lit sphere with a hot spot are both a soft body with a highlight on it, and no
+  measure at this size tells them apart: an artist called the pearls highlights and the lit
+  spheres lighting, and found the line hard to draw.
+- **Tints**, on any role: a tint of 0.25 or more colors the surface (a red glint, a blue silk
+  sheen). A warm white (0.2) doesn't.
 
 A matcap whose impact is below half a displayed level has no role: it shows as having no
 visible effect (a texture scale of 0, which reads one texel, makes one).
@@ -508,7 +514,7 @@ pearl, rubber, shine and silk, and Poiyomi's samples. Gems and facets measure a 
 glass and shine as highlights, and thin rings as rims. Metals split: chrome with a hot spot
 is a highlight, a gold sphere lighting that tints. The inspector
 shows each matcap with its texture (tinted by its color; a click shows it in the Project
-window), and under its name the role, whether it brightens or darkens, whether it tints, and
+window), and under its name the role with its modifiers, whether it brightens or darkens, and
 the materials it is on. The build lists the roles in one line. Placement doesn't follow the role yet: it goes
 by the effect rule above.
 
@@ -1458,9 +1464,9 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
   inspector offers the choice while a slot is fitted.
 - **Matcap roles:** a small bright spot is a highlight that a bake would freeze, as is fine
   detail all over; an effect toward the edges all around is a rim; the rest is lighting (an
-  even matcap, which a bake keeps; sky above ground; light from a side). A colored matcap
-  tints whatever its role, the lookup doesn't decide the role, and a matcap that changes
-  nothing says so.
+  even matcap, which a bake keeps; sky above ground; light from a side), with a highlight
+  where a soft body has a crisp spot. A colored matcap tints whatever its role, the lookup
+  doesn't decide the role, and a matcap that changes nothing says so.
 - **Tuning:** the kept lighting read from a scratch material equals the written material's;
   an output of the source's own shader keeps the mapped lighting; a value that looks closer
   replaces the mapped one; a generated ramp's edge moves to where the chosen lighting puts

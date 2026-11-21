@@ -239,7 +239,8 @@ Rims use the same cost for their fits (`AtlasRimResponse` today).
    needs a control of its own.
 5. **Roles.** The limits are checked against one avatar's matcaps and two collections. A lit
    sphere with a strong hot spot comes within 0.05 of the highlight's spread limit, and a
-   gold sphere stays lighting; both are judgment calls. Whether a rim
+   gold sphere stays lighting; both are judgment calls. How placement treats lighting with a
+   highlight: as a highlight, to protect the spot, or as lighting. Whether a rim
    matcap may use a rim slot, and a highlight the output's own highlights, where no matcap
    slot is left.
 6. **The cost of a bake.** Point by point, freezing an ordinary lit-sphere matcap costs more

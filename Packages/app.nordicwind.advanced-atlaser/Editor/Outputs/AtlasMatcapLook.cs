@@ -41,9 +41,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The share of its variation that is fine: what is left after each point is averaged
         // with its neighbors (a twelfth of the radius, 15° around).
         public float Detail;
+        // How far its sharpest features stand out: what its neighbors' average leaves of the
+        // sharpest fiftieth of the disc, over how much the matcap varies (at least a quarter of
+        // its effect, so an even matcap's faint speckle doesn't count).
+        public float Standout;
         // How colored the matcap is where it shows: its saturation, weighted by its effect.
         public float Tint;
         public AtlasMatcapRole Role;
+
+        // A lighting matcap with a highlight on it: a pearl or a lit sphere with a hot spot.
+        public bool HasHighlight => Role == AtlasMatcapRole.Lighting && Standout >= AtlasMatcapLook.HighlightStandout;
 
         // Whether it colors the surface besides what its role does.
         public bool Tints => Tint >= AtlasMatcapLook.TintSaturation;
@@ -54,10 +61,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool HasEffect => Impact >= 0.002f;
 
         /// <summary>The role, whether it brightens or darkens, and whether it tints, in a few
-        /// words: "Rim, darkens", "Highlight, brightens, tints".</summary>
+        /// words: "Rim, darkens", "Lighting with a highlight, brightens", "Highlight, brightens,
+        /// tints".</summary>
         public string Summary() => !HasEffect ? "No visible effect"
-            : Role + ", " + (Brightens >= 0.9f ? "brightens" : Brightens <= 0.1f ? "darkens" : "brightens and darkens") +
-              (Tints ? ", tints" : "");
+            : Role + (HasHighlight ? " with a highlight" : "") + ", " +
+              (Brightens >= 0.9f ? "brightens" : Brightens <= 0.1f ? "darkens" : "brightens and darkens") + (Tints ? ", tints" : "");
     }
 
     public static class AtlasMatcapLook
@@ -77,6 +85,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public const float HighlightSpread = 0.5f, HighlightDetail = 0.5f, DetailEvenness = 0.75f;
         // - It tints from a quarter saturation: a warm white (0.2) doesn't, a silk blue (0.3) does.
         public const float TintSaturation = 0.25f;
+        // - A lighting matcap has a highlight on it where its sharpest features stand out about
+        //   as far as the whole matcap varies. Pearls measure 1.0 and up, soft spheres and glows
+        //   0.6 and below. No measure at this size tells a pearl from a lit sphere with a hot
+        //   spot, so both are lighting with a highlight.
+        public const float HighlightStandout = 0.95f;
         // - Everything else is lighting, an even color or shade included: how even a matcap is
         //   depends on the base colors it is on (a multiply mixed with a dark base color darkens
         //   almost evenly), so evenness is a measure and not a role.
@@ -265,6 +278,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
             float mean = (float)(signedSum / weight);
             double variation = 0.0, fine = 0.0;
+            var left = new List<(float Weight, float Left)>(Rings * Steps);
             for (int j = 0; j < Rings; j++)
                 for (int k = 0; k < Steps; k++)
                 {
@@ -281,10 +295,23 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             count++;
                         }
                     }
-                    fine += Radius(j) * Mathf.Abs(signs[j, k] - sum / count);
+                    float residual = Mathf.Abs(signs[j, k] - sum / count);
+                    fine += Radius(j) * residual;
+                    left.Add((Radius(j), residual));
                 }
             measure.Evenness = absolute > 1e-9 ? Mathf.Clamp01((float)(1.0 - variation / absolute)) : 1f;
             measure.Detail = variation > 1e-9 ? (float)(fine / variation) : 0f;
+            // The sharpest fiftieth of the disc.
+            double fiftieth = weight * 0.02, got = 0.0, sharpest = 0.0;
+            foreach (var p in left.OrderByDescending(p => p.Left))
+            {
+                double part = System.Math.Min(p.Weight, fiftieth - got);
+                if (part <= 0.0) break;
+                sharpest += part * p.Left;
+                got += part;
+            }
+            double scale = System.Math.Max(variation, 0.25 * absolute) / weight;
+            measure.Standout = got > 0.0 && scale > 1e-9 ? (float)(sharpest / got / scale) : 0f;
 
             // The directions around the outer ring that show the effect.
             var directions = new float[Steps];

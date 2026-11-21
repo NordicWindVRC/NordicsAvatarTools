@@ -143,6 +143,21 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
+        public void ASoftSphereWithACrispSpotIsLightingWithAHighlight()
+        {
+            Func<float, float, float> sphere = (x, y) => Mathf.Max(0f, 0.5f - 0.3f * (x * x + y * y));
+            // A pearl: most of what it does is the soft body, with a hot spot up to the left.
+            var pearl = Measure(With(Texture((x, y) => sphere(x, y) + ((x + 0.4f) * (x + 0.4f) + (y - 0.4f) * (y - 0.4f) < 0.12f * 0.12f ? 0.5f : 0f)), AtlasBlend.Add));
+            Assert.AreEqual(AtlasMatcapRole.Lighting, pearl.Role);
+            Assert.IsTrue(pearl.HasHighlight);
+            Assert.AreEqual("Lighting with a highlight, brightens", pearl.Summary());
+
+            var soft = Measure(With(Texture(sphere), AtlasBlend.Add));
+            Assert.IsFalse(soft.HasHighlight, "the body alone has none");
+            Assert.Less(soft.Standout, 0.6f);
+        }
+
+        [Test]
         public void AColoredMatcapTintsWhateverItsRole()
         {
             var red = new Color(1f, 0.2f, 0.2f, 1f);
