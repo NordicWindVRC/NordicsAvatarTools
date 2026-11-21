@@ -51,8 +51,7 @@ remaining part of the look model is built in the phase that first uses it.
 
 - The reference look beyond the lighting (*The reference look*): matcaps and rims lit by the
   chosen lighting, with highlights and reflections, read from a map at a stage (*Map
-  contributions*). The existing matcap and rim fits move onto it, and weigh the scenes
-  without a main light too.
+  contributions*).
 - The role limits checked against real matcaps (open question 5), then every way of showing
   a matcap with its cost, and *Average in color* (*Matcaps*).
 - **Workable:** *Automatic* places matcaps by role and cost on every writer, and the rules in

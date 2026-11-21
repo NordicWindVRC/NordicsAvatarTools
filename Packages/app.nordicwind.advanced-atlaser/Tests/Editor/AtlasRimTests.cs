@@ -210,6 +210,13 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsTrue(fit.Lit);
             Assert.Less(fit.Strength, 0.5f);
 
+            // Under an unlit atlas the surface isn't lit, and neither is a rim on it: added as it is.
+            var unlit = Rim(Color.white);
+            unlit.Opacity = 0.4f;
+            fit = AtlasRimResponse.Fit(unlit, 1f, Bases(new Color(0.3f, 0.3f, 0.3f, 1f)), new AtlasLighting { Family = AtlasLightingFamily.Unlit });
+            Assert.IsFalse(fit.Lit, "the atlas's lighting lights the surface the rim is on");
+            Assert.AreEqual(0.4f, fit.Strength, 0.02f);
+
             // In a build: the slot's rim is the fitted one, listed.
             var first = Material(mixed);
             first.Surface.BaseColor.Color = dark;

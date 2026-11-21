@@ -10,9 +10,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // with it, a lit or overlay rim blends with the lit color by its light response, an emission
     // rim adds unlit, and its emission amount glows as well. The output's strength, base color mix
     // and lighting are the ones whose displayed (sRGB) results differ least, on the sources' base
-    // colors (AtlasSourceSamples), in the scenes with a main light (AtlasLook) over the angle to the
-    // light, weighted by area (ATLAS_OUTPUT.md, "Matching the look"). Lighting is Lambert × the
-    // direct light + the ambient; shadows, light sides and masks aren't part of it.
+    // colors (AtlasSourceSamples), in the standard scenes (AtlasLook) over the angle to the light,
+    // weighted by area (ATLAS_OUTPUT.md, "Matching the look"). The surface is lit by the atlas's
+    // lighting (AtlasLightingResponse), which also says what light a scene without a main light
+    // gives a rim that follows the light; without one, by Lambert × the direct light + the
+    // ambient. Light sides and masks aren't part of it.
     public static class AtlasRimResponse
     {
         private const int Angles = 9;
@@ -51,9 +53,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         /// <summary>The added rim that looks most like <paramref name="layer"/> at its peak
         /// strength <paramref name="peak"/> (its rim curve's largest value) on the sources' base
-        /// colors, each source weighted by its area.</summary>
-        public static Fitted Fit(AtlasAngleLayer layer, float peak, IReadOnlyList<(IReadOnlyList<Color> Bases, float Weight)> sources)
+        /// colors, each source weighted by its area, under <paramref name="lighting"/> (the
+        /// atlas's; null: plain Lambert).</summary>
+        public static Fitted Fit(AtlasAngleLayer layer, float peak, IReadOnlyList<(IReadOnlyList<Color> Bases, float Weight)> sources,
+            AtlasLighting lighting = null)
         {
+            lighting = lighting ?? new AtlasLighting();
+            var ramp = AtlasLightingResponse.RampOf(lighting);
             var color = layer.Color.Color;
             float alpha = layer.SourceAlphaIsOpacity ? color.a : 1f;
             float strength = Mathf.Max(0f, layer.Opacity) * alpha * peak;
@@ -63,16 +69,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
             foreach (var (bases, weight) in sources)
             {
                 if (bases.Count == 0 || weight <= 0f) continue;
-                float each = weight / (bases.Count * AtlasLook.MainLightScenes.Length * Angles);
+                float each = weight / (bases.Count * AtlasLook.Scenes.Length * Angles);
                 foreach (var b in bases)
-                    foreach (var scene in AtlasLook.MainLightScenes)
+                    foreach (var scene in AtlasLook.Scenes)
                         for (int k = 0; k < Angles; k++)
                         {
                             float nDotL = -1f + 2f * k / (Angles - 1);
-                            float direct = scene.Direct, ambient = scene.Ambient;
-                            float light = direct * Mathf.Max(0f, nDotL) + ambient;
-                            var lit = b * light;
-                            lit.a = 1f;
+                            // The light the lighting makes of the scene, and the surface under it.
+                            AtlasLightingResponse.Light(lighting, scene, nDotL, out float direct, out float ambient);
+                            var lit = AtlasLightingResponse.Lit(lighting, b, nDotL, scene, ramp);
                             var tinted = Tint(color, b, mix);
                             float response = layer.LightResponse == AtlasLightResponse.ScaleByLight ? direct + ambient
                                 : layer.LightResponse == AtlasLightResponse.ScaleByDirectLight ? direct : 1f;
@@ -80,7 +85,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             switch (layer.Placement)
                             {
                                 case AtlasPlacement.Surface:
-                                    result = AtlasBlendMath.Apply(layer.Blend, b, tinted, strength) * light;
+                                    result = AtlasLightingResponse.Lit(lighting, AtlasBlendMath.Apply(layer.Blend, b, tinted, strength), nDotL, scene, ramp);
                                     break;
                                 case AtlasPlacement.Emission:
                                     result = lit + tinted * strength;

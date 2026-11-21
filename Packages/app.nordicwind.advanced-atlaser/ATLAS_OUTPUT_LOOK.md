@@ -83,9 +83,10 @@ planned:
 
 ### The reference look
 
-The look model covers the lighting alone today. The highlight and rim fits assume plain
-Lambert light whatever lighting was chosen, so they use the scenes with a main light only,
-and the matcap fits use no scene.
+The look model covers the lighting today, and the rim fit is lit by it in all four scenes.
+The highlight fit assumes plain Lambert light whatever lighting was chosen, so it uses the
+scenes with a main light only, and the matcap slot fit works on the base color before the
+light, so it uses no scene.
 
 One evaluator computes a source's look from its unified material, at sample points, in the
 unified evaluation stages (S1–S7): the surface inputs, the lighting family with highlights and

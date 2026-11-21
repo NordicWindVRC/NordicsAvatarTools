@@ -343,9 +343,10 @@ What the fits and the build's checks share (`AtlasLook`):
   Without a main light, the angle to the light is the angle to the probes' dominant
   direction, and the lighting's light color model says what becomes direct light (catalog
   3.4): the probes merged, floored or split, or a share of the ambient light standing in
-  for the main light. The lighting's look and *Automatic* lighting use all four scenes. The
-  highlight and rim fits use the two with a main light, since their own light is the main
-  light alone.
+  for the main light. The lighting's look, *Automatic* lighting and the rim fit use all four
+  scenes. The rim fit lights the surface by the atlas's lighting, which also says what a
+  scene without a main light gives a rim that follows the light. The highlight fit uses the
+  two scenes with a main light, since its own light is the main light alone.
 - **A lighting's look.** A lighting setup on a set of base colors has a **level**, the mean
   displayed brightness over the angles to the light, and a **contrast**, the lit side's mean
   minus the shadow side's, in each scene.

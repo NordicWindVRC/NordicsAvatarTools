@@ -329,7 +329,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 if (!(context.Output.Layers[k] is AtlasAngleLayer copy) || AtlasRimResponse.AddsAsIs(copy)) continue;
                 if (!AtlasRimCurve.FitBand(copy, out _, out _, out float peak) || peak <= 0f) continue;
-                var fitted = AtlasRimResponse.Fit(copy, peak, sources);
+                var fitted = AtlasRimResponse.Fit(copy, peak, sources, context.Output.Lighting);
                 var color = copy.Color.Color;
                 copy.Color.Color = new Color(color.r, color.g, color.b, 1f);
                 copy.SourceAlphaIsOpacity = false;
