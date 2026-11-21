@@ -204,7 +204,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         private static readonly List<IAtlasOutputFeature> Registered = new List<IAtlasOutputFeature>();
 
-        // Every feature, by section and then order.
+        // Every feature, by section, then order, then ID: the order they are listed and resolved
+        // in, the same in every session.
         public static IReadOnlyList<IAtlasOutputFeature> All => Registered;
 
         static AtlasOutputFeatures()
@@ -217,7 +218,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     throw new ArgumentException($"[Nordic's Advanced Atlaser] Duplicate output feature ID '{feature.Id}'.");
                 Registered.Add(feature);
             }
-            Registered.Sort((a, b) => a.Section != b.Section ? a.Section.CompareTo(b.Section) : a.Order.CompareTo(b.Order));
+            Registered.Sort((a, b) => a.Section != b.Section ? a.Section.CompareTo(b.Section)
+                : a.Order != b.Order ? a.Order.CompareTo(b.Order) : string.CompareOrdinal(a.Id, b.Id));
         }
 
         public static IAtlasOutputFeature Find(string id) => Registered.FirstOrDefault(f => f.Id == id);

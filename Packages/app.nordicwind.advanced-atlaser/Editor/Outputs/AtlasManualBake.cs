@@ -83,7 +83,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             foreach (var step in plan.BeforeWrite) step();
             var material = new Material(unityShader) { name = name };
             shader.Write(plan.Output, material);
-            plan.Notes.AddRange(AtlasLightingFeature.Unkept(plan.Output, material));
+            plan.Notes.AddRange(AtlasKeptMaterial.Notes(job, plan.Output, material));
             var saved = Save(material, materialPath);
             total.Dispose();
             Debug.Log($"[Nordic's Advanced Atlaser] Bake to Assets: {materialPath}. " + string.Join("; ", timings).Replace("[Time] ", "") +

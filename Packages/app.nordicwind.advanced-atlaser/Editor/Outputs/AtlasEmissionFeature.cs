@@ -58,7 +58,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
             layer.Source.Map = request.Reference;
             layer.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Emission, AtlasBlend.Add, strength));
             context.Output.Layers.Add(layer);
+            CarryInStrength(request, layer.Targets[0]);
             Live(context, request, strength);
+        }
+
+        /// <summary>Lets an emission map's range go into its strength: where a feature's
+        /// contribution takes the baked map above 1, the map is divided by its brightest value
+        /// and the strength is multiplied by it.</summary>
+        public static void CarryInStrength(AtlasMapRequest request, AtlasLayerTarget target)
+        {
+            float? strength = null;
+            request.Carry = peak =>
+            {
+                // The strength as the features left it, read when the map is first finished.
+                if (strength == null) strength = target.Opacity;
+                target.Opacity = strength.Value * peak;
+            };
         }
 
         // Live global masks (AtlasLiveMasks): the live sources' emission with their channels at 0

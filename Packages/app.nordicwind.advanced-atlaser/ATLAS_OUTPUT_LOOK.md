@@ -57,10 +57,9 @@ planned:
   sections), so shared inputs are made once per source and released when the last reader is
   done.
 - **Full values in every carried map.** The emission map is relative to its layer's strength,
-  and a feature that raises the strength rescales what the map held. With the map holding full
-  values and dividing by its carrier at the end, as the base color does with its shared color,
-  the order of the glow contributions stops mattering, and the one step still registered to
-  run after every feature has resolved (the baked matcaps' glow) becomes a plain contribution.
+  and a feature that raises the strength rescales what the map held (glitter). With the map
+  holding full values and dividing by its carrier at the end, as the base color does with its
+  shared color, a feature only adds its part.
 - **Maps with nothing to carry their range** are limited smoothly (*A limit must never step*),
   and the log says so.
 - **Reporting.** The map reports which contribution raised its range and by how much, which
@@ -74,22 +73,17 @@ contribution.
 
 ## The look model
 
-### What it replaces
-
-Three fits carry their own copy of the scenes and their own lighting (`AtlasLightingResponse`,
-`AtlasSpecularResponse`, `AtlasRimResponse`). The highlight and rim fits assume plain Lambert
-light whatever lighting was chosen, and the matcap fits use no scene. Every scene has a main
-light. The lighting model chooses the reference source by comparing one unified setup with
-another; how the output shader shows the result isn't measured.
+Built so far (see *The look model* in the output design): the shared scenes, a lighting's
+level and contrast, the kept material read back from the written material, the sources listed
+where the kept lighting looks different from their own, and a layer's cost as a measure. What
+remains planned:
 
 ### Scenes
 
-One shared set, used by every fit:
+Two scenes join the bright and the dim one:
 
 | Scene | Main light | Ambient | Why |
 |---|---|---|---|
-| Bright | 1 | 0.3 | A lit world |
-| Dim | 0.4 | 0.15 | The same at low light, where floors and limits start to show |
 | Probes only | None | To be set, with a direction | Each shader turns the probes into light its own way, so shaders differ most here |
 | Dark | None | To be set, low | The floors (minimum brightness, minimum light) decide the look |
 
@@ -98,47 +92,38 @@ The unified lighting records what each shader does without a main light, for eve
 
 ### The reference look
 
+The look model covers the lighting alone today. The highlight and rim fits assume plain
+Lambert light whatever lighting was chosen, and the matcap fits use no scene.
+
 One evaluator computes a source's look from its unified material, at sample points, in the
 unified evaluation stages (S1–S7): the surface inputs, the lighting family with highlights and
 reflections, the layers that follow the light, the overlays (matcaps over the lookup disc,
 rims over the facing angle), emission and the final color. It is the unified definition in
-executable form. The three models above become its parts and take their light from it. What
-it doesn't cover yet is listed in one place.
+executable form. The fits' own models become its parts and take their light from it. What it
+doesn't cover yet is listed in one place.
 
 Sample points are a source's base color samples with the values at the same places (masks,
 roughness, metallic), in each scene, over the angles to the light and the view.
 
 ### The kept material
 
-*Written materials are read back* compares the lighting a writer wrote with what the plan
-asked for. The look model uses the same idea for every feature. The **kept material** is the
-output unified material, written by the writer and parsed back by the output shader's own
-parser: what the shader will show, in unified terms. The output's look is the reference look
-of the kept material.
+The kept material is read back after writing today, and only its lighting is compared.
 
-- An output shader is described once, by its parser. Formulas that describe a shader in the
-  capabilities today (`SpecularFresnel`, `ReflectanceFade`, `RimAddsAfterLighting`) become
-  unified modes that its parser sets and the reference look reads. Capabilities keep counts
-  and availability (slots, maps, UV channels).
-- Every output shader needs a parser. Each current and planned output is an input too.
-- A fit evaluates many candidates, so each writer also gives the kept material directly,
-  without writing a material (`Kept`). A test holds it equal to the read-back for every feature
-  the writer maps.
+- **Every feature.** The output's look is the reference look of the kept material, compared
+  with each source's reference look.
+- **Formulas leave the capabilities.** Formulas that describe a shader in the capabilities
+  (`SpecularFresnel`, `ReflectanceFade`, `RimAddsAfterLighting`) become unified modes that its
+  parser sets and the reference look reads. Capabilities keep counts and availability (slots,
+  maps, UV channels). Every output shader needs a parser for this; each current and planned
+  output is an input too.
+- **Without writing.** A fit evaluates many candidates, so each writer also gives the kept
+  material directly, without writing a material (`Kept`). A test holds it equal to the
+  read-back for every feature the writer maps.
 
 ### Differences
 
-- Two looks are compared as today: displayed colors, the mean absolute difference, weighted
-  by the sources' areas (*Fitting what the output lacks*).
-- A **layer** (a matcap, a rim) is compared by its effect, the look with it minus the look
-  without it, per sample point:
-  - **kept:** what the output's effect and the source's have in common (the same direction,
-    up to the source's size);
-  - **missing:** what the source shows and the output doesn't;
-  - **added:** what the output shows and the source doesn't.
-- A layer's **cost** is the mean of missing + 2 × added. Something the artist didn't put there
-  reads as a fault, while a weaker effect reads as a subtler material, so added counts double.
-- Leaving a layer out costs its impact. A way of showing it is used only when it costs less:
-  when it keeps more than twice what it adds.
+Layers are compared by their cost (*Comparing layers* in the output design). Matcaps and rims
+choose by it (*Matcaps*, below).
 
 ### Tuning
 
@@ -159,12 +144,13 @@ below, says), a bake for a layer that loses part of its effect (*Average in colo
 
 ### Look values
 
-Each source's unified material carries its look values: its level and contrast per scene,
-and per view layer its role, impact and direction (*What a matcap is for*, below). They are
-derived by the reference look from the material's own values and kept with the source
-analysis cache. Automatic choices, the overview, the log and the tests read them. A parser
-never writes them: a shader that looks different from its unified material needs a parser
-fix or a field in the model.
+A lighting's level and contrast are computed where they are needed today. Each source's
+unified material carries its look values: its level and contrast per scene, and per view
+layer its role, impact and direction (*What a matcap is for*, below). They are derived by the
+reference look from the material's own values and kept with the source analysis cache.
+Automatic choices, the overview, the log and the tests read them. A parser never writes them:
+a shader that looks different from its unified material needs a parser fix or a field in the
+model.
 
 ---
 
@@ -291,23 +277,18 @@ Rims use the same cost for their fits (`AtlasRimResponse` today).
 
 ## Open questions
 
-1. **Look values are derived only.** Proposed: parsers never write them. The alternative is a
-   parser-supplied correction where a shader isn't fully modeled, which would let shader
-   behavior bypass the model.
-2. **Added counts double.** The factor 2 is a starting value with the reason given in
-   *Differences*. A higher factor leaves more out; a lower one approximates more.
-3. **Views and normals.** Proposed: a sphere of normals, seen from the virtual view and from
+1. **Views and normals.** Proposed: a sphere of normals, seen from the virtual view and from
    around the avatar in 45° steps, so the inspector and the build agree. The mesh's own
    normals would be closer, but the inspector doesn't have them.
-4. **The new scenes' values.** The ambient level and direction for *Probes only*, and the
+2. **The new scenes' values.** The ambient level and direction for *Probes only*, and the
    level for *Dark*.
-5. **The blocked view's weight.** Proposed: under *Automatic* it counts as much as the look
+3. **The blocked view's weight.** Proposed: under *Automatic* it counts as much as the look
    with the shader.
-6. **Shifts within range.** Proposed: under *Automatic* no texel is raised above 1.
-7. **Average in color.** Which roles it is offered for (proposed: lighting, tint and
+4. **Shifts within range.** Proposed: under *Automatic* no texel is raised above 1.
+5. **Average in color.** Which roles it is offered for (proposed: lighting, tint and
    reflection), and whether it needs a control of its own.
-8. **Level compensation for lighting.** Whether a source's base color may be scaled to give
+6. **Level compensation for lighting.** Whether a source's base color may be scaled to give
    it the level its own lighting had, bounded like matcap shifts.
-9. **Roles.** The limits that separate them. Whether a rim matcap may use a rim slot, and a
+7. **Roles.** The limits that separate them. Whether a rim matcap may use a rim slot, and a
    highlight or reflection matcap the output's own highlights and reflections, where no matcap
    slot is left.

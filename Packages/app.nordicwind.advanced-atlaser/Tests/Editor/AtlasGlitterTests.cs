@@ -108,6 +108,47 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
+        public void EmulatedGlitterColorIsBlendedIntoTheTintedColor()
+        {
+            // The one color stays shared, out of the map; the points are still white, not white
+            // × the shared color.
+            var material = Glittery(2f);
+            material.Surface.BaseColor.Color = new Color(0.5f, 0.5f, 0.5f, 1f);
+            var job = Job(material);
+            var choice = new AtlasFeatureChoice { FeatureId = AtlasGlitterFeature.FeatureId, ModeId = "emulated" };
+            choice.Values[AtlasFeatureOption.ValueId(AtlasGlitterFeature.ColorOption)] = (1f, "");
+            job.Features.Add(choice);
+            var plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
+            float shared = plan.Output.Surface.BaseColor.Color.r;
+            Assert.AreEqual(0.5f, shared, 1e-4f, Notes(plan));
+            Assert.AreEqual(1f, shared * Pixel(plan, AtlasVirtualMap.BaseColor, job, 0, 0, 0).r, 1e-3f, "on a point: the glitter's color");
+            Assert.AreEqual(0.5f, shared * Pixel(plan, AtlasVirtualMap.BaseColor, job, 0, 4, 4).r, 1e-3f, "between the points: the color as it is");
+        }
+
+        [Test]
+        public void AGlitterPointOnAGlowingPartGoesIntoTheEmissionsStrength()
+        {
+            var material = Glittery(2f);
+            var glow = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission };
+            glow.Source.Color = Color.white;
+            glow.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Emission, AtlasBlend.Add, 3f));
+            material.Layers.Add(glow);
+            var job = Job(material);
+            job.Features.Add(new AtlasFeatureChoice { FeatureId = AtlasGlitterFeature.FeatureId, ModeId = "emulated" });
+            var plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
+            var target = AtlasEmissionFeature.Of(plan.Output).Targets[0];
+            var request = plan.Maps.Single(m => m.Map == AtlasVirtualMap.Emission);
+            using (var map = request.Evaluate(0, material, 16, 16))
+            {
+                float point = map.GetPixel(0, 0).r * target.Opacity;
+                Assert.Greater(map.GetPixel(0, 0).r, 1f, "the emission and a point on it: more than the map holds");
+                request.Finish(map);
+                Assert.LessOrEqual(map.GetPixel(0, 0).r, 1f + 1e-4f, "the map stays within 0–1");
+                Assert.AreEqual(point, map.GetPixel(0, 0).r * target.Opacity, 1e-3f, "the strength carries the rest");
+            }
+        }
+
+        [Test]
         public void TheWriterSetsTheGlitterTheParserReadsBack()
         {
             var shader = AtlasShaderRegistry.Output("poiyomi10");

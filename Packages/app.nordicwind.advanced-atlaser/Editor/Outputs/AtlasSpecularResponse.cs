@@ -15,13 +15,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // The response: GGX highlights, D × V × F × N·L (V Smith-GGX correlated), from a white light,
     // and reflections of a uniform environment as bright as the ambient light, × F; F by the
     // output's fresnel and faded below its reflectance fade. They're added to a gray diffuse of
-    // the base color's luminance, and the displayed (sRGB) results are compared over two scenes,
-    // a few light angles and the view angles in the light's plane. Tints, fresnel strengths,
-    // steps, occlusion and normal maps aren't part of it.
+    // the base color's luminance, and the displayed (sRGB) results are compared over the scenes
+    // (AtlasLook), a few light angles and the view angles in the light's plane. Tints, fresnel
+    // strengths, steps, occlusion and normal maps aren't part of it.
     public static class AtlasSpecularResponse
     {
-        // (direct, ambient), as AtlasLightingResponse's scenes.
-        private static readonly (float Direct, float Ambient)[] Scenes = { (1f, 0.3f), (0.4f, 0.15f) };
         private static readonly float[] LightAngles = { 0f, 20f, 40f, 60f, 80f };
         // View angles from −80° to 80° in 10° steps, so each light angle's mirror direction is one.
         private const int ViewAngles = 17;
@@ -158,7 +156,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 float roughness = 1f - Mathf.Clamp01(texel.Smoothness);
                 float alpha = Mathf.Max(roughness * roughness, 0.0045f);
                 float a2 = alpha * alpha;
-                foreach (var (direct, ambient) in Scenes)
+                foreach (var scene in AtlasLook.Scenes)
                     foreach (float lightAngle in LightAngles)
                         for (int k = 0; k < ViewAngles; k++)
                         {
@@ -175,9 +173,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             entries.Add(new Entry
                             {
                                 Texel = t,
-                                Diffuse = texel.Base * (1f - texel.Metallic) * (nDotL * direct + ambient),
-                                Highlight = distribution * visibility * nDotL * direct,
-                                Ambient = ambient,
+                                Diffuse = texel.Base * (1f - texel.Metallic) * (nDotL * scene.Direct + scene.Ambient),
+                                Highlight = distribution * visibility * nDotL * scene.Direct,
+                                Ambient = scene.Ambient,
                                 HighlightFalloff = highlightFalloff,
                                 ReflectionFalloff = oneFalloff ? highlightFalloff : Mathf.Pow(1f - nDotV, 5f)
                             });

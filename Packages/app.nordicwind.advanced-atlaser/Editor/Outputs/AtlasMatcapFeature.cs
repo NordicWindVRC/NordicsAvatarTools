@@ -532,8 +532,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 });
             if (!emissionOn || !layers.Values.Any(list => list.Any(l => (AtlasMatcapBake.AddsAfterLighting(l) || l.EmissionAmount > 0f) &&
                                                                         AtlasMatcapBake.GlowShare(l) > 0f))) return;
-            // Once the emission feature has made its map (or not): into it, relative to its strength.
-            context.Plan.AfterResolve.Add(() => BakeEmission(context, layers, rigs, cameras, strength, NormalsOf));
+            // Into the emission map, relative to its strength. The emission feature resolves before
+            // this one (AtlasOutputFeatures), so its map is there if any source has an emission.
+            BakeEmission(context, layers, rigs, cameras, strength, NormalsOf);
         }
 
         private static void BakeEmission(AtlasFeatureContext context, Dictionary<int, List<AtlasLookupLayer>> layers, Dictionary<int, AtlasLightRig> rigs,
@@ -579,8 +580,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             });
             // Brighter than the emission's strength: the map's brightest value goes into the
             // strength (the map's range step).
-            float carried = target.Opacity;
-            request.Carry = peak => target.Opacity = carried * peak;
+            if (request.Carry == null) AtlasEmissionFeature.CarryInStrength(request, target);
         }
 
         // How alike a slot and a group are, for combining what doesn't fit: doing the same

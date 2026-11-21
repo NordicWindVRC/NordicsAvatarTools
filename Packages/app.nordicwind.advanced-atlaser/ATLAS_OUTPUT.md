@@ -66,6 +66,7 @@ Where each part of this design lives:
 | Overview | `Editor/Outputs/AtlasOutputOverview.cs`, `AtlasTextureMemory.cs` | What an output uses: features with their modes and sources, the textures they need with sizes and memory |
 | Evaluator | `Editor/Outputs/AtlasMapEvaluator.cs`, `AtlasColorStack.cs` | The bakeable subset over a source's UV 0–1: textures with their placement, color layers, decals, adjustments, masks and the mask bus |
 | Map requests | `Editor/Outputs/AtlasMapRequest.cs` | A virtual map's content, views and contributions by stage, its shared color and its range step (see [*Map contributions*](#map-contributions)) |
+| Look model | `Editor/Outputs/AtlasLook.cs`, `AtlasKeptMaterial.cs` | The standard scenes, a lighting's level and contrast, a layer's cost, and the written material read back and compared with the sources' own looks (see [*The look model*](#the-look-model)) |
 | Map baker | `Editor/Outputs/AtlasMapBaker.cs` | One texture, source by source: each virtual map evaluated at the source's bake size, its UV islands grown over the unused texels, placed in its region |
 | Coverage | `Editor/Outputs/AtlasCoverage.cs` | Each source's UV0 triangles (from the output's renderers in the manual bake, the avatar's in the build), painted at bake size; a triangle in another UV tile counts by whole tiles |
 | Packing | `Editor/Outputs/AtlasTexturePacker.cs` | One output texture from its virtual maps: which channels each map fills (inverted where the texture stores it so), and the neutral value of the rest |
@@ -211,6 +212,7 @@ more unified features and declares:
 | Part | Meaning |
 |---|---|
 | ID, name, section | Stable ID (stored in settings), display name, the UI section it belongs to |
+| Order | Its place within the section, which is also its priority when places run out. Features are listed and resolved by section, then order, then ID, so a feature can rely on the ones before it: baked matcaps add their glow to the map the emission feature made |
 | Presence | Which sources use it, and its instances in each |
 | Modes | The ways it can be produced. Each mode lists the capabilities it needs, the virtual maps it produces (required, and optional with the map each falls back to), and the masks it needs |
 | Settings | Per mode: the fields shown to the user, with defaults |
@@ -305,8 +307,8 @@ A shared value, or a setting the output lacks, is chosen by how the result looks
    with the candidate value and only what the output keeps. Drawing both sides with the
    output's response leaves only the missing part to differ, and a source the output can
    reproduce costs nothing, so its exact value wins.
-2. The results are compared as **displayed (sRGB) colors** in a few standard scenes (a bright
-   and a dim main light, each with ambient), over the light and view angles, on the source's own
+2. The results are compared as **displayed (sRGB) colors** in the standard scenes (see
+   [*The look model*](#the-look-model)), over the light and view angles, on the source's own
    base colors (`AtlasSourceSamples`, 4 × 4 samples). Displayed colors count what the eye sees:
    linear ones would overweight bright parts, and dark sources show differences less.
 3. The cost is the sum over the sources of **area × the mean absolute difference**. Absolute
@@ -323,6 +325,40 @@ A shared value, or a setting the output lacks, is chosen by how the result looks
 | Matcap blends | A slot's strength and base color for blends it lacks, from Poiyomi's chain with black and white textures | `AtlasMatcapFeature` |
 | Band rims | Another rim's midpoint and rise on a writer whose rim is a band | `AtlasRimCurve` |
 | Added rims | Strength, base color mix and lighting for a rim slot that only adds after lighting, from a rim that blends, sits on the surface or glows | `AtlasRimResponse` |
+
+### The look model
+
+What the fits and the build's checks share (`AtlasLook`):
+
+- **Scenes.** One set of standard scenes for every fit: a bright main light (1) with ambient
+  light (0.3), and a dim one (0.4 with 0.15). Scenes without a main light aren't in it yet:
+  where the ambient light goes depends on how a shader turns the probes into direct light,
+  which the unified lighting doesn't record for every shader.
+- **A lighting's look.** A lighting setup on a set of base colors has a **level**, the mean
+  displayed brightness over the angles to the light, and a **contrast**, the lit side's mean
+  minus the shadow side's, in each scene.
+- **The kept material.** The written material, read back by the output shader's own parser
+  (`AtlasKeptMaterial`): what the shader will show, in unified terms. An output shader is
+  described once, by its parser.
+- **What a source loses.** After writing, each source's own lighting is compared with the
+  kept lighting on the source's own base colors. Where the level or the contrast differs by
+  more than about 8 of the 256 displayed levels in a scene, the build lists the source and the
+  scene, in one line per output. *Lighting from* picks another source's lighting.
+
+#### Comparing layers
+
+A layer (a matcap, a rim) is compared by its effect: the look with it minus the look without
+it, per sample point (`AtlasLayerCost`).
+
+- **Kept:** what the output's effect and the source's have in common: the same direction, up
+  to the source's size.
+- **Missing:** what the source shows and the output doesn't.
+- **Added:** what the output shows and the source doesn't.
+
+The cost is missing + 2 × added. Something the artist didn't put there reads as a fault,
+while a weaker effect reads as a subtler material, so added counts double. Leaving a layer out
+costs its impact, kept + missing, so a way of showing a layer is worth using when it keeps
+more than twice what it adds. No feature chooses by this cost yet.
 
 ### Reading intent from content
 
@@ -1237,6 +1273,9 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
   it.
 - **Bakes:** small synthetic meshes (a quad, a sphere, mirrored halves) give the expected
   values at known texels.
+- **The look model:** a lighting's level and contrast in a scene, the sources listed where
+  the kept lighting looks different from their own, and a layer's cost for a weaker, a stronger
+  and an opposite effect.
 - **Fits:** a source the output can reproduce gets its exact value back; a fit with nothing
   missing finds that same value; a weaker setting gives the expected direction (weaker
   highlights, a lower reflectance); shared values follow the source whose look changes most.
@@ -1251,7 +1290,8 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
   output shader's own parser and compares its lighting with what the plan asked for (in a
   canonical form, settings without effect in the setup at their defaults). What differs is
   listed, so a writer's approximations are reported without rules of their own. A same-shader
-  round trip lists nothing.
+  round trip lists nothing. The same read-back gives the lighting each source ends up with,
+  which is compared with its own (see [*The look model*](#the-look-model)).
 
 - **Only modes that give the effect:** a mode is offered only when its result is the feature
   as the user would recognize it. Emission isn't baked into the color, since it wouldn't

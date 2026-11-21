@@ -5,7 +5,7 @@ using UnityEngine;
 namespace NordicWind.AdvancedAtlaser.Editor
 {
     // How a lighting setup looks, for choosing between setups (not for baking): a base color lit
-    // by white light in a few standard scenes, over the angle to the light. It follows the
+    // by white light in the standard scenes (AtlasLook), over the angle to the light. It follows the
     // unified formulas (AtlasLighting) for the main light and the ambient light: the ramp toon
     // family's L = lerp(S, D, b), the physically based family's diffuse with its shadow strength
     // and tint, flat and unlit; the light's multiplier, floor and limit; the minimum light and
@@ -13,10 +13,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // drawn on the surface aren't part of it, and pre-integrated skin is read as half-Lambert.
     public static class AtlasLightingResponse
     {
-        // (direct, ambient) light: a bright main light and a dim one. Not ambient alone: where
-        // it goes depends on how a shader turns the probes into direct light, which isn't modeled.
-        private static readonly (float Direct, float Ambient)[] Scenes = { (1f, 0.3f), (0.4f, 0.15f) };
-        private const int Angles = 17;
+        private const int Angles = AtlasLook.Angles;
         private const int RampSamples = 32;
 
         /// <summary>The visible difference between a material's colors lit by two setups: the
@@ -29,12 +26,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
             double sum = 0.0;
             int count = 0;
             foreach (var color in bases)
-                foreach (var (direct, ambient) in Scenes)
+                foreach (var scene in AtlasLook.Scenes)
                     for (int k = 0; k < Angles; k++)
                     {
                         float nDotL = -1f + 2f * k / (Angles - 1);
-                        var x = Display(Lit(a, color, nDotL, direct, ambient, rampA));
-                        var y = Display(Lit(b, color, nDotL, direct, ambient, rampB));
+                        var x = Display(Lit(a, color, nDotL, scene.Direct, scene.Ambient, rampA));
+                        var y = Display(Lit(b, color, nDotL, scene.Direct, scene.Ambient, rampB));
                         sum += (Mathf.Abs(x.r - y.r) + Mathf.Abs(x.g - y.g) + Mathf.Abs(x.b - y.b)) / 3.0;
                         count++;
                     }
@@ -154,13 +151,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // A ramp texture the setup reads, as samples along u; null otherwise.
-        private static Color[] RampOf(AtlasLighting lighting) =>
+        public static Color[] RampOf(AtlasLighting lighting) =>
             lighting.Family == AtlasLightingFamily.RampToon && lighting.Ramp.Bands.Count == 0 && lighting.Ramp.Keys.Count == 0 &&
             lighting.Ramp.Ramp?.Texture is Texture2D texture
                 ? AtlasSourceSamples.Small(texture, RampSamples, 1)
                 : null;
 
-        private static Color Display(Color c) =>
+        /// <summary>A linear color as displayed (sRGB), clamped to 0–1.</summary>
+        public static Color Display(Color c) =>
             new Color(Mathf.LinearToGammaSpace(Mathf.Clamp01(c.r)), Mathf.LinearToGammaSpace(Mathf.Clamp01(c.g)),
                 Mathf.LinearToGammaSpace(Mathf.Clamp01(c.b)), 1f);
     }

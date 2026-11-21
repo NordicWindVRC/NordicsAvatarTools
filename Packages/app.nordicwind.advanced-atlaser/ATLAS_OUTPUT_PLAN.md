@@ -37,37 +37,47 @@ it uses. How finished parts work is in the design; what each version added is in
 ## M4 — Matching by look
 
 The design is in [ATLAS_OUTPUT_LOOK.md](ATLAS_OUTPUT_LOOK.md), whose section names the phases
-use. Maps are already built from contributions (the design's *Map contributions*).
-
-### 4.2 The look model
-
-- The shared scenes, the reference look, the kept material and layer costs (*The look
-  model*). The existing fits move onto them, and the formulas leave the capabilities for
-  unified modes the parsers set. Look values show in the overview.
-- What remains of *Map contributions*: a map read at a stage, declared inputs, and full values
-  in the emission map.
-- **Workable:** the fits give the same results in the bright and dim scenes, and each
-  writer's kept material equals its read-back in tests.
+use. Built so far: maps made from contributions, the shared scenes, a lighting's level and
+contrast, the kept material read back, and the sources listed where the kept lighting looks
+different from their own (the design's *Map contributions* and *The look model*). Each
+remaining part of the look model is built in the phase that first uses it.
 
 ### 4.3 Worlds without a main light
 
 - The unified lighting records each shader's rule without a main light, for every parser,
   with the inventories updated. The *Probes only* and *Dark* scenes join the set.
-- **Workable:** *Automatic* lighting and every fit weigh all four scenes.
+- **Workable:** *Automatic* lighting, every fit and the build's lighting comparison weigh all
+  four scenes.
 
 ### 4.4 Lighting by look
 
-- Writers declare their tunable values (*Tuning*). The lighting is tuned where the mapping
-  loses something, with level compensation per source, and the difference left is reported.
+- Writers declare their tunable values (*Tuning*) and give their kept material without
+  writing a material (*The kept material*), since tuning tries many candidates.
+- The lighting is tuned where the mapping loses something, with level compensation per
+  source, and the difference left is reported.
+- Look values on the unified material, shown in the overview next to *Lighting from* (*Look
+  values*).
 - **Workable:** an output of another family than its sources matches their level and contrast
   in the four scenes as closely as its controls allow; same-family outputs are unchanged.
 
 ### 4.5 Matcaps by look
 
+- The reference look beyond the lighting (*The reference look*): matcaps and rims lit by the
+  chosen lighting, with highlights and reflections, read from a map at a stage (*Map
+  contributions*). The existing matcap and rim fits move onto it.
 - Measures and roles, every way of showing a matcap with its cost, bounded base color shifts,
   the blocked view, *Average in color* and the *Base color shift* control (*Matcaps*).
-- **Workable — M4 reached:** *Automatic* places matcaps by role and cost on every writer, and
-  the rules in use before (effects keep their slots, highlights aren't baked) hold as tests.
+- **Workable:** *Automatic* places matcaps by role and cost on every writer, and the rules in
+  use before (effects keep their slots, highlights aren't baked) hold as tests.
+
+### 4.6 Shader formulas out of the capabilities
+
+- The formulas that describe a shader in the capabilities become unified modes its parser
+  sets, read by the reference look (*The kept material*). The highlight and reflection fit
+  moves onto the reference look.
+- What remains of *Map contributions*: full values in the emission map and declared inputs.
+- **Workable — M4 reached:** a new output shader adds its writer and capabilities that hold
+  counts and availability only.
 
 ---
 

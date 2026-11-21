@@ -277,9 +277,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         /// <summary>The lighting settings the written material doesn't hold the same way, read
         /// back by its parser: one line, or none.</summary>
-        public static IEnumerable<string> Unkept(AtlasUnifiedMaterial output, Material material)
+        public static IEnumerable<string> Unkept(AtlasUnifiedMaterial output, Material material) =>
+            Unkept(output, AtlasKeptMaterial.Read(material));
+
+        /// <summary>The same, from the kept material (the written material read back).</summary>
+        public static IEnumerable<string> Unkept(AtlasUnifiedMaterial output, AtlasUnifiedMaterial parsed)
         {
-            var parsed = AtlasShaderRegistry.Detect(material)?.Parse(material);
             if (parsed == null) yield break;
             var paths = AtlasFieldwise.Differences(Canonical(output.Lighting), Canonical(parsed.Lighting));
             if (paths.Count == 0) yield break;

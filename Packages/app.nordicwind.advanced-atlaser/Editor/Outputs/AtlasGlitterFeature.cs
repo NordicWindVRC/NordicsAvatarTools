@@ -241,6 +241,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     output.Layers.Add(emission);
                 }
                 var target = emission.Targets.First(t => t.Target == AtlasSurfaceTarget.Emission);
+                if (request.Carry == null) AtlasEmissionFeature.CarryInStrength(request, target);
                 float before = target.Opacity, after = Mathf.Max(before, peak);
                 target.Opacity = after;
                 // The map is relative to the emission's strength: what it held is rescaled to
@@ -248,7 +249,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 bool rescaled = before > 0f && before < after;
                 request.Add(new AtlasMapContribution
                 {
-                    Feature = FeatureId, Label = "glitter glow", Stage = AtlasMapStage.Overlays,
+                    // A point on a part that already glows can go above 1.
+                    Feature = FeatureId, Label = "glitter glow", Stage = AtlasMapStage.Overlays, CanRaise = true,
                     Applies = rescaled ? (System.Func<int, bool>)null : drawn.ContainsKey,
                     Apply = content =>
                     {
