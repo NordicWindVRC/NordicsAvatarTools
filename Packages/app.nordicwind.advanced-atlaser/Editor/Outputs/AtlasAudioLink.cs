@@ -191,7 +191,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 Map = AtlasVirtualMap.AudioLinkColor,
                 Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Color },
-                Evaluate = (i, material, w, h) =>
+                Content = (i, material, w, h) =>
                 {
                     if (!kept.TryGetValue(i, out var entry)) return AtlasMapEvaluator.Constant(AtlasVirtualMap.AudioLinkColor, 0f, w, h);
                     // The emission at unit strength × how bright the music makes it.
@@ -203,18 +203,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 },
                 // Stretched to its brightest value, so a dim emission keeps its precision through
                 // 8 bits and compression; the level goes into the layer's color.
-                Finish = map =>
-                {
-                    float peak = AtlasColorFeature.Peak(map);
-                    if (peak <= 1e-4f)
-                    {
-                        output.Source.Color = Color.white;
-                        return;
-                    }
-                    output.Source.Color = new Color(peak, peak, peak, 1f);
-                    if (Mathf.Abs(peak - 1f) < 1e-4f) return;
-                    map.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Tint, Parameters = { Color = new Color(1f / peak, 1f / peak, 1f / peak, 1f) } });
-                }
+                Stretch = true,
+                Carry = peak => output.Source.Color = new Color(peak, peak, peak, 1f)
             };
             for (int i = 0; i < job.Sources.Count; i++) request.Sources.Add(i);
             context.Maps.Add(request);

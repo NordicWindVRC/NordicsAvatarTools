@@ -1,8 +1,8 @@
 # Nordic's Advanced Atlaser — Matching by look (planned design)
 
-A planned extension of the output design in [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md): how several
-features build one map, how a source's look is measured and compared with the output's, and
-how matcaps are placed and tuned with that measure. None of it is built yet.
+A planned extension of the output design in [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md): how a
+source's look is measured and compared with the output's, how matcaps are placed and tuned
+with that measure, and what remains of building maps from contributions. It isn't built yet.
 [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md) lists its phases. When a phase is built, its part
 of this document moves into the output design and leaves this one.
 
@@ -46,86 +46,29 @@ documentation of its shader fallback system.
 
 ## Map contributions
 
-### What it replaces
+Maps are built from contributions: see *Map contributions* in the output design. What remains
+planned:
 
-A map request holds one evaluation function today, and each feature that changes the map
-wraps the function it finds. The base color is built this way by seven features: the color
-feature creates it, and live global masks, glitter, baked matcaps, matcap fits, normal-map
-shading and baked occlusion wrap it, in the order they resolve. Each wrapper has to know
-whether the map holds the shared color, whether a step that rescales values above 1 is
-installed, and what ran before it.
+- **Reading a map at a stage.** A contribution or a fit that needs a map's value partway (the
+  base color before the matcaps, or after the surface layers) asks the map for its value at a
+  stage, at the size it needs. Within a source's bake the result is shared between its
+  readers. Today such readers evaluate the color stack themselves, or take a snapshot.
+- **Declared inputs.** A contribution declares what it reads (the world normal, the mesh's
+  sections), so shared inputs are made once per source and released when the last reader is
+  done.
+- **Full values in every carried map.** The emission map is relative to its layer's strength,
+  and a feature that raises the strength rescales what the map held. With the map holding full
+  values and dividing by its carrier at the end, as the base color does with its shared color,
+  the order of the glow contributions stops mattering, and the one step still registered to
+  run after every feature has resolved (the baked matcaps' glow) becomes a plain contribution.
+- **Maps with nothing to carry their range** are limited smoothly (*A limit must never step*),
+  and the log says so.
+- **Reporting.** The map reports which contribution raised its range and by how much, which
+  the bounds on shifts use (*Base color shifts*, below).
 
-Two cases follow from this for baked matcaps, where every source has the same color and
-nothing is layered on it: a matcap that adds isn't rescaled above 1, and it is added to the
-color without the shared tint. Both were found by reading the code; the first phase covers
-them with tests.
-
-An output with one color map (VRChat Mobile Diffuse) puts nearly every feature into that map.
-
-### A map is a list of contributions
-
-A map request holds an ordered list of contributions. A feature adds one instead of wrapping:
-
-| A contribution declares | For |
-|---|---|
-| Its feature and a label | Logs, timings and the overview |
-| Its stage | The order (*Stages*, below) |
-| Its sources | Which sources it applies to |
-| Its kind: content, bake or shift | What the blocked view and the bounds on shifts count |
-| Whether it can raise values | Whether the map's range step is needed |
-| What it reads | Other maps at a stage, the world normal, the mesh's sections: made once per source and released when the last reader is done |
-| How it applies | A change of the source's content in place |
-
-A feature that writes into several maps (glitter into emission, metallic and base color) adds
-one contribution to each, and they share what they prepare per source.
-
-### Stages
-
-Contributions run by stage, then by feature order, whatever order the features resolved in.
-The stages follow *Order of baking*:
-
-1. **Content:** the map's own value from the source (the color stack for the base color).
-2. **Surface edits:** layers and adjustments baked into the map.
-3. **Lighting-dependent bakes:** normal-map shading, matcaps, rims and occlusion, each mixed
-   in as it is made.
-4. **Shifts:** values moved for a live layer (matcap fits, level compensation).
-5. **Final adjustments.**
-
-The steps that features register today, to run after every feature has resolved or just
-before the material is written, become stages and tuning (*The look model*, below).
-
-### The map owns its range
-
-- While contributions run, the content holds the **full value**, the shared color included,
-  so every contribution sees the surface's real color.
-- When they are done, the map splits the value once. A color that every source shares stays
-  in the output's color and the map keeps the textures' own values, as today, so same-shader
-  round trips are unchanged.
-- Values above 1 are handled once, by the map: it is divided by its brightest value, which
-  goes into the value that can carry it (the base color's color, the emission's strength). A
-  map with nothing to carry it is limited smoothly (*A limit must never step*), and the log
-  says so.
-- The map knows which contribution raised its range and by how much, so that is reported and
-  can be bounded (*Base color shifts*, below).
-
-### Reading another map
-
-A contribution or a fit that needs a map's value partway (the base color before the matcaps,
-or after the surface layers) asks the map for its value at a stage, at the size it needs. The
-map folds its contributions up to that stage. Within a source's bake the result is shared
-between its readers.
-
-### Memory
-
-Pixels are float RGBA, 16 bytes each: 256 MB for a 4096 × 4096 map and 64 MB for a
-2048 × 2048 source. The baker keeps working as *Memory budget* says, one texture at a time
-and source by source. A contribution changes the source's content in place and releases its
-temporaries before the next one runs. The peak stays at one source's content, one
-contribution's temporaries and the shared inputs still in use. No contribution is kept as a
-full-size layer.
-
-The fits and the look model do need contributions side by side. They read them at sample
-size (4 × 4 to 32 × 32 per source), where a whole stack takes a few kilobytes.
+The fits and the look model read contributions side by side at sample size (4 × 4 to 32 × 32
+per source), where a whole stack takes a few kilobytes; nothing full-size is kept per
+contribution.
 
 ---
 
@@ -368,4 +311,3 @@ Rims use the same cost for their fits (`AtlasRimResponse` today).
 9. **Roles.** The limits that separate them. Whether a rim matcap may use a rim slot, and a
    highlight or reflection matcap the output's own highlights and reflections, where no matcap
    slot is left.
-10. **Order.** Whether map contributions are built before the Poiyomi writers of M3 or after.

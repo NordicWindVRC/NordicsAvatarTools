@@ -27,49 +27,25 @@ it uses. How finished parts work is in the design; what each version added is in
 |---|---|---|
 | **M1 — End to end** | An avatar builds with the sources' base color textures atlased into one, on both writers, and the manual bake writes the material and its texture | Done |
 | **M2 — Initial features** | Every feature in the design's *Feature inventory*, on both writers | Done |
-| **M3 — More Poiyomi writers** | Poiyomi Toon 11, Pro 10 and Pro 11 as outputs | Next |
-| **M4 — Matching by look** | Maps built from contributions; looks measured and tuned in every scene; matcaps placed by role and cost | Planned |
+| **M4 — Matching by look** | Looks measured and tuned in every scene; matcaps placed by role and cost | Next |
+| **M3 — More Poiyomi writers** | Poiyomi Toon 11, Pro 10 and Pro 11 as outputs | After M4 |
 | **M5 — More output families** | VRChat Mobile Diffuse, Unity Standard, VRChat Mobile Toon Lit and Standard Lite as outputs | Planned |
 | Later | Mochie Uber as an output, the later features, animation, GPU baking | — |
-
----
-
-## M3 — More Poiyomi writers
-
-### 3.1 One Poiyomi writer, by version and variant
-
-- The Poiyomi Toon 10 writer becomes one writer for version and variant, registered as Toon
-  10 and Toon 11. Toon 11 adds its capabilities and maps the features new in 11.
-- **Workable:** Poiyomi Toon 11 as an output, with round trips.
-
-### 3.2 Poiyomi Pro 10 and Pro 11
-
-- The Pro variant: Pro's added capabilities (more slots), and its features natively for Pro
-  sources (screen-space AO, contact shadows, constellation, GT7 tone mapping, neutral
-  emission and the others the unified material types). Offered only where Pro is installed.
-  The writer describes Pro in its own words.
-- **Workable — M3 reached:** Poiyomi Pro 10 and Pro 11 as outputs, with round trips.
 
 ---
 
 ## M4 — Matching by look
 
 The design is in [ATLAS_OUTPUT_LOOK.md](ATLAS_OUTPUT_LOOK.md), whose section names the phases
-use. Whether 4.1 comes before M3 is one of its open questions: it doesn't touch the writers.
-
-### 4.1 Map contributions
-
-- Map requests hold contributions (*Map contributions*). The features that wrap a map's
-  evaluation add contributions instead, and the map owns the shared color and the range step.
-- Tests: baked matcaps over a color every source shares (one that adds above 1, one on a
-  tinted color), and an architecture test that features don't replace a map's evaluation.
-- **Workable:** every output builds as before, and the two baked-matcap cases come out right.
+use. Maps are already built from contributions (the design's *Map contributions*).
 
 ### 4.2 The look model
 
 - The shared scenes, the reference look, the kept material and layer costs (*The look
   model*). The existing fits move onto them, and the formulas leave the capabilities for
   unified modes the parsers set. Look values show in the overview.
+- What remains of *Map contributions*: a map read at a stage, declared inputs, and full values
+  in the emission map.
 - **Workable:** the fits give the same results in the bright and dim scenes, and each
   writer's kept material equals its read-back in tests.
 
@@ -92,6 +68,24 @@ use. Whether 4.1 comes before M3 is one of its open questions: it doesn't touch 
   the blocked view, *Average in color* and the *Base color shift* control (*Matcaps*).
 - **Workable — M4 reached:** *Automatic* places matcaps by role and cost on every writer, and
   the rules in use before (effects keep their slots, highlights aren't baked) hold as tests.
+
+---
+
+## M3 — More Poiyomi writers
+
+### 3.1 One Poiyomi writer, by version and variant
+
+- The Poiyomi Toon 10 writer becomes one writer for version and variant, registered as Toon
+  10 and Toon 11. Toon 11 adds its capabilities and maps the features new in 11.
+- **Workable:** Poiyomi Toon 11 as an output, with round trips.
+
+### 3.2 Poiyomi Pro 10 and Pro 11
+
+- The Pro variant: Pro's added capabilities (more slots), and its features natively for Pro
+  sources (screen-space AO, contact shadows, constellation, GT7 tone mapping, neutral
+  emission and the others the unified material types). Offered only where Pro is installed.
+  The writer describes Pro in its own words.
+- **Workable — M3 reached:** Poiyomi Pro 10 and Pro 11 as outputs, with round trips.
 
 ---
 

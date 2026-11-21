@@ -168,24 +168,6 @@ namespace NordicWind.AdvancedAtlaser.Editor
         bool IsPresent(AtlasGeneratorSource source);
     }
 
-    // A virtual map the output needs, the sources that contribute to it, and the texture
-    // reference in the output unified material that points at it once it is packed.
-    public sealed class AtlasMapRequest
-    {
-        public AtlasVirtualMap Map;
-        public AtlasTextureReference Reference;
-        // Indices into AtlasGeneratorJob.Sources.
-        public readonly List<int> Sources = new List<int>();
-        // How one source's map is evaluated (source index, its material, width, height), when
-        // the feature converts it for the output; null: AtlasMapEvaluator.Evaluate.
-        public Func<int, AtlasUnifiedMaterial, int, int, NordicsTextureWrapper> Evaluate;
-        // Optional: Evaluate for the map baker, which also passes the size the source's content
-        // ends up at in the texture (its region, in pixels), for evaluations that depend on it.
-        public Func<int, AtlasUnifiedMaterial, int, int, UnityEngine.Vector2Int, NordicsTextureWrapper> EvaluatePlaced;
-        // Run on the whole baked map before it is packed; null: nothing.
-        public Action<NordicsTextureWrapper> Finish;
-    }
-
     // What a feature's Resolve works with.
     public sealed class AtlasFeatureContext
     {
@@ -250,14 +232,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return modes;
         }
 
-        // The mode in use: the stored one when the output shader supports it, otherwise the
-        // default. Null when the feature isn't offered.
+        // A conflict switch's value: the user's, or its default.
         public static bool Switch(AtlasGeneratorJob job, string featureId, AtlasConflictSwitch conflictSwitch)
         {
             var choice = job.Features.Find(f => f.FeatureId == featureId);
             return choice != null && choice.Switches.TryGetValue(conflictSwitch.Id, out bool value) ? value : conflictSwitch.Default;
         }
 
+        // The mode in use: the stored one when the output shader supports it, otherwise the
+        // default. Null when the feature isn't offered.
         public static AtlasFeatureMode Effective(IAtlasOutputFeature feature, string storedMode, AtlasOutputCapabilities capabilities)
         {
             var modes = Available(feature, capabilities);

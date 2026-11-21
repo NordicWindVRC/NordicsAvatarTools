@@ -175,30 +175,33 @@ namespace NordicWind.AdvancedAtlaser.Editor
             response.Highlights.Enabled = response.Reflections.Enabled = true;
             if (response.Highlights.Strength <= 0f) response.Highlights.Strength = 1f;
             if (response.Reflections.Strength <= 0f) response.Reflections.Strength = 1f;
-            var inner = request.Evaluate;
-            request.Evaluate = (index, material, width, height) =>
+            request.Add(new AtlasMapContribution
             {
-                var result = inner != null ? inner(index, material, width, height)
-                    : AtlasMapEvaluator.Evaluate(AtlasVirtualMap.Roughness, material, width, height);
-                var coat = Coat(material);
-                if (!active.Contains(index) || coat == null) return result;
-                using (var coatRoughness = AtlasMapEvaluator.Scalar(coat.Roughness, width, height, material))
-                using (var amount = AtlasMapEvaluator.Scalar(coat.Strength, width, height, material))
-                using (var reflections = AtlasMapEvaluator.ScaledMask(coat.Reflections.Mask, Mathf.Clamp01(coat.Reflections.Strength), width, height, material))
+                Feature = FeatureId, Label = "clear coat gloss", Stage = AtlasMapStage.Layers,
+                Applies = active.Contains,
+                Apply = content =>
                 {
-                    // The amount, strength × reflection strength, rides along in the coat's green.
-                    AtlasPixels.Map(amount, reflections, (a, r) => new Color(Mathf.Clamp01(a.r * r.r), 0f, 0f, 1f));
-                    AtlasPixels.Map(coatRoughness, amount, (c, a) => new Color(c.r, a.r, 0f, 1f));
-                    AtlasPixels.Map(result, coatRoughness, (b, c) =>
+                    var material = content.Material;
+                    int width = content.Width, height = content.Height;
+                    var coat = Coat(material);
+                    if (coat == null) return;
+                    using (var coatRoughness = AtlasMapEvaluator.Scalar(coat.Roughness, width, height, material))
+                    using (var amount = AtlasMapEvaluator.Scalar(coat.Strength, width, height, material))
+                    using (var reflections = AtlasMapEvaluator.ScaledMask(coat.Reflections.Mask, Mathf.Clamp01(coat.Reflections.Strength), width, height, material))
                     {
-                        float baseGloss = 1f - b.r, coatGloss = 1f - c.r;
-                        float gloss = Mathf.Lerp(baseGloss, Mathf.Max(baseGloss, coatGloss), c.g);
-                        float roughness = 1f - gloss;
-                        return new Color(roughness, roughness, roughness, b.a);
-                    });
+                        // The amount, strength × reflection strength, rides along in the coat's green.
+                        AtlasPixels.Map(amount, reflections, (a, r) => new Color(Mathf.Clamp01(a.r * r.r), 0f, 0f, 1f));
+                        AtlasPixels.Map(coatRoughness, amount, (c, a) => new Color(c.r, a.r, 0f, 1f));
+                        AtlasPixels.Map(content.Map, coatRoughness, (b, c) =>
+                        {
+                            float baseGloss = 1f - b.r, coatGloss = 1f - c.r;
+                            float gloss = Mathf.Lerp(baseGloss, Mathf.Max(baseGloss, coatGloss), c.g);
+                            float roughness = 1f - gloss;
+                            return new Color(roughness, roughness, roughness, b.a);
+                        });
+                    }
                 }
-                return result;
-            };
+            });
             context.Notes.Add("The output shader has no clear coat; it raises the gloss in the coated parts instead " +
                               "(a surface under the coat is as glossy as the coat there; the coat's tints and normal map amount aren't kept).");
             var materials = context.Sources.Select(i => job.Sources[i].Material).ToList();

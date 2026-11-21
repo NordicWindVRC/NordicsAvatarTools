@@ -79,7 +79,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 Map = AtlasVirtualMap.SubsurfaceColor,
                 Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Color },
-                Evaluate = (i, material, w, h) =>
+                Content = (i, material, w, h) =>
                 {
                     if (!layers.TryGetValue(i, out var layer)) return AtlasMapEvaluator.Constant(AtlasVirtualMap.SubsurfaceColor, 0f, w, h);
                     var c = layer.Color.Color * (layer.Intensity / strongest);
@@ -92,19 +92,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     AtlasPixels.Map(result, p => new Color(p.r * c.r, p.g * c.g, p.b * c.b, 1f));
                     return result;
                 },
-                Finish = map =>
-                {
-                    float peak = AtlasColorFeature.Peak(map);
-                    output.Color.Color = peak > 1f ? new Color(peak, peak, peak, 1f) : Color.white;
-                    if (peak <= 1f) return;
-                    map.ApplyColor(new ColorOperation { Opcode = ColorOperationCode.Tint, Parameters = { Color = new Color(1f / peak, 1f / peak, 1f / peak, 1f) } });
-                }
+                // Colors above 1: the map's brightest value goes into the layer's color.
+                ContentCanRaise = true,
+                Carry = peak => output.Color.Color = new Color(peak, peak, peak, 1f)
             };
             var thickness = new AtlasMapRequest
             {
                 Map = AtlasVirtualMap.SubsurfaceThickness,
                 Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Data },
-                Evaluate = (i, material, w, h) =>
+                Content = (i, material, w, h) =>
                 {
                     if (!layers.TryGetValue(i, out var layer)) return AtlasMapEvaluator.Constant(AtlasVirtualMap.SubsurfaceThickness, 1f, w, h);
                     var input = new AtlasScalarInput(1f) { Map = Bakeable(layer.Thickness) ? layer.Thickness : null, Channel = layer.ThicknessChannel };

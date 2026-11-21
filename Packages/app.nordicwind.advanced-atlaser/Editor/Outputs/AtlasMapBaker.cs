@@ -66,11 +66,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                                 AtlasEvaluationCache.Name("evaluate " + map);
                                 NordicsTextureWrapper evaluated;
                                 using (new AtlasStageTimer("evaluate " + map, timings))
-                                    evaluated = part.Request.EvaluatePlaced != null
-                                        ? part.Request.EvaluatePlaced(index, source.Material, bake.x, bake.y, AtlasOutputLayout.IslandSize(source.UVRegion, size))
-                                        : part.Request.Evaluate != null
-                                        ? part.Request.Evaluate(index, source.Material, bake.x, bake.y)
-                                        : AtlasMapEvaluator.Evaluate(part.Request.Map, source.Material, bake.x, bake.y);
+                                    evaluated = part.Request.Evaluate(index, source.Material, bake.x, bake.y,
+                                        AtlasOutputLayout.IslandSize(source.UVRegion, size));
                                 if (part.Copy == null)
                                 {
                                     content.Dispose();
@@ -100,8 +97,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
                 using (new AtlasStageTimer($"fill between regions (dilate) {name} ({width}×{height})", timings))
                     atlas.Dilate();
-                // A map's Finish sees the texture that holds it, the map in RGB.
-                foreach (var part in parts) part.Request.Finish?.Invoke(atlas);
+                // A map's range step sees the texture that holds it, the map in RGB.
+                foreach (var part in parts) part.Request.Finish(atlas);
                 return atlas;
             }
             catch

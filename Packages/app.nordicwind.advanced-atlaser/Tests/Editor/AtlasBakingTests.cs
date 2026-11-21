@@ -465,6 +465,71 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
+        public void ABakedMatcapThatAddsAboveOneGoesIntoTheSharedColor()
+        {
+            // One color on every source and nothing layered on it: the color stays shared, and
+            // the map still has to rescale what the matcap adds above 1.
+            var material = new AtlasUnifiedMaterial();
+            material.Layers.Add(Matcap(new Color(0.2f, 0.4f, 0.6f, 1f), AtlasBlend.Add));
+            var job = new AtlasGeneratorJob();
+            job.Sources.Add(new AtlasGeneratorSource { Material = material, UVRegion = new Rect(0f, 0f, 1f, 1f), Surface = () => new[] { Square() } });
+            var plan = AtlasOutputPipeline.Resolve(job, BaseColorOnly());
+            var request = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor);
+            var map = request.Evaluate(0, material, Size, Size);
+            disposables.Add(map);
+            float lit = map.GetPixel(Size / 2, Size / 2).b;
+            Assert.AreEqual(1.6f, lit, 1e-3f, "white + the matcap");
+            request.Finish(map);
+            Assert.LessOrEqual(map.GetPixel(Size / 2, Size / 2).b, 1f + 1e-4f, "the map stays within 0–1");
+            Assert.AreEqual(lit, plan.Output.Surface.BaseColor.Color.b * map.GetPixel(Size / 2, Size / 2).b, 1e-3f,
+                "the shared color carries the rest");
+        }
+
+        [Test]
+        public void ABakedMatcapIsAddedToTheTintedColorNotTintedWithIt()
+        {
+            // The shared color isn't in the map, but a contribution works on the surface's real
+            // color: the source shows 0.5 + the matcap, not (1 + the matcap) × 0.5.
+            var material = new AtlasUnifiedMaterial();
+            material.Surface.BaseColor.Color = new Color(0.5f, 0.5f, 0.5f, 1f);
+            material.Layers.Add(Matcap(new Color(0.2f, 0.4f, 0.6f, 1f), AtlasBlend.Add));
+            var job = new AtlasGeneratorJob();
+            job.Sources.Add(new AtlasGeneratorSource { Material = material, UVRegion = new Rect(0f, 0f, 1f, 1f), Surface = () => new[] { Square() } });
+            var plan = AtlasOutputPipeline.Resolve(job, BaseColorOnly());
+            var shared = plan.Output.Surface.BaseColor.Color;
+            Assert.AreEqual(0.5f, shared.g, 1e-4f, "the one color stays shared");
+            using (var map = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Evaluate(0, material, Size, Size))
+                Assert.AreEqual(0.9f, shared.g * map.GetPixel(Size / 2, Size / 2).g, 1e-3f, "0.5 + the matcap");
+        }
+
+        [Test]
+        public void AMapsContributionsRunByStageAndItsContentIsSetOnce()
+        {
+            var request = new AtlasMapRequest
+            {
+                Map = AtlasVirtualMap.BaseColor,
+                Content = (i, m, w, h) => AtlasMapEvaluator.Constant(AtlasVirtualMap.BaseColor, 0.5f, w, h)
+            };
+            // Added in the other order: the shading first, the layer second.
+            request.Add(new AtlasMapContribution
+            {
+                Feature = "test", Stage = AtlasMapStage.Shading,
+                Apply = c => AtlasPixels.Map(c.Map, p => new Color(p.r * 2f, p.g * 2f, p.b * 2f, p.a))
+            });
+            request.Add(new AtlasMapContribution
+            {
+                Feature = "test", Stage = AtlasMapStage.Layers, Applies = i => i == 0,
+                Apply = c => AtlasPixels.Map(c.Map, p => new Color(p.r + 0.25f, p.g + 0.25f, p.b + 0.25f, p.a))
+            });
+            using (var map = request.Evaluate(0, new AtlasUnifiedMaterial(), 2, 2))
+                Assert.AreEqual(1.5f, map.GetPixel(0, 0).r, 1e-5f, "(0.5 + 0.25) × 2: the layer, then the shading");
+            using (var map = request.Evaluate(1, new AtlasUnifiedMaterial(), 2, 2))
+                Assert.AreEqual(1f, map.GetPixel(0, 0).r, 1e-5f, "the layer isn't on this source");
+            Assert.Throws<System.InvalidOperationException>(() => request.Content = (i, m, w, h) => null,
+                "later features add contributions; they don't replace the content");
+        }
+
+        [Test]
         public void AutomaticBakesShadingMatcapsAndLeavesHighlightsOut()
         {
             // Both look up the planar reflection, which counts as an effect; only the one that

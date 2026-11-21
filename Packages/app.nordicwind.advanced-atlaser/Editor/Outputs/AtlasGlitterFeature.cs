@@ -231,7 +231,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     {
                         Map = AtlasVirtualMap.Emission,
                         Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Color },
-                        Evaluate = (i, m, w, h) => AtlasMapEvaluator.Constant(AtlasVirtualMap.Emission, 0f, w, h)
+                        Content = (i, m, w, h) => AtlasMapEvaluator.Constant(AtlasVirtualMap.Emission, 0f, w, h)
                     };
                     for (int i = 0; i < job.Sources.Count; i++) request.Sources.Add(i);
                     context.Maps.Add(request);
@@ -243,21 +243,26 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 var target = emission.Targets.First(t => t.Target == AtlasSurfaceTarget.Emission);
                 float before = target.Opacity, after = Mathf.Max(before, peak);
                 target.Opacity = after;
-                var inner = request.Evaluate;
-                request.Evaluate = (i, material, w, h) =>
+                // The map is relative to the emission's strength: what it held is rescaled to
+                // the raised strength in every source, and the points are added where drawn.
+                bool rescaled = before > 0f && before < after;
+                request.Add(new AtlasMapContribution
                 {
-                    var result = inner(i, material, w, h);
-                    if (before > 0f && before < after)
-                        AtlasPixels.Map(result, c => new Color(c.r * before / after, c.g * before / after, c.b * before / after, c.a));
-                    if (drawn.ContainsKey(i))
-                        using (var points = Points(i, material, w, h))
-                            AtlasPixels.Map(result, points, (c, p) =>
-                            {
-                                float k = p.a * glow / after;
-                                return new Color(c.r + p.r * k, c.g + p.g * k, c.b + p.b * k, c.a);
-                            });
-                    return result;
-                };
+                    Feature = FeatureId, Label = "glitter glow", Stage = AtlasMapStage.Overlays,
+                    Applies = rescaled ? (System.Func<int, bool>)null : drawn.ContainsKey,
+                    Apply = content =>
+                    {
+                        if (rescaled)
+                            AtlasPixels.Map(content.Map, c => new Color(c.r * before / after, c.g * before / after, c.b * before / after, c.a));
+                        if (drawn.ContainsKey(content.Source))
+                            using (var points = Points(content.Source, content.Material, content.Width, content.Height))
+                                AtlasPixels.Map(content.Map, points, (c, p) =>
+                                {
+                                    float k = p.a * glow / after;
+                                    return new Color(c.r + p.r * k, c.g + p.g * k, c.b + p.b * k, c.a);
+                                });
+                    }
+                });
                 targets.Add("glow");
             }
 
@@ -285,18 +290,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 var request = AtlasLiveMasks.Request(context, AtlasVirtualMap.BaseColor);
                 if (request != null)
                 {
-                    var inner = request.Evaluate ?? ((i, m, w, h) => AtlasMapEvaluator.Evaluate(AtlasVirtualMap.BaseColor, m, w, h));
-                    request.Evaluate = (i, material, w, h) =>
+                    request.Add(new AtlasMapContribution
                     {
-                        var result = inner(i, material, w, h);
-                        if (drawn.TryGetValue(i, out var layer))
+                        Feature = FeatureId, Label = "glitter color", Stage = AtlasMapStage.Overlays, Applies = drawn.ContainsKey,
+                        Apply = content =>
                         {
-                            var color = layer.Color;
-                            using (var points = Points(i, material, w, h))
-                                AtlasPixels.Map(result, points, (c, p) => Color.Lerp(c, new Color(color.r, color.g, color.b, c.a), p.a * tint));
+                            var color = drawn[content.Source].Color;
+                            using (var points = Points(content.Source, content.Material, content.Width, content.Height))
+                                AtlasPixels.Map(content.Map, points, (c, p) => Color.Lerp(c, new Color(color.r, color.g, color.b, c.a), p.a * tint));
                         }
-                        return result;
-                    };
+                    });
                     targets.Add("color");
                 }
             }
@@ -304,19 +307,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
             void Wrap(AtlasMapRequest request, System.Func<float, Color, float> apply)
             {
                 if (request == null) return;
-                var inner = request.Evaluate ?? ((i, m, w, h) => AtlasMapEvaluator.Evaluate(request.Map, m, w, h));
-                request.Evaluate = (i, material, w, h) =>
+                request.Add(new AtlasMapContribution
                 {
-                    var result = inner(i, material, w, h);
-                    if (drawn.ContainsKey(i))
-                        using (var points = Points(i, material, w, h))
-                            AtlasPixels.Map(result, points, (c, p) =>
+                    Feature = FeatureId, Label = "glitter shine", Stage = AtlasMapStage.Overlays, Applies = drawn.ContainsKey,
+                    Apply = content =>
+                    {
+                        using (var points = Points(content.Source, content.Material, content.Width, content.Height))
+                            AtlasPixels.Map(content.Map, points, (c, p) =>
                             {
                                 float v = apply(c.r, p);
                                 return new Color(v, v, v, c.a);
                             });
-                    return result;
-                };
+                    }
+                });
             }
 
             if (targets.Count > 0)

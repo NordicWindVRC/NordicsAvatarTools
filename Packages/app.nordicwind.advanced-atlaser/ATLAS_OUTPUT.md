@@ -12,8 +12,8 @@ Related documents:
 - [NORMAL_BAKER.md](NORMAL_BAKER.md): the normal correction bake that the output reuses.
 - [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md): the implementation plan: what's done, what's
   next and what's later.
-- [ATLAS_OUTPUT_LOOK.md](ATLAS_OUTPUT_LOOK.md): the planned design for building maps from
-  contributions and matching by look, not built yet.
+- [ATLAS_OUTPUT_LOOK.md](ATLAS_OUTPUT_LOOK.md): the planned design for matching by look, not
+  built yet.
 
 ---
 
@@ -65,6 +65,7 @@ Where each part of this design lives:
 | Source analysis cache | `Editor/AtlasSourceAnalysisCache.cs` | Each source's parse, kept until the material, its shader or an imported texture or shader changes |
 | Overview | `Editor/Outputs/AtlasOutputOverview.cs`, `AtlasTextureMemory.cs` | What an output uses: features with their modes and sources, the textures they need with sizes and memory |
 | Evaluator | `Editor/Outputs/AtlasMapEvaluator.cs`, `AtlasColorStack.cs` | The bakeable subset over a source's UV 0–1: textures with their placement, color layers, decals, adjustments, masks and the mask bus |
+| Map requests | `Editor/Outputs/AtlasMapRequest.cs` | A virtual map's content, views and contributions by stage, its shared color and its range step (see [*Map contributions*](#map-contributions)) |
 | Map baker | `Editor/Outputs/AtlasMapBaker.cs` | One texture, source by source: each virtual map evaluated at the source's bake size, its UV islands grown over the unused texels, placed in its region |
 | Coverage | `Editor/Outputs/AtlasCoverage.cs` | Each source's UV0 triangles (from the output's renderers in the manual bake, the avatar's in the build), painted at bake size; a triangle in another UV tile counts by whole tiles |
 | Packing | `Editor/Outputs/AtlasTexturePacker.cs` | One output texture from its virtual maps: which channels each map fills (inverted where the texture stores it so), and the neutral value of the rest |
@@ -157,6 +158,46 @@ Bakes depend on each other, so they run in this order per source:
    targets and strengths, then the final static color adjustments run.
 
 Step 4 only runs for features whose mode bakes them; with none, steps 3–5 are skipped.
+
+### Map contributions
+
+Several features can change one map: the base color takes baked matcaps, the shifts of fitted
+matcap slots, glitter points, normal-map shading and occlusion. A map request
+(`AtlasMapRequest`) builds each source's part of the map from three things:
+
+- **Content:** the map's own value, set once by the feature that makes the map (the color
+  stack for the base color).
+- **Views:** scopes the content is evaluated under, such as the global masks with a source's
+  live channels at 0 (see [*Masks*](#masks)). Contributions run outside them.
+- **Contributions:** the other features' changes, each made in place on the source's content.
+  A contribution names its feature, the sources it changes, whether it is a bake (the map
+  still looks right on its own) or a shift (right only together with a live layer), and
+  whether it can raise values.
+
+Contributions run by stage, then in the order they were added, whatever order the features
+resolved in:
+
+| Stage | Holds |
+|---|---|
+| Layers | Baked matcaps, the clear coat's gloss, the shifts of matcap slot fits |
+| Overlays | Glitter points, and the matcap glow baked into the emission |
+| Shading | Normal-map shading, baked occlusion, the occlusion of reflections: the light on everything the stages before put there |
+
+The map owns what each feature would otherwise have to know:
+- **The shared color.** The base color map leaves out a color that every source shares; it
+  stays in the output's color. Contributions get the content × that color, the surface's real
+  color, and the map divides it out again when they are done. A source that no contribution
+  changes keeps its content exactly.
+- **The range.** Once the whole map is baked, a map whose content or contributions can go
+  above 1 is divided by its brightest value, which the map's carrier takes: the base color's
+  shared color, a layer's color or strength. A map marked as stretched is divided whatever its
+  brightest value is (see [*What reads a value*](#what-reads-a-value)).
+
+A feature that needs the map as it was before a change takes a snapshot of it: the highlight
+mask copied before the occlusion goes into the reflection mask, the live part of a split map.
+
+No contribution is kept as a layer of its own: each changes the source's content and releases
+its temporaries before the next one runs (see [*Memory budget*](#memory-budget)).
 
 ---
 
@@ -1191,6 +1232,9 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
   and maps (equal instances share a slot, different ones don't, overflow follows the mode).
 - **Capabilities:** a test output shader with chosen capabilities offers exactly the modes they
   allow.
+- **Map contributions:** contributions run by stage whatever order they were added in, a
+  map's content is set once, and a contribution works on the color with the shared color in
+  it.
 - **Bakes:** small synthetic meshes (a quad, a sphere, mirrored halves) give the expected
   values at known texels.
 - **Fits:** a source the output can reproduce gets its exact value back; a fit with nothing

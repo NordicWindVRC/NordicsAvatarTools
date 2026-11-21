@@ -60,7 +60,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 Map = AtlasVirtualMap.Alpha,
                 Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Data },
-                Evaluate = (index, source, width, height) =>
+                Content = (index, source, width, height) =>
                     active.Contains(index) && conversions[index].Kind != AtlasAlphaConversionKind.Solid
                         ? AtlasMapEvaluator.Alpha(source, width, height, conversions[index])
                         : AtlasMapEvaluator.Constant(AtlasVirtualMap.Alpha, 1f, width, height)

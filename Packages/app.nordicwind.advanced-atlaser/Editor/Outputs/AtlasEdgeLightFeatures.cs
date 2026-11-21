@@ -306,7 +306,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 {
                     Map = AtlasVirtualMap.BacklightColor,
                     Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Color },
-                    Evaluate = (i, material, w, h) =>
+                    Content = (i, material, w, h) =>
                     {
                         var layer = Of(i);
                         if (layer == null) return AtlasMapEvaluator.Constant(AtlasVirtualMap.BacklightColor, 0f, w, h);
@@ -319,16 +319,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     }
                 };
                 for (int i = 0; i < job.Sources.Count; i++) request.Sources.Add(i);
-                request.Finish = map =>
-                {
-                    float peak = AtlasColorFeature.Peak(map);
-                    copy.Color.Color = peak > 1f ? new Color(peak, peak, peak, 1f) : Color.white;
-                    if (peak <= 1f) return;
-                    map.ApplyColor(new ColorOperation
-                    {
-                        Opcode = ColorOperationCode.Tint, Parameters = { Color = new Color(1f / peak, 1f / peak, 1f / peak, 1f) }
-                    });
-                };
+                // Colors above 1: the map's brightest value goes into the layer's color.
+                request.ContentCanRaise = true;
+                request.Carry = peak => copy.Color.Color = new Color(peak, peak, peak, 1f);
                 context.Maps.Add(request);
                 copy.Color.Color = Color.white;
                 copy.Color.Map = request.Reference;

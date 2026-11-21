@@ -133,14 +133,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (request == null) return -1;
             var split = Plan(context, featureId, name, reads);
             if (split == null) return -1;
-            var map = request.Map;
-            var inner = request.Evaluate ?? ((i, m, w, h) => AtlasMapEvaluator.Evaluate(map, m, w, h));
-            int channel = Place(context, split, name, inner, decreasing);
+            int channel = Place(context, split, name, request.Snapshot(), decreasing);
             if (channel < 0) return -1;
-            request.Evaluate = Own(split, inner);
+            request.AddView(View(split));
             Kept(context, split);
             return channel;
         }
+
+        /// <summary>The view a map's own part is evaluated under: the live sources' live
+        /// channels at 0, the other sources as they are.</summary>
+        public static Func<int, AtlasUnifiedMaterial, IDisposable> View(AtlasLiveSplit split) =>
+            (index, material) => split.Contains(index) ? AtlasMaskBusEvaluator.View(material, split.Channels[index], AtlasBusView.Zero) : null;
 
         /// <summary>Splits a mask request the same way (before it's allocated).</summary>
         public static int Split(AtlasFeatureContext context, string featureId, string name, AtlasMaskRequest request,
@@ -206,13 +209,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 ? Under(split, index, material, AtlasBusView.Zero, evaluate, width, height)
                 : evaluate(index, material, width, height);
 
-        /// <summary>The request's own part (OwnPart of its evaluation). Returns the evaluation
-        /// before, for the live part.</summary>
+        /// <summary>The request's own part: its content under the split's view. Returns the
+        /// evaluation before, for the live part.</summary>
         public static Func<int, AtlasUnifiedMaterial, int, int, NordicsTextureWrapper> OwnPart(AtlasMapRequest request, AtlasLiveSplit split)
         {
-            var map = request.Map;
-            var inner = request.Evaluate ?? ((i, m, w, h) => AtlasMapEvaluator.Evaluate(map, m, w, h));
-            request.Evaluate = Own(split, inner);
+            var inner = request.Snapshot();
+            request.AddView(View(split));
             return inner;
         }
 

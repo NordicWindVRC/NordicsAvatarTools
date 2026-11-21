@@ -47,7 +47,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 Map = AtlasVirtualMap.Emission,
                 Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Color },
-                Evaluate = (index, material, width, height) => active.Contains(index)
+                Content = (index, material, width, height) => active.Contains(index)
                     ? AtlasColorStack.EvaluateEmission(material, width, height, strength)
                     : AtlasMapEvaluator.Constant(AtlasVirtualMap.Emission, 0f, width, height)
             };
@@ -73,16 +73,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (split == null) return;
             int channel = AtlasLiveMasks.Unit(context, split, "emission");
             if (channel < 0) return;
-            var inner = request.Evaluate;
+            var inner = AtlasLiveMasks.OwnPart(request, split);
             var live = new AtlasMapRequest
             {
                 Map = AtlasVirtualMap.EmissionLive,
                 Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Color },
-                Evaluate = (i, material, width, height) => AtlasLiveMasks.Difference(split, i, material, width, height, inner, false, color: true)
+                Content = (i, material, width, height) => AtlasLiveMasks.Difference(split, i, material, width, height, inner, false, color: true)
             };
             for (int i = 0; i < job.Sources.Count; i++) live.Sources.Add(i);
             context.Maps.Add(live);
-            request.Evaluate = AtlasLiveMasks.Own(split, inner);
             AtlasLiveMasks.Kept(context, split);
             var layer = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission, Mask = new AtlasMask { Bus = channel, BusBlend = AtlasMaskBlend.Multiply } };
             layer.Source.Map = live.Reference;
@@ -166,7 +165,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 Map = map,
                     Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Color },
-                    Evaluate = (index, material, width, height) => layers.TryGetValue(index, out var only)
+                    Content = (index, material, width, height) => layers.TryGetValue(index, out var only)
                         ? audio ? AtlasColorStack.EvaluateEmission(material, width, height, peak, only, unitStrength: true)
                             : AtlasColorStack.EvaluateEmission(material, width, height, strength, only)
                         : AtlasMapEvaluator.Constant(AtlasVirtualMap.Emission, 0f, width, height)

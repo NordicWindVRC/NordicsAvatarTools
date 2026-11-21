@@ -303,7 +303,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 Map = map,
                 Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Data },
-                Evaluate = (index, material, width, height) => active.Contains(index) && evaluate != null
+                Content = (index, material, width, height) => active.Contains(index) && evaluate != null
                     ? evaluate(material, width, height)
                     : AtlasMapEvaluator.Constant(map, neutral, width, height)
             };
@@ -405,21 +405,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
                 if (active.Any(i => job.Sources[i].Material.Surface.Response.OcclusionTint?.Map?.Texture != null))
                     context.Notes.Add("An occlusion tint texture isn't baked; its color is used.");
-                // After every feature's edits to the base color: occlusion darkens all of it.
-                context.Plan.AfterResolve.Add(() =>
+                request.Add(new AtlasMapContribution
                 {
-                    var inner = request.Evaluate ?? ((i, m, w, h) => AtlasMapEvaluator.Evaluate(AtlasVirtualMap.BaseColor, m, w, h));
-                    request.Evaluate = (i, material, w, h) =>
+                    Feature = "occlusion", Label = "baked occlusion", Stage = AtlasMapStage.Shading, Applies = shares.ContainsKey,
+                    Apply = content =>
                     {
-                        var result = inner(i, material, w, h);
-                        if (!shares.TryGetValue(i, out var share)) return result;
+                        var material = content.Material;
                         var response = material.Surface.Response;
-                        using (var occlusion = AtlasMapEvaluator.Scalar(response.Occlusion, w, h, material))
-                        using (var metallic = response.MultiBounceOcclusion ? AtlasMapEvaluator.Scalar(response.Metallic, w, h, material) : null)
-                            AtlasOcclusionShading.Apply(result, occlusion, metallic, share,
+                        using (var occlusion = AtlasMapEvaluator.Scalar(response.Occlusion, content.Width, content.Height, material))
+                        using (var metallic = response.MultiBounceOcclusion ? AtlasMapEvaluator.Scalar(response.Metallic, content.Width, content.Height, material) : null)
+                            AtlasOcclusionShading.Apply(content.Map, occlusion, metallic, shares[content.Source],
                                 response.OcclusionTint?.Color ?? Color.black, response.MultiBounceOcclusion, strength);
-                        return result;
-                    };
+                    }
                 });
             }
             BakeIntoReflections(context, active, strength);
@@ -465,26 +462,27 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             var request = context.Maps.LastOrDefault(r => r.Map == AtlasVirtualMap.ReflectionMask && r.Reference == output.Reflections.Mask.Map);
             if (request == null) return;
-            var inner = request.Evaluate;
             if (output.Highlights.Mask?.Map == request.Reference && context.Capabilities.Provides(AtlasVirtualMap.SpecularMask))
             {
+                // The map as it is before the occlusion goes into it.
                 var copy = new AtlasMapRequest
                 {
-                    Map = AtlasVirtualMap.SpecularMask, Evaluate = inner,
+                    Map = AtlasVirtualMap.SpecularMask, Content = request.Snapshot(),
                     Reference = new AtlasTextureReference { Interpretation = request.Reference.Interpretation }
                 };
                 copy.Sources.AddRange(request.Sources);
                 context.Maps.Add(copy);
                 output.Highlights.Mask.Map = copy.Reference;
             }
-            request.Evaluate = (i, material, w, h) =>
+            request.Add(new AtlasMapContribution
             {
-                var result = inner(i, material, w, h);
-                if (!occluded.Contains(i)) return result;
-                using (var factor = Factor(material, w, h))
-                    AtlasPixels.Map(result, factor, (c, f) => new Color(c.r * f.r, c.g * f.r, c.b * f.r, c.a));
-                return result;
-            };
+                Feature = "occlusion", Label = "occlusion of reflections", Stage = AtlasMapStage.Shading, Applies = occluded.Contains,
+                Apply = content =>
+                {
+                    using (var factor = Factor(content.Material, content.Width, content.Height))
+                        AtlasPixels.Map(content.Map, factor, (c, f) => new Color(c.r * f.r, c.g * f.r, c.b * f.r, c.a));
+                }
+            });
         }
     }
 }

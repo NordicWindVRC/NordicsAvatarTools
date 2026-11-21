@@ -42,19 +42,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             baseColor.Color = shared ? new Color(first.r, first.g, first.b, 1f) : Color.white;
             var reference = context.RequestMap(AtlasVirtualMap.BaseColor, AtlasTextureInterpretation.Color);
             var request = context.Maps[context.Maps.Count - 1];
-            request.Evaluate = (index, material, width, height) =>
+            request.Content = (index, material, width, height) =>
                 AtlasColorStack.Evaluate(material, width, height, multiplyColor: !shared);
-            if (!shared)
-                request.Finish = map =>
-                {
-                    float peak = Peak(map);
-                    baseColor.Color = peak > 1f ? new Color(peak, peak, peak, 1f) : Color.white;
-                    if (peak <= 1f) return;
-                    map.ApplyColor(new ColorOperation
-                    {
-                        Opcode = ColorOperationCode.Tint, Parameters = { Color = new Color(1f / peak, 1f / peak, 1f / peak, 1f) }
-                    });
-                };
+            // The color the map leaves out, which contributions work with (AtlasMapRequest), and
+            // which takes the map's brightest value where it goes above 1.
+            var tint = baseColor.Color;
+            request.SharedColor = tint;
+            request.ContentCanRaise = !shared;
+            request.Carry = peak => baseColor.Color = new Color(tint.r * peak, tint.g * peak, tint.b * peak, tint.a);
             baseColor.Map = reference;
             foreach (var note in materials.SelectMany(AtlasColorStack.LeftOut).Distinct()) context.Notes.Add(note);
         }
