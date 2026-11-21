@@ -143,33 +143,22 @@ from its unified material needs a parser fix or a field in the model.
 
 ### What a matcap is for
 
-*Reading intent from content* sorts matcaps into effects and environment matcaps by one
-measure. Matcaps serve more purposes than two, and the purpose decides which ways of showing
-one are acceptable. Each matcap is measured as its slot looks it up, on a sphere of normals:
+Each matcap is measured by its effect and given a role, which the inspector and the log name
+(*What a matcap is for* in the output design). Placement still sorts matcaps into effects and
+environment matcaps by one measure. What remains planned is that the role sets which ways of
+showing a matcap are offered:
 
-| Measure | Meaning |
-|---|---|
-| Impact | How much it changes the look on its sources |
-| Direction | Whether it brightens, darkens or both, and each side's share |
-| Bake loss | The cost of freezing it at the virtual view, seen from around the avatar |
-| Spread | The share of its light in its brightest tenth (today's measure) |
-| Evenness | How close it is to one color over the disc |
-| Edge weight | How much of it lies at the disc's edge, alike all around |
+| Role | Can share a slot | Can be baked |
+|---|---|---|
+| Tint | Yes | Yes |
+| Lighting | With other lighting matcaps | Yes |
+| Rim | On the same parts | No |
+| Highlight | On the same parts, with the same lookup | No |
+| Reflection | On the same parts, with the same lookup | No |
 
-The **role** follows from the measures:
-
-| Role | What it does | Measured as | Can share a slot | Can be baked |
-|---|---|---|---|---|
-| Tint | Colors the surface | Even | Yes | Yes |
-| Lighting | Stands in for the world's light: soft shading, sky and ground | Low bake loss, low spread | With other lighting matcaps | Yes |
-| Rim | Lights or darkens the edges | Edge weight, alike all around | On the same parts | No |
-| Highlight | Gloss, shine, glints | High spread | On the same parts, with the same lookup | No |
-| Reflection | Shows surroundings, metal | The reflection projection, or detail over the whole disc | On the same parts, with the same lookup | No |
-
-The role names the matcap in the inspector and the log, and sets which ways are offered.
-Among those, the cost decides. The rules in use today (an effect keeps its own slot, a
-highlight isn't baked by *Automatic*) follow from the cost: a highlight frozen by a bake is
-missing where it should be and added where it stayed. They are kept as tests.
+Among the ways offered, the cost decides. The rules in use today (an effect keeps its own
+slot, a highlight isn't baked by *Automatic*) follow from the cost: a highlight frozen by a
+bake is missing where it should be and added where it stayed. They are kept as tests.
 
 ### Brightening, darkening or both
 
@@ -262,9 +251,9 @@ Rims use the same cost for their fits (`AtlasRimResponse` today).
 
 ## Open questions
 
-1. **Views and normals.** Proposed: a sphere of normals, seen from the virtual view and from
-   around the avatar in 45° steps, so the inspector and the build agree. The mesh's own
-   normals would be closer, but the inspector doesn't have them.
+1. **Views and normals.** In place for the matcap measures: a sphere of normals, seen from the
+   front and from around the avatar in 45° steps, so the inspector and the build agree. The
+   mesh's own normals would be closer, but the inspector doesn't have them.
 2. **The new scenes' values.** In place as starting values: *Probes only* at 0.5 on average
    with 0.25 more along the dominant direction, *Dark* at 0.02. To be confirmed.
 3. **The blocked view's weight.** Proposed: under *Automatic* it counts as much as the look
@@ -272,6 +261,7 @@ Rims use the same cost for their fits (`AtlasRimResponse` today).
 4. **Shifts within range.** Proposed: under *Automatic* no texel is raised above 1.
 5. **Average in color.** Which roles it is offered for (proposed: lighting, tint and
    reflection), and whether it needs a control of its own.
-6. **Roles.** The limits that separate them. Whether a rim matcap may use a rim slot, and a
-   highlight or reflection matcap the output's own highlights and reflections, where no matcap
-   slot is left.
+6. **Roles.** The limits that separate them are in place as starting values, to be checked
+   against real matcaps before placement follows the roles. Whether a rim matcap may use a rim
+   slot, and a highlight or reflection matcap the output's own highlights and reflections,
+   where no matcap slot is left.

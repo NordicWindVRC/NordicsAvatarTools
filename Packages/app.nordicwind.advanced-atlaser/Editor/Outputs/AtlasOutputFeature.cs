@@ -112,6 +112,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public string Key;
         public string Label;
+        // What the item is and does, in a sentence, for its tooltip; null: nothing to add.
+        public string Detail;
         public List<int> Sources = new List<int>();
     }
 

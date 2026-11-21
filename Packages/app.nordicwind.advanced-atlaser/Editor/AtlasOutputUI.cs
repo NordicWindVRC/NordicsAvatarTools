@@ -538,10 +538,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (mode == AtlasInstancePlacement.Combined) index = others.FindIndex(o => o.Key == target) is int at && at >= 0 ? placements.Count + at : 0;
                 else index = Math.Max(0, placements.IndexOf(mode));
             }
+            string what = instance.Label + ". " + (string.IsNullOrEmpty(instance.Detail) ? "" : instance.Detail + " ");
             var label = new GUIContent(instance.Label, bakedMode
-                ? instance.Label + ". Automatic bakes it into the color as seen from the front, unless it's a highlight that brightens (shine, glints), " +
+                ? what + "Automatic bakes it into the color as seen from the front, unless it's a highlight that brightens (shine, glints), " +
                   "which would stay in place from every view; the build log says which."
-                : instance.Label + ". Automatic combines it with others on the same parts, or gives it a slot while one is free, " +
+                : what + "Automatic combines it with others on the same parts, or gives it a slot while one is free, " +
                   "and otherwise combines it with the most similar one; the build log says which." +
                   (canBake ? " Baked into color draws it into the textures as seen from the front, instead of sharing a slot." : ""));
             int next = PopupRow(label, index, options.ToArray());

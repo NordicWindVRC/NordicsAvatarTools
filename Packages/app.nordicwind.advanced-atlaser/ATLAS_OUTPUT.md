@@ -66,7 +66,7 @@ Where each part of this design lives:
 | Overview | `Editor/Outputs/AtlasOutputOverview.cs`, `AtlasTextureMemory.cs` | What an output uses: features with their modes and sources, the textures they need with sizes and memory |
 | Evaluator | `Editor/Outputs/AtlasMapEvaluator.cs`, `AtlasColorStack.cs` | The bakeable subset over a source's UV 0–1: textures with their placement, color layers, decals, adjustments, masks and the mask bus |
 | Map requests | `Editor/Outputs/AtlasMapRequest.cs` | A virtual map's content, views and contributions by stage, its shared color and its range step (see [*Map contributions*](#map-contributions)) |
-| Look model | `Editor/Outputs/AtlasLook.cs`, `AtlasKeptMaterial.cs`, `AtlasLightingTuning.cs`, `AtlasLevelCompensation.cs` | The standard scenes, a lighting's level and contrast, a layer's cost, the written material read back and compared with the sources' own looks, the lighting tuned where the output shader shows it differently, and the base color scaled for sources the atlas's lighting shows brighter or darker than their own (see [*The look model*](#the-look-model)) |
+| Look model | `Editor/Outputs/AtlasLook.cs`, `AtlasKeptMaterial.cs`, `AtlasLightingTuning.cs`, `AtlasLevelCompensation.cs`, `AtlasMatcapLook.cs` | The standard scenes, a lighting's level and contrast, a layer's cost, the written material read back and compared with the sources' own looks, the lighting tuned where the output shader shows it differently, and the base color scaled for sources the atlas's lighting shows brighter or darker than their own (see [*The look model*](#the-look-model)), and a matcap's effect measured and named by its role (see [*What a matcap is for*](#what-a-matcap-is-for)) |
 | Map baker | `Editor/Outputs/AtlasMapBaker.cs` | One texture, source by source: each virtual map evaluated at the source's bake size, its UV islands grown over the unused texels, placed in its region |
 | Coverage | `Editor/Outputs/AtlasCoverage.cs` | Each source's UV0 triangles (from the output's renderers in the manual bake, the avatar's in the build), painted at bake size; a triangle in another UV tile counts by whole tiles |
 | Packing | `Editor/Outputs/AtlasTexturePacker.cs` | One output texture from its virtual maps: which channels each map fills (inverted where the texture stores it so), and the neutral value of the rest |
@@ -452,6 +452,39 @@ is measured as the output will use it:
   shading can be combined. When slots run out, the weakest effects go first.
 - **Visibility, not counts.** Priorities and shares weigh what shows: area × the blend's effect
   × the mask's average × the base color mix's darkening.
+
+#### What a matcap is for
+
+Each matcap is also measured by its effect (`AtlasMatcapLook`): the look with it minus the
+look without it, as displayed, on its largest source's darkest, average and brightest base
+color, under that source's own lighting in the four scenes. The effect is taken on a sphere
+of normals, looked up as the layer's projection does, seen from the front and from around
+the avatar in 45° steps:
+
+| Measure | Meaning |
+|---|---|
+| Impact | The mean size of its effect where it shows |
+| Direction | The share of its effect that brightens; the rest darkens |
+| Bake loss | What freezing it at the virtual view costs seen from around the avatar, over its impact (see [*Comparing layers*](#comparing-layers)). From 1, leaving it out costs less |
+| Spread | The share of its effect in its strongest tenth, seen from the front |
+| Evenness | 1: the same effect all over. 0: as much variation as effect |
+| Edge weight | The share of its effect on the outer ring, beyond three quarters of the disc's radius. An even matcap has 0.44 there |
+| Follows the facing | The share of its variation that depends on the distance from the disc's center alone: 1 for a matcap that is alike all around |
+
+The **role** is the first that holds:
+
+| Role | What it does | Measured as |
+|---|---|---|
+| Reflection | Shows surroundings | The reflection projection |
+| Rim | Lights or darkens the edges: a rim light, soft shading toward the silhouette | Follows the facing for 0.75 or more, with an edge weight of 0.6 or more |
+| Highlight | Gloss, shine, glints | A spread of 0.5 or more |
+| Tint | Colors the surface | An evenness of 0.9 or more |
+| Reflection | Detail that moves with the view | A bake loss of 1 or more, not following the facing |
+| Lighting | Stands in for the world's light: sky and ground, light from a side, a soft glow toward the viewer | The rest |
+
+The limits are starting values, each on a measure of the matcap's own effect. The inspector
+names the role, the direction and the impact in the matcap's tooltip, and the build lists the
+roles in one line. Placement doesn't follow the role yet: it goes by the effect rule above.
 
 ### Versions
 
@@ -1356,6 +1389,9 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
 - **The look model:** a lighting's level and contrast in a scene, the sources listed where
   the kept lighting looks different from their own, and a layer's cost for a weaker, a stronger
   and an opposite effect.
+- **Matcap roles:** an even matcap is a tint, a small bright spot a highlight that a bake
+  would freeze, sky above ground and light from a side lighting, an effect toward the edges
+  all around a rim, and a reflection lookup or detail that moves with the view a reflection.
 - **Tuning:** the kept lighting read from a scratch material equals the written material's;
   an output of the source's own shader keeps the mapped lighting; a value that looks closer
   replaces the mapped one; a generated ramp's edge moves to where the chosen lighting puts

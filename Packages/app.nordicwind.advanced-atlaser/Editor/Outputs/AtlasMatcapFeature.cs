@@ -13,6 +13,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // - What a matcap shows (Content): its texture sampled as the slot looks it up, over the
     //   lookup disc through its scale and offset. One that reads black where it adds, screens,
     //   mixes or glows (white where it multiplies, without base color mix) changes nothing.
+    // - Each group is measured on its largest source (AtlasMatcapLook): its impact, whether it
+    //   brightens or darkens, and its role (tint, lighting, rim, highlight, reflection), which
+    //   the inspector's tooltip and the build's log name. Placement doesn't follow the role yet:
+    //   it goes by the effect rule below.
     // - An effect (shine, glints, reflections) carries at least half its light in its brightest
     //   tenth, or uses the reflection projection; the others are environment matcaps (shading,
     //   soft light). A shared slot shows its one texture on every member's parts, which an effect
@@ -109,6 +113,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // Area × visible strength: the order of own slots and the shares of a combined texture.
             public float Visible;
             public bool Effect;
+            // The group's look on its largest source: its impact, direction and role.
+            public AtlasMatcapMeasure Measure;
             public readonly List<Instance> Members = new List<Instance>();
             public string Parts;
         }
@@ -197,6 +203,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 group.Visible = group.Members.GroupBy(m => m.Source).Sum(s =>
                     job.Sources[s.Key].UVRegion.width * job.Sources[s.Key].UVRegion.height * Visibility(s.First(), job.Sources[s.Key].Material));
                 group.Effect = IsEffect(group.Members[0]);
+                var largest = group.Members.OrderByDescending(m => job.Sources[m.Source].UVRegion.width * job.Sources[m.Source].UVRegion.height).First();
+                group.Measure = AtlasMatcapLook.Measure(largest.Layers, job.Sources[largest.Source].Material);
                 group.Label += " (" + (members.Count == 1 ? "source " : "sources ") + string.Join(", ", members.Select(i => i + 1)) + ")";
                 group.Parts = string.Join(";", group.Members.OrderBy(m => m.Source)
                     .Select(m => m.Source + ":" + AtlasMaskKeys.Of(m.Mask, 1f, job.Sources[m.Source].Material)));
@@ -339,7 +347,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public IReadOnlyList<AtlasFeatureInstance> Instances(AtlasGeneratorJob job, IReadOnlyList<int> sources) =>
             Groups(job, sources, null).Select(g => new AtlasFeatureInstance
             {
-                Key = g.Key, Label = g.Label, Sources = g.Members.Select(m => m.Source).Distinct().ToList()
+                Key = g.Key, Label = g.Label, Detail = g.Measure.Describe(), Sources = g.Members.Select(m => m.Source).Distinct().ToList()
             }).ToList();
 
         public void Resolve(AtlasFeatureContext context)
@@ -356,6 +364,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     context.Notes.Add("The output's matcaps don't glow, so the matcap glow of " + string.Join(", ", glowing) +
                                       " is added to the color instead (lit, so it doesn't glow in the dark).");
             }
+            var measured = groups.Except(unseen).ToList();
+            if (measured.Count > 0)
+                context.Notes.Add("Matcap roles, as measured on their materials: " +
+                                  string.Join(", ", measured.Select(g => g.Label + ": " + g.Measure.RoleName)) + ".");
             var choice = job.Features.Find(f => f.FeatureId == FeatureId);
             (AtlasInstancePlacement Mode, string Target) Placed(Group g) =>
                 choice != null && choice.Values.TryGetValue(AtlasInstancePlacements.Id(g.Key), out var value)
