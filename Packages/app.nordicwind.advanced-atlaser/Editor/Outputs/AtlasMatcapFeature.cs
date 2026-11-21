@@ -16,12 +16,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // - Each group is measured on its largest source (AtlasMatcapLook): its impact, whether it
     //   brightens or darkens, and its role (lighting, rim, highlight), which
     //   the inspector shows under the matcap, next to its texture, and the build's log lists.
-    //   Placement doesn't follow the role yet: it goes by the effect rule below.
-    // - An effect (shine, glints) carries at least half its light in its brightest tenth; the
-    //   others are environment matcaps (shading, soft light). The lookup doesn't decide it:
-    //   Poiyomi's double-sided mode looks up by the reflection and is used for every kind of
-    //   matcap. A shared slot shows its one texture on every member's parts, which an effect
-    //   can't share without putting its highlights where they don't belong.
+    // - An effect is a matcap whose role is highlight (shine, glints, facets); the others are
+    //   environment matcaps (lighting, rims). A shared slot shows its one texture on every
+    //   member's parts, which an effect can't share without putting its highlights where they
+    //   don't belong.
+    // - Lighting with a highlight (a pearl, a lit sphere with a hot spot) is an environment
+    //   matcap that is guarded: it takes its own slot before the other environment matcaps do,
+    //   and they share its slot only where no other will do. Out of slots it shares, since
+    //   most of what it does is its body.
     // - The user places each group: its own slot, combined with another group's slot, or off
     //   (stored by the group's key). Automatic, where the user hasn't: matcaps that change
     //   nothing are left out; groups on the same parts with the same lookup are combined; effects
@@ -144,6 +146,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // Area × visible strength: the order of own slots and the shares of a combined texture.
             public float Visible;
             public bool Effect;
+            // Lighting with a highlight on it, which sharing would smear.
+            public bool Guarded;
             // The group's look on its largest source: its impact, direction and role.
             public AtlasMatcapMeasure Measure;
             public readonly List<Instance> Members = new List<Instance>();
@@ -233,9 +237,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 group.Area = members.Sum(i => job.Sources[i].UVRegion.width * job.Sources[i].UVRegion.height);
                 group.Visible = group.Members.GroupBy(m => m.Source).Sum(s =>
                     job.Sources[s.Key].UVRegion.width * job.Sources[s.Key].UVRegion.height * Visibility(s.First(), job.Sources[s.Key].Material));
-                group.Effect = IsEffect(group.Members[0]);
                 var largest = group.Members.OrderByDescending(m => job.Sources[m.Source].UVRegion.width * job.Sources[m.Source].UVRegion.height).First();
                 group.Measure = AtlasMatcapLook.Measure(largest.Layers, job.Sources[largest.Source].Material);
+                group.Effect = group.Measure.Role == AtlasMatcapRole.Highlight;
+                group.Guarded = group.Measure.HasHighlight;
                 group.Label += " (" + (members.Count == 1 ? "source " : "sources ") + string.Join(", ", members.Select(i => i + 1)) + ")";
                 group.Parts = string.Join(";", group.Members.OrderBy(m => m.Source)
                     .Select(m => m.Source + ":" + AtlasMaskKeys.Of(m.Mask, 1f, job.Sources[m.Source].Material)));
@@ -260,11 +265,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // What a matcap texture shows as its slot looks it up: luminance (linear, before its
-        // color) over the lookup disc, its darkest, mean and brightest value, and the share of its
-        // light in its brightest tenth; and its mean color (alpha included).
+        // color) over the lookup disc, its darkest, mean and brightest value; and its mean color
+        // (alpha included).
         private sealed class Content
         {
-            public float Min, Mean, Max, Concentration;
+            public float Min, Mean, Max;
             public Color MeanColor = Color.white;
         }
 
@@ -278,7 +283,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static Content ContentOf(AtlasLookupLayer layer)
         {
             var map = layer.Source.Map;
-            if (!(map?.Texture is Texture2D texture)) return new Content { Min = 1f, Mean = 1f, Max = 1f, Concentration = 0.1f };
+            if (!(map?.Texture is Texture2D texture)) return new Content { Min = 1f, Mean = 1f, Max = 1f };
             bool line = layer.Projection == AtlasLookupProjection.Gradient;
             string key = texture.GetInstanceID() + "|" + texture.imageContentsHash + "|" + map.Tiling + "|" + map.Offset + "|" + layer.Tiling + "|" + line;
             if (Contents.TryGetValue(key, out var content)) return content;
@@ -309,11 +314,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     }
             values.Sort();
             float total = values.Sum();
-            int top = Mathf.Max(1, values.Count / 10);
             content = new Content
             {
                 Min = values[0], Max = values[values.Count - 1], Mean = total / values.Count,
-                Concentration = total > 1e-6f ? values.Skip(values.Count - top).Sum() / total : 0.1f,
                 MeanColor = sum / values.Count
             };
             Contents[key] = content;
@@ -338,8 +341,6 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return shown.Count == 0 ? Glow(m) > 0f : Main(shown) == AtlasBlend.Add;
         });
 
-        // An effect: half its light or more in its brightest tenth, however it is looked up.
-        private static bool IsEffect(Instance instance) => ContentOf(instance.Layers[0]).Concentration >= 0.5f;
 
         // A matcap that changes nothing where its slot looks it up: black where it adds, screens,
         // mixes or glows; white where it multiplies, without base color or light color mix.
@@ -395,7 +396,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var measured = groups.Except(unseen).ToList();
             if (measured.Count > 0)
                 context.Notes.Add("Matcap roles, as measured on their materials: " +
-                                  string.Join(", ", measured.Select(g => g.Label + ": " + g.Measure.RoleName)) + ".");
+                                  string.Join(", ", measured.Select(g => g.Label + ": " + g.Measure.RoleLabel)) + ".");
             var choice = job.Features.Find(f => f.FeatureId == FeatureId);
             (AtlasInstancePlacement Mode, string Target) Placed(Group g) =>
                 choice != null && choice.Values.TryGetValue(AtlasInstancePlacements.Id(g.Key), out var value)
@@ -456,7 +457,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 else if (forEffects > 0 && Own(g)) forEffects--;
                 else cut.Add(g);
             }
-            foreach (var g in automatic.Where(g => !g.Effect))
+            // The guarded ones first, so a slot of their own goes to them while there is one.
+            foreach (var g in automatic.Where(g => !g.Effect).OrderByDescending(g => g.Guarded))
             {
                 var same = Same(g);
                 if (same != null) Join(same, g);
@@ -477,6 +479,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 // An environment matcap shares an environment slot where there is one.
                 var candidates = g.Effect ? slots : slots.Where(s => s.Any(x => !x.Effect)).ToList();
                 if (candidates.Count == 0) candidates = slots;
+                // A guarded slot isn't shared while another will do.
+                var unguarded = candidates.Where(s => !s.Any(x => x.Guarded)).ToList();
+                if (unguarded.Count > 0) candidates = unguarded;
                 Join(candidates.OrderByDescending(s => Similarity(s, g)).First(), g);
             }
             if (unseen.Count > 0)

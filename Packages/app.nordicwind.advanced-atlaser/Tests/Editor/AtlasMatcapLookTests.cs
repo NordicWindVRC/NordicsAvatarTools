@@ -172,12 +172,63 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(0f, Measure(With(Texture((x, y) => 0.25f + 0.25f * y), AtlasBlend.Add)).Tint, 1e-4f);
         }
 
+        // Sources with areas from the largest to the smallest.
+        private static AtlasGeneratorJob Job(params AtlasUnifiedMaterial[] materials)
+        {
+            var job = new AtlasGeneratorJob();
+            float x = 0f;
+            for (int i = 0; i < materials.Length; i++)
+            {
+                float width = (materials.Length - i) / (materials.Length * (materials.Length + 1) / 2f);
+                job.Sources.Add(new AtlasGeneratorSource { Material = materials[i], UVRegion = new Rect(x, 0f, width, 1f) });
+                x += width;
+            }
+            return job;
+        }
+
+        private static readonly Func<float, float, float> Sky = (x, y) => 0.25f + 0.25f * y;
+        private static readonly Func<float, float, float> Facets =
+            (x, y) => (Mathf.FloorToInt((x + 1f) * 4f) + Mathf.FloorToInt((y + 1f) * 4f)) % 2 == 0 ? 0.6f : 0f;
+
+        [Test]
+        public void PlacementFollowsTheRole()
+        {
+            // Toon Standard's one slot goes to the lighting. The facets are a highlight by their
+            // detail: an effect, left out and not averaged into the slot.
+            var job = Job(With(Texture(Sky, "sky"), AtlasBlend.Add), With(Texture(Facets, "facets"), AtlasBlend.Add));
+            var toon = AtlasOutputPipeline.Resolve(job, AtlasShaderRegistry.Output("mobiletoon").Capabilities);
+            StringAssert.Contains("facets", toon.Notes.Single(n => n.Contains("effects")));
+            Assert.IsFalse(toon.Notes.Any(n => n.Contains("combines")), string.Join(" | ", toon.Notes));
+            StringAssert.Contains("facets (source 2): highlight", toon.Notes.Single(n => n.Contains("Matcap roles")));
+        }
+
+        [Test]
+        public void LightingWithAHighlightTakesItsOwnSlotAndPlainLightingSharesAnother()
+        {
+            // Two slots for three lighting matcaps, the pearl on the smallest material.
+            var capabilities = new AtlasOutputCapabilities();
+            AtlasFieldwise.Copy(AtlasShaderRegistry.Output("poiyomi10").Capabilities, capabilities);
+            capabilities.MatcapSlots = 2;
+            Func<float, float, float> pearl = (x, y) =>
+                Mathf.Max(0f, 0.5f - 0.3f * (x * x + y * y)) + ((x + 0.4f) * (x + 0.4f) + (y - 0.4f) * (y - 0.4f) < 0.12f * 0.12f ? 0.5f : 0f);
+            var job = Job(With(Texture(Sky, "sky"), AtlasBlend.Add), With(Texture((x, y) => 0.25f + 0.25f * x, "side"), AtlasBlend.Add),
+                With(Texture(pearl, "pearl"), AtlasBlend.Add));
+            var plan = AtlasOutputPipeline.Resolve(job, capabilities);
+            StringAssert.Contains("pearl (source 3): lighting with a highlight", plan.Notes.Single(n => n.Contains("Matcap roles")));
+            string combines = plan.Notes.Single(n => n.Contains("combines"));
+            StringAssert.Contains("sky", combines);
+            StringAssert.Contains("side", combines);
+            StringAssert.DoesNotContain("pearl", combines, "the pearl's spot isn't averaged with the others");
+        }
+
         [Test]
         public void AMatcapThatChangesNothingSaysSo()
         {
             // Black, added: as a texture scale of 0 makes any matcap whose corner texel is black.
             var nothing = Measure(With(Texture((x, y) => 0f), AtlasBlend.Add));
             Assert.IsFalse(nothing.HasEffect);
+            // A glint is tiny on average and still shows.
+            Assert.IsTrue(Measure(With(Texture((x, y) => x * x + y * y < 0.01f ? 1f : 0f), AtlasBlend.Add)).HasEffect);
             Assert.AreEqual("No visible effect", nothing.Summary());
             Assert.AreEqual("Lighting, brightens", Measure(With(Texture((x, y) => 0.25f + 0.25f * y), AtlasBlend.Add)).Summary());
         }

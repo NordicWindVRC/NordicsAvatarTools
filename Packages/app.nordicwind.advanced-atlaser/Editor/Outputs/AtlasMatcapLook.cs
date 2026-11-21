@@ -22,8 +22,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // standard scenes.
     public sealed class AtlasMatcapMeasure
     {
-        // The mean size of its effect on the parts it shows on.
+        // The mean size of its effect on the parts it shows on, and its size where it is
+        // strongest, seen from the front.
         public float Impact;
+        public float Peak;
         // The share of its effect that brightens, 0–1; the rest darkens.
         public float Brightens;
         // What freezing it at the virtual view costs seen from around the avatar, over its
@@ -57,8 +59,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         public string RoleName => Role.ToString().ToLowerInvariant();
 
-        // Whether it changes the look at all: half a displayed level of 256 on average.
-        public bool HasEffect => Impact >= 0.002f;
+        // Whether it changes the look anywhere: a displayed level of 256 where it is strongest.
+        // A glint is small on average and still shows.
+        public bool HasEffect => Peak >= 1f / 256f;
+
+        // The role with what is on it, for lists: "lighting with a highlight".
+        public string RoleLabel => RoleName + (HasHighlight ? " with a highlight" : "");
 
         /// <summary>The role, whether it brightens or darkens, and whether it tints, in a few
         /// words: "Rim, darkens", "Lighting with a highlight, brightens", "Highlight, brightens,
@@ -231,6 +237,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     }
                     sizes[j, k] = size / combos;
                     signs[j, k] = signed / combos;
+                    measure.Peak = Mathf.Max(measure.Peak, sizes[j, k]);
                     float brightest = Mathf.Max(look.Color.r, Mathf.Max(look.Color.g, look.Color.b));
                     float darkest = Mathf.Min(look.Color.r, Mathf.Min(look.Color.g, look.Color.b));
                     tintWeights += radius * sizes[j, k];

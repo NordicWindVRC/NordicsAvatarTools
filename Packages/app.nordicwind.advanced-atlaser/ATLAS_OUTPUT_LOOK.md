@@ -145,9 +145,9 @@ from its unified material needs a parser fix or a field in the model.
 ### What a matcap is for
 
 Each matcap is measured by its effect and given a role, which the inspector and the log name
-(*What a matcap is for* in the output design). Placement still sorts matcaps into effects and
-environment matcaps by one measure. What remains planned is that the role sets which ways of
-showing a matcap are offered:
+(*What a matcap is for* in the output design), and *Automatic* placement follows the role:
+highlights are effects, and lighting with a highlight is guarded. What remains planned is
+that the role sets which ways of showing a matcap are offered:
 
 | Role | Can share a slot | Can be baked |
 |---|---|---|
@@ -239,8 +239,7 @@ Rims use the same cost for their fits (`AtlasRimResponse` today).
    needs a control of its own.
 5. **Roles.** The limits are checked against one avatar's matcaps and two collections. A lit
    sphere with a strong hot spot comes within 0.05 of the highlight's spread limit, and a
-   gold sphere stays lighting; both are judgment calls. How placement treats lighting with a
-   highlight: as a highlight, to protect the spot, or as lighting. Whether a rim
+   gold sphere stays lighting; both are judgment calls. Whether a rim
    matcap may use a rim slot, and a highlight the output's own highlights, where no matcap
    slot is left.
 6. **The cost of a bake.** Point by point, freezing an ordinary lit-sphere matcap costs more
