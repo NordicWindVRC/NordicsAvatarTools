@@ -77,7 +77,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     // The view a matcap whose lookup is fixed to the world is redrawn for, on an output whose
     // slot follows the view (ATLAS_OUTPUT.md, the matcaps' row of the feature inventory).
-    public enum AtlasMatcapView { Front = 0, Around = 1 }
+    public enum AtlasMatcapView { Around = 0, Front = 1 }
 
     public sealed class AtlasMatcapFeature : IAtlasInstanceFeature, IAtlasLitBakeFeature
     {
@@ -112,18 +112,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static AtlasFeatureOption ViewOption => new AtlasFeatureOption
         {
             Id = ViewOptionId, Label = "World-fixed matcaps", Default = 0f, Max = 1f,
-            Choices = new[] { "As seen from the front", "Averaged all around" },
+            Choices = new[] { "Averaged all around", "As seen from the front" },
             Tooltip = "A matcap looked up in the world rather than by the view looks different from each side; the output's " +
-                      "matcap looks the same from every side. As seen from the front keeps its look from straight in front, and " +
-                      "shows that pattern from the other sides too. Averaged all around shows its average over the sides the " +
-                      "avatar is seen from: softer, without a pattern that follows the view."
+                      "matcap looks the same from every side. Averaged all around shows its average over the sides the avatar " +
+                      "is seen from: softer, without a pattern that follows the view. As seen from the front keeps its look " +
+                      "from straight in front, and shows that pattern from the other sides too."
         };
 
         private static AtlasMatcapView View(AtlasGeneratorJob job)
         {
             var choice = job.Features.Find(f => f.FeatureId == FeatureId);
             return choice != null && choice.Values.TryGetValue(AtlasFeatureOption.ValueId(ViewOptionId), out var value)
-                ? (AtlasMatcapView)Mathf.Clamp(Mathf.RoundToInt(value.Number), 0, 1) : AtlasMatcapView.Front;
+                ? (AtlasMatcapView)Mathf.Clamp(Mathf.RoundToInt(value.Number), 0, 1) : AtlasMatcapView.Around;
         }
 
         public const int CombinedSize = 512;
@@ -1071,8 +1071,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // lookup has at `uv`: the slot's coordinate to the matcap's, per view the texture is
         // averaged over. A lookup that follows the view has one, straight in front, and is
         // exact. A lookup fixed to the world (the planar reflection, the light's half vector)
-        // differs from each side: as seen from the front it is exact there alone, and all
-        // around it gets the views around the avatar, which keeps what every side shows alike.
+        // differs from each side: all around it gets the views around the avatar, which keeps
+        // what every side shows alike, and as seen from the front it is exact there alone.
         private static Func<Vector2, Vector2>[] Relook(AtlasLookupLayer layer, AtlasMatcapView view)
         {
             int count = view == AtlasMatcapView.Around && WorldFixed(layer) ? ViewsAround : 1;

@@ -411,23 +411,24 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(Vector2.one, Lookups(plan).Single().Tiling, "the slot's own lookup");
             Assert.IsTrue(plan.Notes.Any(n => n.Contains("redrawn") && n.Contains("bordered")), string.Join(" | ", plan.Notes));
 
-            // Looked up by the reflection: halfway to the edge the normal is tilted 30°, its
-            // reflection 60°, which reads 0.87 of the way out on the other side of the texture.
+            // Looked up by the reflection, the matcap is fixed to the world and looks different
+            // from each side, so the view is the user's choice. Averaged all around, the
+            // ramp's two sides even out.
             var mirrored = WithMatcap(Ramp("mirrored"), null, Color.white, (AtlasBlend.Add, 1f));
             ((AtlasLookupLayer)mirrored.Layers[0]).Projection = AtlasLookupProjection.ReflectionPlanar;
             plan = AtlasOutputPipeline.Resolve(Job(mirrored), ToonStandard);
-            Assert.AreEqual(0.5f - 0.5f * Mathf.Sin(60f * Mathf.Deg2Rad), At(plan, 0.75f), 0.02f);
+            Assert.AreEqual(0.5f, At(plan, 0.75f), 0.02f);
             Assert.AreEqual(AtlasLookupProjection.ViewStabilized, Lookups(plan).Single().Projection);
-
-            // That lookup is fixed to the world and looks different from each side, so the
-            // view is the user's choice. Averaged all around, the ramp's two sides even out.
             Assert.IsTrue(plan.MatcapViews);
             Assert.IsFalse(AtlasOutputPipeline.Resolve(Job(bordered), ToonStandard).MatcapViews, "a border follows the view");
-            var around = Job(mirrored);
+
+            // As seen from the front: halfway to the edge the normal is tilted 30°, its
+            // reflection 60°, which reads 0.87 of the way out on the other side of the texture.
+            var front = Job(mirrored);
             var choice = new AtlasFeatureChoice { FeatureId = AtlasMatcapFeature.FeatureId };
-            choice.Values[AtlasFeatureOption.ValueId(AtlasMatcapFeature.ViewOptionId)] = ((int)AtlasMatcapView.Around, "");
-            around.Features.Add(choice);
-            Assert.AreEqual(0.5f, At(AtlasOutputPipeline.Resolve(around, ToonStandard), 0.75f), 0.02f);
+            choice.Values[AtlasFeatureOption.ValueId(AtlasMatcapFeature.ViewOptionId)] = ((int)AtlasMatcapView.Front, "");
+            front.Features.Add(choice);
+            Assert.AreEqual(0.5f - 0.5f * Mathf.Sin(60f * Mathf.Deg2Rad), At(AtlasOutputPipeline.Resolve(front, ToonStandard), 0.75f), 0.02f);
             var overview = AtlasOutputOverview.Build(new AtlasOutputConfiguration(), ToonStandard, new Material[] { null }, new[] { mirrored });
             Assert.AreEqual(2, overview.Features.Single(s => s.Feature is AtlasMatcapFeature).Options
                 .Single(o => o.Id == AtlasMatcapFeature.ViewOptionId).Choices.Length);
