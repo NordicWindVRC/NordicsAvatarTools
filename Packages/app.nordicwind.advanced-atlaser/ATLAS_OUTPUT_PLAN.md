@@ -20,6 +20,8 @@ it uses. How finished parts work is in the design; what each version added is in
 - **A feature is done when it looks right**: a build on every writer is compared with the
   original avatar, as the design's *Matching the look* describes, and what that turns up is
   fixed as a general rule with tests, not tuned to the test avatar.
+- **Fixes need no phase.** What testing more avatars and features turns up in a finished
+  milestone is fixed when it is found, by the same rule.
 - **Settings may change until 1.0.** Beta versions need no migration of the serialized output
   settings; the changelog says when a configuration must be redone.
 
@@ -27,31 +29,25 @@ it uses. How finished parts work is in the design; what each version added is in
 |---|---|---|
 | **M1 — End to end** | An avatar builds with the sources' base color textures atlased into one, on both writers, and the manual bake writes the material and its texture | Done |
 | **M2 — Initial features** | Every feature in the design's *Feature inventory*, on both writers | Done |
-| **M4 — Matching by look** | Looks measured and tuned in every scene; matcaps placed by role and cost | Built; builds are being compared |
+| **M4 — Matching by look** | Looks measured and tuned in every scene; matcaps placed by role and cost | Done |
 | **M3 — More Poiyomi writers** | Poiyomi Toon 11, Pro 10 and Pro 11 as outputs | In progress |
 | **M5 — More output families** | VRChat Mobile Diffuse, Unity Standard, VRChat Mobile Toon Lit and Standard Lite as outputs | Planned |
 | Later | Mochie Uber as an output, the later features, animation, GPU baking | — |
 
 ---
 
-## M4 — Matching by look
-
-Its phases are built; how each part works is in the design (*Map contributions*, *The look
-model*, *Comparing layers*, *What a matcap is for* and *Base color shifts*). What comparing
-builds with their originals turns up is fixed here, as general rules with tests. What
-[ATLAS_OUTPUT_LOOK.md](ATLAS_OUTPUT_LOOK.md) still plans is under *Later*.
-
----
-
 ## M3 — More Poiyomi writers
 
 Built so far: one Poiyomi writer registered as Toon 10 and Toon 11, with 11's global mask
-contacts kept live and its rim application stage (the design's *Output shaders*).
+contacts kept live, its rim application stage and its second backlight (the design's
+*Output shaders*).
 
 ### 3.1 The rest of Toon 11
 
-- The features new in 11 that an output can use and aren't mapped yet: the PBR lighting type
-  as the output's lighting, and the second backlight.
+- The PBR lighting type as the output's lighting. It replaces Reflections & Specular and the
+  clear coat with its own controls (one packed map, a reflectance, no highlight or
+  reflection strengths, sheen and glints), so what the output can express changes with the
+  lighting chosen.
 - **Workable:** every feature of the design's inventory that Toon 11 has a control for is
   written to it, with round trips.
 

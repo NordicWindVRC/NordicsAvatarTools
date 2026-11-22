@@ -140,7 +140,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 RimSlots = 2,
                 RimMask = true,
                 EnvironmentalRim = true,
-                Backlight = true,
+                Backlights = 1,
                 // Global masks: Masks 1 and 2 as Global Mask Textures 1 and 2; the back face, mirror,
                 // camera, distance and blacklight modifiers (Poiyomi 11's contacts are added below).
                 // Detail texture (× 2 in gamma, tinted, with an intensity) and detail normal, on any
@@ -161,8 +161,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     AtlasMaskBusStepKind.Distance, AtlasMaskBusStepKind.Blacklight
                 }
             };
-            // Poiyomi 11: Global Mask Contacts, a touch written into a channel.
-            if (major >= 11) capabilities.LiveMaskSteps.Add(AtlasMaskBusStepKind.Contact);
+            if (major >= 11)
+            {
+                // Poiyomi 11: Global Mask Contacts, a touch written into a channel.
+                capabilities.LiveMaskSteps.Add(AtlasMaskBusStepKind.Contact);
+                // And a second backlight: _BacklightColorTex__1.
+                capabilities.Backlights = 2;
+                capabilities.Textures.Add(new AtlasOutputTexture("Backlight2", "Backlight 2 color") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
+                    .With(AtlasVirtualMap.BacklightColor2, AtlasTextureChannels.RGB, Color.black));
+            }
             return capabilities;
         }
 
@@ -1323,31 +1330,37 @@ namespace NordicWind.AdvancedAtlaser.Editor
             m.SetFloat("_RimEnviroChannel", MaskChannel(rim.Mask));
         }
 
-        // The backlight, as the Poiyomi parser reads it (AtlasPoiyomiEdgeLight); Poiyomi 11's
-        // second one stays off.
+        // The backlights, as the Poiyomi parser reads them (AtlasPoiyomiEdgeLight): the first,
+        // and Poiyomi 11's second with the same properties + "__1".
         private static void WriteBacklight(AtlasUnifiedMaterial output, Material m)
         {
-            var light = AtlasBacklightFeature.Layer(output);
-            m.SetFloat("_BacklightEnabled", light != null ? 1 : 0);
-            if (light != null) m.EnableKeyword("POI_BACKLIGHT");
-            else m.DisableKeyword("POI_BACKLIGHT");
-            if (light == null) return;
-            m.SetFloat("_BacklightBorder", (light.Low + light.High) * 0.5f);
-            m.SetFloat("_BacklightBlur", light.High - light.Low);
-            m.SetFloat("_BacklightDirectivity", light.Directivity);
-            m.SetFloat("_BacklightViewStrength", light.ViewStrength);
-            m.SetFloat("_BacklightReceiveShadow", light.ReceiveShadows ? 1 : 0);
-            m.SetFloat("_BacklightNormalStrength", light.SurfaceNormalAmount);
-            m.SetFloat("_BacklightMainStrength", light.BaseColorMix);
-            m.SetFloat("_BacklightBackfaceMask", light.Faces == AtlasFaces.Front ? 1 : 0);
-            m.SetFloat("_BacklightApplyToOutlines", light.OnOutlines ? 1 : 0);
-            m.SetColor("_BacklightColor", light.Color.Color.gamma);
-            m.SetTexture("_BacklightColorTex", light.Color.Map?.Texture);
-            m.SetTextureScale("_BacklightColorTex", Vector2.one);
-            m.SetTextureOffset("_BacklightColorTex", Vector2.zero);
-            m.SetFloat("_BacklightColorTexUV", 0);
-            m.SetFloat("_BacklightGlobalMask", 0);
-            m.SetFloat("_BacklightApplyGlobalMaskIndex", 0);
+            var lights = AtlasBacklightFeature.Layers(output);
+            string[] suffixes = { "", "__1" };
+            for (int k = 0; k < suffixes.Length; k++)
+            {
+                string s = suffixes[k];
+                var light = k < lights.Count ? lights[k] : null;
+                m.SetFloat("_BacklightEnabled" + s, light != null ? 1 : 0);
+                if (light != null) m.EnableKeyword("POI_BACKLIGHT" + s);
+                else m.DisableKeyword("POI_BACKLIGHT" + s);
+                if (light == null) continue;
+                m.SetFloat("_BacklightBorder" + s, (light.Low + light.High) * 0.5f);
+                m.SetFloat("_BacklightBlur" + s, light.High - light.Low);
+                m.SetFloat("_BacklightDirectivity" + s, light.Directivity);
+                m.SetFloat("_BacklightViewStrength" + s, light.ViewStrength);
+                m.SetFloat("_BacklightReceiveShadow" + s, light.ReceiveShadows ? 1 : 0);
+                m.SetFloat("_BacklightNormalStrength" + s, light.SurfaceNormalAmount);
+                m.SetFloat("_BacklightMainStrength" + s, light.BaseColorMix);
+                m.SetFloat("_BacklightBackfaceMask" + s, light.Faces == AtlasFaces.Front ? 1 : 0);
+                m.SetFloat("_BacklightApplyToOutlines" + s, light.OnOutlines ? 1 : 0);
+                m.SetColor("_BacklightColor" + s, light.Color.Color.gamma);
+                m.SetTexture("_BacklightColorTex" + s, light.Color.Map?.Texture);
+                m.SetTextureScale("_BacklightColorTex" + s, Vector2.one);
+                m.SetTextureOffset("_BacklightColorTex" + s, Vector2.zero);
+                m.SetFloat("_BacklightColorTexUV" + s, 0);
+                m.SetFloat("_BacklightGlobalMask" + s, 0);
+                m.SetFloat("_BacklightApplyGlobalMaskIndex" + s, 0);
+            }
         }
 
         // A texture slot set from a reference: its texture, tiling and offset, and its UV channel
@@ -1609,7 +1622,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public override string DisplayName => "Poiyomi Toon 10";
     }
 
-    // Toon 11 adds global mask contacts kept live and a rim's application stage.
+    // Toon 11 adds global mask contacts kept live, a rim's application stage and a second
+    // backlight.
     public sealed class PoiyomiToon11OutputShader : PoiyomiOutputShader
     {
         public PoiyomiToon11OutputShader() : base(11) { }

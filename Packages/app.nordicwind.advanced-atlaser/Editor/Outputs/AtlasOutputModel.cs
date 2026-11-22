@@ -52,7 +52,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // RGB: emissions whose hue cycles, each in an emission slot of its own.
         EmissionCycle1, EmissionCycle2,
         // RGB: the AudioLink emission's color × gain per source, black without (Toon Standard).
-        AudioLinkColor
+        AudioLinkColor,
+        // RGB (4.4): the second backlight's color, as BacklightColor (Poiyomi 11).
+        BacklightColor2
     }
 
     // Which channels of a texture a virtual map fills.
@@ -220,8 +222,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool RimFollowsSceneLight;
         // One environmental rim (the probe's color at the edge), with a mask.
         public bool EnvironmentalRim;
-        // One backlight, its color from a texture (BacklightColor).
-        public bool Backlight;
+        // How many backlights, each with its color from a texture (BacklightColor,
+        // BacklightColor2).
+        public int Backlights;
         // Tiled layers kept live (a detail texture, a detail normal): the highest UV channel a
         // detail can read, the detail texture's blends, whether it has a tint and strength of its
         // own, whether there's a detail normal, and whether the detail mask picks a channel (one

@@ -414,6 +414,42 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 Assert.AreEqual(AtlasPlacement.Overlay, RoundTrip("poiyomi10", Material(Edge())).Single().Placement, "Poiyomi 10: after lighting");
         }
 
+        // Poiyomi 11 has two backlights: a source's second one keeps its settings, and its color
+        // per part goes into a map of its own. Poiyomi 10 has one, so the second is left out
+        // and listed.
+        [Test]
+        public void ASecondBacklightIsKeptWhereTheOutputHasTwo()
+        {
+            var both = Material(Backlight(new Color(2f, 0f, 0f, 1f)), Backlight(Color.blue));
+            var one = Material(Backlight(Color.green));
+            var job = Job(both, one);
+            var plan = AtlasOutputPipeline.Resolve(job, AtlasShaderRegistry.Output("poiyomi11").Capabilities);
+            Assert.AreEqual(2, plan.Output.Layers.OfType<AtlasAngleLayer>().Count(l => l.Source == AtlasAngleSource.Backlight), Notes(plan));
+            Assert.AreEqual(2f, Evaluate(plan, AtlasVirtualMap.BacklightColor, job, 0, 0), 1e-4f, "the first: red × 2");
+            Assert.AreEqual(1f, Evaluate(plan, AtlasVirtualMap.BacklightColor, job, 1, 1), 1e-4f, "green on the second material");
+            Assert.AreEqual(1f, Evaluate(plan, AtlasVirtualMap.BacklightColor2, job, 0, 2), 1e-4f, "the second: blue");
+            Assert.AreEqual(0f, Evaluate(plan, AtlasVirtualMap.BacklightColor2, job, 1, 2), 1e-4f, "none on the second material: black");
+            Assert.IsFalse(plan.Notes.Any(n => n.Contains("further backlights")), Notes(plan));
+
+            var ten = AtlasOutputPipeline.Resolve(job, Poiyomi);
+            Assert.AreEqual(1, ten.Output.Layers.OfType<AtlasAngleLayer>().Count(l => l.Source == AtlasAngleSource.Backlight));
+            StringAssert.Contains("the further backlights of source 1 are left out", Notes(ten));
+
+            // The writer sets both and the parser reads them back.
+            if (AtlasShaderRegistry.Output("poiyomi11").FindShader() == null) return;
+            var second = Backlight(Color.blue);
+            second.Low = 0.3f;
+            second.High = 0.5f;
+            second.Directivity = 2f;
+            var parsed = RoundTrip("poiyomi11", Material(Backlight(Color.red), second)).Where(l => l.Source == AtlasAngleSource.Backlight).ToList();
+            Assert.AreEqual(2, parsed.Count);
+            Assert.AreEqual(1f, parsed[0].Color.Color.r, 1e-3f);
+            Assert.AreEqual(0.3f, parsed[1].Low, 1e-4f);
+            Assert.AreEqual(0.5f, parsed[1].High, 1e-4f);
+            Assert.AreEqual(2f, parsed[1].Directivity, 1e-4f);
+            Assert.AreEqual(1f, parsed[1].Color.Color.b, 1e-3f);
+        }
+
         private List<AtlasAngleLayer> RoundTrip(string shaderId, AtlasUnifiedMaterial output)
         {
             var shader = AtlasShaderRegistry.Output(shaderId);
