@@ -319,7 +319,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     {
                         case AtlasLitBake.Matcaps:
                             EditorGUILayout.PropertyField(baking.FindPropertyRelative("matcaps"), new GUIContent("Matcaps",
-                                "How strongly matcaps baked into color show."));
+                                "How strongly matcaps show where they are baked: into the color, or as shading in the minimum light's emission."));
                             EditorGUILayout.PropertyField(baking.FindPropertyRelative("matcapViewSide"), new GUIContent("Matcap View Side",
                                 "Where baked matcaps are seen from, in degrees to the side: positive is to your left as you face the avatar. " +
                                 "Materials whose UVs overlap are seen from the middle, so mirrored halves match."));

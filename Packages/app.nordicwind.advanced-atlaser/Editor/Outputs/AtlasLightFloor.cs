@@ -20,7 +20,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // lit bakes instead (ATLAS_OUTPUT.md, "Virtual light rigs"): the normal-map shading and
     // the occlusion of the sources whose normal and occlusion maps the output keeps as maps,
     // with the Baking section's rig and strengths. Where they are baked into the base color,
-    // the base color as shown has them already.
+    // the base color as shown has them already. A matcap that is in the base color as its
+    // average (AtlasMatcapForm) shades the floor as it would drawn from the virtual view:
+    // under the world's light the output shader shades the form itself, in the floor nothing
+    // else does.
     public static class AtlasLightFloor
     {
         // Stored with the lighting feature's settings.
@@ -31,8 +34,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             Id = SwitchId, Label = "Minimum light in the emission", Default = true,
             Tooltip = "The materials have a minimum light, which keeps them visible in the dark, and the output shader can't keep all of it. " +
-                      "On: the rest is added to the emission, as the base color at that brightness, with normal-map shading and occlusion " +
-                      "baked in by the Baking section's lights. Where nothing else glows, this is what the atlas has an emission texture " +
+                      "On: the rest is added to the emission, as the base color at that brightness, with normal-map shading, occlusion " +
+                      "and the shading of matcaps kept as their average baked in by the Baking section's settings. Where nothing else glows, this is what the atlas has an emission texture " +
                       "for. Off: the atlas is darker without light than the materials were."
         };
 
@@ -66,11 +69,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // The sources whose normals and occlusion the output keeps as maps.
             var bent = new HashSet<int>(Sources(job).Where(i => normalShading > 0f && AsMap(job, plan, "normal", i) && normals.IsPresent(job.Sources[i])));
             var occluded = new HashSet<int>(Sources(job).Where(i => occlusion > 0f && AsMap(job, plan, "occlusion", i) && Occluded(job.Sources[i].Material)));
+            // The sources with matcaps kept as their average.
+            var forms = plan.MatcapForms.Where(f => f.Strength > 0f).ToList();
+            var formed = new HashSet<int>(Sources(job).Where(i => forms.Any(f => f.Applies(i))));
             if (bent.Count > 0) plan.LightFloorBakes.Add(AtlasLitBake.NormalShading);
             if (occluded.Count > 0) plan.LightFloorBakes.Add(AtlasLitBake.Occlusion);
-            var unknown = bent.Where(i => job.Sources[i].Surface == null).ToList();
+            if (formed.Count > 0) plan.LightFloorBakes.Add(AtlasLitBake.Matcaps);
+            var unknown = bent.Concat(formed).Distinct().Where(i => job.Sources[i].Surface == null).OrderBy(i => i).ToList();
             if (unknown.Count > 0)
-                plan.Notes.Add($"The minimum light's normal-map shading needs the meshes, which aren't known here; it's left out on {AtlasLiveMasks.Numbers(unknown)}.");
+                plan.Notes.Add($"The minimum light's normal-map and matcap shading need the meshes, which aren't known here; they're left out on {AtlasLiveMasks.Numbers(unknown)}.");
 
             // The map gives its value in full, so the floor is added as it is.
             request.Add(new AtlasMapContribution
@@ -82,6 +89,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     int i = content.Source;
                     using (var shown = color.Shown(i, content.Material, content.Width, content.Height))
                     {
+                        if (formed.Contains(i)) Form(shown, color, forms, i, content.Material);
                         if (occluded.Contains(i)) Occlude(shown, job.Sources[i], settings, occlusion);
                         if (bent.Contains(i)) Bend(shown, job.Sources[i], settings, normalShading, content.Placed);
                         AtlasPixels.Map(content.Map, shown, (c, b) => new Color(c.r + b.r * rest, c.g + b.g * rest, c.b + b.b * rest, c.a));
@@ -91,8 +99,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (request.Carry == null) AtlasEmissionFeature.CarryInStrength(request, target);
             kept.MinimumBrightness += rest;
             plan.LightFloor = rest;
-            string shaded = plan.LightFloorBakes.Count == 0 ? ""
-                : ", with " + string.Join(" and ", plan.LightFloorBakes.Select(b => b == AtlasLitBake.NormalShading ? "normal-map shading" : "occlusion")) + " baked in";
+            var names = plan.LightFloorBakes.Select(b => b == AtlasLitBake.NormalShading ? "normal-map shading"
+                : b == AtlasLitBake.Occlusion ? "occlusion" : "matcap shading").ToList();
+            string shaded = names.Count == 0 ? ""
+                : ", with " + (names.Count == 1 ? names[0] : string.Join(", ", names.Take(names.Count - 1)) + " and " + names[names.Count - 1]) + " baked in";
             plan.Notes.Add((own > 0f
                                ? $"The output shader keeps {Number(own)} of the atlas's minimum light of {Number(floor)}, so the base color × {Number(rest)}"
                                : $"The output shader has no minimum light, so the base color × {Number(rest)}") +
@@ -107,6 +117,35 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static bool AsMap(AtlasGeneratorJob job, AtlasOutputPlan plan, string featureId, int source) =>
             plan.Modes.TryGetValue(featureId, out var mode) && mode.Kind == AtlasFeatureModeKind.Native &&
             !(job.Features.Find(f => f.FeatureId == featureId)?.DisabledSources.Contains(source) ?? false);
+
+        // A drawn matcap can't brighten the floor without limit where its average is dark.
+        private const float MaxGain = 4f;
+
+        // The floor × each form's matcaps drawn as shading over their average, both from the
+        // base color before its matcaps, lerped from 1 by the form's strength.
+        private static void Form(NordicsTextureWrapper map, AtlasMapRequest color, List<AtlasMatcapForm> forms, int source, AtlasUnifiedMaterial material)
+        {
+            foreach (var form in forms.Where(f => f.Applies(source)))
+                using (var drawn = color.Before(AtlasMapStage.Layers, source, material, map.Width, map.Height))
+                using (var averaged = color.Before(AtlasMapStage.Layers, source, material, map.Width, map.Height))
+                {
+                    if (!form.Draw(drawn, source, material)) continue;
+                    form.Average(averaged, source, material);
+                    float strength = form.Strength;
+                    var shading = drawn.GetPixels();
+                    var mean = averaged.GetPixels();
+                    var pixels = map.GetPixels();
+                    for (int p = 0; p < pixels.Length; p++)
+                    {
+                        pixels[p].r *= Mathf.LerpUnclamped(1f, Gain(shading[p].r, mean[p].r), strength);
+                        pixels[p].g *= Mathf.LerpUnclamped(1f, Gain(shading[p].g, mean[p].g), strength);
+                        pixels[p].b *= Mathf.LerpUnclamped(1f, Gain(shading[p].b, mean[p].b), strength);
+                    }
+                    map.SetPixels(pixels);
+                }
+        }
+
+        private static float Gain(float drawn, float mean) => mean > 1e-5f ? Mathf.Clamp(drawn / mean, 0f, MaxGain) : 1f;
 
         private static bool Occluded(AtlasUnifiedMaterial material)
         {

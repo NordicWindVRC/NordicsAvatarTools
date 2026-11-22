@@ -469,6 +469,68 @@ namespace NordicWind.AdvancedAtlaser.Tests
             }
         }
 
+        // A matcap kept as its average gives the lit color no form: the output shader's light
+        // shades it. In the minimum light's emission nothing does, so the matcap shades the
+        // floor as it would drawn from the virtual view, at the floor's level.
+        [Test]
+        public void AnAveragedMatcapShadesTheMinimumLightInTheEmission()
+        {
+            var shader = AtlasShaderRegistry.Output("standard");
+            // A matcap holding its distance from the center: darker toward the viewer.
+            const int size = 64;
+            var texture = new Texture2D(size, size, TextureFormat.RGBAFloat, false, true) { name = "radial" };
+            var pixels = new Color[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float r = Mathf.Min(1f, new Vector2((x + 0.5f) / size - 0.5f, (y + 0.5f) / size - 0.5f).magnitude * 2f);
+                    pixels[y * size + x] = new Color(r, r, r, 1f);
+                }
+            texture.SetPixels(pixels);
+            texture.Apply();
+            created.Add(texture);
+            var material = new AtlasUnifiedMaterial();
+            material.Surface.BaseColor.Color = new Color(0.5f, 0.5f, 0.5f, 1f);
+            material.Lighting.MinimumLight = 0.2f;
+            var layer = new AtlasLookupLayer { Blend = AtlasBlend.Multiply, Placement = AtlasPlacement.Surface, Opacity = 1f };
+            layer.Source.Map = new AtlasTextureReference { Texture = texture, Space = AtlasTextureSpace.View };
+            material.Layers.Add(layer);
+            var job = new AtlasGeneratorJob();
+            job.Sources.Add(new AtlasGeneratorSource { Material = material, UVRegion = new Rect(0f, 0f, 1f, 1f), Surface = () => new[] { Square() } });
+            var feature = (AtlasMatcapFeature)AtlasOutputFeatures.Find(AtlasMatcapFeature.FeatureId);
+            var choice = new AtlasFeatureChoice { FeatureId = AtlasMatcapFeature.FeatureId };
+            choice.Values[AtlasInstancePlacements.Id(feature.Instances(job, new[] { 0 }).Single().Key)] = ((float)AtlasInstancePlacement.Averaged, "");
+            job.Features.Add(choice);
+
+            float Glow(AtlasOutputPlan plan, out float flat)
+            {
+                var emission = plan.Maps.Single(m => m.Map == AtlasVirtualMap.Emission);
+                var target = plan.Output.Layers.OfType<AtlasSurfaceLayer>().Single(l => l.Source.Map == emission.Reference)
+                    .Targets.Single(t => t.Target == AtlasSurfaceTarget.Emission);
+                using (var glow = emission.Evaluate(0, material, Size, Size))
+                using (var shown = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Shown(0, material, Size, Size))
+                {
+                    flat = shown.GetPixel(Size / 2, Size / 2).r * plan.LightFloor;
+                    return glow.GetPixel(Size / 2, Size / 2).r * target.Opacity;
+                }
+            }
+
+            // Seen from straight in front, the surface looks the matcap's dark center up.
+            job.Baking = new AtlasBakeSettings { matcapViewSide = 0f, matcapViewHeight = 0f };
+            var plan = AtlasOutputPipeline.Resolve(job, shader);
+            CollectionAssert.Contains(plan.LightFloorBakes, AtlasLitBake.Matcaps);
+            StringAssert.Contains("matcap shading baked in", string.Join(" | ", plan.Notes));
+            float shaded = Glow(plan, out float flat);
+            Assert.Greater(flat, 0.01f, "the color keeps the matcap's average");
+            Assert.Less(shaded, flat * 0.25f, "the floor is dark where the matcap is");
+
+            // Turned off in the Baking section, the floor has the average alone.
+            job.Baking = new AtlasBakeSettings { matcaps = 0f };
+            plan = AtlasOutputPipeline.Resolve(job, shader);
+            CollectionAssert.DoesNotContain(plan.LightFloorBakes, AtlasLitBake.Matcaps);
+            Assert.AreEqual(Glow(plan, out flat), flat, 2e-3f);
+        }
+
         [Test]
         public void ABakedMatcapThatAddsAboveOneGoesIntoTheSharedColor()
         {

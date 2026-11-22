@@ -393,7 +393,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var shaded = AtlasOutputPipeline.Resolve(job, Shader);
             CollectionAssert.AreEquivalent(new[] { AtlasLitBake.NormalShading, AtlasLitBake.Occlusion }, shaded.LightFloorBakes);
             StringAssert.Contains("with normal-map shading and occlusion baked in", Notes(shaded));
-            StringAssert.Contains("normal-map shading needs the meshes", Notes(shaded), "no meshes in this job");
+            StringAssert.Contains("shading need the meshes", Notes(shaded), "no meshes in this job");
             Assert.Less(Glow(shaded, out float unshaded), unshaded - 1e-3f, "darker where the occlusion map is");
 
             // Turned down in the Baking section, the floor is flat.

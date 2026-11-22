@@ -22,6 +22,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float LightFloor;
         // The lit bakes that shade it (the Baking section's settings apply to them).
         public readonly List<AtlasLitBake> LightFloorBakes = new List<AtlasLitBake>();
+        // The matcaps kept as their average in the base color, with how they'd look drawn as
+        // shading instead: for what shows the surface without the output shader's light.
+        public readonly List<AtlasMatcapForm> MatcapForms = new List<AtlasMatcapForm>();
         // Level compensation: the base color scale that gives a source the level its own
         // lighting had, by index into the job's sources (applied unless turned off), and what
         // the bake applied of it within the map's range.
@@ -77,6 +80,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (UVChannels.Add(channel)) return channel;
             return -1;
         }
+    }
+
+    // Matcaps that are in the base color as their average (AtlasMatcapFeature), and the shading
+    // they'd give drawn as the virtual view sees them. Both change a color map of the source in
+    // place, from the base color before its matcaps, so their ratio is the matcaps' form alone.
+    public sealed class AtlasMatcapForm
+    {
+        public System.Func<int, bool> Applies;
+        // Lerps the ratio toward 1: the bakes' and the baked matcaps' strengths.
+        public float Strength;
+        public System.Action<NordicWind.TextureWrapper.NordicsTextureWrapper, int, AtlasUnifiedMaterial> Average;
+        // False where the source's meshes aren't known: nothing is drawn.
+        public System.Func<NordicWind.TextureWrapper.NordicsTextureWrapper, int, AtlasUnifiedMaterial, bool> Draw;
     }
 
     // Steps 1 and 2 of the output pipeline (ATLAS_OUTPUT.md, "Pipeline"): collect each

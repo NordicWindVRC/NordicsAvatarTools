@@ -482,8 +482,16 @@ before the level compensation:
   light rigs*](#virtual-light-rigs)): each source's normal-map shading and occlusion, where
   the output keeps them as maps, with the *Baking* section's rig and strengths, which shows
   while they apply. Where they are baked into the base color, the color as shown has them
-  already. A matcap that lights the surface is in the floor as its average, as in the base
-  color: its shading isn't drawn.
+  already.
+- **Matcaps kept as their average** (an output without slots, a matcap that lost its slot,
+  one placed *Average in color*) shade the floor too. Under the world's light the output
+  shader shades the form itself, which is why the color has only their average; in the
+  floor nothing else does. The floor is multiplied by the matcaps drawn as the virtual view
+  sees them over their average (`AtlasMatcapForm`), both from the base color before its
+  matcaps, so the floor keeps its level and gets the form; the ratio stops at 4 and is
+  lerped from 1 by the *Matcaps* strength. As any baked matcap, it is seen from the
+  *Baking* section's matcap view and stays in place from every side. A matcap in a slot
+  isn't drawn: the live one follows the view.
 - **The control:** where no source glows, the floor is what the atlas has an emission
   texture for, so the user can turn it off (*Minimum light in the emission*, with the
   lighting's settings, shown while the output shader can't keep the whole floor). Off, the
@@ -1746,7 +1754,9 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
   the floor is still known to be missing, so the control stays; on Toon Standard the part
   its own floor can't hold is added, and the two together are the atlas's floor; the floor
   is darker where a source's occlusion map is and names its lit bakes, flat with their
-  strengths at 0, and not occluded twice where the occlusion is baked into the color.
+  strengths at 0, and not occluded twice where the occlusion is baked into the color; a
+  matcap kept as its average darkens the floor where it is dark from the front while the
+  color keeps the average, and not with the matcaps' strength at 0.
 - **Level compensation:** a source the atlas lights darker is scaled by what its own lighting
   had over it, and none of its texels goes above 1; a raise that doesn't fit is applied in
   full below the knee and less above it, in order and without a step, so a white part of a
