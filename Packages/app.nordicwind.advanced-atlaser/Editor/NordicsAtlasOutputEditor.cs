@@ -203,7 +203,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     EditorGUILayout.HelpBox($"{materials[i].name}: {analyses[i].Error}", MessageType.Info);
             serializedObject.ApplyModifiedProperties();
             EditorGUILayout.Space();
-            using (new EditorGUI.DisabledScope(materials.Count == 0 || shader?.FindShader() == null))
+            using (new EditorGUI.DisabledScope(materials.Count == 0 || !AtlasShaderRegistry.IsInstalled(shader)))
                 if (GUILayout.Button("Bake to Assets…"))
                     BakeToAssets(output);
             previewOpen = EditorGUILayout.Foldout(previewOpen, "UV Layout Preview", true);

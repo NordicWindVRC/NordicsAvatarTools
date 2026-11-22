@@ -1523,6 +1523,10 @@ kept too:
 - **The overview** (features, modes, items, textures and memory), per output inspector, until
   its settings (as JSON), its output shader, a source's analysis or the scene changes.
 - **Overlapping UVs** in the *Baking* section, per material, until the scene changes.
+- **The installed output shaders** (`AtlasShaderRegistry.Find`, `InstalledOutputShaders`),
+  until a shader is imported, moved or deleted. Each output shader is looked up by name, and
+  a lookup that finds nothing is slow, so the shader drop-down doesn't look them up on
+  every redraw.
 
 ### Stored settings
 

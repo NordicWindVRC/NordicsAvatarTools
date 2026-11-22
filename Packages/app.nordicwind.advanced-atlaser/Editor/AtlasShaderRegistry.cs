@@ -46,9 +46,34 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static readonly List<IAtlasOutputShader> Outputs = new List<IAtlasOutputShader>();
         public static IReadOnlyList<IAtlasSourceShaderParser> InputParsers => Parsers;
         public static IReadOnlyList<IAtlasOutputShader> OutputShaders => Outputs;
-        public static bool IsInstalled(IAtlasOutputShader output) => output != null && output.FindShader() != null;
+        public static bool IsInstalled(IAtlasOutputShader output) => Find(output) != null;
         // The output shaders whose Unity shader is installed in this project.
-        public static IReadOnlyList<IAtlasOutputShader> InstalledOutputShaders => Outputs.Where(IsInstalled).ToList();
+        public static IReadOnlyList<IAtlasOutputShader> InstalledOutputShaders => installed ?? (installed = Outputs.Where(IsInstalled).ToList());
+
+        // Looking a shader up by name is slow, most of all for one that isn't installed, and
+        // the inspectors ask on every redraw. What each output shader's lookup gave is kept
+        // until a shader is imported, moved or deleted (ShadersChanged).
+        private static readonly Dictionary<IAtlasOutputShader, Shader> Found = new Dictionary<IAtlasOutputShader, Shader>();
+        private static IReadOnlyList<IAtlasOutputShader> installed;
+
+        /// <summary>The output shader's installed Unity shader (its FindShader), or null.</summary>
+        public static Shader Find(IAtlasOutputShader output)
+        {
+            if (output == null) return null;
+            // A kept shader that was destroyed since (reimported) is looked up again.
+            if (Found.TryGetValue(output, out var shader) && (ReferenceEquals(shader, null) || shader != null)) return shader;
+            shader = output.FindShader();
+            // Unity's null for a missing object isn't a null reference: keep a real one.
+            Found[output] = shader != null ? shader : null;
+            return Found[output];
+        }
+
+        /// <summary>The project's shaders changed: the installed ones are looked up again.</summary>
+        public static void ShadersChanged()
+        {
+            Found.Clear();
+            installed = null;
+        }
         static AtlasShaderRegistry()
         {
             foreach (var type in TypeCache.GetTypesDerivedFrom<IAtlasSourceShaderParser>())
@@ -75,6 +100,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // The capabilities name their shader, so what its parser says of it can be found.
             shader.Capabilities.ShaderId = shader.ShaderId;
             Outputs.Add(shader);
+            installed = null;
         }
         public static IAtlasSourceShaderParser Detect(Material material)
         {
