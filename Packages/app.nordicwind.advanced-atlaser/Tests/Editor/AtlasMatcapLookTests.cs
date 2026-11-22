@@ -85,6 +85,28 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.Greater(glint.BakeLoss, 1f, "frozen in place, it costs more than leaving it out");
         }
 
+        // A matcap's shading is its level and its contrast. A lighting matcap's bake is judged
+        // by what it keeps of them, a highlight's point by point.
+        [Test]
+        public void ABakeOfALightingMatcapIsJudgedByItsLevelAndContrast()
+        {
+            var even = Measure(With(Texture((x, y) => 0.3f), AtlasBlend.Add));
+            Assert.Greater(even.Level, 0.01f);
+            Assert.AreEqual(0f, even.Contrast, 1e-3f, "the same all over");
+            Assert.AreEqual(0f, even.AverageLoss, 1e-2f, "its average is all of it");
+            Assert.AreEqual(0f, even.BakeShadingLoss, 1e-2f);
+            Assert.AreEqual(even.BakeShadingLoss, even.BakeCost, 1e-6f, "lighting: by its shading");
+
+            var sky = Measure(With(Texture((x, y) => 0.25f + 0.25f * y), AtlasBlend.Add));
+            Assert.Greater(sky.Contrast, 0.005f);
+            Assert.Greater(sky.AverageLoss, 0.1f, "its average loses its contrast");
+            Assert.Less(sky.AverageLoss, 1f, "and keeps its level");
+            Assert.Greater(sky.Range, sky.Contrast, "from black to white is more than it varies");
+
+            var glint = Measure(With(Texture((x, y) => x * x + y * y < 0.04f ? 1f : 0f), AtlasBlend.Add));
+            Assert.AreEqual(glint.BakeLoss, glint.BakeCost, 1e-6f, "a highlight: point by point");
+        }
+
         [Test]
         public void SkyAboveAndGroundBelowIsLighting()
         {

@@ -46,6 +46,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         public bool CanBake(AtlasOutputCapabilities capabilities) => false;
 
+        public bool CanAverage(AtlasOutputCapabilities capabilities) => false;
+
         private sealed class Instance
         {
             public int Source;

@@ -28,9 +28,21 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float Peak;
         // The share of its effect that brightens, 0–1; the rest darkens.
         public float Brightens;
-        // What freezing it at the virtual view costs seen from around the avatar, over its
-        // impact (AtlasLayerCost): from 1, leaving it out costs less.
+        // What freezing it at the virtual view costs seen from around the avatar, point by
+        // point, over its impact (AtlasLayerCost): from 1, leaving it out costs less.
         public float BakeLoss;
+        // Its shading, seen from around the avatar: its level, the size of its average effect,
+        // and its contrast, how far its effect lies from that average on average.
+        public float Level;
+        public float Contrast;
+        // The share of its shading (level + contrast) that is lost as its average alone (its
+        // contrast), and frozen at the virtual view (how far the frozen level and contrast
+        // are from its own, wherever the shading sits).
+        public float AverageLoss;
+        public float BakeShadingLoss;
+        // How far its effect goes from a black texture to a white one: what a unit of its
+        // texture's variation shows as.
+        public float Range;
         // The share of its effect in its strongest tenth, seen from the front.
         public float Spread;
         // 1: the same effect all over; 0: as much variation as effect.
@@ -50,6 +62,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // How colored the matcap is where it shows: its saturation, weighted by its effect.
         public float Tint;
         public AtlasMatcapRole Role;
+
+        // What a bake of it costs, over what leaving it out does. Lighting is judged by its
+        // shading: frozen, a lit sphere still reads as shading, though not point by point. A
+        // highlight or a rim frozen in place is missing where it should be and added where it
+        // stayed, as is the spot of lighting with a highlight.
+        public float BakeCost => Role == AtlasMatcapRole.Lighting && !HasHighlight ? BakeShadingLoss : BakeLoss;
 
         // A lighting matcap with a highlight on it: a pearl or a lit sphere with a hot spot.
         public bool HasHighlight => Role == AtlasMatcapRole.Lighting && Standout >= AtlasMatcapLook.HighlightStandout;
@@ -176,6 +194,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
             var seen = new Color[combos];
             var baked = new Color[Normals][];
+            // Every normal as each view shows it: its weight and its effect per base color
+            // and scene (the mean of the channels), as it is and frozen.
+            var samples = new List<(float Weight, float[] Seen, float[] Frozen)>();
             double total = 0.0, brightens = 0.0, weights = 0.0;
             var cost = new AtlasLayerCost();
             for (int k = 0; k < Views; k++)
@@ -196,13 +217,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
                         Effects(Look(normal, AtlasVirtualView.Direction(normal, Vector3.forward, AtlasMatcapBake.Frontal, AtlasMatcapBake.AlongNormal)), baked[i]);
                     }
                     float size = 0f;
+                    var sample = (Weight: weight, Seen: new float[combos], Frozen: new float[combos]);
                     for (int c = 0; c < combos; c++)
                     {
                         var e = seen[c];
                         size += (Mathf.Abs(e.r) + Mathf.Abs(e.g) + Mathf.Abs(e.b)) / 3f;
                         brightens += weight * (Mathf.Max(0f, e.r) + Mathf.Max(0f, e.g) + Mathf.Max(0f, e.b)) / 3f;
                         cost.Add(e, baked[i][c], weight);
+                        sample.Seen[c] = (e.r + e.g + e.b) / 3f;
+                        sample.Frozen[c] = (baked[i][c].r + baked[i][c].g + baked[i][c].b) / 3f;
                     }
+                    samples.Add(sample);
                     total += weight * size;
                     weights += weight * combos;
                 }
@@ -214,6 +239,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Brightens = total > 1e-9 ? (float)(brightens / total) : 0f,
                 BakeLoss = cost.Impact > 1e-9f ? cost.Cost / cost.Impact : 0f
             };
+            Shading(samples, combos, measure);
+            // From a black texture to a white one, in the matcap's color.
+            var white = new Color[combos];
+            var black = new Color[combos];
+            var tint = first.Source.Color;
+            Effects((new Color(tint.r, tint.g, tint.b, 1f), 1f), white);
+            Effects((Color.black, 1f), black);
+            for (int c = 0; c < combos; c++)
+                measure.Range += (Mathf.Abs(white[c].r - black[c].r) + Mathf.Abs(white[c].g - black[c].g) + Mathf.Abs(white[c].b - black[c].b)) / (3f * combos);
             // The disc seen from the front, on a polar grid: each point's effect size, signed
             // effect and the matcap's saturation there. A ring's points weigh by its radius.
             var sizes = new float[Rings, Steps];
@@ -250,6 +284,40 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (Measures.Count >= 256) Measures.Clear();
             Measures[key] = measure;
             return measure;
+        }
+
+        // The shading and what its average and a bake keep of it, per base color and scene: the
+        // level is the mean effect, the contrast the mean distance from it.
+        private static void Shading(List<(float Weight, float[] Seen, float[] Frozen)> samples, int combos, AtlasMatcapMeasure measure)
+        {
+            double levels = 0.0, contrasts = 0.0, frozenOff = 0.0;
+            for (int c = 0; c < combos; c++)
+            {
+                double weights = 0.0, seen = 0.0, frozen = 0.0;
+                foreach (var s in samples)
+                {
+                    weights += s.Weight;
+                    seen += s.Weight * s.Seen[c];
+                    frozen += s.Weight * s.Frozen[c];
+                }
+                if (weights <= 0.0) continue;
+                double level = seen / weights, frozenLevel = frozen / weights, contrast = 0.0, frozenContrast = 0.0;
+                foreach (var s in samples)
+                {
+                    contrast += s.Weight * System.Math.Abs(s.Seen[c] - level);
+                    frozenContrast += s.Weight * System.Math.Abs(s.Frozen[c] - frozenLevel);
+                }
+                contrast /= weights;
+                frozenContrast /= weights;
+                levels += System.Math.Abs(level);
+                contrasts += contrast;
+                frozenOff += System.Math.Abs(level - frozenLevel) + System.Math.Abs(contrast - frozenContrast);
+            }
+            measure.Level = (float)(levels / combos);
+            measure.Contrast = (float)(contrasts / combos);
+            double shading = levels + contrasts;
+            measure.AverageLoss = shading > 1e-9 ? (float)(contrasts / shading) : 0f;
+            measure.BakeShadingLoss = shading > 1e-9 ? (float)(frozenOff / shading) : 0f;
         }
 
         // How the effect is spread over the disc, seen from the front.

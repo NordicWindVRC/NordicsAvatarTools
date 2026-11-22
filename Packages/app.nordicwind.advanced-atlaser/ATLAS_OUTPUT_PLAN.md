@@ -43,8 +43,10 @@ back, the sources listed where the kept lighting looks different from their own,
 lighting's shared values and a generated ramp's shape tuned where the output shader shows
 the chosen lighting differently, and the base color scaled for sources the atlas's lighting
 shows brighter or darker than their own, each matcap's effect measured and named by its
-role, base color shifts bounded by what viewers who block the shader see, and a fitted
-source's own average look kept in a slot shared across parts (the design's
+role, base color shifts bounded by what viewers who block the shader see, each source's own
+average look kept in a slot shared across parts, a matcap kept as its average in the
+base color where the user places it so or no slot is left for it, and a lighting matcap
+without a slot of its own placed by what its level and contrast lose (the design's
 *Map contributions*, *The look model*, *What a matcap is for* and *Base color shifts*). Each
 remaining part of the look model is built in the phase that first uses it.
 
@@ -53,9 +55,8 @@ remaining part of the look model is built in the phase that first uses it.
 - The reference look beyond the lighting (*The reference look*): matcaps and rims lit by the
   chosen lighting, with highlights and reflections, read from a map at a stage (*Map
   contributions*).
-- Every way of showing a matcap with its cost, once the cost of a bake is settled (open
-  question 6), and what remains of *Average in color*: a source a shared slot shows
-  without a fit, a matcap shown on one side, and one left out (*Matcaps*).
+- What remains of *Automatic* by cost (*Matcaps*): the inspector showing each matcap's way
+  and how much of it is kept; rims and highlights by cost, with the reference look.
 - **Workable:** *Automatic* places matcaps by role and cost on every writer, and the rules in
   use before (effects keep their slots, highlights aren't baked) hold as tests.
 

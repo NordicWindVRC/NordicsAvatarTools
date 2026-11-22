@@ -56,29 +56,32 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             if (AtlasDebugSettings.VerboseLogging && ctx.Diagnostics.Count>0)
             {
+                // The diagnostics stay out of the NDMF Console, which is for what needs the
+                // user's attention: they run to hundreds of lines, and its text can't be
+                // selected or searched. They go where they can be: a file in the debug output
+                // folder, replaced on every build, and one information line in Unity's console
+                // (and its Editor.log) that names the file.
                 string text = string.Join("\n", ctx.Diagnostics);
-                ReportInformation(new AtlasMessageError(ErrorSeverity.Information,
-                    "Nordic's Advanced Atlaser — Diagnostics", text));
-                // The NDMF Console's text can't be selected, so the diagnostics are also written
-                // where they can be copied: one information line in Unity's console (and its
-                // Editor.log), and a file in the debug output folder, replaced on every build.
-                Debug.Log("[Nordic's Advanced Atlaser] Diagnostics:\n" + text);
-                WriteDiagnosticsFile(text);
+                string path = WriteDiagnosticsFile(text);
+                Debug.Log("[Nordic's Advanced Atlaser] Diagnostics" + (path != null ? " (also in " + path + ")" : "") + ":\n" + text);
             }
         }
 
-        private static void WriteDiagnosticsFile(string text)
+        // The file's path, or null where it couldn't be written.
+        private static string WriteDiagnosticsFile(string text)
         {
             string path = System.IO.Path.Combine(AtlasDebugSettings.OutputDirectory, "Diagnostics.txt");
             try
             {
                 System.IO.Directory.CreateDirectory(AtlasDebugSettings.OutputDirectory);
                 System.IO.File.WriteAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}\n{text}\n");
+                return path;
             }
             catch (Exception e)
             {
                 // Debug output only: a failed write never affects the build.
                 Debug.LogWarning($"[Nordic's Advanced Atlaser] Couldn't write {path}: {e.Message}");
+                return null;
             }
         }
 

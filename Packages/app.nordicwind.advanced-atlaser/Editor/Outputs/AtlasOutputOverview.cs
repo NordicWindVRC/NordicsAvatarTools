@@ -27,6 +27,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool InstancesAsMatcap;
         // Whether an item can be baked into the textures instead.
         public bool InstancesCanBake;
+        // Whether an item can be kept as its average effect in the base color instead.
+        public bool InstancesCanAverage;
         // Sources with different live global mask setups for the feature, one of each (Live from).
         public readonly List<int> LiveSetups = new List<int>();
         // The feature's own settings in its mode (IAtlasOptionFeature).
@@ -89,6 +91,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     state.Instances.AddRange(items.Instances(probe ?? (probe = Probe(config, materials, unified)), state.Active));
                     state.InstancesAsMatcap = items.CanPlaceAsMatcap(capabilities);
                     state.InstancesCanBake = items.CanBake(capabilities);
+                    state.InstancesCanAverage = items.CanAverage(capabilities);
                 }
                 overview.Features.Add(state);
             }

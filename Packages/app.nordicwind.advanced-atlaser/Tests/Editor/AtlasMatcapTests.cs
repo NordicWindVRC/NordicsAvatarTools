@@ -372,8 +372,9 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual((1f - faintShare) * 1f + faintShare * 0.68f, pixel.r, 1e-3f);
         }
 
-        // Brighter toward the right: its value is its horizontal coordinate.
-        private Texture2D Ramp(string name)
+        // Brighter toward the right: its value is its horizontal coordinate; upright, brighter
+        // toward the top.
+        private Texture2D Ramp(string name, bool upright = false)
         {
             const int size = 64;
             var texture = new Texture2D(size, size, TextureFormat.RGBAFloat, false, true) { name = name };
@@ -381,7 +382,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             for (int y = 0; y < size; y++)
                 for (int x = 0; x < size; x++)
                 {
-                    float v = (x + 0.5f) / size;
+                    float v = ((upright ? y : x) + 0.5f) / size;
                     pixels[y * size + x] = new Color(v, v, v, 1f);
                 }
             texture.SetPixels(pixels);
@@ -584,6 +585,122 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(Mathf.Lerp(black, white, 0.4f), Look(0), 0.01f, "the darker matcap's material");
             Assert.AreEqual(Mathf.Lerp(black, white, 0.6f), Look(1), 0.01f, "the brighter matcap's material");
             StringAssert.Contains("keep the average look of their own matcaps", string.Join(" | ", plan.Notes));
+        }
+
+        // Two matcaps the slot shows as they are, on different materials, share it. The slot
+        // shows neither its own texture, so both are fitted and keep their own average look.
+        [Test]
+        public void EverySourceOfASharedSlotKeepsItsOwnAverageLook()
+        {
+            const float gray = 0.5f;
+            AtlasUnifiedMaterial Shaded(float value, string name)
+            {
+                var material = WithMatcap(Solid(new Color(value, value, value, 1f), name), null, Color.white, (AtlasBlend.Multiply, 0.8f));
+                material.Surface.BaseColor.Color = new Color(gray, gray, gray, 1f);
+                return material;
+            }
+
+            var job = Job(Shaded(0.4f, "darker"), Shaded(0.6f, "brighter"));
+            var plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
+            var layer = Lookups(plan).Single();
+            Assert.AreEqual(AtlasBlend.Multiply, layer.Blend);
+            float shown = plan.GeneratedTextures.Single(t => t.Name == "Matcap1").Pixels()[0].r;
+            float Look(int source) =>
+                Evaluate(plan, AtlasVirtualMap.BaseColor, job, source) * plan.Output.Surface.BaseColor.Color.r *
+                Mathf.Lerp(1f, shown, layer.Opacity * Evaluate(plan, AtlasVirtualMap.Mask1, job, source));
+            Assert.AreEqual(gray * Mathf.Lerp(1f, 0.4f, 0.8f), Look(0), 0.01f, "the darker matcap's material");
+            Assert.AreEqual(gray * Mathf.Lerp(1f, 0.6f, 0.8f), Look(1), 0.01f, "the brighter matcap's material");
+            Assert.IsFalse(plan.Notes.Any(n => n.Contains("approximated")), string.Join(" | ", plan.Notes));
+        }
+
+        // Toon Standard's one slot, a shaded matcap on the larger material and an even one on
+        // the other. Sharing would give the even one the other's shading and weaken that, so
+        // the even one is kept as its average and the slot stays the shaded matcap's own.
+        [Test]
+        public void AnEvenMatcapIsKeptInTheColorRatherThanGivenAnothersShading()
+        {
+            var gray = new Color(0.5f, 0.5f, 0.5f, 1f);
+            var ramp = Ramp("shaded");
+            var shaded = WithMatcap(ramp, null, Color.white, (AtlasBlend.Multiply, 0.8f));
+            shaded.Surface.BaseColor.Color = gray;
+            var even = WithMatcap(Solid(gray, "even"), null, Color.white, (AtlasBlend.Multiply, 0.8f));
+            even.Surface.BaseColor.Color = gray;
+            var job = Job(shaded, even);
+            var plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
+            Assert.AreSame(ramp, Lookups(plan).Single().Source.Map.Texture, "the slot shows the shaded matcap alone");
+            Assert.IsEmpty(plan.GeneratedTextures);
+            Assert.AreEqual(0.5f * Mathf.Lerp(1f, 0.5f, 0.8f), Evaluate(plan, AtlasVirtualMap.BaseColor, job, 1) * plan.Output.Surface.BaseColor.Color.r, 2e-3f,
+                "the even matcap's average");
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("Sharing a slot")), string.Join(" | ", plan.Notes));
+            Assert.IsFalse(plan.Notes.Any(n => n.Contains("combines")), string.Join(" | ", plan.Notes));
+        }
+
+        // Two shaded matcaps on different materials, lit from the side and from above: sharing
+        // the slot keeps most of both, and the log says how much.
+        [Test]
+        public void ASharedSlotSaysHowMuchShadingItKeeps()
+        {
+            var gray = new Color(0.5f, 0.5f, 0.5f, 1f);
+            var side = WithMatcap(Ramp("side"), null, Color.white, (AtlasBlend.Multiply, 0.8f));
+            side.Surface.BaseColor.Color = gray;
+            var above = WithMatcap(Ramp("above", true), null, Color.white, (AtlasBlend.Multiply, 0.8f));
+            above.Surface.BaseColor.Color = gray;
+            var plan = AtlasOutputPipeline.Resolve(Job(side, above), ToonStandard);
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("combines")), string.Join(" | ", plan.Notes));
+            string kept = plan.Notes.Single(n => n.Contains("level and contrast"));
+            StringAssert.Contains("side (source 1)", kept);
+            StringAssert.Contains("above (source 2)", kept);
+        }
+
+        // The log names a bake only where it would keep clearly more of a lighting matcap's
+        // shading; a spot or a highlight would stay in place.
+        [Test]
+        public void TheLogNamesABakeOnlyWhereItKeepsClearlyMore()
+        {
+            var lighting = new AtlasMatcapMeasure { Role = AtlasMatcapRole.Lighting, BakeShadingLoss = 0.1f, BakeLoss = 1.5f };
+            Assert.IsTrue(AtlasMatcapFeature.BakeKeepsMore(lighting, 0.5f));
+            Assert.IsFalse(AtlasMatcapFeature.BakeKeepsMore(lighting, 0.3f), "within a quarter of its shading");
+            var pearl = new AtlasMatcapMeasure { Role = AtlasMatcapRole.Lighting, BakeShadingLoss = 0.1f, Standout = 1.2f };
+            Assert.IsFalse(AtlasMatcapFeature.BakeKeepsMore(pearl, 0.9f), "its spot would stay in place");
+            var glint = new AtlasMatcapMeasure { Role = AtlasMatcapRole.Highlight, BakeShadingLoss = 0f, BakeLoss = 0f };
+            Assert.IsFalse(AtlasMatcapFeature.BakeKeepsMore(glint, 0.9f));
+        }
+
+        // A matcap placed as its average takes no slot: its average effect is in the base color.
+        [Test]
+        public void AMatcapPlacedAsItsAverageGoesIntoTheBaseColor()
+        {
+            foreach (var capabilities in new[] { Poiyomi, ToonStandard })
+            {
+                var material = WithMatcap(Solid(new Color(0.5f, 0.5f, 0.5f, 1f)), null, Color.white, (AtlasBlend.Multiply, 0.8f), (AtlasBlend.Add, 0.2f));
+                material.Surface.BaseColor.Color = new Color(0.5f, 0.5f, 0.5f, 1f);
+                var job = Job(material);
+                Place(job, new AtlasMatcapFeature().Instances(job, new[] { 0 }).Single().Key, AtlasInstancePlacement.Averaged);
+                var plan = AtlasOutputPipeline.Resolve(job, capabilities);
+                Assert.IsEmpty(Lookups(plan));
+                Assert.IsEmpty(plan.GeneratedTextures);
+                Assert.AreEqual(0, plan.MatcapSlotsUsed);
+                // The base color × lerp(1, 0.5, 0.8), plus 0.5 × 0.2.
+                Assert.AreEqual(0.5f * 0.6f + 0.1f, Evaluate(plan, AtlasVirtualMap.BaseColor, job, 0) * plan.Output.Surface.BaseColor.Color.r, 2e-3f);
+                Assert.IsTrue(plan.Notes.Any(n => n.Contains("Average in color")), string.Join(" | ", plan.Notes));
+            }
+        }
+
+        // A lighting matcap that ends up without a slot (here: combined with a matcap that
+        // isn't there, and no slot to join) keeps its average effect, where its mask is.
+        [Test]
+        public void ALightingMatcapWithoutASlotKeepsItsAverage()
+        {
+            var mask = new AtlasMask { Map = new AtlasTextureReference { Texture = Solid(new Color(0.5f, 0f, 0f, 1f), "mask") } };
+            var material = WithMatcap(Solid(new Color(0.5f, 0.5f, 0.5f, 1f)), mask, Color.white, (AtlasBlend.Multiply, 0.8f));
+            material.Surface.BaseColor.Color = new Color(0.5f, 0.5f, 0.5f, 1f);
+            var job = Job(material);
+            Place(job, new AtlasMatcapFeature().Instances(job, new[] { 0 }).Single().Key, AtlasInstancePlacement.Combined, "gone");
+            var plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
+            Assert.IsEmpty(Lookups(plan));
+            // The matcap's mean 0.5 at weight 0.8 × the mask 0.5.
+            Assert.AreEqual(0.5f * Mathf.Lerp(1f, 0.5f, 0.4f), Evaluate(plan, AtlasVirtualMap.BaseColor, job, 0) * plan.Output.Surface.BaseColor.Color.r, 2e-3f);
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("No matcap slot is left")), string.Join(" | ", plan.Notes));
         }
 
         [Test]

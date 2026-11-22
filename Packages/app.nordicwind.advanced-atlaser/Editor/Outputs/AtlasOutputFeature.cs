@@ -126,8 +126,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     }
 
     // Where the user puts an item: Automatic (the feature's choice), its own place, combined
-    // with another item (the stored text names it), or off.
-    public enum AtlasInstancePlacement { Automatic = 0, Own = 1, Combined = 2, Off = 3, AsMatcap = 4, Baked = 5 }
+    // with another item (the stored text names it), off, in a matcap slot, baked into the
+    // textures, or kept as its average in the base color.
+    public enum AtlasInstancePlacement { Automatic = 0, Own = 1, Combined = 2, Off = 3, AsMatcap = 4, Baked = 5, Averaged = 6 }
 
     public static class AtlasInstancePlacements
     {
@@ -143,6 +144,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         bool CanPlaceAsMatcap(AtlasOutputCapabilities capabilities);
         // Whether an item can be baked into the textures instead.
         bool CanBake(AtlasOutputCapabilities capabilities);
+        // Whether an item can be kept as its average effect in the base color instead.
+        bool CanAverage(AtlasOutputCapabilities capabilities);
     }
 
     // A setting a feature offers in some of its modes (a strength, 0–1 by default), stored in its

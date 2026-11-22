@@ -424,13 +424,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
             foreach (var conflictSwitch in state.Switches)
                 using (new EditorGUI.IndentLevelScope())
                     Switch(setting, conflictSwitch);
-            // With one item in slots there is nothing to place: the mode and the per-material
-            // toggles decide. Baked, each item is baked, left out or left to Automatic.
+            // With one item in slots there is nothing to place, unless it can be kept as its
+            // average: otherwise the mode and the per-material toggles decide. Baked, each item
+            // is baked, left out or left to Automatic.
             bool bakedMode = state.Mode != null && state.Mode.Kind == AtlasFeatureModeKind.Baked;
-            if (state.Instances.Count > 1 || (bakedMode && state.Instances.Count > 0))
+            if (state.Instances.Count > 1 || ((bakedMode || state.InstancesCanAverage) && state.Instances.Count > 0))
                 using (new EditorGUI.IndentLevelScope())
                     foreach (var instance in state.Instances)
-                        Placement(setting, instance, state.Instances, state.InstancesAsMatcap, state.InstancesCanBake, bakedMode, materials);
+                        Placement(setting, instance, state.Instances, state.InstancesAsMatcap, state.InstancesCanBake, state.InstancesCanAverage,
+                            bakedMode, materials);
             if (open)
                 using (new EditorGUI.IndentLevelScope())
                     Sources(setting, state, materials);
@@ -522,9 +524,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             stored.FindPropertyRelative("toggle").boolValue = next == 0;
         }
 
-        // Where one item goes: Automatic, its own slot, off, or combined with another item.
+        // Where one item goes: Automatic, its own slot, baked, kept as its average, off, or
+        // combined with another item.
         private static void Placement(SerializedProperty setting, AtlasFeatureInstance instance, List<AtlasFeatureInstance> instances, bool asMatcap,
-            bool canBake, bool bakedMode, IReadOnlyList<Material> materials)
+            bool canBake, bool canAverage, bool bakedMode, IReadOnlyList<Material> materials)
         {
             var stored = StoredValue(setting, AtlasInstancePlacements.Id(instance.Key));
             // Baked, there are no slots to share.
@@ -533,9 +536,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (!bakedMode) placements.Add(AtlasInstancePlacement.Own);
             if (asMatcap && !bakedMode) placements.Add(AtlasInstancePlacement.AsMatcap);
             if (canBake) placements.Add(AtlasInstancePlacement.Baked);
+            if (canAverage) placements.Add(AtlasInstancePlacement.Averaged);
             placements.Add(AtlasInstancePlacement.Off);
             var options = placements.Select(p => p == AtlasInstancePlacement.Automatic ? "Automatic" : p == AtlasInstancePlacement.Own ? "Own slot"
-                : p == AtlasInstancePlacement.AsMatcap ? "As matcap" : p == AtlasInstancePlacement.Baked ? "Baked into color" : "Off").ToList();
+                : p == AtlasInstancePlacement.AsMatcap ? "As matcap" : p == AtlasInstancePlacement.Baked ? "Baked into color"
+                : p == AtlasInstancePlacement.Averaged ? "Average in color" : "Off").ToList();
             options.AddRange(others.Select(o => "Combine with " + o.Label));
             int index = 0;
             if (stored != null)
@@ -547,12 +552,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 else index = Math.Max(0, placements.IndexOf(mode));
             }
             string what = instance.Label + ". ";
-            var label = new GUIContent(instance.Label, bakedMode
+            string averaged = canAverage ? " Average in color keeps its average effect in the base color without a slot; what changes with the view is lost." : "";
+            var label = new GUIContent(instance.Label, (bakedMode
                 ? what + "Automatic bakes it into the color as seen from the front, unless it's a highlight that brightens (shine, glints), " +
                   "which would stay in place from every view; the build log says which."
                 : what + "Automatic combines it with others on the same parts, or gives it a slot while one is free, " +
                   "and otherwise combines it with the most similar one; the build log says which." +
-                  (canBake ? " Baked into color draws it into the textures as seen from the front, instead of sharing a slot." : ""));
+                  (canBake ? " Baked into color draws it into the textures as seen from the front, instead of sharing a slot." : "")) + averaged);
             int next = instance.HasPreview ? PreviewRow(label, instance, materials, index, options.ToArray()) : PopupRow(label, index, options.ToArray());
             if (next == index) return;
             if (stored == null) stored = AddValue(setting, AtlasInstancePlacements.Id(instance.Key));

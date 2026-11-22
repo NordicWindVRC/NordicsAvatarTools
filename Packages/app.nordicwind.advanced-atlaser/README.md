@@ -42,7 +42,9 @@ The build log lists what couldn't be kept, or was only approximated.
 
 **Normal Baker** (**Tools → NordicWind → Advanced Atlaser**) bakes a normal map for a
 lower-detail mesh from its detailed original, for a source's *Pre-baked Normal Map*.
-**Verbose Logging** in the same menu shows the build's diagnostics.
+**Verbose Logging** in the same menu writes the build's diagnostics to Unity's console and to
+`Diagnostics.txt` in the debug output folder (**Open Debug Output Folder** in the same menu).
+The NDMF Console lists only what needs attention.
 
 ## Supported shaders
 

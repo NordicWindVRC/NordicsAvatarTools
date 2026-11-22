@@ -187,10 +187,11 @@ Every way the output offers is a candidate with a cost:
 | Left out | Nothing of it shows | Unchanged |
 
 *Average in color* can accompany a way that loses part of the effect (one side, left out). It
-keeps the part as bright as it was, which is most of what a lighting matcap does. Built for a
-fitted source in a slot shared across parts (*Base color shifts* in the output design). What
-remains: a source the shared slot shows without a fit, a matcap shown on one side, and one
-left out.
+keeps the part as bright as it was, which is most of what a lighting matcap does. Built
+(*Base color shifts* in the output design): for every source of a slot shared across parts,
+as a placement the user chooses, and for a lighting matcap that ends up without a slot. A
+matcap shown on one side is covered by the shift's bounds, which stop at its average look.
+What remains: *Automatic* choosing it by its cost.
 
 ### Base color shifts
 
@@ -213,10 +214,20 @@ design). What remains planned:
 3. Groups take slots in the order of their impact. Each takes the way with the lowest cost
    among those its role and the output offer, with the slots that are left. The cost is the
    look's, plus the blocked view's difference where a shift is used.
-4. A group without a slot of its own is combined, baked, kept as its average or left out,
-   whichever costs least.
+4. A group without a slot of its own is combined, kept as its average or left out, whichever
+   costs least. A bake is the user's choice in the slots mode: it stays in place from every
+   side and uses the virtual light rig's settings. The log names it where it would keep
+   clearly more.
 5. The log names each group's role, the way it is shown and how much of it is kept. The
    inspector shows the same next to the group's placement.
+
+Built (*Comparing layers* and the matcaps' row in the output design): a lighting matcap's
+shading (level and contrast) and what each way keeps of it, and step 4 for lighting
+matcaps between a slot shared across parts and the average in color, with the log's line
+on what a shared slot keeps. What remains:
+
+- **The inspector** showing each matcap's way and how much of it is kept.
+- **Rims and highlights** by cost (step 3), with the reference look.
 
 ### Controls
 
@@ -240,14 +251,14 @@ Rims use the same cost for their fits (`AtlasRimResponse` today).
 3. **The blocked view's weight.** In place: under *Automatic* it counts as much as the look
    with the shader, which stops a shift at the average look. With a lower weight, a matcap
    that is bright on average would shift in full.
-4. **Average in color.** Which roles it is offered for (proposed: lighting), and whether it
-   needs a control of its own.
+4. **Average in color.** In place: *Automatic* keeps the average of lighting matcaps only,
+   and the user can place any matcap so. To be confirmed.
 5. **Roles.** The limits are checked against one avatar's matcaps and two collections. A lit
    sphere with a strong hot spot comes within 0.05 of the highlight's spread limit, and a
    gold sphere stays lighting; both are judgment calls. Whether a rim
    matcap may use a rim slot, and a highlight the output's own highlights, where no matcap
    slot is left.
-6. **The cost of a bake.** Point by point, freezing an ordinary lit-sphere matcap costs more
-   than leaving it out, though a baked one reads as plausible shading. Before the cost
-   decides what is baked, it needs a gentler measure for matcaps that light, or a check by
-   eye that the point-by-point one is right.
+6. **The cost of a bake.** In place: a lighting matcap's bake, average and shared slot are
+   judged by its level and contrast, not point by point (*Comparing layers* in the output
+   design). To be confirmed by eye, with the margin by which a slot that follows the view is
+   preferred to the average (a quarter of the matcap's shading).
