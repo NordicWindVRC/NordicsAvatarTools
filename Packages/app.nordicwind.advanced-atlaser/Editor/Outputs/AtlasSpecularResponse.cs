@@ -56,7 +56,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static Source Sample(AtlasUnifiedMaterial material, float weight = 1f)
         {
             var response = material.Surface.Response;
-            var bases = AtlasSourceSamples.Bases(material).Select(AtlasSourceSamples.Luminance).ToArray();
+            // By position, like the other maps' samples: each sample is one place on the surface.
+            var bases = AtlasSourceSamples.BasesByPosition(material).Select(AtlasSourceSamples.Luminance).ToArray();
             var roughness = AtlasSourceSamples.Scalars(response.Roughness);
             var metallic = AtlasSourceSamples.Scalars(response.Metallic);
             var reflectance = AtlasSourceSamples.Scalars(response.Reflectance);

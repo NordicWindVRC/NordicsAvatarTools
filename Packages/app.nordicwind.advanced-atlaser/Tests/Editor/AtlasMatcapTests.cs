@@ -412,15 +412,34 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsTrue(plan.Notes.Any(n => n.Contains("redrawn") && n.Contains("bordered")), string.Join(" | ", plan.Notes));
 
             // Looked up by the reflection, the matcap is fixed to the world and looks different
-            // from each side, so the view is the user's choice. Averaged all around, the
-            // ramp's two sides even out.
+            // from each side, which the slot can't show: how it is shown is the user's choice.
             var mirrored = WithMatcap(Ramp("mirrored"), null, Color.white, (AtlasBlend.Add, 1f));
             ((AtlasLookupLayer)mirrored.Layers[0]).Projection = AtlasLookupProjection.ReflectionPlanar;
+            // By the view, the default: its texture as it is, looked up like any matcap.
             plan = AtlasOutputPipeline.Resolve(Job(mirrored), ToonStandard);
-            Assert.AreEqual(0.5f, At(plan, 0.75f), 0.02f);
+            Assert.IsEmpty(plan.GeneratedTextures);
             Assert.AreEqual(AtlasLookupProjection.ViewStabilized, Lookups(plan).Single().Projection);
             Assert.IsTrue(plan.MatcapViews);
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("looked up by the view instead")), string.Join(" | ", plan.Notes));
             Assert.IsFalse(AtlasOutputPipeline.Resolve(Job(bordered), ToonStandard).MatcapViews, "a border follows the view");
+            // Its border is kept: redrawn as the bordered one is.
+            ((AtlasLookupLayer)mirrored.Layers[0]).Tiling = new Vector2(0.86f, 0.86f);
+            Assert.AreEqual(0.93f, At(AtlasOutputPipeline.Resolve(Job(mirrored), ToonStandard), 1f), 0.02f);
+            ((AtlasLookupLayer)mirrored.Layers[0]).Tiling = Vector2.one;
+            // A sideways texture offset is a shift in the world, which points the other way from
+            // behind: by the view it is left out, so the center stays the texture's center.
+            var shifted = WithMatcap(Ramp("shifted"), null, Color.white, (AtlasBlend.Add, 1f));
+            ((AtlasLookupLayer)shifted.Layers[0]).Projection = AtlasLookupProjection.ReflectionPlanar;
+            ((AtlasLookupLayer)shifted.Layers[0]).Source.Map.Offset = new Vector2(0.25f, 0f);
+            plan = AtlasOutputPipeline.Resolve(Job(shifted), ToonStandard);
+            Assert.AreEqual(0.5f, At(plan, 0.5f), 0.02f);
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("without its sideways texture offset")), string.Join(" | ", plan.Notes));
+            // As seen from the front, the offset is the matcap's own: the center reads 0.75.
+            var shiftedFront = Job(shifted);
+            var frontChoice = new AtlasFeatureChoice { FeatureId = AtlasMatcapFeature.FeatureId };
+            frontChoice.Values[AtlasFeatureOption.ValueId(AtlasMatcapFeature.ViewOptionId)] = ((int)AtlasMatcapView.Front, "");
+            shiftedFront.Features.Add(frontChoice);
+            Assert.AreEqual(0.75f, At(AtlasOutputPipeline.Resolve(shiftedFront, ToonStandard), 0.5f), 0.02f);
 
             // As seen from the front: halfway to the edge the normal is tilted 30°, its
             // reflection 60°, which reads 0.87 of the way out on the other side of the texture.
@@ -428,7 +447,9 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var choice = new AtlasFeatureChoice { FeatureId = AtlasMatcapFeature.FeatureId };
             choice.Values[AtlasFeatureOption.ValueId(AtlasMatcapFeature.ViewOptionId)] = ((int)AtlasMatcapView.Front, "");
             front.Features.Add(choice);
-            Assert.AreEqual(0.5f - 0.5f * Mathf.Sin(60f * Mathf.Deg2Rad), At(AtlasOutputPipeline.Resolve(front, ToonStandard), 0.75f), 0.02f);
+            plan = AtlasOutputPipeline.Resolve(front, ToonStandard);
+            Assert.AreEqual(0.5f - 0.5f * Mathf.Sin(60f * Mathf.Deg2Rad), At(plan, 0.75f), 0.02f);
+            Assert.AreEqual(AtlasLookupProjection.ViewStabilized, Lookups(plan).Single().Projection);
             var overview = AtlasOutputOverview.Build(new AtlasOutputConfiguration(), ToonStandard, new Material[] { null }, new[] { mirrored });
             Assert.AreEqual(2, overview.Features.Single(s => s.Feature is AtlasMatcapFeature).Options
                 .Single(o => o.Id == AtlasMatcapFeature.ViewOptionId).Choices.Length);
@@ -532,6 +553,37 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var averaged = AtlasMatcapFeature.Combine(parts, AtlasBlend.Add, 2)[0];
             Assert.AreEqual(0.25f, averaged.r, 1e-5f, "by area");
             Assert.AreEqual(0.75f, averaged.g, 1e-5f);
+        }
+
+        // Two shading matcaps on different materials share Toon Standard's one slot, which
+        // shows their averaged texture on both. Each material keeps the average look of its
+        // own matcap through its base color.
+        [Test]
+        public void ASharedSlotKeepsEachMaterialsOwnAverageLook()
+        {
+            const float gray = 0.5f;
+            AtlasUnifiedMaterial Shaded(float value, string name)
+            {
+                var material = WithMatcap(Solid(new Color(value, value, value, 1f), name), null, Color.white,
+                    (AtlasBlend.Multiply, 0.8f), (AtlasBlend.Screen, 0.2f));
+                material.Surface.BaseColor.Color = new Color(gray, gray, gray, 1f);
+                return material;
+            }
+
+            var job = Job(Shaded(0.4f, "darker"), Shaded(0.6f, "brighter"));
+            var plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
+            var layer = Lookups(plan).Single();
+            Assert.AreEqual(AtlasBlend.Multiply, layer.Blend);
+            float shown = plan.GeneratedTextures.Single(t => t.Name == "Matcap1").Pixels()[0].r;
+            float Look(int source) =>
+                Evaluate(plan, AtlasVirtualMap.BaseColor, job, source) * plan.Output.Surface.BaseColor.Color.r *
+                Mathf.Lerp(1f, shown, layer.Opacity * Evaluate(plan, AtlasVirtualMap.Mask1, job, source));
+
+            // The chain with a black matcap and with a white one, and between them by the texture.
+            float black = gray * (1f - 0.8f), white = Mathf.Lerp(gray, 1f - (1f - gray) * (1f - 1f), 0.2f);
+            Assert.AreEqual(Mathf.Lerp(black, white, 0.4f), Look(0), 0.01f, "the darker matcap's material");
+            Assert.AreEqual(Mathf.Lerp(black, white, 0.6f), Look(1), 0.01f, "the brighter matcap's material");
+            StringAssert.Contains("keep the average look of their own matcaps", string.Join(" | ", plan.Notes));
         }
 
         [Test]

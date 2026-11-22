@@ -40,9 +40,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
     //   Stacks on different parts are averaged by how visible they are, not by area alone.
     //   An output whose slot has no texture transform also gets one for a matcap with them, and
     //   an output whose slot looks up by the view-space normal alone (Toon Standard) for a
-    //   matcap looked up otherwise (Poiyomi's double-sided mode, a border, a rotation): the
-    //   texture is redrawn for the slot's lookup (Relook: as seen from the front, or for a
-    //   lookup fixed to the world averaged all around, by the user's choice). Groups on the same parts stack: their
+    //   matcap with a border or a rotation: the texture is redrawn for the slot's lookup
+    //   (Relook). A lookup fixed to the world (Poiyomi's double-sided mode) can't be shown by
+    //   a slot that follows the view: its texture is looked up by the view instead (without
+    //   its sideways offset, SlotMap), or redrawn as it looks from the front, by the user's
+    //   choice. Groups on the same parts stack: their
     //   textures × colors × weights added (for add) or multiplied (for multiply), with every
     //   blend converted to one of the two. Stacks on different parts are averaged by area,
     //   since each part shows the one texture.
@@ -59,6 +61,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     //   matcap; Full shifts as far as the matcap needs, as an output whose blocked view is the
     //   same look always does. Without a base color map, the base color mix goes into the
     //   mask: the mask × lerp(1, the base color's luminance, mix).
+    // - A slot shared by matcaps on different parts shows their averaged texture on each
+    //   part. A fitted source keeps its own average look there (average in color): its fit
+    //   is moved by the difference between its matcaps' average and the shared texture's.
     // - A combined slot whose matcaps mix in the base color differently has none: each one's
     //   mix goes into its mask, as where the slot has no base color mix.
     // - A slot that only glows has its texture made from the glows. The slot's one glow
@@ -75,9 +80,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // How far a matcap slot's fit may shift the base color (ATLAS_OUTPUT.md, "Base color shifts").
     public enum AtlasBaseColorShift { Automatic = 0, Keep = 1, Full = 2 }
 
-    // The view a matcap whose lookup is fixed to the world is redrawn for, on an output whose
-    // slot follows the view (ATLAS_OUTPUT.md, the matcaps' row of the feature inventory).
-    public enum AtlasMatcapView { Around = 0, Front = 1 }
+    // How a matcap whose lookup is fixed to the world is shown by a slot that follows the view
+    // (ATLAS_OUTPUT.md, the matcaps' row of the feature inventory): its texture looked up by
+    // the view, or redrawn as it looks from the front.
+    public enum AtlasMatcapView { ByView = 0, Front = 1 }
 
     public sealed class AtlasMatcapFeature : IAtlasInstanceFeature, IAtlasLitBakeFeature
     {
@@ -105,30 +111,29 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 ? (AtlasBaseColorShift)Mathf.Clamp(Mathf.RoundToInt(value.Number), 0, 2) : AtlasBaseColorShift.Automatic;
         }
 
-        public const string ViewOptionId = "matcap-view";
+        public const string ViewOptionId = "world-fixed-lookup";
 
-        // The control, shown while a matcap whose lookup is fixed to the world is redrawn for a
-        // slot that follows the view.
+        // The control, shown while a matcap whose lookup is fixed to the world is in a slot
+        // that follows the view.
         public static AtlasFeatureOption ViewOption => new AtlasFeatureOption
         {
             Id = ViewOptionId, Label = "World-fixed matcaps", Default = 0f, Max = 1f,
-            Choices = new[] { "Averaged all around", "As seen from the front" },
+            Choices = new[] { "Follow the view", "As seen from the front" },
             Tooltip = "A matcap looked up in the world rather than by the view looks different from each side; the output's " +
-                      "matcap looks the same from every side. Averaged all around shows its average over the sides the avatar " +
-                      "is seen from: softer, without a pattern that follows the view. As seen from the front keeps its look " +
-                      "from straight in front, and shows that pattern from the other sides too."
+                      "matcap follows the view. Follow the view looks its texture up by the view, like any matcap: the middle " +
+                      "of the texture where the surface faces the viewer, its edge at the outline; a sideways shift of the " +
+                      "texture is left out, since it points the other way from behind. As seen from the front " +
+                      "keeps its exact look from straight in front, and shows that pattern from the other sides too."
         };
 
         private static AtlasMatcapView View(AtlasGeneratorJob job)
         {
             var choice = job.Features.Find(f => f.FeatureId == FeatureId);
             return choice != null && choice.Values.TryGetValue(AtlasFeatureOption.ValueId(ViewOptionId), out var value)
-                ? (AtlasMatcapView)Mathf.Clamp(Mathf.RoundToInt(value.Number), 0, 1) : AtlasMatcapView.Around;
+                ? (AtlasMatcapView)Mathf.Clamp(Mathf.RoundToInt(value.Number), 0, 1) : AtlasMatcapView.ByView;
         }
 
         public const int CombinedSize = 512;
-        // The views around the avatar a world-fixed lookup is averaged over.
-        private const int ViewsAround = 24;
 
         public static readonly AtlasFeatureMode Baked = new AtlasFeatureMode
         {
@@ -763,7 +768,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var job = context.Job;
             var capabilities = context.Capabilities;
             var main = Main(slot.SelectMany(g => g.Members[0].Layers).ToList());
-            bool combined = Combined(slot, capabilities);
+            var view = View(job);
+            bool combined = Combined(slot, capabilities, view);
             // The sources the slot can't show as they are, fitted to (SlotFit) where the output
             // has a base color map; otherwise the base color mix goes into the mask.
             var baseColor = AtlasLiveMasks.Request(context, AtlasVirtualMap.BaseColor);
@@ -798,6 +804,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 FitBaseColor(baseColor, fits);
                 context.Plan.BaseColorShifts |= capabilities.VRChatFallback;
+                var shared = fits.Where(f => f.Value.Shared).Select(f => f.Key).OrderBy(i => i).ToList();
+                if (shared.Count > 0)
+                    context.Notes.Add($"Matcap slot {index + 1} shows one averaged texture on different parts; " +
+                                      AtlasLiveMasks.Numbers(shared) + (shared.Count == 1 ? " keeps" : " keep") +
+                                      " the average look of their own matcaps through the base color.");
             }
             // Every slot has a mask object of its own, which the writers group its layers by.
             var slotMask = mask.Mask ?? new AtlasMask();
@@ -806,9 +817,28 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (slot.Select(g => g.Members.Select(m => m.Source)).SelectMany(s => s).GroupBy(s => s).Any(s => s.Count() > 1))
                 context.Notes.Add($"Matcap slot {index + 1} has several matcaps on one source; the first one's mask is used there.");
 
+            // A lookup fixed to the world looks different from each side, which a slot that
+            // follows the view can't show: how it is shown is the user's choice.
+            var worldFixed = capabilities.MatcapLookup ? new List<string>()
+                : slot.Where(g => WorldFixed(g.Members[0].Layers[0]) && g.Members[0].Layers[0].Source.Map?.Texture != null).Select(g => g.Label).ToList();
+            if (worldFixed.Count > 0)
+            {
+                context.Plan.MatcapViews = true;
+                context.Notes.Add($"Matcap slot {index + 1}: the lookup of " + string.Join(", ", worldFixed) +
+                                  " is fixed to the world, which the output's slot can't follow; " +
+                                  (view == AtlasMatcapView.Front ? "its texture is redrawn as it looks from the front."
+                                      : slot.Any(g => SlotMap(g.Members[0].Layers[0], capabilities, view) != g.Members[0].Layers[0].Source.Map)
+                                          ? "it is looked up by the view instead, without its sideways texture offset."
+                                          : "it is looked up by the view instead."));
+            }
+
             var output = context.Output.Layers;
             int first = output.Count;
             AddLayers(context, slot, index, slotMask, scale, approximated, fits != null);
+            // What the output shows of a world-fixed lookup follows the view.
+            if (!capabilities.MatcapLookup)
+                for (int i = first; i < output.Count; i++)
+                    if (output[i] is AtlasLookupLayer shown && WorldFixed(shown)) shown.Projection = AtlasLookupProjection.ViewStabilized;
             // Folded into the mask or fitted: the slot's layers don't mix in the base color again.
             if (fold || fits != null)
                 for (int i = first; i < output.Count; i++)
@@ -972,7 +1002,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var capabilities = context.Capabilities;
             var template = slot[0].Members[0].Layers;
             var output = context.Output.Layers;
-            if (!Combined(slot, capabilities))
+            var view = View(context.Job);
+            if (!Combined(slot, capabilities, view))
             {
                 var shown = Shown(template);
                 bool supported = shown.All(l => (capabilities.MatcapBlends & Flag(l)) != 0);
@@ -1009,21 +1040,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // A slot that only glows is made from the glows, relative to the strongest.
             bool glows = GlowsOnly(slot);
             float strongest = slot.Max(g => Glow(g.Members[0]));
-            var parts = slot.Select(g => (Map: g.Members[0].Layers[0].Source.Map, g.Members[0].Layers[0].Source.Color,
+            var parts = slot.Select(g => (Map: SlotMap(g.Members[0].Layers[0], capabilities, view), g.Members[0].Layers[0].Source.Color,
                 Weight: TextureWeight(g.Members[0], main, glows, strongest), g.Parts, Area: g.Visible)).ToList();
             // Each matcap's own lookup, where the slot has only the view-space normal's.
-            var view = View(context.Job);
-            var lookups = slot.Select(g => Relooked(g.Members[0].Layers[0], capabilities) ? Relook(g.Members[0].Layers[0], view) : null).ToList();
+            var lookups = slot.Select(g => Relooked(g.Members[0].Layers[0], capabilities, view) ? Relook(g.Members[0].Layers[0], view) : null).ToList();
             var relooked = slot.Where((g, i) => lookups[i] != null).Select(g => g.Label).ToList();
-            // A lookup fixed to the world looks different from each side: the user chooses the view.
-            bool worldFixed = slot.Where((g, i) => lookups[i] != null).Any(g => WorldFixed(g.Members[0].Layers[0]));
-            context.Plan.MatcapViews |= worldFixed;
             if (relooked.Count > 0)
                 context.Notes.Add($"Matcap slot {index + 1}: the output's slot looks up by the view-space normal over the whole texture, so the texture of " +
-                                  string.Join(", ", relooked) + " (another lookup, a border or a rotation) is redrawn for it, " +
-                                  (worldFixed && view == AtlasMatcapView.Around
-                                      ? "a lookup fixed to the world averaged over the sides the avatar is seen from."
-                                      : "as seen from the front."));
+                                  string.Join(", ", relooked) + " (another lookup, a border or a rotation) is redrawn for it.");
             var reference = new AtlasTextureReference { Space = AtlasTextureSpace.View, Interpretation = AtlasTextureInterpretation.Color };
             context.Plan.GeneratedTextures.Add(new AtlasGeneratedTexture
             {
@@ -1047,50 +1071,75 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         // One generated texture for the slot: several groups, or a tint, texture transform or
         // lookup the slot doesn't have.
-        private static bool Combined(List<Group> slot, AtlasOutputCapabilities capabilities)
+        private static bool Combined(List<Group> slot, AtlasOutputCapabilities capabilities, AtlasMatcapView view)
         {
             var tint = slot[0].Members[0].Layers[0].Source.Color;
             bool tinted = Mathf.Abs(tint.r - 1f) + Mathf.Abs(tint.g - 1f) + Mathf.Abs(tint.b - 1f) > 1e-3f;
             return slot.Count > 1 || (tinted && !capabilities.MatcapColor) ||
                    (Transformed(slot[0].Members[0].Layers[0].Source.Map) && !capabilities.MatcapTextureTransform) ||
-                   Relooked(slot[0].Members[0].Layers[0], capabilities);
+                   Relooked(slot[0].Members[0].Layers[0], capabilities, view);
         }
 
-        // A matcap whose own lookup the slot doesn't have: the slot looks up by the view-space
-        // normal over the whole texture, the matcap by another projection, a border or a rotation.
-        private static bool Relooked(AtlasLookupLayer layer, AtlasOutputCapabilities capabilities) =>
+        // A matcap whose texture is redrawn for the slot: the slot looks up by the view-space
+        // normal over the whole texture, the matcap by another projection, a border or a
+        // rotation. A lookup fixed to the world that is looked up by the view needs it only
+        // for its border or rotation.
+        private static bool Relooked(AtlasLookupLayer layer, AtlasOutputCapabilities capabilities, AtlasMatcapView view) =>
             !capabilities.MatcapLookup && layer.Source.Map?.Texture != null &&
-            !((layer.Projection == AtlasLookupProjection.ViewStabilized || layer.Projection == AtlasLookupProjection.ViewCorrected) &&
+            !((layer.Projection == AtlasLookupProjection.ViewStabilized || layer.Projection == AtlasLookupProjection.ViewCorrected ||
+               (WorldFixed(layer) && view == AtlasMatcapView.ByView)) &&
               layer.Tiling == Vector2.one && layer.LookupRotation == 0f);
 
         // A lookup fixed to the world, not to the view: it looks different from each side.
         private static bool WorldFixed(AtlasLookupLayer layer) =>
             layer.Projection == AtlasLookupProjection.ReflectionPlanar || layer.Projection == AtlasLookupProjection.LightHalfVector;
 
-        // Where a matcap's own lookup reads its texture for the normal that a view-space normal
-        // lookup has at `uv`: the slot's coordinate to the matcap's, per view the texture is
-        // averaged over. A lookup that follows the view has one, straight in front, and is
-        // exact. A lookup fixed to the world (the planar reflection, the light's half vector)
-        // differs from each side: all around it gets the views around the avatar, which keeps
-        // what every side shows alike, and as seen from the front it is exact there alone.
-        private static Func<Vector2, Vector2>[] Relook(AtlasLookupLayer layer, AtlasMatcapView view)
+        // A matcap's texture as the slot reads it. A lookup fixed to the world that is looked up
+        // by the view loses its sideways texture offset. That offset shifts the texture along a
+        // world axis, which points the other way from behind; kept by the view, it would pull
+        // one side of the texture (a matcap's dark edge and its corners) into view on the same
+        // side of the surface from everywhere, as a band. The upward offset is the same from
+        // every side and stays.
+        private static AtlasTextureReference SlotMap(AtlasLookupLayer layer, AtlasOutputCapabilities capabilities, AtlasMatcapView view)
         {
-            int count = view == AtlasMatcapView.Around && WorldFixed(layer) ? ViewsAround : 1;
-            var lookups = new Func<Vector2, Vector2>[count];
-            for (int k = 0; k < count; k++)
+            var map = layer.Source.Map;
+            if (map == null || capabilities.MatcapLookup || !WorldFixed(layer) || view != AtlasMatcapView.ByView || map.Offset.x == 0f)
+                return map;
+            var shown = new AtlasTextureReference();
+            AtlasFieldwise.Copy(map, shown);
+            shown.Offset = new Vector2(0f, map.Offset.y);
+            return shown;
+        }
+
+        // Where a matcap's own lookup reads its texture for the normal that a view-space normal
+        // lookup has at `uv`, seen from straight in front: the slot's coordinate to the
+        // matcap's. Exact for a lookup that follows the view. A lookup fixed to the world (the
+        // planar reflection, the light's half vector) looks different from each side, which
+        // no slot that follows the view shows:
+        // - By the view: its texture is looked up by the view-space normal, with its border
+        //   and rotation. The texture keeps its place on the surface as any matcap does: its
+        //   middle where the surface faces the viewer, its edge at the outline.
+        // - As seen from the front: its own lookup from straight in front, exact there. The
+        //   planar reflection reads at twice the normal's angle, so the texture's edge lies
+        //   halfway out and the outline reads its middle again, from every side.
+        private static Func<Vector2, Vector2> Relook(AtlasLookupLayer layer, AtlasMatcapView view)
+        {
+            var read = layer;
+            if (WorldFixed(layer) && view == AtlasMatcapView.ByView)
             {
-                var toViewer = Quaternion.AngleAxis(360f * k / count, Vector3.up) * Vector3.forward;
-                var right = Vector3.Cross(toViewer, Vector3.up).normalized;
-                lookups[k] = uv =>
-                {
-                    var p = new Vector2(uv.x * 2f - 1f, uv.y * 2f - 1f);
-                    // Beyond the disc no normal looks up: the edge's value fills the corners.
-                    if (p.sqrMagnitude > 1f) p.Normalize();
-                    var normal = right * p.x + Vector3.up * p.y + toViewer * Mathf.Sqrt(Mathf.Max(0f, 1f - p.sqrMagnitude));
-                    return AtlasMatcapBake.Rotate(AtlasMatcapBake.Lookup(layer, normal, toViewer, AtlasMatcapLook.Light), layer.LookupRotation);
-                };
+                read = new AtlasLookupLayer();
+                AtlasFieldwise.Copy(layer, read);
+                read.Projection = AtlasLookupProjection.ViewStabilized;
             }
-            return lookups;
+            var right = Vector3.Cross(Vector3.forward, Vector3.up).normalized;
+            return uv =>
+            {
+                var p = new Vector2(uv.x * 2f - 1f, uv.y * 2f - 1f);
+                // Beyond the disc no normal looks up: the edge's value fills the corners.
+                if (p.sqrMagnitude > 1f) p.Normalize();
+                var normal = right * p.x + Vector3.up * p.y + Vector3.forward * Mathf.Sqrt(Mathf.Max(0f, 1f - p.sqrMagnitude));
+                return AtlasMatcapBake.Rotate(AtlasMatcapBake.Lookup(read, normal, Vector3.forward, AtlasMatcapLook.Light), read.LookupRotation);
+            };
         }
 
         // A matcap texture with its own scale or offset.
@@ -1120,6 +1169,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // with black matcaps and with full ones.
             public AtlasBaseColorShift Shift = AtlasBaseColorShift.Full;
             public Color Mean = Color.white;
+            // A slot shared with matcaps on other parts: where its texture's average lies
+            // between T0 and T1 (per channel, 0–1). The fit keeps the source's own average.
+            public bool Shared;
+            public Color SlotMean = Color.white;
             // Poiyomi's chain: the matcap (instance) each layer belongs to, in order.
             public readonly List<(int Matcap, AtlasBlend Blend, float Weight, Color Color, float Mix)> Layers =
                 new List<(int, AtlasBlend, float, Color, float)>();
@@ -1139,6 +1192,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var shift = capabilities.VRChatFallback ? Shift(job) : AtlasBaseColorShift.Full;
             var result = new Dictionary<int, SlotFit>();
             var ends = combined ? Ends(slot, main) : (Zero: 0f, Full: Color.white);
+            // On different parts, each part shows the slot's averaged texture.
+            bool shared = combined && slot.GroupBy(g => g.Parts ?? "").Count() > 1;
+            var slotMean = shared ? CombinedValue(slot, main, g => Clamped(MeanColor(g.Members[0].Layers[0]))) : Color.white;
             bool lacking = combined || Lacks(slot[0].Members[0].Layers, capabilities);
             bool all = true;
             foreach (var members in slot.SelectMany(g => g.Members).GroupBy(m => m.Source))
@@ -1156,7 +1212,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 // The source's matcaps on average over the lookup disc.
                 var mean = Color.black;
                 foreach (var member in ordered) mean += MeanColor(member.Layers[0]) / ordered.Count;
-                fit.Mean = new Color(Mathf.Clamp01(mean.r), Mathf.Clamp01(mean.g), Mathf.Clamp01(mean.b), 1f);
+                fit.Mean = Clamped(mean);
                 for (int k = 0; k < ordered.Count; k++)
                     foreach (var layer in ordered[k].Layers.Where(Chained))
                         fit.Layers.Add((k, layer.Blend, layer.Opacity, layer.Source.Color, Mathf.Clamp01(layer.BaseColorMix)));
@@ -1164,6 +1220,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 {
                     fit.Zero = ends.Zero;
                     fit.Full = ends.Full;
+                    fit.Shared = shared;
+                    for (int c = 0; c < 3; c++)
+                    {
+                        float span = ends.Full[c] - ends.Zero;
+                        fit.SlotMean[c] = Mathf.Abs(span) > 1e-5f ? Mathf.Clamp01((slotMean[c] - ends.Zero) / span) : fit.Mean[c];
+                    }
                 }
                 else
                 {
@@ -1179,32 +1241,36 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // The generated texture's value (Combine) with every matcap texture black and white.
-        private static (float Zero, Color Full) Ends(List<Group> slot, AtlasBlend main)
+        private static (float Zero, Color Full) Ends(List<Group> slot, AtlasBlend main) =>
+            (CombinedValue(slot, main, g => Color.black).r, CombinedValue(slot, main, g => Color.white));
+
+        // The generated texture's value (Combine) where each group's matcap texture reads
+        // `texture`: black, white, or its mean over the lookup disc.
+        private static Color CombinedValue(List<Group> slot, AtlasBlend main, Func<Group, Color> texture)
         {
             bool add = main != AtlasBlend.Multiply;
             var stacks = slot.GroupBy(g => g.Parts ?? "").ToList();
             float total = stacks.Sum(StackWeight);
-            float zero = 0f;
-            var full = Color.black;
+            var value = Color.black;
             foreach (var stack in stacks)
             {
                 float share = stacks.Count == 1 ? 1f : total > 0f ? StackWeight(stack) / total : 1f / stacks.Count;
-                float z = add ? 0f : 1f;
                 var f = add ? Color.black : Color.white;
                 foreach (var group in stack)
                 {
                     float weight = Weight(group.Members[0], main);
                     var color = group.Members[0].Layers[0].Source.Color;
+                    var read = texture(group);
                     for (int c = 0; c < 3; c++)
-                        f[c] = add ? f[c] + color[c] * weight : f[c] * Mathf.Lerp(1f, color[c], weight);
-                    if (!add) z *= 1f - weight;
+                        f[c] = add ? f[c] + color[c] * read[c] * weight : f[c] * Mathf.Lerp(1f, color[c] * read[c], weight);
                 }
-                zero += z * share;
-                for (int c = 0; c < 3; c++) full[c] += f[c] * share;
+                for (int c = 0; c < 3; c++) value[c] += f[c] * share;
             }
-            full.a = 1f;
-            return (zero, full);
+            value.a = 1f;
+            return value;
         }
+
+        private static Color Clamped(Color c) => new Color(Mathf.Clamp01(c.r), Mathf.Clamp01(c.g), Mathf.Clamp01(c.b), 1f);
 
         // A stack's weight among those on other parts: how visible its groups are together.
         private static float StackWeight(IEnumerable<Group> stack) => stack.Sum(g => Mathf.Max(0f, g.Visible));
@@ -1247,6 +1313,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var black = Chain(fit, mask, b, 0f);
             var full = Chain(fit, mask, b, 1f);
+            // The source's average look with its own matcaps.
+            var average = Color.black;
+            for (int c = 0; c < 3; c++) average[c] = Mathf.Lerp(black[c], full[c], fit.Mean[c]);
+            if (fit.Shared)
+                // The slot shows the shared texture here, whose average differs from the
+                // source's own matcaps': the ends move by the difference, as far as black
+                // stays a color, so the source keeps its average look and the shared
+                // texture varies it.
+                for (int c = 0; c < 3; c++)
+                {
+                    float moved = Mathf.Max(average[c] - Mathf.Lerp(black[c], full[c], fit.SlotMean[c]), -black[c]);
+                    black[c] += moved;
+                    full[c] += moved;
+                }
             Color rise = Color.black, top = Color.black;
             for (int c = 0; c < 3; c++)
             {
@@ -1284,9 +1364,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 float low = b[c], high = b[c];
                 if (fit.Shift == AtlasBaseColorShift.Automatic)
                 {
-                    float average = Mathf.Lerp(black[c], full[c], fit.Mean[c]);
-                    low = Mathf.Min(b[c], average);
-                    high = Mathf.Max(b[c], average);
+                    low = Mathf.Min(b[c], average[c]);
+                    high = Mathf.Max(b[c], average[c]);
                 }
                 bounded[c] = Mathf.Clamp(result[c], low, high);
                 changed |= Mathf.Abs(bounded[c] - result[c]) > 1e-6f;
@@ -1348,10 +1427,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         /// the stacks on different parts averaged by their <c>Area</c> (the parts' total: their
         /// area, or how visible they are).</summary>
         /// <param name="lookups">Per part: where its own lookup reads its texture for the slot's
-        /// coordinate, for each view it is averaged over; null where the slot's lookup is its
-        /// own.</param>
+        /// coordinate; null where the slot's lookup is its own.</param>
         public static Color[] Combine(IReadOnlyList<(AtlasTextureReference Map, Color Color, float Weight, string Parts, float Area)> parts,
-            AtlasBlend blend, int size, IReadOnlyList<Func<Vector2, Vector2>[]> lookups = null)
+            AtlasBlend blend, int size, IReadOnlyList<Func<Vector2, Vector2>> lookups = null)
         {
             var indexed = parts.Select((p, i) => (Part: p, Lookup: lookups != null && i < lookups.Count ? lookups[i] : null)).ToList();
             var stacks = indexed.GroupBy(p => p.Part.Parts ?? "").ToList();
@@ -1370,30 +1448,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // The texture as the slot shows it: sampled at the lookup coordinate (the matcap's own,
-        // where the slot's is another, averaged over its views) × scale + offset, repeated as
-        // Poiyomi samples it.
-        private static Color[] Transformed(NordicsTextureWrapper texture, AtlasTextureReference map, int size, Func<Vector2, Vector2>[] lookups = null)
+        // where the slot's is another) × scale + offset, repeated as Poiyomi samples it.
+        private static Color[] Transformed(NordicsTextureWrapper texture, AtlasTextureReference map, int size, Func<Vector2, Vector2> lookup = null)
         {
-            Color At(Vector2 uv) => texture.Sample(Vector2.Scale(uv, map.Tiling) + map.Offset, TextureSamplingMode.Bilinear, TextureWrapMode.Repeat);
             var result = new Color[size * size];
             for (int y = 0; y < size; y++)
                 for (int x = 0; x < size; x++)
                 {
                     var uv = new Vector2((x + 0.5f) / size, (y + 0.5f) / size);
-                    if (lookups == null)
-                    {
-                        result[y * size + x] = At(uv);
-                        continue;
-                    }
-                    var sum = new Color(0f, 0f, 0f, 0f);
-                    foreach (var lookup in lookups) sum += At(lookup(uv));
-                    result[y * size + x] = sum / lookups.Length;
+                    if (lookup != null) uv = lookup(uv);
+                    result[y * size + x] = texture.Sample(Vector2.Scale(uv, map.Tiling) + map.Offset, TextureSamplingMode.Bilinear, TextureWrapMode.Repeat);
                 }
             return result;
         }
 
         private static Color[] Stack(IReadOnlyList<(AtlasTextureReference Map, Color Color, float Weight)> parts, AtlasBlend blend, int size,
-            IReadOnlyList<Func<Vector2, Vector2>[]> lookups = null)
+            IReadOnlyList<Func<Vector2, Vector2>> lookups = null)
         {
             var result = new Color[size * size];
             bool add = blend != AtlasBlend.Multiply;

@@ -187,7 +187,10 @@ Every way the output offers is a candidate with a cost:
 | Left out | Nothing of it shows | Unchanged |
 
 *Average in color* can accompany a way that loses part of the effect (one side, left out). It
-keeps the part as bright as it was, which is most of what a lighting matcap does.
+keeps the part as bright as it was, which is most of what a lighting matcap does. Built for a
+fitted source in a slot shared across parts (*Base color shifts* in the output design). What
+remains: a source the shared slot shows without a fit, a matcap shown on one side, and one
+left out.
 
 ### Base color shifts
 

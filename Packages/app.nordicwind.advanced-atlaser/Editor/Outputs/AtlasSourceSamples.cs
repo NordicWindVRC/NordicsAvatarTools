@@ -64,10 +64,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
         /// color alone. Layers and vertex colors aren't part of them.</summary>
         public static List<Color> Bases(AtlasUnifiedMaterial material)
         {
+            if (!Used.TryGetValue(material, out var used)) return BasesByPosition(material);
+            var color = material.Surface.BaseColor.Color;
+            return used.Select(p => new Color(p.r * color.r, p.g * color.g, p.b * color.b, 1f)).ToList();
+        }
+
+        /// <summary>A material's base colors by position: its color × a 4 × 4 copy of the whole
+        /// base color texture (linear), or the color alone. Sample by sample with Scalars and
+        /// Masks, for what reads the base color together with another map at the same place.</summary>
+        public static List<Color> BasesByPosition(AtlasUnifiedMaterial material)
+        {
             var color = material.Surface.BaseColor.Color;
             if (!(material.Surface.BaseColor.Map?.Texture is Texture2D texture)) return new List<Color> { color };
-            var pixels = Used.TryGetValue(material, out var used) ? (IEnumerable<Color>)used : Small(texture, Size, Size);
-            return pixels.Select(p => new Color(p.r * color.r, p.g * color.g, p.b * color.b, 1f)).ToList();
+            return Small(texture, Size, Size).Select(p => new Color(p.r * color.r, p.g * color.g, p.b * color.b, 1f)).ToList();
         }
 
         /// <summary>A mask's average over a 4 × 4 copy of its map, through its channel, levels,

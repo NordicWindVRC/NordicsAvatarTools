@@ -100,6 +100,10 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var used = AtlasSourceSamples.Bases(material);
             Assert.IsNotEmpty(used);
             foreach (var color in used) Assert.AreEqual(0.5f, color.r, 0.01f, "only what the mesh shows");
+            // By position, the samples stay the whole texture's, in step with the other maps' samples.
+            var placed = AtlasSourceSamples.BasesByPosition(material);
+            Assert.AreEqual(16, placed.Count);
+            for (int i = 0; i < placed.Count; i++) Assert.AreEqual(i % 4 < 2 ? 0f : 0.5f, placed[i].r, 0.01f, "sample " + i);
 
             AtlasSourceSamples.Cover(material, null);
             Assert.Less(AtlasSourceSamples.Bases(material).Min(AtlasSourceSamples.Luminance), 0.01f, "without triangles: the whole texture again");

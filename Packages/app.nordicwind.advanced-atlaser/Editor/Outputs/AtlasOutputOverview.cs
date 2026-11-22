@@ -101,7 +101,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     if (plan.LiveSetups.TryGetValue(state.Feature.Id, out var setups)) state.LiveSetups.AddRange(setups);
                     // How far a matcap slot's fit may shift the base color, while one does.
                     if (state.Feature is AtlasMatcapFeature && plan.BaseColorShifts) state.Options.Add(AtlasMatcapFeature.ShiftOption);
-                    // The view a world-fixed matcap is redrawn for, while one is.
+                    // How a world-fixed matcap is shown in a slot that follows the view, while one is.
                     if (state.Feature is AtlasMatcapFeature && plan.MatcapViews) state.Options.Add(AtlasMatcapFeature.ViewOption);
                     if (!(state.Feature is AtlasLightingFeature)) continue;
                     // Level compensation, while a material would be scaled.
