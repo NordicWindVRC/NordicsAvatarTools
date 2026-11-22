@@ -318,7 +318,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 response.Reflections.Strength = 1f;
                 response.Occlusion.Constant = 1f;
                 // Poiyomi keeps occlusion in its own texture; Toon Standard in the surface texture.
-                response.Occlusion.Map = new AtlasTextureReference { Texture = shader.ShaderId == "poiyomi10" ? occlusionTexture : surface };
+                response.Occlusion.Map = new AtlasTextureReference { Texture = shader.Family == AtlasShaderFamilies.Poiyomi ? occlusionTexture : surface };
                 var material = new Material(shader.FindShader());
                 created.Add(material);
                 shader.Write(unified, material);

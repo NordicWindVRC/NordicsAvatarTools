@@ -68,6 +68,7 @@ Logging*.
 | Shader | Notes |
 |---|---|
 | Poiyomi Toon 10 | Found under its usual name, or under *Old Versions* when Poiyomi Pro or 11 is installed |
+| Poiyomi Toon 11 | As Toon 10, and it keeps global mask contacts live |
 | VRChat Mobile Toon Standard | Opaque only; what it lacks is approximated, baked or left out |
 
 ## Limitations

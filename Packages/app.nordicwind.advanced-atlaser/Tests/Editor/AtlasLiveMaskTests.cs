@@ -181,6 +181,50 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(0f, Evaluate(difference, job, 1), 1e-4f);
         }
 
+        // Poiyomi 11 has global mask contacts, so a touch stays live there: the writer sets
+        // them and the parser reads them back. Poiyomi 10 has none.
+        [Test]
+        public void PoiyomiElevenKeepsContactsLive()
+        {
+            var ten = AtlasShaderRegistry.Output("poiyomi10");
+            var shader = AtlasShaderRegistry.Output("poiyomi11");
+            Assert.IsFalse(ten.Capabilities.LiveMaskSteps.Contains(AtlasMaskBusStepKind.Contact));
+            Assert.IsTrue(shader.Capabilities.LiveMaskSteps.Contains(AtlasMaskBusStepKind.Contact));
+            Assert.IsTrue(shader.Capabilities.LiveMaskSteps.Contains(AtlasMaskBusStepKind.Mirror), "and what 10 keeps live");
+            Assert.Greater(shader.Rank, ten.Rank, "the newer version is picked first");
+            Assert.AreEqual("poiyomi11", shader.Capabilities.ShaderId);
+            if (shader.FindShader() == null) Assert.Ignore("Poiyomi Toon 11 isn't installed.");
+            Assert.AreEqual(11, AtlasPoiyomiVersionDetector.DetectFromMetadata(shader.FindShader().name,
+                UnityEditor.AssetDatabase.GetAssetPath(shader.FindShader()), AtlasPoiyomiVersionDetector.GetShaderMasterLabel(shader.FindShader())));
+
+            var output = new AtlasUnifiedMaterial();
+            var contact = new AtlasContact
+            {
+                People = AtlasContactPeople.Others, InnerRadius = 0.1f, OuterRadius = 0.3f, ScaleWithToucher = true, AroundTouch = false, Invert = true
+            };
+            contact.Tags[1] = 5;
+            output.MaskBus.Steps.Add(new AtlasMaskBusStep { Channel = 9, Kind = AtlasMaskBusStepKind.Contact, Contact = contact, Blend = AtlasMaskBlend.Multiply });
+            var material = new Material(shader.FindShader());
+            created.Add(material);
+            shader.Write(output, material);
+            Assert.IsTrue(material.IsKeywordEnabled("POI_GLOBALMASK_CONTACTS"));
+            var step = AtlasShaderRegistry.Detect(material).Parse(material).MaskBus.Steps.Single(s => s.Kind == AtlasMaskBusStepKind.Contact);
+            Assert.AreEqual(9, step.Channel);
+            Assert.AreEqual(AtlasMaskBlend.Multiply, step.Blend);
+            Assert.AreEqual(AtlasContactPeople.Others, step.Contact.People);
+            Assert.AreEqual(0.1f, step.Contact.InnerRadius, 1e-5f);
+            Assert.AreEqual(0.3f, step.Contact.OuterRadius, 1e-5f);
+            Assert.IsTrue(step.Contact.ScaleWithToucher);
+            Assert.IsFalse(step.Contact.AroundTouch);
+            Assert.IsTrue(step.Contact.Invert);
+            Assert.AreEqual(5, step.Contact.Tags[1]);
+
+            var without = new Material(shader.FindShader());
+            created.Add(without);
+            shader.Write(new AtlasUnifiedMaterial(), without);
+            Assert.IsFalse(AtlasShaderRegistry.Detect(without).Parse(without).MaskBus.Steps.Any(s => s.Kind == AtlasMaskBusStepKind.Contact), "none");
+        }
+
         [Test]
         public void TheWriterSetsTheGlobalMasksTheParserReadsBack()
         {

@@ -8,140 +8,165 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // Output shaders declare what they can express and their texture layouts; the shared
     // output features decide what to produce. Registrations are discovered automatically by
     // AtlasShaderRegistry.
-    public sealed class PoiyomiToon10OutputShader : IAtlasOutputShader
+
+    // Poiyomi's writer, one for its versions: Poiyomi 11 keeps 10's property names, so the
+    // versions share the texture layout, the capabilities and the writer, and each one's
+    // registration says its major version, which adds what that version has. A property a
+    // version doesn't declare isn't set on its material.
+    public abstract class PoiyomiOutputShader : IAtlasOutputShader
     {
-        public string ShaderId => "poiyomi10";
-        public string DisplayName => "Poiyomi Toon 10";
+        private readonly int major;
+
+        protected PoiyomiOutputShader(int major)
+        {
+            this.major = major;
+            Capabilities = Build(major);
+        }
+
+        public abstract string ShaderId { get; }
+        public abstract string DisplayName { get; }
         public string Family => AtlasShaderFamilies.Poiyomi;
-        public int Rank => 100;
-        // Poiyomi 11 keeps 10's shader name; with Poiyomi Pro installed, 10 lives under Old Versions.
+        // The major version × 10.
+        public int Rank => major * 10;
+
+        // Every version names its shader the same; one installed next to a newer version lives
+        // under Old Versions. The shader's master label says which version it is.
         public Shader FindShader()
         {
-            foreach (string name in new[] { ".poiyomi/Poiyomi Toon", ".poiyomi/Old Versions/10.0/Poiyomi Toon" })
+            foreach (string name in new[] { ".poiyomi/Poiyomi Toon", ".poiyomi/Old Versions/" + major + ".0/Poiyomi Toon" })
             {
                 var shader = Shader.Find(name);
                 if (shader == null) continue;
-                int major = AtlasPoiyomiVersionDetector.DetectFromMetadata(shader.name,
+                int found = AtlasPoiyomiVersionDetector.DetectFromMetadata(shader.name,
                     UnityEditor.AssetDatabase.GetAssetPath(shader), AtlasPoiyomiVersionDetector.GetShaderMasterLabel(shader));
-                if (major == 10) return shader;
+                if (found == major) return shader;
             }
             return null;
         }
-        public AtlasOutputCapabilities Capabilities { get; } = new AtlasOutputCapabilities
-        {
-            Textures =
-            {
-                new AtlasOutputTexture("BaseColor", "Base color") { SizeMode = AtlasTextureSizeMode.Main }
-                    .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB)
-                    .With(AtlasVirtualMap.Alpha, AtlasTextureChannels.A),
-                NormalTexture(),
-                // Poiyomi's packed maps (_MochieMetallicMaps): R metallic, G smoothness, B reflection
-                // mask, A specular mask, read as they are (multipliers 1).
-                new AtlasOutputTexture("Metallic", "Metallic and smoothness") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
-                    .With(AtlasVirtualMap.Metallic, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f))
-                    .With(AtlasVirtualMap.Roughness, AtlasTextureChannels.G, AtlasOutputTexture.Gray(0f), invert: true)
-                    .With(AtlasVirtualMap.ReflectionMask, AtlasTextureChannels.B, AtlasOutputTexture.Gray(0f))
-                    .With(AtlasVirtualMap.SpecularMask, AtlasTextureChannels.A, AtlasOutputTexture.Gray(0f)),
-                // _LightingAOMaps: occlusion in R.
-                new AtlasOutputTexture("Occlusion", "Ambient occlusion") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
-                    .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f)),
-                EmissionTexture(),
-                // _EmissionMap2 and 3: emissions whose hue cycles.
-                new AtlasOutputTexture("EmissionCycle1", "Cycling emission 1") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
-                    .With(AtlasVirtualMap.EmissionCycle1, AtlasTextureChannels.RGB, new Color(0f, 0f, 0f, 1f)),
-                new AtlasOutputTexture("EmissionCycle2", "Cycling emission 2") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
-                    .With(AtlasVirtualMap.EmissionCycle2, AtlasTextureChannels.RGB, new Color(0f, 0f, 0f, 1f)),
-                // _MainColorAdjustTexture: R where the base color's hue cycles.
-                new AtlasOutputTexture("ColorAdjust", "Hue cycling mask") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false, MainDivisor = 2 }
-                    .With(AtlasVirtualMap.HueCyclingMask, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f)),
-                // _EmissionMap1: emission shown through a live global mask channel.
-                new AtlasOutputTexture("EmissionLive", "Live emission") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
-                    .With(AtlasVirtualMap.EmissionLive, AtlasTextureChannels.RGB, new Color(0f, 0f, 0f, 1f)),
-                // _LightingShadowMasks reads R, _LightingDetailShadowMaps G (by their channel strengths).
-                new AtlasOutputTexture("LightingMasks", "Shadow and detail masks") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
-                    .With(AtlasVirtualMap.ShadowStrengthMask, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f))
-                    .With(AtlasVirtualMap.DetailShadow, AtlasTextureChannels.G, AtlasOutputTexture.Gray(1f)),
-                // _ShadowColorTex / _1st_ShadeMap, _Shadow2ndColorTex / _2nd_ShadeMap, _Shadow3rdColorTex.
-                new AtlasOutputTexture("ShadowColor1", "Shadow color 1") { SizeMode = AtlasTextureSizeMode.MainAspect }
-                    .With(AtlasVirtualMap.ShadowColor1, AtlasTextureChannels.RGBA),
-                new AtlasOutputTexture("ShadowColor2", "Shadow color 2") { SizeMode = AtlasTextureSizeMode.MainAspect }
-                    .With(AtlasVirtualMap.ShadowColor2, AtlasTextureChannels.RGBA),
-                new AtlasOutputTexture("ShadowColor3", "Shadow color 3") { SizeMode = AtlasTextureSizeMode.MainAspect }
-                    .With(AtlasVirtualMap.ShadowColor3, AtlasTextureChannels.RGBA),
-                // _SkinThicknessMap reads R.
-                new AtlasOutputTexture("SkinThickness", "Skin thickness") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
-                    .With(AtlasVirtualMap.SkinThickness, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f)),
-                MaskTexture(1, AtlasVirtualMap.Mask1, AtlasVirtualMap.Mask2, AtlasVirtualMap.Mask3, AtlasVirtualMap.Mask4),
-                MaskTexture(2, AtlasVirtualMap.Mask5, AtlasVirtualMap.Mask6, AtlasVirtualMap.Mask7, AtlasVirtualMap.Mask8),
-                // _ClearCoatMaps: R strength, G smoothness, B reflection mask, A specular mask.
-                new AtlasOutputTexture("ClearCoat", "Clear coat maps") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
-                    .With(AtlasVirtualMap.ClearCoatStrength, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f))
-                    .With(AtlasVirtualMap.ClearCoatRoughness, AtlasTextureChannels.G, AtlasOutputTexture.Gray(0f), invert: true)
-                    .With(AtlasVirtualMap.ClearCoatReflectionMask, AtlasTextureChannels.B, AtlasOutputTexture.Gray(0f))
-                    .With(AtlasVirtualMap.ClearCoatSpecularMask, AtlasTextureChannels.A, AtlasOutputTexture.Gray(0f)),
-                // _DetailMask: R the detail texture's strength, G the detail normal's.
-                new AtlasOutputTexture("DetailMask", "Detail mask") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false, MainDivisor = 2 }
-                    .With(AtlasVirtualMap.DetailTextureMask, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f))
-                    .With(AtlasVirtualMap.DetailNormalMask, AtlasTextureChannels.G, AtlasOutputTexture.Gray(1f)),
-                // _SSSThicknessMap: RGB the subsurface color (black where a source has none), A the thickness.
-                new AtlasOutputTexture("Subsurface", "Subsurface color and thickness") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
-                    .With(AtlasVirtualMap.SubsurfaceColor, AtlasTextureChannels.RGB, Color.black)
-                    .With(AtlasVirtualMap.SubsurfaceThickness, AtlasTextureChannels.A, AtlasOutputTexture.Gray(1f)),
-                // _BacklightColorTex: the backlight's color, black where a source has none.
-                new AtlasOutputTexture("Backlight", "Backlight color") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
-                    .With(AtlasVirtualMap.BacklightColor, AtlasTextureChannels.RGB, Color.black)
-            },
-            SurfaceModes = { AtlasSurfaceMode.Cutout, AtlasSurfaceMode.Transparent, AtlasSurfaceMode.Fade },
-            VRChatFallback = true,
-            BlendedDepthWrite = true,
-            VertexColors = AtlasVertexColorSupport.Color | AtlasVertexColorSupport.Alpha | AtlasVertexColorSupport.Amount | AtlasVertexColorSupport.Srgb,
-            // UV Tile Discard: on both sides (_UDIMDiscard*) and one side (_UDIMFaceDiscard*),
-            // each reading UV0 to UV3.
-            TileDiscard = true,
-            FaceTileDiscard = true,
-            // World AO Blocker on UV0 to UV3.
-            AOBlocker = true,
-            UVChannels = 3,
-            // _SDFShadingTextureUV and _LightDataSDFMapUV pick the channel.
-            SdfFace = true,
-            // Matcap 0 to 3, every blend by weight; masks pick a channel and invert.
-            MatcapSlots = 4,
-            MatcapBlends = AtlasMatcapBlends.All,
-            MatcapMaskInvert = true,
-            MatcapColor = true,
-            MatcapBaseColorMix = true,
-            MatcapEmission = true,
-            MatcapWeights = true,
-            MatcapTextureTransform = true,
-            MatcapLookup = true,
-            // Rim Lighting 0 and 1, each with a mask (by channel, inverted); the environmental rim
-            // with a mask (by channel); Backlight 0 with its color texture.
-            RimSlots = 2,
-            RimMask = true,
-            EnvironmentalRim = true,
-            Backlight = true,
-            // Global masks: Masks 1 and 2 as Global Mask Textures 1 and 2; the back face, mirror,
-            // camera, distance and blacklight modifiers (contacts are Poiyomi 11's).
-            // Detail texture (× 2 in gamma, tinted, with an intensity) and detail normal, on any
-            // UV channel; the detail mask's R and G.
-            Glitter = true,
-            ProximityColor = true,
-            HueCycling = true,
-            EmissionSlots = 4,
-            AudioLinkPerSection = true,
-            DetailUVChannels = 3,
-            DetailTextureBlends = { AtlasBlend.MultiplyDouble },
-            DetailStrength = true,
-            DetailNormal = true,
-            GlobalMasks = true,
-            LiveMaskSteps =
-            {
-                AtlasMaskBusStepKind.Faces, AtlasMaskBusStepKind.Mirror, AtlasMaskBusStepKind.Camera,
-                AtlasMaskBusStepKind.Distance, AtlasMaskBusStepKind.Blacklight
-            }
-        };
 
-        // Poiyomi 10's rendering presets (_Mode), as its shader's on_value_actions set them, by
+        public AtlasOutputCapabilities Capabilities { get; }
+
+        private static AtlasOutputCapabilities Build(int major)
+        {
+            var capabilities = new AtlasOutputCapabilities
+            {
+                Textures =
+                {
+                    new AtlasOutputTexture("BaseColor", "Base color") { SizeMode = AtlasTextureSizeMode.Main }
+                        .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB)
+                        .With(AtlasVirtualMap.Alpha, AtlasTextureChannels.A),
+                    NormalTexture(),
+                    // Poiyomi's packed maps (_MochieMetallicMaps): R metallic, G smoothness, B reflection
+                    // mask, A specular mask, read as they are (multipliers 1).
+                    new AtlasOutputTexture("Metallic", "Metallic and smoothness") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
+                        .With(AtlasVirtualMap.Metallic, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f))
+                        .With(AtlasVirtualMap.Roughness, AtlasTextureChannels.G, AtlasOutputTexture.Gray(0f), invert: true)
+                        .With(AtlasVirtualMap.ReflectionMask, AtlasTextureChannels.B, AtlasOutputTexture.Gray(0f))
+                        .With(AtlasVirtualMap.SpecularMask, AtlasTextureChannels.A, AtlasOutputTexture.Gray(0f)),
+                    // _LightingAOMaps: occlusion in R.
+                    new AtlasOutputTexture("Occlusion", "Ambient occlusion") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
+                        .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f)),
+                    EmissionTexture(),
+                    // _EmissionMap2 and 3: emissions whose hue cycles.
+                    new AtlasOutputTexture("EmissionCycle1", "Cycling emission 1") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
+                        .With(AtlasVirtualMap.EmissionCycle1, AtlasTextureChannels.RGB, new Color(0f, 0f, 0f, 1f)),
+                    new AtlasOutputTexture("EmissionCycle2", "Cycling emission 2") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
+                        .With(AtlasVirtualMap.EmissionCycle2, AtlasTextureChannels.RGB, new Color(0f, 0f, 0f, 1f)),
+                    // _MainColorAdjustTexture: R where the base color's hue cycles.
+                    new AtlasOutputTexture("ColorAdjust", "Hue cycling mask") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false, MainDivisor = 2 }
+                        .With(AtlasVirtualMap.HueCyclingMask, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f)),
+                    // _EmissionMap1: emission shown through a live global mask channel.
+                    new AtlasOutputTexture("EmissionLive", "Live emission") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
+                        .With(AtlasVirtualMap.EmissionLive, AtlasTextureChannels.RGB, new Color(0f, 0f, 0f, 1f)),
+                    // _LightingShadowMasks reads R, _LightingDetailShadowMaps G (by their channel strengths).
+                    new AtlasOutputTexture("LightingMasks", "Shadow and detail masks") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
+                        .With(AtlasVirtualMap.ShadowStrengthMask, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f))
+                        .With(AtlasVirtualMap.DetailShadow, AtlasTextureChannels.G, AtlasOutputTexture.Gray(1f)),
+                    // _ShadowColorTex / _1st_ShadeMap, _Shadow2ndColorTex / _2nd_ShadeMap, _Shadow3rdColorTex.
+                    new AtlasOutputTexture("ShadowColor1", "Shadow color 1") { SizeMode = AtlasTextureSizeMode.MainAspect }
+                        .With(AtlasVirtualMap.ShadowColor1, AtlasTextureChannels.RGBA),
+                    new AtlasOutputTexture("ShadowColor2", "Shadow color 2") { SizeMode = AtlasTextureSizeMode.MainAspect }
+                        .With(AtlasVirtualMap.ShadowColor2, AtlasTextureChannels.RGBA),
+                    new AtlasOutputTexture("ShadowColor3", "Shadow color 3") { SizeMode = AtlasTextureSizeMode.MainAspect }
+                        .With(AtlasVirtualMap.ShadowColor3, AtlasTextureChannels.RGBA),
+                    // _SkinThicknessMap reads R.
+                    new AtlasOutputTexture("SkinThickness", "Skin thickness") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
+                        .With(AtlasVirtualMap.SkinThickness, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f)),
+                    MaskTexture(1, AtlasVirtualMap.Mask1, AtlasVirtualMap.Mask2, AtlasVirtualMap.Mask3, AtlasVirtualMap.Mask4),
+                    MaskTexture(2, AtlasVirtualMap.Mask5, AtlasVirtualMap.Mask6, AtlasVirtualMap.Mask7, AtlasVirtualMap.Mask8),
+                    // _ClearCoatMaps: R strength, G smoothness, B reflection mask, A specular mask.
+                    new AtlasOutputTexture("ClearCoat", "Clear coat maps") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
+                        .With(AtlasVirtualMap.ClearCoatStrength, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f))
+                        .With(AtlasVirtualMap.ClearCoatRoughness, AtlasTextureChannels.G, AtlasOutputTexture.Gray(0f), invert: true)
+                        .With(AtlasVirtualMap.ClearCoatReflectionMask, AtlasTextureChannels.B, AtlasOutputTexture.Gray(0f))
+                        .With(AtlasVirtualMap.ClearCoatSpecularMask, AtlasTextureChannels.A, AtlasOutputTexture.Gray(0f)),
+                    // _DetailMask: R the detail texture's strength, G the detail normal's.
+                    new AtlasOutputTexture("DetailMask", "Detail mask") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false, MainDivisor = 2 }
+                        .With(AtlasVirtualMap.DetailTextureMask, AtlasTextureChannels.R, AtlasOutputTexture.Gray(1f))
+                        .With(AtlasVirtualMap.DetailNormalMask, AtlasTextureChannels.G, AtlasOutputTexture.Gray(1f)),
+                    // _SSSThicknessMap: RGB the subsurface color (black where a source has none), A the thickness.
+                    new AtlasOutputTexture("Subsurface", "Subsurface color and thickness") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
+                        .With(AtlasVirtualMap.SubsurfaceColor, AtlasTextureChannels.RGB, Color.black)
+                        .With(AtlasVirtualMap.SubsurfaceThickness, AtlasTextureChannels.A, AtlasOutputTexture.Gray(1f)),
+                    // _BacklightColorTex: the backlight's color, black where a source has none.
+                    new AtlasOutputTexture("Backlight", "Backlight color") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
+                        .With(AtlasVirtualMap.BacklightColor, AtlasTextureChannels.RGB, Color.black)
+                },
+                SurfaceModes = { AtlasSurfaceMode.Cutout, AtlasSurfaceMode.Transparent, AtlasSurfaceMode.Fade },
+                VRChatFallback = true,
+                BlendedDepthWrite = true,
+                VertexColors = AtlasVertexColorSupport.Color | AtlasVertexColorSupport.Alpha | AtlasVertexColorSupport.Amount | AtlasVertexColorSupport.Srgb,
+                // UV Tile Discard: on both sides (_UDIMDiscard*) and one side (_UDIMFaceDiscard*),
+                // each reading UV0 to UV3.
+                TileDiscard = true,
+                FaceTileDiscard = true,
+                // World AO Blocker on UV0 to UV3.
+                AOBlocker = true,
+                UVChannels = 3,
+                // _SDFShadingTextureUV and _LightDataSDFMapUV pick the channel.
+                SdfFace = true,
+                // Matcap 0 to 3, every blend by weight; masks pick a channel and invert.
+                MatcapSlots = 4,
+                MatcapBlends = AtlasMatcapBlends.All,
+                MatcapMaskInvert = true,
+                MatcapColor = true,
+                MatcapBaseColorMix = true,
+                MatcapEmission = true,
+                MatcapWeights = true,
+                MatcapTextureTransform = true,
+                MatcapLookup = true,
+                // Rim Lighting 0 and 1, each with a mask (by channel, inverted); the environmental rim
+                // with a mask (by channel); Backlight 0 with its color texture.
+                RimSlots = 2,
+                RimMask = true,
+                EnvironmentalRim = true,
+                Backlight = true,
+                // Global masks: Masks 1 and 2 as Global Mask Textures 1 and 2; the back face, mirror,
+                // camera, distance and blacklight modifiers (Poiyomi 11's contacts are added below).
+                // Detail texture (× 2 in gamma, tinted, with an intensity) and detail normal, on any
+                // UV channel; the detail mask's R and G.
+                Glitter = true,
+                ProximityColor = true,
+                HueCycling = true,
+                EmissionSlots = 4,
+                AudioLinkPerSection = true,
+                DetailUVChannels = 3,
+                DetailTextureBlends = { AtlasBlend.MultiplyDouble },
+                DetailStrength = true,
+                DetailNormal = true,
+                GlobalMasks = true,
+                LiveMaskSteps =
+                {
+                    AtlasMaskBusStepKind.Faces, AtlasMaskBusStepKind.Mirror, AtlasMaskBusStepKind.Camera,
+                    AtlasMaskBusStepKind.Distance, AtlasMaskBusStepKind.Blacklight
+                }
+            };
+            // Poiyomi 11: Global Mask Contacts, a touch written into a channel.
+            if (major >= 11) capabilities.LiveMaskSteps.Add(AtlasMaskBusStepKind.Contact);
+            return capabilities;
+        }
+
+        // Poiyomi's rendering presets (_Mode), the same in 10 and 11, as its shader's on_value_actions set them, by
         // property: _Mode, queue, RenderType, _AlphaForceOpaque, _Cutoff, _SrcBlend, _DstBlend,
         // _AddSrcBlend, _ZWrite, _AlphaPremultiply, _OutlineSrcBlend, _OutlineDstBlend,
         // _OutlineDstBlendAlpha. The properties every preset sets alike follow in Write.
@@ -223,6 +248,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetFloat("_AddSrcBlendAlpha", 0);
             material.SetFloat("_AddDstBlendAlpha", 1);
             material.SetFloat("_AlphaToCoverage", preset.Mode == AtlasSurfaceMode.Cutout && render.AlphaToCoverage ? 1 : 0);
+            // Poiyomi 11's presets also turn the sharpened coverage off; it follows the alpha's.
+            material.SetFloat("_AlphaSharpenedA2C", output.Surface.Alpha.SharpenedCoverage ? 1 : 0);
             material.SetFloat("_ZWrite", preset.ZWrite);
             material.SetFloat("_ZTest", 4);
             material.SetFloat("_AlphaPremultiply", preset.Premultiply);
@@ -558,6 +585,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             m.SetFloat(n("_RimApplyAlpha", "_Rim2ApplyAlpha"), 0);
             Consumer(m, n("_RimGlobalMask", "_Rim2GlobalMask"), slot[0].Mask?.Bus ?? -1, slot[0].Mask?.BusBlend ?? AtlasMaskBlend.Add);
             m.SetFloat(n("_RimApplyGlobalMaskIndex", "_Rim2ApplyGlobalMaskIndex"), 0);
+            // Poiyomi 11's application stage, which its lilToon style sets (WriteLilRim).
+            m.SetFloat(n("_RimApplicationStage", "_Rim2ApplicationStage"), 0);
             switch (style)
             {
                 case 1: WriteUts2Rim(m, rim, dark, n); break;
@@ -657,6 +686,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
             int blend = rim.Blend == AtlasBlend.Replace ? 0 : rim.Blend == AtlasBlend.Screen ? 2 : rim.Blend == AtlasBlend.Multiply ? 3 : 1;
             m.SetFloat(n("_RimBlendMode", "_Rim2BlendMode"), blend);
             m.SetFloat(n("_RimEnableLighting", "_Rim2EnableLighting"), rim.LightResponse == AtlasLightResponse.IgnoreLight ? 0 : 1);
+            // Poiyomi 11: on the base color, lit with the surface (1); after lighting, lit by
+            // the direct light alone (2) or by all of it (0), as the parser reads the stages.
+            // Poiyomi 10 has the last one only.
+            m.SetFloat(n("_RimApplicationStage", "_Rim2ApplicationStage"),
+                rim.Placement == AtlasPlacement.Surface ? 1 : rim.LightResponse == AtlasLightResponse.ScaleByDirectLight ? 2 : 0);
             m.SetFloat(n("_RimVRParallaxStrength", "_Rim2VRParallaxStrength"), rim.PerEye ? 1 : 0);
             m.SetFloat(n("_RimAAStrength", "_Rim2AAStrength"), rim.AntiAliasing);
             m.SetFloat(n("_RimApplyTransparency", "_Rim2ApplyTransparency"), rim.TimesAlpha ? 1 : 0);
@@ -1162,6 +1196,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             m.SetFloat("_GlobalMaskOptionsEnable", 0);
             foreach (var color in new[] { "Red", "Green", "Blue", "Alpha" }) m.SetFloat("_GlobalMaskVertexColor" + color, 0);
+            WriteContacts(steps, m);
 
             // Consumers: the channel (1R = 1) and blend (maskBlend's order; the Mochie strengths
             // use customBlend, whose 8 adds).
@@ -1179,6 +1214,34 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // Alpha: the channel combined with the alpha after Alpha Mod.
             var alpha = output.Surface.Alpha;
             Consumer(m, "_AlphaGlobalMask", alpha.Bus, alpha.BusBlend);
+        }
+
+        // Global Mask Contacts (Poiyomi 11), as the Poiyomi parser reads them: up to 8, each
+        // writing its touch into a channel by its blend.
+        private static void WriteContacts(List<AtlasMaskBusStep> steps, Material m)
+        {
+            var contacts = steps.Where(s => s.Kind == AtlasMaskBusStepKind.Contact && s.Contact != null).Take(8).ToList();
+            m.SetFloat("_GlobalMaskContactsEnable", contacts.Count > 0 ? 1 : 0);
+            if (contacts.Count > 0) m.EnableKeyword("POI_GLOBALMASK_CONTACTS");
+            else m.DisableKeyword("POI_GLOBALMASK_CONTACTS");
+            for (int i = 0; i < 8; i++)
+            {
+                string s = "_" + i;
+                var step = i < contacts.Count ? contacts[i] : null;
+                m.SetFloat("_GlobalMaskContactEnable" + s, step != null ? 1 : 0);
+                m.SetFloat("_GlobalMaskContactTarget" + s, step != null ? step.Channel + 1 : 0);
+                if (step == null) continue;
+                var contact = step.Contact;
+                m.SetVector("_GlobalMaskContactTag" + s, new Vector4(contact.Tags[0], contact.Tags[1], contact.Tags[2], contact.Tags[3]));
+                m.SetFloat("_GlobalMaskContactPeople" + s, (int)contact.People);
+                m.SetFloat("_GlobalMaskContactThemeColor" + s, 0);
+                m.SetFloat("_GlobalMaskContactRadius" + s, contact.InnerRadius);
+                m.SetFloat("_GlobalMaskContactFalloff" + s, contact.OuterRadius);
+                m.SetFloat("_GlobalMaskContactToucherScale" + s, contact.ScaleWithToucher ? 1 : 0);
+                m.SetFloat("_GlobalMaskContactPosition" + s, contact.AroundTouch ? 1 : 0);
+                m.SetFloat("_GlobalMaskContactInvert" + s, contact.Invert ? 1 : 0);
+                m.SetFloat("_GlobalMaskContactBlendType" + s, (int)step.Blend);
+            }
         }
 
         private static void Consumer(Material m, string property, int bus, AtlasMaskBlend blend, string blendProperty = null, bool custom = false)
@@ -1538,6 +1601,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return type + mode + (render.Pass.Cull == AtlasCull.Off ? "DoubleSided" : "");
         }
     }
+
+    public sealed class PoiyomiToon10OutputShader : PoiyomiOutputShader
+    {
+        public PoiyomiToon10OutputShader() : base(10) { }
+        public override string ShaderId => "poiyomi10";
+        public override string DisplayName => "Poiyomi Toon 10";
+    }
+
+    // Toon 11 adds global mask contacts kept live and a rim's application stage.
+    public sealed class PoiyomiToon11OutputShader : PoiyomiOutputShader
+    {
+        public PoiyomiToon11OutputShader() : base(11) { }
+        public override string ShaderId => "poiyomi11";
+        public override string DisplayName => "Poiyomi Toon 11";
+    }
+
     public sealed class VRChatMobileToonOutputShader : IAtlasOutputShader
     {
         public string ShaderId => "mobiletoon";
@@ -1551,14 +1630,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 new AtlasOutputTexture("BaseColor", "Base color") { SizeMode = AtlasTextureSizeMode.Main }
                     .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB),
-                PoiyomiToon10OutputShader.NormalTexture(),
+                PoiyomiOutputShader.NormalTexture(),
                 // One texture for _MetallicMap (R), _GlossMap (G, smoothness) and _OcclusionMap (B).
                 new AtlasOutputTexture("Surface", "Metallic, gloss and occlusion") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
                     .With(AtlasVirtualMap.Metallic, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f))
                     .With(AtlasVirtualMap.Roughness, AtlasTextureChannels.G, AtlasOutputTexture.Gray(0f), invert: true)
                     .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.B, AtlasOutputTexture.Gray(1f)),
-                PoiyomiToon10OutputShader.EmissionTexture(),
-                PoiyomiToon10OutputShader.MaskTexture(1, AtlasVirtualMap.Mask1, AtlasVirtualMap.Mask2, AtlasVirtualMap.Mask3, AtlasVirtualMap.Mask4),
+                PoiyomiOutputShader.EmissionTexture(),
+                PoiyomiOutputShader.MaskTexture(1, AtlasVirtualMap.Mask1, AtlasVirtualMap.Mask2, AtlasVirtualMap.Mask3, AtlasVirtualMap.Mask4),
                 // _AudioLinkMask: the AudioLink emission's color per part, black without.
                 new AtlasOutputTexture("AudioLink", "AudioLink color") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
                     .With(AtlasVirtualMap.AudioLinkColor, AtlasTextureChannels.RGB, Color.black)

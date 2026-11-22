@@ -261,12 +261,14 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 .Contains(AtlasFeatureMode.Off), "the surface mode can't be off");
         }
 
-        [Test]
-        public void PoiyomiTenWritesEachModeAsItsPresetAndReadsItBack()
+        // Poiyomi 11's rendering presets are 10's, so one writer sets them for both.
+        [TestCase("poiyomi10")]
+        [TestCase("poiyomi11")]
+        public void PoiyomiWritesEachModeAsItsPresetAndReadsItBack(string id)
         {
-            var output = AtlasShaderRegistry.Output("poiyomi10");
+            var output = AtlasShaderRegistry.Output(id);
             var shader = output.FindShader();
-            if (shader == null) Assert.Ignore("Poiyomi Toon 10 isn't installed.");
+            if (shader == null) Assert.Ignore(output.DisplayName + " isn't installed.");
             foreach (var (mode, depth, queue, type) in new[] {
                 (AtlasSurfaceMode.Opaque, true, 2000, "Opaque"), (AtlasSurfaceMode.Cutout, true, 2450, "TransparentCutout"),
                 (AtlasSurfaceMode.Fade, false, 3000, "Transparent"), (AtlasSurfaceMode.Fade, true, 2460, "TransparentCutout"),

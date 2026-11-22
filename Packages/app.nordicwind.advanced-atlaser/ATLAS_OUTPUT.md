@@ -49,7 +49,7 @@ Where each part of this design lives:
 |---|---|---|
 | Output component | `Runtime/NordicsAtlasOutput.cs` | `AtlasOutputConfiguration`: the output's name and shader, region padding, sources, main texture size, feature, texture and baking settings (see [*Stored settings*](#stored-settings)) |
 | Output shader interface | `Editor/AtlasShaderRegistry.cs` | `IAtlasOutputShader`: ID, display name, family and rank, `FindShader`, `Capabilities`, `Write` |
-| Output shaders | `Editor/Outputs/AtlasOutputShaders.cs` | Poiyomi Toon 10 and VRChat Mobile Toon Standard: their texture layouts and capabilities (see [*Output shaders*](#output-shaders)) |
+| Output shaders | `Editor/Outputs/AtlasOutputShaders.cs` | Poiyomi Toon 10 and 11 (one writer, a registration per version) and VRChat Mobile Toon Standard: their texture layouts and capabilities (see [*Output shaders*](#output-shaders)) |
 | Output model | `Editor/Outputs/AtlasOutputModel.cs`, `AtlasOutputFeature.cs` | Virtual maps, texture layouts, capabilities; `IAtlasOutputFeature` with its modes; the feature registry, available and effective modes |
 | Features | `Editor/Outputs/Atlas*Feature*.cs` | One class per feature of the [*Feature inventory*](#feature-inventory), found through `IAtlasOutputFeature`; `IAtlasSourceAwareFeature` counts a source by more than its material (a pre-baked map, the build's correction) |
 | Resolve | `Editor/Outputs/AtlasOutputPipeline.cs` | Feature choices from the settings, and steps 1 and 2 of the pipeline: the output unified material and its map requests (`AtlasOutputPlan`), with the UV channel and mask allocators' places and the generated textures |
@@ -1391,10 +1391,22 @@ reverse, and round-trip tests (parse, write, parse, compare) check it. How the s
 computes what it has no settings for comes from its parser too (see [*The look
 model*](#the-look-model)), so an output shader needs one.
 
+**Poiyomi** has one writer for its versions (`PoiyomiOutputShader`), since Poiyomi 11 keeps
+10's property names: the versions share the texture layout, the capabilities and the writer,
+and each one's registration says its major version. The writer sets every property by name,
+and a property a version doesn't declare isn't set on its material, so what a newer version
+adds needs no branch. A version's shader is found by its name, the same in every version
+(under *Old Versions* next to a newer one), and its master label.
+
+| Version | What it adds as an output |
+|---|---|
+| Toon 10 | The base: see the [*Feature inventory*](#feature-inventory) |
+| Toon 11 | Global mask contacts kept live (a touch written into a channel); a lilToon-style rim's application stage, so one on the base color stays there; the rendering presets also turn the sharpened alpha to coverage off |
+
 | Output | Work |
 |---|---|
-| Poiyomi Toon 11 | Extends the Poiyomi 10 writer, since 11 keeps 10's property names: 11's added capabilities, and the features new in 11 |
-| Poiyomi Pro | Extends the Poiyomi 11 writer: more slots (three outlines, for example) and the Pro-only features. Offered only where Pro is installed. Pro is a paid shader: its writer describes it in our own words, as its parser does |
+| Poiyomi Toon 11, the rest | The features new in 11 that an output can use and aren't mapped yet: the PBR lighting type as the output's lighting, and the second backlight |
+| Poiyomi Pro | Registrations of the Poiyomi writer for Pro: more slots (three outlines, for example) and the Pro-only features. Offered only where Pro is installed. Pro is a paid shader: its writer describes it in our own words, as its parser does |
 | Mochie Uber | A new writer, mostly the existing Uber parser in reverse |
 
 What adds work is a feature or mode that no shared feature covers yet (built once, then
@@ -1501,7 +1513,8 @@ without a shader chosen). It never changes a shader chosen before.
 - Without a winning family, the installed output shader of the alphabetically first family,
   at its highest version, is chosen; without any, none is, and the inspector says that no
   supported output shader is installed.
-- The rank is the major version × 10, plus 1 for Pro: Poiyomi Toon 10 is 100, Pro 11 is 111.
+- The rank is the major version × 10, plus 1 for Pro: Poiyomi Toon 10 is 100, Toon 11 is
+  110, Pro 11 is 111.
 
 **The Auto Setup button** sets up the output for the sources already assigned to it, in one
 Undo step. It never adds or removes sources, and never runs by itself: a new output has no
@@ -1644,6 +1657,10 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
   own values, a source with Schlick's fresnel looks different there and is fitted, and
   one whose reflections rise less is closer; Poiyomi's fresnel strength slider converts to
   the unified strength and back.
+- **Poiyomi 11 as an output:** it keeps contacts live where 10 has none, and writes and
+  reads back a contact; a lilToon-style rim on the base color stays there on 11 and comes
+  back after lighting on 10; both versions write each surface mode as its preset; every
+  writer round trip runs on each installed output shader.
 - **Fits:** a source the output can reproduce gets its exact value back; a fit with nothing
   missing finds that same value; a weaker setting gives the expected direction (weaker
   highlights, a lower reflectance); shared values follow the source whose look changes most.
@@ -1687,6 +1704,9 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
 - **Light roles:** each light has its own temperature, softness, and diffuse and specular
   weights. Each bake uses only the light terms its purpose needs. Baked light color is
   limited by a color influence, and every bake has its own strength slider.
+- **One Poiyomi writer:** Poiyomi's versions share one writer, registered once per version;
+  a version adds capabilities and the properties only it declares, never a writer of its
+  own.
 - **First writers:** Poiyomi Toon 10 and VRChat Mobile Toon Standard, both from the first
   milestone.
 - **Compound textures:** an output shader's texture can provide several virtual maps in its

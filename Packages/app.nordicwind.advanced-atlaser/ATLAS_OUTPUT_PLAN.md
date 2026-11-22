@@ -28,7 +28,7 @@ it uses. How finished parts work is in the design; what each version added is in
 | **M1 — End to end** | An avatar builds with the sources' base color textures atlased into one, on both writers, and the manual bake writes the material and its texture | Done |
 | **M2 — Initial features** | Every feature in the design's *Feature inventory*, on both writers | Done |
 | **M4 — Matching by look** | Looks measured and tuned in every scene; matcaps placed by role and cost | Built; builds are being compared |
-| **M3 — More Poiyomi writers** | Poiyomi Toon 11, Pro 10 and Pro 11 as outputs | Next |
+| **M3 — More Poiyomi writers** | Poiyomi Toon 11, Pro 10 and Pro 11 as outputs | In progress |
 | **M5 — More output families** | VRChat Mobile Diffuse, Unity Standard, VRChat Mobile Toon Lit and Standard Lite as outputs | Planned |
 | Later | Mochie Uber as an output, the later features, animation, GPU baking | — |
 
@@ -38,25 +38,29 @@ it uses. How finished parts work is in the design; what each version added is in
 
 Its phases are built; how each part works is in the design (*Map contributions*, *The look
 model*, *Comparing layers*, *What a matcap is for* and *Base color shifts*). What comparing
-builds with their originals turns up is fixed here, as general rules with tests, before M3
-starts. What [ATLAS_OUTPUT_LOOK.md](ATLAS_OUTPUT_LOOK.md) still plans is under *Later*.
+builds with their originals turns up is fixed here, as general rules with tests. What
+[ATLAS_OUTPUT_LOOK.md](ATLAS_OUTPUT_LOOK.md) still plans is under *Later*.
 
 ---
 
 ## M3 — More Poiyomi writers
 
-### 3.1 One Poiyomi writer, by version and variant
+Built so far: one Poiyomi writer registered as Toon 10 and Toon 11, with 11's global mask
+contacts kept live and its rim application stage (the design's *Output shaders*).
 
-- The Poiyomi Toon 10 writer becomes one writer for version and variant, registered as Toon
-  10 and Toon 11. Toon 11 adds its capabilities and maps the features new in 11.
-- **Workable:** Poiyomi Toon 11 as an output, with round trips.
+### 3.1 The rest of Toon 11
+
+- The features new in 11 that an output can use and aren't mapped yet: the PBR lighting type
+  as the output's lighting, and the second backlight.
+- **Workable:** every feature of the design's inventory that Toon 11 has a control for is
+  written to it, with round trips.
 
 ### 3.2 Poiyomi Pro 10 and Pro 11
 
-- The Pro variant: Pro's added capabilities (more slots), and its features natively for Pro
-  sources (screen-space AO, contact shadows, constellation, GT7 tone mapping, neutral
-  emission and the others the unified material types). Offered only where Pro is installed.
-  The writer describes Pro in its own words.
+- The Poiyomi writer registered for Pro, by variant: Pro's added capabilities (more slots),
+  and its features natively for Pro sources (screen-space AO, contact shadows,
+  constellation, GT7 tone mapping, neutral emission and the others the unified material
+  types). Offered only where Pro is installed. The writer describes Pro in its own words.
 - **Workable — M3 reached:** Poiyomi Pro 10 and Pro 11 as outputs, with round trips.
 
 ---

@@ -310,7 +310,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (options.Count == 0)
             {
                 EditorGUILayout.HelpBox("No supported output shader is installed in this project. Install one, " +
-                    "for example Poiyomi Toon 10 or the VRChat SDK's Mobile Toon Standard.", MessageType.Error);
+                    "for example Poiyomi Toon or the VRChat SDK's Mobile Toon Standard.", MessageType.Error);
                 return;
             }
             var labels = options.Select(o => o.DisplayName).ToArray();

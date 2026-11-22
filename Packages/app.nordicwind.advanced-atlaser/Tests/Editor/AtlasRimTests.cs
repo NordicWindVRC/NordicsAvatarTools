@@ -385,6 +385,35 @@ namespace NordicWind.AdvancedAtlaser.Tests
             StringAssert.Contains("backlight is drawn by the output's rim", Notes(AtlasOutputPipeline.Resolve(job, ToonStandard)));
         }
 
+        // Poiyomi 11's lilToon rim has an application stage: on the base color, lit with the
+        // surface, it stays there. Poiyomi 10 has the stage after lighting only.
+        [Test]
+        public void PoiyomiElevenKeepsARimOnTheSurface()
+        {
+            AtlasAngleLayer Edge() => With(new AtlasAngleLayer
+            {
+                Placement = AtlasPlacement.Surface, Profile = AtlasAngleProfile.Step, StepBase = AtlasAngleBase.Edge, Power = 3.5f,
+                Low = 0.3f, High = 0.7f, Blend = AtlasBlend.Add, SourceAlphaIsOpacity = true
+            }, Color.white);
+            bool eleven = AtlasShaderRegistry.Output("poiyomi11").FindShader() != null, ten = AtlasShaderRegistry.Output("poiyomi10").FindShader() != null;
+            if (!eleven && !ten) Assert.Ignore("Poiyomi Toon isn't installed.");
+            if (eleven)
+            {
+                var kept = RoundTrip("poiyomi11", Material(Edge())).Single();
+                Assert.AreEqual(AtlasPlacement.Surface, kept.Placement, "the stage on the base color");
+                Assert.AreEqual(0.3f, kept.Low, 1e-4f);
+                Assert.AreEqual(0.7f, kept.High, 1e-4f);
+                var direct = Edge();
+                direct.Placement = AtlasPlacement.Overlay;
+                direct.LightResponse = AtlasLightResponse.ScaleByDirectLight;
+                kept = RoundTrip("poiyomi11", Material(direct)).Single();
+                Assert.AreEqual(AtlasPlacement.Overlay, kept.Placement);
+                Assert.AreEqual(AtlasLightResponse.ScaleByDirectLight, kept.LightResponse, "after lighting, lit by the direct light alone");
+            }
+            if (ten)
+                Assert.AreEqual(AtlasPlacement.Overlay, RoundTrip("poiyomi10", Material(Edge())).Single().Placement, "Poiyomi 10: after lighting");
+        }
+
         private List<AtlasAngleLayer> RoundTrip(string shaderId, AtlasUnifiedMaterial output)
         {
             var shader = AtlasShaderRegistry.Output(shaderId);
