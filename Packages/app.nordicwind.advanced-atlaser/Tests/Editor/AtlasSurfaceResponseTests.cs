@@ -306,7 +306,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         {
             var surface = Solid(new Color(0.6f, 0.75f, 0.5f, 1f));
             var occlusionTexture = Solid(new Color(0.5f, 0.5f, 0.5f, 1f));
-            foreach (var shader in AtlasShaderRegistry.InstalledOutputShaders)
+            foreach (var shader in AtlasShaderRegistry.InstalledOutputShaders.Where(s => s.Capabilities.Provides(AtlasVirtualMap.Metallic)))
             {
                 var unified = new AtlasUnifiedMaterial();
                 var response = unified.Surface.Response;

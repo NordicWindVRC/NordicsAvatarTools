@@ -124,7 +124,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         {
             var texture = new Texture2D(4, 4, TextureFormat.RGBA32, false);
             created.Add(texture);
-            foreach (var shader in AtlasShaderRegistry.InstalledOutputShaders)
+            foreach (var shader in AtlasShaderRegistry.InstalledOutputShaders.Where(s => s.Capabilities.Provides(AtlasVirtualMap.Emission)))
             {
                 var output = new AtlasUnifiedMaterial();
                 var layer = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission };

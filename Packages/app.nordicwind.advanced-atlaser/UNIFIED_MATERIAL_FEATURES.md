@@ -6,7 +6,7 @@ and formulas for every feature a parser maps. Atlasing concerns are left out on 
 get their own pass later.
 
 **Inputs:**
-- [VRChat Mobile](UNIFIED_MATERIAL_VRCHAT_MOBILE.md): Toon Lit, Standard Lite, Toon Standard.
+- [VRChat Mobile](UNIFIED_MATERIAL_VRCHAT_MOBILE.md): Toon Lit, Diffuse, Bumped Diffuse, Standard Lite, Toon Standard.
 - [Unity Standard](UNIFIED_MATERIAL_UNITY_STANDARD.md).
 - [Mochie Uber](UNIFIED_MATERIAL_MOCHIE_UBER.md).
 - [Poiyomi Toon 10 and 11, and Poiyomi Pro](UNIFIED_MATERIAL_POIYOMI.md), with both kinds of fur.
@@ -1394,41 +1394,42 @@ flip their normal, so they light like front faces). Also:
 
 ✓ the source has it; ~ partly or as a special case; blank: not present.
 
-| Unified feature | Toon Lit | Std Lite | Toon Std | Unity Std | Uber | Poiyomi | Poiyomi Pro adds |
-|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| 1.1 Mapping beyond UV0/1, placement, frames | | | | | ~ | ✓ | |
-| 1.5 Mask bus | | | | | | ✓ | |
-| 1.6 Palette | | | | | | ~ | |
-| 1.9 Modulators | | | ~ | | ✓ | ✓ | |
-| 1.10 Color adjustment | | | ✓ | | ✓ | ✓ | GT7, neutral emission |
-| 2.1 Base color | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| 2.2 Alpha | | | | ✓ | ✓ | ✓ | |
-| 2.3 Normals | | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| 2.4 Surface response | | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| 2.5 Parallax | | | | ✓ | ✓ | ✓ | |
-| 3 Lighting: unlit | | | | | ✓ | ✓ | |
-| 3 Lighting: flat | ✓ | | | | | ✓ | |
-| 3 Lighting: ramp toon | | | ✓ | | ✓ | ✓ | |
-| 3 Lighting: physically based | | ✓ | | ✓ | ✓ | ✓ | |
-| 3.5 External lighting | | | | | ✓ | ✓ | |
-| 3.6 Screen-space lighting | | | | | | | ✓ |
-| 4.1 Surface layer | | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| 4.2 Transition | | | | | ✓ | ✓ | |
-| 4.3 Lookup layer | | | ✓ | | ✓ | ✓ | |
-| 4.4 Angle layer | | | ✓ | | ✓ | ✓ | |
-| 4.5 Subsurface | | | | | ✓ | ✓ | |
-| 4.6 Procedural pattern | | | | | ~ | ✓ | constellation, lava lamp |
-| 4.7 Refraction | | | | | ✓ | ✓ | self grab, lava lamp |
-| 5.1 Outline | | | ~ | | ✓ | ✓ | layers, curvature |
-| 5.2 Fur | | | | | | ✓ | shells |
-| 5.3 Deformation | | | | | ✓ | ✓ | squish, TPS |
-| 5.4 Geometry effects | | | | | | | tessellation (dissolve, shatter, particles reported) |
-| 6 Visibility | | | | | ✓ | ✓ | |
-| 6 Second pass, depth prepass | | | | | | ✓ | |
+| Unified feature | Toon Lit | Diffuse | Std Lite | Toon Std | Unity Std | Uber | Poiyomi | Poiyomi Pro adds |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| 1.1 Mapping beyond UV0/1, placement, frames | | | | | | ~ | ✓ | |
+| 1.5 Mask bus | | | | | | | ✓ | |
+| 1.6 Palette | | | | | | | ~ | |
+| 1.9 Modulators | | | | ~ | | ✓ | ✓ | |
+| 1.10 Color adjustment | | | | ✓ | | ✓ | ✓ | GT7, neutral emission |
+| 2.1 Base color | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| 2.2 Alpha | | | | | ✓ | ✓ | ✓ | |
+| 2.3 Normals | | ~ | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| 2.4 Surface response | | | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| 2.5 Parallax | | | | | ✓ | ✓ | ✓ | |
+| 3 Lighting: unlit | | | | | | ✓ | ✓ | |
+| 3 Lighting: flat | ✓ | | | | | | ✓ | |
+| 3 Lighting: ramp toon | | | | ✓ | | ✓ | ✓ | |
+| 3 Lighting: physically based | | ✓ | ✓ | | ✓ | ✓ | ✓ | |
+| 3.5 External lighting | | | | | | ✓ | ✓ | |
+| 3.6 Screen-space lighting | | | | | | | | ✓ |
+| 4.1 Surface layer | | | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| 4.2 Transition | | | | | | ✓ | ✓ | |
+| 4.3 Lookup layer | | | | ✓ | | ✓ | ✓ | |
+| 4.4 Angle layer | | | | ✓ | | ✓ | ✓ | |
+| 4.5 Subsurface | | | | | | ✓ | ✓ | |
+| 4.6 Procedural pattern | | | | | | ~ | ✓ | constellation, lava lamp |
+| 4.7 Refraction | | | | | | ✓ | ✓ | self grab, lava lamp |
+| 5.1 Outline | | | | ~ | | ✓ | ✓ | layers, curvature |
+| 5.2 Fur | | | | | | | ✓ | shells |
+| 5.3 Deformation | | | | | | ✓ | ✓ | squish, TPS |
+| 5.4 Geometry effects | | | | | | | | tessellation (dissolve, shatter, particles reported) |
+| 6 Visibility | | | | | | ✓ | ✓ | |
+| 6 Second pass, depth prepass | | | | | | | ✓ | |
 
 Single-source features, described generically so other shaders can map into them later: mask
 bus, palette and the back-face condition (Poiyomi); screen-space lighting and geometry effects
-(Poiyomi Pro). The Poiyomi column is Poiyomi 10 and 11 (Grab Pass and Two Pass
+(Poiyomi Pro). The Diffuse column is VRChat Mobile Diffuse and Bumped Diffuse, whose normal
+map is the ~. The Poiyomi column is Poiyomi 10 and 11 (Grab Pass and Two Pass
 included); 7.3 to 9.3 are read on the same parser with version tables. *Palette* is ~ because
 theme colors are resolved to the colors they produce (1.6).
 

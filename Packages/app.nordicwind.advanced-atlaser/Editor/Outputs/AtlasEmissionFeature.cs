@@ -7,12 +7,23 @@ namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Emission (ATLAS_OUTPUT.md, "Feature inventory"): each source's static emission layers
     // added up into the output's emission map, relative to the strongest source's emission, which
-    // the output glows at. Sources without emission are dark. Only the native mode: emission
-    // baked into the color wouldn't glow. Other features add their glow to the map in full
-    // (a baked matcap's glow, glitter points): the map gives them its value × the strength,
-    // and what goes above the map's range goes into the strength (CarryInStrength).
+    // the output glows at. Sources without emission are dark. Other features add their glow to
+    // the map in full (a baked matcap's glow, glitter points): the map gives them its value ×
+    // the strength, and what goes above the map's range goes into the strength
+    // (CarryInStrength).
+    // An output without an emission map can have the emission drawn into its base color
+    // instead. That shows what the emission draws, under light, and doesn't glow in the dark,
+    // so it is used only when chosen.
     public sealed class AtlasEmissionFeature : IAtlasOutputFeature
     {
+        public static readonly AtlasFeatureMode InColor = new AtlasFeatureMode
+        {
+            Id = "color", Label = "Drawn into the color", Kind = AtlasFeatureModeKind.Emulated,
+            RequiredMaps = new[] { AtlasVirtualMap.BaseColor },
+            Requires = c => !c.Provides(AtlasVirtualMap.Emission),
+            OptIn = true
+        };
+
         private static readonly AtlasFeatureMode[] ModeList =
         {
             new AtlasFeatureMode
@@ -20,6 +31,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Id = "native", Label = "Emission map", Kind = AtlasFeatureModeKind.Native,
                 RequiredMaps = new[] { AtlasVirtualMap.Emission }
             },
+            InColor,
             AtlasFeatureMode.Off
         };
 
@@ -41,6 +53,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var job = context.Job;
             var active = new HashSet<int>(context.Sources);
+            if (context.Mode == InColor)
+            {
+                DrawIntoColor(context, active);
+                return;
+            }
             Cycling(context, active);
             float strength = active.Max(i => AtlasColorStack.EmissionStrength(job.Sources[i].Material));
             Notes(context, active);
@@ -65,6 +82,35 @@ namespace NordicWind.AdvancedAtlaser.Editor
             context.Output.Layers.Add(layer);
             CarryInStrength(request, layer.Targets[0]);
             Live(context, request, strength);
+        }
+
+        // Each source's emission added to its base color, after the surface's layers. A hue
+        // that cycles is drawn at its start and AudioLink at rest. Where nothing takes what
+        // the map can't hold (an output without a base color of its own), the sum stops at 1.
+        private static void DrawIntoColor(AtlasFeatureContext context, HashSet<int> active)
+        {
+            Notes(context, active);
+            var request = AtlasLiveMasks.Request(context, AtlasVirtualMap.BaseColor);
+            if (request == null)
+            {
+                context.Notes.Add("Without a base color map the emission has nothing to be drawn into; it's left out.");
+                return;
+            }
+            request.Add(new AtlasMapContribution
+            {
+                Feature = "emission", Label = "emission drawn into the color", Stage = AtlasMapStage.Overlays,
+                Kind = AtlasContributionKind.Bake, CanRaise = true, Applies = active.Contains,
+                Apply = content =>
+                {
+                    bool carried = request.Carry != null;
+                    using (var emission = AtlasColorStack.EvaluateEmission(content.Material, content.Width, content.Height, 1f, clamp: false))
+                        AtlasPixels.Map(content.Map, emission, (c, e) => carried
+                            ? new Color(c.r + e.r, c.g + e.g, c.b + e.b, c.a)
+                            : new Color(Mathf.Min(1f, c.r + e.r), Mathf.Min(1f, c.g + e.g), Mathf.Min(1f, c.b + e.b), c.a));
+                }
+            });
+            context.Notes.Add("The emission of " + AtlasLiveMasks.Numbers(active) +
+                              " is drawn into the base color: it shows under light and doesn't glow in the dark.");
         }
 
         /// <summary>Lets an emission map's range go into its strength: where a feature's

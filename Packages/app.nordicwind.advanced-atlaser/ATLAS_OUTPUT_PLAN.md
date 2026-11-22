@@ -31,17 +31,31 @@ it uses. How finished parts work is in the design; what each version added is in
 | **M2 — Initial features** | Every feature in the design's *Feature inventory*, on both writers | Done |
 | **M4 — Matching by look** | Looks measured and tuned in every scene; matcaps placed by role and cost | Done |
 | **M3 — More Poiyomi writers** | Poiyomi Toon 11, Pro 10 and Pro 11 as outputs | Done |
-| **M5 — More output families** | VRChat Mobile Diffuse, Unity Standard, VRChat Mobile Toon Lit and Standard Lite as outputs | Planned |
+| **M5 — More output families** | VRChat Mobile Diffuse, Unity Standard, VRChat Mobile Toon Lit and Standard Lite as outputs | In progress |
 | Later | Mochie Uber as an output, the later features, animation, GPU baking | — |
 
 ---
 
 ## M5 — More output families
 
-- VRChat Mobile Diffuse, Unity Standard, VRChat Mobile Toon Lit and Standard Lite as outputs.
-  Each starts from its shader's source and uses its parser for the kept material.
-- VRChat Mobile Diffuse has one color map, so every feature it keeps is a contribution to
-  that map.
+Each output starts from its shader's source and uses its parser for the kept material.
+
+Built so far: VRChat Mobile Diffuse as an input (with Bumped Diffuse) and as an output with
+one color texture, where every feature it keeps is a contribution to that texture, emission
+included when the user chooses so (the design's *Output shaders*).
+
+### 5.3 Unity Standard
+
+- A writer for Unity Standard and Standard (Specular setup), mostly its parser in reverse;
+  its family and rank for auto setup.
+- **Workable:** Unity Standard as an output, with round trips.
+
+### 5.4 VRChat Mobile Toon Lit and Standard Lite
+
+- Toon Lit: one texture, as Diffuse, lit without shading across the surface, so its form
+  comes from baked shading (the design's *form shading*).
+- Standard Lite: Standard's maps on the albedo's tiling, opaque only.
+- **Workable — M5 reached:** the four shaders as outputs, with round trips.
 
 ---
 
@@ -53,6 +67,8 @@ Not planned in detail yet, in rough order:
   patterns, refraction, highlight layers, parallax, deformations and geometry effects,
   second pass and visibility. Poiyomi Pro's remaining features come with them: the
   constellation pattern, TPS and squish, three outlines and the outline bake (from 3.2);
+- rims and highlights drawn into the color texture of an output without them (VRChat
+  Mobile Diffuse), as modes used when chosen (from 5.2);
 - animation support;
 - half-precision buffers or GPU baking, if the memory budget is too tight;
 - a typed-in value for shared values, next to *Automatic* and the sources in the reference

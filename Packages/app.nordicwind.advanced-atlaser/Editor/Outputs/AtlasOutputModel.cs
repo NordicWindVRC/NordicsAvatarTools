@@ -140,7 +140,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Takes an amount: lerp(1, vertex color, amount).
         Amount = 4,
         // Can decode the vertex colors from sRGB.
-        Srgb = 8
+        Srgb = 8,
+        // Has no switch for it: the base color is always multiplied by the vertex color, so
+        // the sources that don't use theirs get white on the mesh.
+        Always = 16
     }
 
     // The blends an output's matcap slot can take.
@@ -177,6 +180,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool BlendedDepthWrite;
         public AtlasReflectanceSupport Reflectance;
         public AtlasVertexColorSupport VertexColors;
+        // The output multiplies its base color texture by a color. Without one, every source's
+        // color goes into the texture, which cuts off what is brighter than 1.
+        public bool BaseColorTint = true;
         // Hides UV tiles on both sides (Poiyomi's UV tile discard), and on one chosen side.
         public bool TileDiscard;
         public bool FaceTileDiscard;

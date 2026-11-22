@@ -158,7 +158,9 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 var without = new Material(shader.FindShader());
                 created.Add(without);
                 shader.Write(new AtlasUnifiedMaterial(), without);
-                Assert.IsFalse(AtlasShaderRegistry.Detect(without).Parse(without).Surface.VertexColor.MultiplyColor, shader.DisplayName + ": none");
+                // A shader without a switch for it always multiplies.
+                Assert.AreEqual((support & AtlasVertexColorSupport.Always) != 0,
+                    AtlasShaderRegistry.Detect(without).Parse(without).Surface.VertexColor.MultiplyColor, shader.DisplayName + ": none");
             }
         }
 

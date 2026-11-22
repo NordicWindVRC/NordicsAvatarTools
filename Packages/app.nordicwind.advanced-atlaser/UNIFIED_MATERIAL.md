@@ -16,7 +16,7 @@ specification. How outputs turn unified materials into atlas materials is in
 
 | Shader family | Document |
 |---|---|
-| VRChat Mobile (Toon Lit, Standard Lite, Toon Standard) | [UNIFIED_MATERIAL_VRCHAT_MOBILE.md](UNIFIED_MATERIAL_VRCHAT_MOBILE.md) |
+| VRChat Mobile (Toon Lit, Diffuse, Bumped Diffuse, Standard Lite, Toon Standard) | [UNIFIED_MATERIAL_VRCHAT_MOBILE.md](UNIFIED_MATERIAL_VRCHAT_MOBILE.md) |
 | Unity Standard (metallic and specular setup) | [UNIFIED_MATERIAL_UNITY_STANDARD.md](UNIFIED_MATERIAL_UNITY_STANDARD.md) |
 | Mochie Uber (and Outline) | [UNIFIED_MATERIAL_MOCHIE_UBER.md](UNIFIED_MATERIAL_MOCHIE_UBER.md) |
 | Poiyomi Toon and Pro, every version (and their variants) | [UNIFIED_MATERIAL_POIYOMI.md](UNIFIED_MATERIAL_POIYOMI.md) |
@@ -210,12 +210,13 @@ shader's inspector, as the existing `UNIFIED_MATERIAL_*.md` documents do.
 **VRChat Mobile (Quest avatars).** Android and Quest avatars may only use the shaders that ship
 with the current VRChat SDK, under `VRChat/Mobile/` (see VRChat's
 [Quest content limitations](https://creators.vrchat.com/platforms/android/quest-content-limitations/)).
-Toon Lit, Standard Lite and Toon Standard already have parsers. The rest are small:
+Toon Lit, Diffuse, Bumped Diffuse, Standard Lite and Toon Standard already have parsers. The rest
+are small:
 
 | Shader | Notes |
 |---|---|
 | Matcap Lit | A matcap on a base texture; a lookup layer |
-| Diffuse, Bumped Diffuse, Bumped Mapped Specular | Unity's legacy mobile shaders: base color, normal map, a simple specular |
+| Bumped Mapped Specular | Unity's legacy mobile shader: base color, normal map, a simple specular |
 | Particles/Additive, Particles/Multiply | Particle materials on avatars; additive and multiplicative surface modes |
 
 **PC avatars:**

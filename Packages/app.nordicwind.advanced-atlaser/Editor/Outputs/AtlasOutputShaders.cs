@@ -2053,4 +2053,37 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
         }
     }
+
+    // VRChat/Mobile/Diffuse: one texture times the mesh's vertex colors, lit by Lambert, always
+    // opaque. It has no other setting: what an atlas keeps beyond the base color is baked into
+    // that texture by the features' baked modes, and the rest is left out.
+    public sealed class VRChatMobileDiffuseOutputShader : IAtlasOutputShader
+    {
+        public string ShaderId => "mobilediffuse";
+        public string DisplayName => "VRChat Mobile Diffuse";
+        public string Family => AtlasShaderFamilies.VRChat;
+        // Below Toon Standard, which keeps more.
+        public int Rank => 1;
+        public Shader FindShader() => Shader.Find("VRChat/Mobile/Diffuse");
+        public AtlasOutputCapabilities Capabilities { get; } = new AtlasOutputCapabilities
+        {
+            Textures =
+            {
+                new AtlasOutputTexture("BaseColor", "Base color") { SizeMode = AtlasTextureSizeMode.Main }
+                    .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB)
+            },
+            // _MainTex alone: no color to multiply it by.
+            BaseColorTint = false,
+            // The base color × the vertex RGB as stored, with no switch.
+            VertexColors = AtlasVertexColorSupport.Color | AtlasVertexColorSupport.Always
+        };
+
+        public void Write(AtlasUnifiedMaterial output, Material material)
+        {
+            material.SetTexture("_MainTex", output.Surface.BaseColor.Map?.Texture);
+            material.SetTextureScale("_MainTex", Vector2.one);
+            material.SetTextureOffset("_MainTex", Vector2.zero);
+            material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
+        }
+    }
 }

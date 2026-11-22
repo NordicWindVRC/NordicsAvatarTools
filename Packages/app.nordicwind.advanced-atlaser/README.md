@@ -58,7 +58,7 @@ Logging*.
 | Poiyomi Pro 9.x, 10.x, 11.x, and its variants | Everything Toon reads, plus the Pro features |
 | Poiyomi Toon 7.3, 8.x, 9.x, and unversioned | Read with Poiyomi 10's meaning; differences are listed |
 | VRChat Mobile Toon Standard (and Outline) | Every section |
-| VRChat Mobile Toon Lit, Standard Lite | Every setting |
+| VRChat Mobile Toon Lit, Standard Lite, Diffuse, Bumped Diffuse | Every setting |
 | Mochie Uber (and Outline) | Every section of the free version; Uber X is unsupported |
 | Unity Standard, Standard (Specular setup) | Every setting |
 | Any other shader | Common property names: base color, alpha, normal, metallic or specular, smoothness, occlusion, emission, culling and blending |
@@ -72,6 +72,7 @@ Logging*.
 | Poiyomi Pro 10 | As Toon 10, and it keeps GT7 tone mapping, screen-space ambient occlusion and contact shadows |
 | Poiyomi Pro 11 | As Toon 11 and Pro 10, and it keeps the neutral surface emission |
 | VRChat Mobile Toon Standard | Opaque only; what it lacks is approximated, baked or left out |
+| VRChat Mobile Diffuse | One color texture, opaque only: normal maps, occlusion and matcaps are baked into it, and emission when you choose so; rims and highlights are left out |
 
 ## Limitations
 

@@ -107,6 +107,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             foreach (var feature in AtlasOutputFeatures.All)
                 Resolve(job, capabilities, feature, plan);
+            // An output that always multiplies by the mesh's vertex colors: the sources whose
+            // colors no feature rewrote (they are baked, turned off or unused) get white.
+            if ((capabilities.VertexColors & AtlasVertexColorSupport.Always) != 0)
+                for (int i = 0; i < job.Sources.Count; i++)
+                    if (!plan.VertexColors.ContainsKey(i))
+                        plan.VertexColors[i] = color => new Color(1f, 1f, 1f, color.a);
             var live = new List<string>();
             for (int i = 0; i < job.Sources.Count; i++)
             {
@@ -194,7 +200,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             plan.Modes[feature.Id] = mode;
             // Off adds nothing: the output unified material starts without any feature.
-            if (mode.Kind == AtlasFeatureModeKind.Off) return;
+            if (mode.Kind == AtlasFeatureModeKind.Off)
+            {
+                // Off without being chosen: the output's only way to show the feature is one
+                // used when chosen, which is said so it isn't left out unnoticed.
+                var optIn = feature.Modes.FirstOrDefault(m => m.OptIn && m.IsSupported(capabilities));
+                if (optIn != null && choice?.ModeId != mode.Id)
+                    plan.Notes.Add($"{feature.DisplayName} is off: the output shader has none of its own, and \"{optIn.Label}\" is used only when chosen (" +
+                        (sources.Count == 1 ? "source " : "sources ") + string.Join(", ", sources.Select(i => i + 1)) + ").");
+                return;
+            }
             feature.Resolve(new AtlasFeatureContext
             {
                 Job = job, Capabilities = capabilities, Mode = mode, Sources = sources,

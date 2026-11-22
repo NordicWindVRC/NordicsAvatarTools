@@ -32,12 +32,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // same color and nothing is layered on it, that color stays shared (also above 1, which
         // the texture couldn't hold); otherwise each color is multiplied into its texture, and the
         // shared color is white. Where the baked map goes above 1, it is divided by its brightest
-        // value, which becomes the shared color, so nothing is cut off at 1.
+        // value, which becomes the shared color, so nothing is cut off at 1. An output without
+        // a color has no shared color: every color goes into the texture, which holds up to 1.
         public void Resolve(AtlasFeatureContext context)
         {
             var materials = context.Sources.Select(i => context.Job.Sources[i].Material).ToList();
             var first = materials[0].Surface.BaseColor.Color;
-            bool shared = materials.All(m => Same(m.Surface.BaseColor.Color, first) && !AtlasColorStack.HasStack(m));
+            bool tinted = context.Capabilities.BaseColorTint;
+            bool shared = tinted && materials.All(m => Same(m.Surface.BaseColor.Color, first) && !AtlasColorStack.HasStack(m));
             var baseColor = context.Output.Surface.BaseColor;
             baseColor.Color = shared ? new Color(first.r, first.g, first.b, 1f) : Color.white;
             var reference = context.RequestMap(AtlasVirtualMap.BaseColor, AtlasTextureInterpretation.Color);
@@ -49,7 +51,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var tint = baseColor.Color;
             request.SharedColor = tint;
             request.ContentCanRaise = !shared;
-            request.Carry = peak => baseColor.Color = new Color(tint.r * peak, tint.g * peak, tint.b * peak, tint.a);
+            if (tinted) request.Carry = peak => baseColor.Color = new Color(tint.r * peak, tint.g * peak, tint.b * peak, tint.a);
+            else
+            {
+                var bright = context.Sources.Where(i =>
+                {
+                    var color = context.Job.Sources[i].Material.Surface.BaseColor.Color;
+                    return Mathf.Max(color.r, Mathf.Max(color.g, color.b)) > 1f + 1e-4f;
+                }).ToList();
+                if (bright.Count > 0)
+                    context.Notes.Add("The output shader's base color has no color of its own, so colors brighter than 1 are cut off at 1 (" +
+                                      AtlasLiveMasks.Numbers(bright) + ").");
+            }
             baseColor.Map = reference;
             foreach (var note in materials.SelectMany(AtlasColorStack.LeftOut).Distinct()) context.Notes.Add(note);
         }

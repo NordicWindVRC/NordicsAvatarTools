@@ -277,7 +277,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 Assert.AreEqual(0.4f * plan.LevelScales[1], map.GetPixel(1, 1).r, 1e-3f);
             Assert.AreEqual(plan.LevelScales[1], plan.LevelApplied[1], 1e-4f, "applied in full");
             using (var map = request.Evaluate(2, nearWhite, 4, 4, placed))
-                Assert.AreEqual(1f, map.GetPixel(1, 1).r, 1e-3f, "a raise stops where the brightest texel reaches 1");
+                Assert.AreEqual(1f, map.GetPixel(1, 1).r, 1e-3f, "a raise stops at 1");
             Assert.AreEqual(1f / 0.9f, plan.LevelApplied[2], 1e-3f);
             using (var map = request.Evaluate(0, job.Sources[0].Material, 4, 4, placed))
                 Assert.AreEqual(0.3f, map.GetPixel(1, 1).r, 1e-4f, "the others keep their colors");
@@ -289,6 +289,56 @@ namespace NordicWind.AdvancedAtlaser.Tests
             // A source lit as it was needs no scale; one lit darker than its own gets one.
             Assert.AreEqual(1f, AtlasLevelCompensation.Scale(Source(0.3f), new AtlasLighting()));
             Assert.Less(AtlasLevelCompensation.Scale(Source(0.3f), new AtlasLighting { LightMultiplier = 1.5f }), 0.75f, "lit brighter: scaled down");
+        }
+
+        // A bright part of a texture (white horns on a dark body) doesn't hold the rest back:
+        // the texels that stay below the knee get the raise in full, and the brighter ones are
+        // raised less, in their order, up to 1.
+        [Test]
+        public void ARaiseThatDoesntFitIsAppliedInFullBelowTheKnee()
+        {
+            const float scale = 1.6f;
+            float knee = AtlasLevelCompensation.Knee;
+            // It fits: the scale itself.
+            Assert.AreEqual(0.8f, AtlasLevelCompensation.Raised(0.5f, scale, 0.6f), 1e-6f);
+            Assert.AreEqual(0.96f, AtlasLevelCompensation.Raised(0.6f, scale, 0.6f), 1e-6f);
+            // It doesn't: in full below the knee, less above it, the peak at 1.
+            Assert.AreEqual(0.48f, AtlasLevelCompensation.Raised(0.3f, scale, 1f), 1e-6f);
+            Assert.AreEqual(knee, AtlasLevelCompensation.Raised(knee / scale, scale, 1f), 1e-5f);
+            Assert.AreEqual(1f, AtlasLevelCompensation.Raised(1f, scale, 1f), 1e-5f);
+            float last = 0f;
+            for (int i = 1; i <= 100; i++)
+            {
+                float value = i / 100f;
+                float raised = AtlasLevelCompensation.Raised(value, scale, 1f);
+                Assert.GreaterOrEqual(raised, last, "the order is kept");
+                Assert.LessOrEqual(raised, 1f + 1e-6f);
+                Assert.GreaterOrEqual(raised, value - 1e-6f, "never lowered");
+                Assert.LessOrEqual(raised, value * scale + 1e-6f);
+                last = raised;
+            }
+            // No step at the knee.
+            Assert.AreEqual(AtlasLevelCompensation.Raised(knee / scale - 1e-4f, scale, 1f),
+                AtlasLevelCompensation.Raised(knee / scale + 1e-4f, scale, 1f), 1e-3f);
+
+            // On a map: a dark red body with a white part.
+            using (var map = AtlasMapEvaluator.Constant(AtlasVirtualMap.BaseColor, 1f, 4, 4))
+            {
+                var pixels = Enumerable.Repeat(new Color(0.4f, 0.1f, 0f, 1f), 16).ToArray();
+                pixels[0] = Color.white;
+                map.SetPixels(pixels);
+                Assert.AreEqual(1f, AtlasLevelCompensation.ScaleMap(map, scale, Color.white), 1e-6f, "the brightest value before");
+                var body = map.GetPixel(1, 1);
+                Assert.AreEqual(0.64f, body.r, 1e-4f, "in full, though a texel is white");
+                Assert.AreEqual(0.16f, body.g, 1e-4f, "its hue is kept");
+                Assert.AreEqual(1f, map.GetPixel(0, 0).r, 1e-4f, "white stays white");
+            }
+            // A lowering is the scale alone.
+            using (var map = AtlasMapEvaluator.Constant(AtlasVirtualMap.BaseColor, 1f, 4, 4))
+            {
+                AtlasLevelCompensation.ScaleMap(map, 0.5f, Color.white);
+                Assert.AreEqual(0.5f, map.GetPixel(1, 1).r, 1e-5f);
+            }
         }
 
         [Test]
