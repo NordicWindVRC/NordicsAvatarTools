@@ -304,10 +304,12 @@ originals has shown; new features and fixes follow it.
 
 A shared value, or a setting the output lacks, is chosen by how the result looks:
 
-1. Each source is drawn twice with the **output's own response**: with its own settings, and
-   with the candidate value and only what the output keeps. Drawing both sides with the
-   output's response leaves only the missing part to differ, and a source the output can
-   reproduce costs nothing, so its exact value wins.
+1. Each source is drawn twice: **as its own shader shows it**, with its own settings, and
+   **as the output shader shows it**, with the candidate value and only what the output
+   keeps. Where the two shaders compute the same way, only the missing part differs, and a
+   source the output can reproduce costs nothing, so its exact value wins. Where they
+   compute differently (another fresnel), the value also makes up for that as far as it
+   can.
 2. The results are compared as **displayed (sRGB) colors** in the standard scenes (see
    [*The look model*](#the-look-model)), over the light and view angles, on the source's own
    base colors (`AtlasSourceSamples`, 4 × 4 samples). Displayed colors count what the eye sees:
@@ -321,7 +323,7 @@ A shared value, or a setting the output lacks, is chosen by how the result looks
 | Fit | What it chooses | Where |
 |---|---|---|
 | Automatic lighting | One lighting setup among the sources' | `AtlasLightingResponse` |
-| Reflectance | Toon Standard's `_Reflectance`, carrying the highlight and reflection strengths it has no settings for | `AtlasSpecularResponse` |
+| Reflectance | Toon Standard's `_Reflectance`, carrying the highlight and reflection strengths it has no settings for, and making up for a source shader's other fresnel | `AtlasSpecularResponse` |
 | Matcap glow | A combined slot's one glow strength, by least squares over the sources' texels when the material is written | `AtlasMatcapFeature` |
 | Matcap blends | A slot's strength and base color for blends it lacks, from Poiyomi's chain with black and white textures | `AtlasMatcapFeature` |
 | Band rims | Another rim's midpoint and rise on a writer whose rim is a band | `AtlasRimCurve` |
@@ -345,8 +347,9 @@ What the fits and the build's checks share (`AtlasLook`):
   3.4): the probes merged, floored or split, or a share of the ambient light standing in
   for the main light. The lighting's look, *Automatic* lighting and the rim fit use all four
   scenes. The rim fit lights the surface by the atlas's lighting, which also says what a
-  scene without a main light gives a rim that follows the light. The highlight fit uses the
-  two scenes with a main light, since its own light is the main light alone.
+  scene without a main light gives a rim that follows the light. The highlight fit uses all
+  four as well: its diffuse light and the light of its highlights are what each source's
+  own lighting makes of the scene.
 - **Base colors.** A source's look is judged on its base colors: its color × its base color
   texture where its meshes use it (the UV0 triangles' texels, as up to 16 samples from the
   darkest to the brightest), `AtlasSourceSamples`. A texture's unused parts, often black and
@@ -373,8 +376,14 @@ What the fits and the build's checks share (`AtlasLook`):
   measures, the rim fit and the rims' costs describe their layers so, and take the stages
   and the light from there. A rim is taken over the angles to the light, under the atlas's
   lighting. A matcap's place on the surface doesn't follow the light, so it takes each
-  scene's light on average over those angles, under its source's own lighting. Highlights
-  and reflections aren't part of it: the highlight fit has its own model.
+  scene's light on average over those angles, under its source's own lighting.
+
+  The lighting stage also holds highlights and reflections, which the reflectance fit
+  uses: GGX highlights from the direct light and reflections of an environment as bright
+  as the scene's ambient light, each × its fresnel, `F0 + (1 − F0) × its rise`, and both ×
+  the reflectance fade. The rise follows the surface response's fresnel mode, and for
+  reflections its fresnel strength. A source is drawn with its own shader's and the output
+  with the output shader's (below), each under the source's lighting.
 - **The kept material.** The written material, read back by the output shader's own parser
   (`AtlasKeptMaterial`): what the shader will show, in unified terms. An output shader is
   described once, by its parser. Before an atlas's material exists, the kept lighting is
@@ -1255,7 +1264,7 @@ allocator (see [*Masks*](#masks)). *Merge* uses the strategies above.
 | **Normal maps** | 2.3 normals<br>the normal correction and the pre-baked normal<br>4.1 layers targeting the normal | 1. Native<br>2. Baked into color (normal-map shading)<br>3. Off | main normal **(Required)**<br>secondary normal → main normal<br>detail normal → main normal | Bake, combined in the order of [*Normal correction*](#normal-correction). A secondary or detail layer is offered a map of its own when every source using it has the same texture and a preserved UV channel is available for it; otherwise it is baked into the main normal. Normal maps shrunk into a source's bake size or region are averaged by area and flattened where the normals a texel covers disagree (`AreaFlatten`), so detail finer than the texel turns flat instead of into noise, which a toon ramp shows as speckles. *Baked into color* makes no normal map: each source's combined normals are baked into its base color as normal-map shading under the virtual light rig (see [*Virtual light rigs*](#virtual-light-rigs)), the default where the output has no normal map; sources whose meshes aren't known are listed |
 | **Color adjustments** | 1.10 | 1. Baked (static adjustments, always)<br>2. Native (live adjustments, where the output has the operation) | hue cycling mask, for the base color's hue cycling | Static adjustments are baked into the maps they target. A cycling hue (a hue shift with a speed) is baked at its start, and *Hue Cycling* keeps the turning live on top: one rate from the reference source (*Hue Cycling from*), the base color's in the hue cycling mask, the final color's in an allocated mask, 0 where a source doesn't cycle. Slots with a hue shift of their own (matcaps, rims, glitter) copy their layer's; an emission whose hue cycles takes an emission slot of its own. Other live adjustments (AudioLink) come with AudioLink |
 | **Vertex colors** | 2.1 vertex color on the base color and alpha<br>1.4 masks reading vertex color<br>1.5 vertex color steps of the mask bus<br>other uses (transition space, anisotropy, outline and fur directions) | 1. Live<br>2. Baked<br>3. Off | base color, alpha and mask maps, when baked | Shown when a source's material uses vertex colors; the user chooses. *Live*: the vertex colors stay on the mesh and the output multiplies its base color (and alpha, where it can) by them, with one setting (amount, sRGB decoding). The remap rewrites each source's vertex colors so that setting gives what its own did: sources that don't use them get white, and other amounts are solved exactly; a different sRGB decoding matches at the vertices and can differ slightly between them (when the sources disagree on it, the user picks the output's: *Vertex colors as sRGB*). Masks and mask bus steps reading vertex colors are baked. *Baked*: the vertex colors are painted in UV space (`AtlasVertexColors.cs`) into the maps they affect; texels shared by triangles with different colors get the average. *Off*: they are ignored (read as white) |
-| **Reflection and specular** | 2.4 metallic, roughness, reflectance, specular color, highlights, reflections<br>4.3 cubemap lookups | 1. Native<br>2. Off | cubemaps **(Required)**, for cubemap lookups<br>metallic → constant<br>roughness → constant<br>reflectance → constant<br>specular color → constant | Constants that differ become maps (spatial). Reflectance is one value on the current outputs: fixed at 0.5 in Poiyomi's Reflections & Specular, and Toon Standard's gloss map × `_Reflectance`, where each source needs its reflectance over its smoothness. The value is fitted (`AtlasSpecularResponse`): each source is drawn with the output's own response (GGX highlights and environment reflections, its fresnel and Toon Standard's fade below reflectance 0.25) with its own reflectance and strengths, and with the output's value and the strengths the output keeps (1 without a mask), and the displayed results are compared over two scenes and the light and view angles; Automatic takes the value with the least difference over all sources by area, a chosen source is fitted alone, and sources the output can give exactly keep their exact value. Without highlight and reflection strengths (Toon Standard), a lower reflectance (F0 = 0.16 × r²) is what dims them. Highlight and reflection groups are shared values with their strengths in a mask. The unified highlight strength is on the scale of GGX × N·L without π, as Poiyomi lights its highlights before 10.0.26 and in 11; Poiyomi 10.0.26 to 10.0.29 multiply them by π, so their parser reads × π and their writer writes ÷ π, by the full version in the shader's master label (`AtlasPoiyomiVersionDetector.HighlightsTimesPi`; checked in 8.1.167 to 11.0.50). A cubemap is a lookup layer and takes a slot |
+| **Reflection and specular** | 2.4 metallic, roughness, reflectance, specular color, highlights, reflections<br>4.3 cubemap lookups | 1. Native<br>2. Off | cubemaps **(Required)**, for cubemap lookups<br>metallic → constant<br>roughness → constant<br>reflectance → constant<br>specular color → constant | Constants that differ become maps (spatial). Reflectance is one value on the current outputs: fixed at 0.5 in Poiyomi's Reflections & Specular, and Toon Standard's gloss map × `_Reflectance`, where each source needs its reflectance over its smoothness. The value is fitted (`AtlasSpecularResponse`): each source is drawn as its own shader shows it (GGX highlights and environment reflections with its shader's fresnel, the fresnel strength of its reflections and its reflectance fade, its own reflectance and strengths) and as the output shader shows it (the output's value, the strengths the output keeps, 1 without a mask, and the output shader's fresnel: Toon Standard's one term and its fade below reflectance 0.25), both under the source's own lighting, and the displayed results are compared over the four scenes and the light and view angles; Automatic takes the value with the least difference over all sources by area, a chosen source is fitted alone, and sources the output can give exactly keep their exact value: those whose shader computes highlights and reflections as the output's does. A source of another shader is always fitted, since the same values look different there. Without highlight and reflection strengths (Toon Standard), a lower reflectance (F0 = 0.16 × r²) is what dims them. Highlight and reflection groups are shared values with their strengths in a mask. The unified highlight strength is on the scale of GGX × N·L without π, as Poiyomi lights its highlights before 10.0.26 and in 11; Poiyomi 10.0.26 to 10.0.29 multiply them by π, so their parser reads × π and their writer writes ÷ π, by the full version in the shader's master label (`AtlasPoiyomiVersionDetector.HighlightsTimesPi`; checked in 8.1.167 to 11.0.50). A cubemap is a lookup layer and takes a slot |
 | **Clear coat** | 2.4 clear coat | 1. Native<br>2. Into the gloss map (outputs without a coat)<br>3. Off | clear coat strength and roughness **(Required)**, native<br>clear coat reflection and highlight masks, native<br>metallic and roughness **(Required)**, into the gloss map | Spatial value for strength and roughness (no coat: strength 0); strength in mask for the reflection and highlight strengths, relative to the strongest (one value everywhere: no mask; a highlight mask equal to the reflection mask reads its channel). The rest is a shared value from the reference source (*Clear Coat from*). *Into the gloss map* approximates the coat with the output's one specular layer: in coated parts the gloss is raised toward the coat's, `lerp(base, max(base, coat), coat strength × coat reflection strength)`, never lowered, so they get real, sharper highlights and probe reflections; without highlights in any source, the feature asks for the metallic and roughness maps itself. A surface under the coat becomes as glossy as the coat there, and the coat's tints and normal map amount aren't kept (listed) |
 | **Ambient occlusion** | 2.4 occlusion | 1. Native<br>2. Baked into color<br>3. Off | occlusion **(Required)**, for the native mode | Bake. *Baked into color* is for sources with an occlusion map when the output has none, or to save the texture. See below |
 
@@ -1611,6 +1620,10 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
   fade are read from a material of the shader with nothing set, once, and capabilities of
   no registered shader have none; a rim that blends into the surface and glows is read
   back from Toon Standard as a band added after lighting.
+- **A source's own fresnel:** a Toon Standard source costs nothing on Toon Standard at its
+  own values, a source with Schlick's fresnel looks different there and is fitted, and
+  one whose reflections rise less is closer; Poiyomi's fresnel strength slider converts to
+  the unified strength and back.
 - **Fits:** a source the output can reproduce gets its exact value back; a fit with nothing
   missing finds that same value; a weaker setting gives the expected direction (weaker
   highlights, a lower reflectance); shared values follow the source whose look changes most.

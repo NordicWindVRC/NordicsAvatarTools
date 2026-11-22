@@ -10,8 +10,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // relative to the largest, which the output uses. Sources without them get no metallic, full
     // roughness and no highlights or reflections. Reflectance is one value in the output, fitted
     // to the sources' highlights and reflections (AtlasSpecularResponse): where the output has no
-    // strengths or masks for them, a lower reflectance is what dims them. Automatic fits all
-    // sources by area; a chosen source is fitted alone.
+    // strengths or masks for them, a lower reflectance is what dims them, and where its shader's
+    // fresnel differs from a source's, the reflectance makes up for it as far as it can.
+    // Automatic fits all sources by area; a chosen source is fitted alone.
     public sealed class AtlasSpecularFeature : IAtlasSharedValueFeature, IAtlasAutomaticReference
     {
         private static readonly AtlasFeatureMode[] ModeList =
@@ -46,13 +47,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Fitted values: within the fit's steps.
         private static bool Close(float a, float b) => Mathf.Abs(a - b) <= 0.01f;
 
-        // Whether the output gives a source its look exactly: its reflectance, and its highlight
-        // and reflection strengths where the output has none.
+        // Whether the output gives a source its look exactly: its reflectance, its highlight and
+        // reflection strengths where the output has none, and the fresnel its own shader has.
+        // A source of another shader is fitted, since the same values look different there.
         private static bool Exact(AtlasUnifiedMaterial source, AtlasOutputCapabilities capabilities)
         {
             var response = source.Surface.Response;
             OutputReflectance(response, capabilities.Reflectance, out bool exact);
-            return exact && (capabilities.Provides(AtlasVirtualMap.SpecularMask) || Full(response.Highlights.Enabled, response.Highlights.Strength, response.Highlights.Mask)) &&
+            return exact && AtlasSpecularResponse.SameShading(response, capabilities) && (capabilities.Provides(AtlasVirtualMap.SpecularMask) || Full(response.Highlights.Enabled, response.Highlights.Strength, response.Highlights.Mask)) &&
                    (capabilities.Provides(AtlasVirtualMap.ReflectionMask) || Full(response.Reflections.Enabled, response.Reflections.Strength, response.Reflections.Mask));
         }
 

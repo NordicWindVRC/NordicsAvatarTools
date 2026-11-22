@@ -851,7 +851,10 @@ Thry's locking keeps.
 - **Reflections & Specular** off means no highlights or reflections (Cloth keeps its own; both
   on is reported). On: metallic and smoothness from the packed map's chosen channels (or white)
   times their sliders, with their inverts; the reflection and specular masks with their
-  visibilities (an inverted mask below full strength is noted); tints; fresnel strength;
+  visibilities (an inverted mask below full strength is noted); tints; fresnel strength
+  (the slider `s` raises reflections by `lerp(F0, 1, s) × s × (1 − N·V)⁵`, so the unified
+  strength is `s × lerp(F0, 1, s) / (1 − F0)` at a non-metal's F0 of 4%: 0.27 at the default
+  0.5; the writer converts back);
   exposure occlusion; the fallback cubemap (forced as the source, lit or not); ignore casted
   shadows; 2nd specular as the second lobe; pixel normal mix (0 the mesh normal, between is
   reported); GSAA; GGX anisotropics (amount, map channel or vertex color, reflection stretch,

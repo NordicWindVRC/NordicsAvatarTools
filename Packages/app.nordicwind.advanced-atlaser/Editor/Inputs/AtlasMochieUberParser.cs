@@ -556,7 +556,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             reflections.Strength = Float(m, "_ReflectionStr", 1f);
             reflections.Tint = AtlasMaterialReader.ColorLinear(m, "_ReflCol", Color.white);
             reflections.Mask = Mask(m, UberMask.Reflection);
-            reflections.FresnelStrength = Int(m, "_FresnelToggle", 1) == 1 ? Float(m, "_FresnelStrength", 1f) : 0f;
+            // Uber's fresnel rises by ((1 − N·V) × its strength)⁵, so by the strength's fifth power.
+            reflections.FresnelStrength = Int(m, "_FresnelToggle", 1) == 1 ? Mathf.Pow(Mathf.Max(0f, Float(m, "_FresnelStrength", 1f)), 5f) : 0f;
             reflections.RoughnessOverride = Int(m, "_ReflUseRough", 0) == 1;
             reflections.Roughness = Float(m, "_ReflRough", 0.5f);
             var cube = AtlasSourceMapping.Texture(m, "_ReflCube");

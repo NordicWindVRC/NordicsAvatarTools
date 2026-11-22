@@ -339,7 +339,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public UnityEngine.Color Tint = UnityEngine.Color.white;
         // Null: everywhere.
         public AtlasMask Mask;
-        // 1 = full fresnel falloff, 0 = none.
+        // How far reflections rise from F0 toward grazing angles: F0 + (1 − F0) × this ×
+        // (1 − N·V)⁵. 1: all the way; 0: no rise. Parsers convert their shader's setting.
         public float FresnelStrength = 1f;
         public bool RoughnessOverride;
         public float Roughness = 0.5f;

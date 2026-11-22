@@ -84,13 +84,13 @@ look in the unified evaluation stages. What remains planned:
 ### The reference look
 
 Built (*The look model* in the output design): a view layer's look at a sample point, in
-the stages S1–S5, which the matcap measures, the rim fit and the rims' costs use. What
-remains planned:
+the stages S1–S5, which the matcap measures, the rim fit and the rims' costs use; and
+highlights and reflections in the lighting stage, which the reflectance fit uses with each
+source's own lighting and its own shader's fresnel. What remains planned:
 
-- **Highlights and reflections.** The highlight fit has its own model, which assumes plain
-  Lambert light whatever lighting was chosen, so it uses the scenes with a main light only.
-  With highlights and reflections as part of the lighting stage, it takes its light from
-  the reference look.
+- **How reflections fall off with roughness** (a shader's surface reduction, the grazing
+  term of Unity's reflections) isn't part of the lighting stage; the same on both sides
+  today.
 - **The matcap slot fit** works on the base color before the light, so it uses no scene.
 - **Sample points** are a source's base colors alone. With the values at the same places
   (masks, roughness, metallic), read from a map at a stage (*Map contributions*, above),
@@ -114,8 +114,11 @@ tuning, the kept lighting is read from a scratch material before the atlas's mat
   the output design): the fresnel of highlights and reflections and the reflectance they
   fade below, and what a rim slot shows of a rim.
 - **Beyond the lighting.** The rim fit reads its kept part from a scratch material with the
-  rim written to it, as the lighting is read. The other fits (the matcap slot, highlights
-  and reflections) read theirs the same way once they compare the kept material's look.
+  rim written to it, as the lighting is read, and the reflectance fit reads the output
+  shader's fresnel from what its parser says of the shader. The output's side of the
+  reflectance fit is drawn under each source's own lighting, not the kept lighting, which
+  isn't chosen yet when the surface resolves. The matcap slot fit reads its kept part the
+  same way once it compares looks.
 
 ### Differences
 

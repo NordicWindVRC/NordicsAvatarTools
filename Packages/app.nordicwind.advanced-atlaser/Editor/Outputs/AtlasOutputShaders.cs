@@ -1228,7 +1228,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             m.SetFloat("_ClearCoatReflectionTintThemeIndex", 0);
             m.SetColor("_ClearCoatSpecularTint", highlights.Tint.gamma);
             m.SetFloat("_ClearCoatSpecularTintThemeIndex", 0);
-            m.SetFloat("_ClearcoatFresnelStrength", reflections.FresnelStrength);
+            m.SetFloat("_ClearcoatFresnelStrength", AtlasPoiyomiFresnel.Slider(reflections.FresnelStrength));
             m.SetFloat("_ClearcoatExposureOcclusion", reflections.ExposureOcclusion);
             bool forced = reflections.Source == AtlasReflectionSource.Cubemap && reflections.Cubemap != null;
             m.SetTexture("_ClearCoatFallback", forced ? reflections.Cubemap.Texture : reflections.FallbackCubemap?.Texture);

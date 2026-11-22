@@ -120,6 +120,47 @@ namespace NordicWind.AdvancedAtlaser.Editor
             new Color(layer.Color.r * Mathf.Lerp(1f, surface.r, layer.BaseColorMix), layer.Color.g * Mathf.Lerp(1f, surface.g, layer.BaseColorMix),
                 layer.Color.b * Mathf.Lerp(1f, surface.b, layer.BaseColorMix), 1f);
 
+        /// <summary>S2, a highlight from a direct light of 1, without its fresnel: GGX's
+        /// distribution × the Smith-GGX correlated visibility × N·L, at a perceptual
+        /// roughness.</summary>
+        public static float Highlight(float roughness, float nDotL, float nDotV, float nDotH)
+        {
+            float alpha = Mathf.Max(roughness * roughness, 0.0045f);
+            float a2 = alpha * alpha;
+            float denominator = nDotH * nDotH * (a2 - 1f) + 1f;
+            float distribution = a2 / (Mathf.PI * denominator * denominator + 1e-6f);
+            float visibility = Mathf.Clamp01(0.5f / Mathf.Max(Mathf.Lerp(2f * nDotL * nDotV, nDotL + nDotV, alpha), 1e-5f));
+            return distribution * visibility * nDotL;
+        }
+
+        /// <summary>S2, how far the fresnel of highlights and of reflections rises from F0
+        /// toward 1 at the angles (0–1), by the response's fresnel; the rise of reflections ×
+        /// their fresnel strength.</summary>
+        public static void FresnelRise(AtlasSurfaceResponse response, float vDotH, float nDotV, out float highlights, out float reflections)
+        {
+            float strength = Mathf.Max(0f, response.Reflections.FresnelStrength);
+            if (response.Fresnel == AtlasFresnel.ViewHalfTimesViewNormal)
+            {
+                highlights = Mathf.Pow((1f - vDotH) * (1f - nDotV), 5f);
+                reflections = highlights * strength;
+                return;
+            }
+            highlights = Mathf.Pow(1f - vDotH, 5f);
+            reflections = Mathf.Pow(1f - nDotV, 5f) * strength;
+        }
+
+        /// <summary>S2, the highlights and reflections added to the diffuse light: each × its
+        /// fresnel, F0 + (1 − F0) × its rise, both × the response's reflectance fade.
+        /// <paramref name="highlight"/> and <paramref name="reflection"/> are what shows
+        /// without fresnel: the highlight × the direct light, and the environment, each × its
+        /// strength.</summary>
+        public static float Specular(AtlasSurfaceResponse response, float f0, float reflectance, float metallic, float highlight, float highlightRise,
+            float reflection, float reflectionRise)
+        {
+            float fade = response.ReflectanceFade > 0f ? Mathf.Clamp01((reflectance + metallic) / response.ReflectanceFade) : 1f;
+            return (highlight * (f0 + (1f - f0) * highlightRise) + reflection * (f0 + (1f - f0) * reflectionRise)) * fade;
+        }
+
         /// <summary>The look as displayed (sRGB).</summary>
         public static Color Shown(Color baseColor, IReadOnlyList<AtlasLookLayer> layers, AtlasLookLight light) =>
             AtlasLightingResponse.Display(Linear(baseColor, layers, light));

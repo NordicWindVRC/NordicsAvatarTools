@@ -51,18 +51,16 @@ in the unified evaluation stages, rims and the matcaps that are rims or highligh
 by their cost point by point, matcap slots taken in the order of measured impact, the
 inspector saying how each matcap and rim ends up shown, and what an output shader has no
 settings for read from its parser instead of its capabilities: the fresnel of its
-highlights and reflections and what its rim slot shows of a rim (the design's *Map
+highlights and reflections and what its rim slot shows of a rim, and the reflectance fitted
+in the reference look, each source drawn with its own shader's fresnel (the design's *Map
 contributions*, *The look model*, *Comparing layers*, *What a matcap is for* and *Base color
 shifts*). Each remaining part of the look model is built in the phase that first uses it.
 
 ### 4.6 Shader formulas out of the capabilities
 
-- The rest of the reference look (*The reference look*): highlights and reflections in its
-  lighting stage, and sample points with the values at the same places (masks, roughness,
-  metallic).
-- The highlight and reflection fit moves onto the reference look (*The kept material*).
-- What remains of *Map contributions*: reading a map at a stage, which the sample points
-  use, full values in the emission map and declared inputs.
+- Sample points with the values at the same places (masks, roughness, metallic), read from
+  a map at a stage (*The reference look*, *Map contributions*).
+- What remains of *Map contributions*: full values in the emission map and declared inputs.
 - **Workable — M4 reached:** a new output shader adds its writer and capabilities that hold
   counts and availability only.
 
