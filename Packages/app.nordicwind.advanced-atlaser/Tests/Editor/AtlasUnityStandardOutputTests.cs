@@ -302,7 +302,8 @@ namespace NordicWind.AdvancedAtlaser.Tests
 
         // Standard has no minimum light. A source's keeps it visible in the dark, so the base
         // color × the floor goes into the emission, on every source of the atlas, and the kept
-        // lighting says so. An output with a floor of its own keeps it there.
+        // lighting says so. An output with a floor of its own keeps what it can there, and the
+        // rest goes into the emission. The user can turn it off.
         [Test]
         public void AMinimumLightGoesIntoTheEmission()
         {
@@ -313,6 +314,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var job = Job(lit);
             var plan = AtlasOutputPipeline.Resolve(job, Shader);
             Assert.AreEqual(0.2f, plan.LightFloor, 1e-6f);
+            Assert.AreEqual(0.2f, plan.LightFloorMissing, 1e-6f);
             Assert.AreEqual(0.2f, plan.KeptLighting.MinimumBrightness, 1e-6f);
             StringAssert.Contains("has no minimum light", Notes(plan));
             var emission = plan.Maps.Single(m => m.Map == AtlasVirtualMap.Emission);
@@ -333,12 +335,29 @@ namespace NordicWind.AdvancedAtlaser.Tests
             job.Features.Add(new AtlasFeatureChoice { FeatureId = "emission", ModeId = "off" });
             plan = AtlasOutputPipeline.Resolve(job, Shader);
             Assert.AreEqual(0f, plan.LightFloor);
+            Assert.AreEqual(0f, plan.LightFloorMissing, "no emission to keep it in: no control either");
             Assert.IsFalse(plan.Maps.Any(m => m.Map == AtlasVirtualMap.Emission));
 
-            // Toon Standard has a minimum brightness of its own.
+            // Turned off by its own control, which stays while the floor is missing.
+            job.Features.Clear();
+            var lighting = new AtlasFeatureChoice { FeatureId = AtlasLightingFeature.FeatureId };
+            lighting.Switches[AtlasLightFloor.SwitchId] = false;
+            job.Features.Add(lighting);
+            plan = AtlasOutputPipeline.Resolve(job, Shader);
+            Assert.AreEqual(0f, plan.LightFloor);
+            Assert.AreEqual(0.2f, plan.LightFloorMissing, 1e-6f);
+            Assert.AreEqual(0f, plan.KeptLighting.MinimumBrightness);
+            Assert.IsFalse(plan.Maps.Any(m => m.Map == AtlasVirtualMap.Emission));
+
+            // Toon Standard has a minimum brightness of its own, up to 0.1: the rest is added,
+            // so the two together are the atlas's floor.
             var toon = AtlasShaderRegistry.Output("mobiletoon");
-            if (toon.FindShader() != null)
-                Assert.AreEqual(0f, AtlasOutputPipeline.Resolve(Job(lit), toon).LightFloor);
+            if (toon.FindShader() == null) return;
+            plan = AtlasOutputPipeline.Resolve(Job(lit), toon);
+            Assert.GreaterOrEqual(plan.LightFloor, 0.1f - 1e-4f, "what its slider can't hold");
+            Assert.AreEqual(0.2f, plan.KeptLighting.MinimumBrightness, 1e-4f, "its own and the emission's");
+            StringAssert.Contains("is added to the emission", Notes(plan));
+            Assert.IsTrue(plan.Maps.Any(m => m.Map == AtlasVirtualMap.Emission));
         }
 
         // What Standard has no control for goes into its textures or is left out, and its

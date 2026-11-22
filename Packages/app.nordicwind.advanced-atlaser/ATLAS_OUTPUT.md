@@ -66,7 +66,7 @@ Where each part of this design lives:
 | Overview | `Editor/Outputs/AtlasOutputOverview.cs`, `AtlasTextureMemory.cs` | What an output uses: features with their modes and sources, the textures they need with sizes and memory |
 | Evaluator | `Editor/Outputs/AtlasMapEvaluator.cs`, `AtlasColorStack.cs` | The bakeable subset over a source's UV 0–1: textures with their placement, color layers, decals, adjustments, masks and the mask bus |
 | Map requests | `Editor/Outputs/AtlasMapRequest.cs` | A virtual map's content, views and contributions by stage, its shared color and its range step (see [*Map contributions*](#map-contributions)) |
-| Look model | `Editor/Outputs/AtlasLook.cs`, `AtlasReferenceLook.cs`, `AtlasKeptMaterial.cs`, `AtlasLightingTuning.cs`, `AtlasLightFloor.cs`, `AtlasLevelCompensation.cs`, `AtlasMatcapLook.cs` | The standard scenes, a lighting's level and contrast, a layer's cost, a view layer's look in the unified evaluation stages, the written material read back and compared with the sources' own looks, the lighting tuned where the output shader shows it differently, a minimum light kept through the emission where the output shader has none, and the base color scaled for sources the atlas's lighting shows brighter or darker than their own (see [*The look model*](#the-look-model)), and a matcap's effect measured and named by its role (see [*What a matcap is for*](#what-a-matcap-is-for)) |
+| Look model | `Editor/Outputs/AtlasLook.cs`, `AtlasReferenceLook.cs`, `AtlasKeptMaterial.cs`, `AtlasLightingTuning.cs`, `AtlasLightFloor.cs`, `AtlasLevelCompensation.cs`, `AtlasMatcapLook.cs` | The standard scenes, a lighting's level and contrast, a layer's cost, a view layer's look in the unified evaluation stages, the written material read back and compared with the sources' own looks, the lighting tuned where the output shader shows it differently, the minimum light an output shader can't keep itself added through the emission, and the base color scaled for sources the atlas's lighting shows brighter or darker than their own (see [*The look model*](#the-look-model)), and a matcap's effect measured and named by its role (see [*What a matcap is for*](#what-a-matcap-is-for)) |
 | Map baker | `Editor/Outputs/AtlasMapBaker.cs` | One texture, source by source: each virtual map evaluated at the source's bake size, its UV islands grown over the unused texels, placed in its region |
 | Coverage | `Editor/Outputs/AtlasCoverage.cs` | Each source's UV0 triangles (from the output's renderers in the manual bake, the avatar's in the build), painted at bake size; a triangle in another UV tile counts by whole tiles |
 | Packing | `Editor/Outputs/AtlasTexturePacker.cs` | One output texture from its virtual maps: which channels each map fills (inverted where the texture stores it so), and the neutral value of the rest |
@@ -463,15 +463,25 @@ doesn't search again.
 #### Minimum light
 
 A lighting's floors (a minimum light, a minimum brightness, a floored light color) keep a
-surface visible without light. An output shader that keeps none of them but has an emission
-map gets the floor there (`AtlasLightFloor`), after the lighting is tuned and before the
-level compensation: the base color as the atlas shows it × the floor is added to the
-emission map of every source, since the atlas has one lighting. That is what a minimum
-brightness is (Toon Standard's own floor works so), so the kept lighting carries it as one,
-and the level compensation and the comparison after writing count it. It adds to the
-world's light where a minimum light only raises it (listed). An output shader with a floor
-of its own keeps what it can there, and one without an emission map, or with the emission
-turned off, stays dark without light.
+surface visible without light. An output shader has none (Unity Standard), or one that
+stops below the atlas's (Toon Standard's minimum brightness at 0.1). Where it has an
+emission map, the rest goes there (`AtlasLightFloor`), after the lighting is tuned and
+before the level compensation:
+
+- **The rest** is the floor of the lighting the atlas chose, before tuning, less the floor
+  the kept lighting has. The shader's own floor and the emission's together are the
+  atlas's, whatever the tuning made of the shader's.
+- **In the emission:** the base color as the atlas shows it × the rest is added to the
+  emission map of every source, since the atlas has one lighting. That is what a minimum
+  brightness is (Toon Standard's own floor works so), so the kept lighting carries it as
+  one, and the level compensation and the comparison after writing count it. It adds to
+  the world's light where a minimum light only raises it (listed).
+- **The control:** where no source glows, the floor is what the atlas has an emission
+  texture for, so the user can turn it off (*Minimum light in the emission*, with the
+  lighting's settings, shown while the output shader can't keep the whole floor). Off, the
+  atlas is darker without light than the sources were.
+- An output without an emission map (VRChat Mobile Diffuse), or with the emission turned
+  off, stays dark without light.
 
 #### Level compensation
 
@@ -1720,8 +1730,9 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
   it; and tuning never leaves the lighting farther from the chosen one.
 - **Minimum light:** on Unity Standard a source's minimum light adds the base color as shown
   × the floor to the emission, and the kept lighting carries it as a minimum brightness;
-  there is none without a floor or with the emission turned off, and an output with a floor
-  of its own keeps it there.
+  there is none without a floor or with the emission turned off; turned off by its control,
+  the floor is still known to be missing, so the control stays; on Toon Standard the part
+  its own floor can't hold is added, and the two together are the atlas's floor.
 - **Level compensation:** a source the atlas lights darker is scaled by what its own lighting
   had over it, and none of its texels goes above 1; a raise that doesn't fit is applied in
   full below the knee and less above it, in order and without a step, so a white part of a

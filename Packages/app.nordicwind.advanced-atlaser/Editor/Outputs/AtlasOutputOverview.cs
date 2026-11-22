@@ -116,6 +116,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     if (!(state.Feature is AtlasLightingFeature)) continue;
                     // Level compensation, while a material would be scaled.
                     if (plan.LevelScales.Count > 0) state.Switches.Add(AtlasLevelCompensation.Switch);
+                    // The minimum light in the emission, while the output shader can't keep it all.
+                    if (plan.LightFloorMissing > 0f) state.Switches.Add(AtlasLightFloor.Switch);
                 }
             overview.AddTextures(config, capabilities, plan);
             if (plan != null) overview.AddOtherTextures(plan, config, capabilities);

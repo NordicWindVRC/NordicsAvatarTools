@@ -16,8 +16,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly List<string> Notes = new List<string>();
         // The lighting as the output shader shows it; null when resolved without the shader.
         public AtlasLighting KeptLighting;
-        // The minimum brightness added through the emission, where the output shader has no
-        // minimum light of its own (AtlasLightFloor); 0: none.
+        // The part of the atlas's minimum light the output shader can't keep itself, and what
+        // of it is added through the emission (AtlasLightFloor: all of it unless turned off).
+        public float LightFloorMissing;
         public float LightFloor;
         // Level compensation: the base color scale that gives a source the level its own
         // lighting had, by index into the job's sources (applied unless turned off), and what
@@ -82,8 +83,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         /// <summary>The plan for an output shader: resolved by its capabilities, then matched
         /// by look against the lighting the shader keeps. The lighting is tuned where the shader
-        /// shows it differently (AtlasLightingTuning), a minimum light the shader lacks goes into
-        /// the emission (AtlasLightFloor), and the sources it still shows brighter or darker than
+        /// shows it differently (AtlasLightingTuning), the minimum light the shader can't keep goes
+        /// into the emission (AtlasLightFloor), and the sources it still shows brighter or darker than
         /// their own get their base color scaled (AtlasLevelCompensation).</summary>
         public static AtlasOutputPlan Resolve(AtlasGeneratorJob job, IAtlasOutputShader shader)
         {
@@ -91,9 +92,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
             using (var kept = AtlasKeptLighting.For(shader))
             {
                 if (kept == null) return plan;
+                // The floor of the lighting the atlas chose, before it is tuned to the shader.
+                float floor = AtlasLightingFeature.Floor(plan.Output.Lighting);
                 AtlasLightingTuning.Tune(job, plan, kept);
                 plan.KeptLighting = kept.Of(plan.Output.Lighting);
-                AtlasLightFloor.Apply(job, plan, shader.Capabilities, plan.KeptLighting);
+                AtlasLightFloor.Apply(job, plan, shader.Capabilities, plan.KeptLighting, floor);
                 AtlasLevelCompensation.Apply(job, plan, plan.KeptLighting);
             }
             return plan;
