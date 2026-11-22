@@ -1310,6 +1310,9 @@ allocator (see [*Masks*](#masks)). *Merge* uses the strategies above.
 | Feature | Unified | Modes | Maps | Merge and notes |
 |---|---|---|---|---|
 | **Proximity color** | 1.9 a modulator with source *camera distance*, driving a color adjustment | 1. Native<br>2. Off | — | Shared value from the reference source (*Proximity Color from*). Poiyomi's has no mask, so it covers the whole atlas; when some sources don't have it, that's listed and *Off* is the choice |
+| **Tone mapping** | 1.10 color adjustments: the GT7 tone map of the final color, the neutral surface emission | 1. Native<br>2. Off | — | Shared value from the reference source (*Tone Mapping from*). The output's has no mask, so it covers the whole atlas; when some sources don't have it, that's listed and *Off* is the choice. An operation the output lacks (the neutral surface emission before Poiyomi Pro 11) is left out, listed |
+| **Screen-space ambient occlusion** | 3.6 as a pattern layer | 1. Native<br>2. Off | a mask place, when it differs between sources | Shared value from the reference source (*Screen-space AO from*). It follows the view and the depth texture, so there is nothing to bake. Each source's mask goes into an allocated mask place, 0 where a source has none, so the occlusion shows where it did; a mask that is one value everywhere goes into the intensity. A color map sampled by the occlusion as a ramp is kept; one on the source's UVs isn't baked yet, and the color is used (listed) |
+| **Contact shadows** | 3.6 as a pattern layer | 1. Native<br>2. Off | a mask place, when it differs between sources | As screen-space ambient occlusion: the reference source's setup (*Contact shadows from*) and each source's mask |
 | **AudioLink** | 1.3 AudioLink themes<br>1.9 audio modulators<br>4.6 audio patterns | 1. Per feature (outputs whose sections have AudioLink)<br>2. AudioLink emission (outputs with one)<br>3. Off (the feature keeps its rest value) | AudioLink color, for an AudioLink emission | A modulator that leaves its target as it is without music is baked at rest (`AtlasAudio`). Per feature: slots copy their layer's modulators (matcaps, rims, glitter), an audio-driven emission takes an emission slot of its own (slots whose maps come out the same, such as emissions that differ only in their band, share one map); parts without a slot stay at rest, listed. AudioLink emission: the reference source's (*AudioLink from*), each kept source's emission × its audio gain in the AudioLink color map, stretched to its brightest value (a dim emission keeps its precision through 8 bits and compression), the level in the layer's color (Toon Standard: above 1 in the intensity, below 1 in the tint, since an intensity below 1 also lowers the tint's alpha); with smoothing 0, Poiyomi reads the raw level, Toon Standard only the filtered ones (its least filtered lags about 0.1 s); scroll and bar run along the atlas's UVs (listed). AudioLink modes keyed to UV tiles read a preserved UV channel (see [*UV channels*](#uv-channels)) |
 | **Surface mode and render queue** | 6 | 1. Automatic: the most see-through mode among the sources that the output supports (opaque, cutout, dithered, transparent, fade, in that order). When transparent or fade sources mix with others, a **fade with depth writes** (Poiyomi's TransClipping): the solid parts, at alpha 1, sort like opaque ones and the transparent sources keep their alpha; a plain blended mode would make the whole avatar sort wrongly. An output that can't do that gets the most see-through of the other sources' modes, and the transparent sources are drawn solid (alpha 1), never cut or dithered. A source whose alpha is turned off counts as opaque<br>2. A chosen mode, including *Fade with Depth* | — | Always on. The queue follows the mode (the writer's queue for it); a queue override isn't there yet. Additive, multiplicative and custom blends aren't merged yet: their sources count as opaque |
 | **Fallback shader** | 6 (not typed) | 1. Automatic: the writer's choice<br>2. Toon, Unlit, Standard or Hidden | — | Always on, where the writer sets one. The writer follows the surface mode and culling (Poiyomi: `VRCFallback`, such as `ToonCutout` or `ToonFadeDoubleSided`) |
@@ -1362,7 +1365,7 @@ These are covered by the same model and come after the initial features: outline
 slots and exclusive values), fur (5.2, exclusive with a length mask), transition and dissolve
 (4.2), the other procedural patterns (4.6), refraction (4.7), highlight layers (4.8, slots),
 parallax (2.5, height map baked per region), deformations and geometry effects (5.3, 5.4),
-second pass and visibility (6), screen-space lighting (3.6).
+second pass and visibility (6).
 
 ---
 
@@ -1391,22 +1394,27 @@ reverse, and round-trip tests (parse, write, parse, compare) check it. How the s
 computes what it has no settings for comes from its parser too (see [*The look
 model*](#the-look-model)), so an output shader needs one.
 
-**Poiyomi** has one writer for its versions (`PoiyomiOutputShader`), since Poiyomi 11 keeps
-10's property names: the versions share the texture layout, the capabilities and the writer,
-and each one's registration says its major version. The writer sets every property by name,
-and a property a version doesn't declare isn't set on its material, so what a newer version
-adds needs no branch. A version's shader is found by its name, the same in every version
-(under *Old Versions* next to a newer one), and its master label.
+**Poiyomi** has one writer for its versions and variants (`PoiyomiOutputShader`), since
+Poiyomi 11 keeps 10's property names and Pro has Toon's: they share the texture layout, the
+capabilities and the writer, and each one's registration says its major version and its
+variant. The writer sets every property by name, and a property a version doesn't declare
+isn't set on its material, so what a newer version adds needs no branch; Pro's own sections
+are written on Pro only. A shader is found by its name, the same in every version (under
+*Old Versions* next to a newer one), and its master label. Pro is a paid shader: its writer
+describes it in its own words, as its parser does, and it is offered only where Pro is
+installed.
 
 | Version | What it adds as an output |
 |---|---|
 | Toon 10 | The base: see the [*Feature inventory*](#feature-inventory) |
+| Pro 10 | Toon 10, and Pro's own sections: GT7 tone mapping, screen-space ambient occlusion and contact shadows |
+| Pro 11 | Toon 11 and Pro 10, and the neutral surface emission |
 | Toon 11 | Global mask contacts kept live (a touch written into a channel); a lilToon-style rim's application stage, so one on the base color stays there; a second backlight with a color map of its own; the rendering presets also turn the sharpened alpha to coverage off |
 
 | Output | Work |
 |---|---|
 | Poiyomi Toon 11, the rest | The PBR lighting type as the output's lighting. It replaces Reflections & Specular and the clear coat with its own controls, so what the output can express changes with the lighting chosen |
-| Poiyomi Pro | Registrations of the Poiyomi writer for Pro: more slots (three outlines, for example) and the Pro-only features. Offered only where Pro is installed. Pro is a paid shader: its writer describes it in our own words, as its parser does |
+| Poiyomi Pro, the rest | The Pro features that wait for others: the constellation pattern with the other procedural patterns, TPS and squish with the deformations, three outlines and the outline bake with the outlines |
 | Mochie Uber | A new writer, mostly the existing Uber parser in reverse |
 
 What adds work is a feature or mode that no shared feature covers yet (built once, then
@@ -1476,7 +1484,8 @@ Output name, output shader, sources ("Source 1 (Body)") and UV regions
     Lighting          Shading · Light volumes · LTCGI
     Layers            Matcaps · Rim lighting · Environmental rim · Backlight ·
                       Emission · Glitter · Subsurface
-    Effects           Proximity color · AudioLink
+    Effects           Proximity color · Tone mapping · Screen-space ambient occlusion ·
+                      Contact shadows · AudioLink
     Render            Surface mode and queue · Fallback
 ▸ Masks               where each mask went (read only)
 ▸ Baking              light rig, strengths, lights, view     (only when a mode bakes)
@@ -1662,6 +1671,13 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
   back after lighting on 10; a source's second backlight is kept on 11, with its color in
   a second map, and left out on 10 (listed); both versions write each surface mode as its
   preset; every writer round trip runs on each installed output shader.
+- **Poiyomi Pro as an output:** Pro is an output of its own per version, ranked just above
+  Toon of that version, with Toon's capabilities and its own; tone mapping comes from the
+  reference source and covers the atlas, an operation the output lacks is listed, and an
+  output without tone mapping says so once; screen-space ambient occlusion gets a mask that
+  is 0 on the sources without it and its own copy of the settings; contact shadows on every
+  source need no mask; the writer's Pro sections are read back by the parser on each
+  installed Pro version.
 - **Fits:** a source the output can reproduce gets its exact value back; a fit with nothing
   missing finds that same value; a weaker setting gives the expected direction (weaker
   highlights, a lower reflectance); shared values follow the source whose look changes most.
@@ -1705,9 +1721,9 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
 - **Light roles:** each light has its own temperature, softness, and diffuse and specular
   weights. Each bake uses only the light terms its purpose needs. Baked light color is
   limited by a color influence, and every bake has its own strength slider.
-- **One Poiyomi writer:** Poiyomi's versions share one writer, registered once per version;
-  a version adds capabilities and the properties only it declares, never a writer of its
-  own.
+- **One Poiyomi writer:** Poiyomi's versions and variants share one writer, registered once
+  per version and variant; each adds capabilities and the properties only it declares, never
+  a writer of its own.
 - **First writers:** Poiyomi Toon 10 and VRChat Mobile Toon Standard, both from the first
   milestone.
 - **Compound textures:** an output shader's texture can provide several virtual maps in its

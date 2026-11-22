@@ -241,6 +241,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Hue cycling (a hue shift with a speed) of the base color (its mask in HueCyclingMask) and
         // the final color (an allocated mask), and of the slots that have their own hue shift.
         public bool HueCycling;
+        // A GT7 tone map of the final color, and a neutral surface emission; neither has a mask.
+        public bool ToneMapping;
+        public bool NeutralEmission;
+        // Shadows from the depth texture, each with a mask by channel (inverted): screen-space
+        // ambient occlusion, and contact shadows.
+        public bool ScreenOcclusion;
+        public bool ContactShadows;
         // Emission slots: the first holds the baked emission, the second the live global mask
         // emission, the rest emissions whose hue cycles.
         public int EmissionSlots = 1;

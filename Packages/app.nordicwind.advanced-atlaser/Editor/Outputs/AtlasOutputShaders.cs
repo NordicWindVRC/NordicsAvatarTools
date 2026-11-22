@@ -9,31 +9,34 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // output features decide what to produce. Registrations are discovered automatically by
     // AtlasShaderRegistry.
 
-    // Poiyomi's writer, one for its versions: Poiyomi 11 keeps 10's property names, so the
-    // versions share the texture layout, the capabilities and the writer, and each one's
-    // registration says its major version, which adds what that version has. A property a
-    // version doesn't declare isn't set on its material.
+    // Poiyomi's writer, one for its versions and variants: Poiyomi 11 keeps 10's property
+    // names, and Pro has Toon's, so they share the texture layout, the capabilities and the
+    // writer. Each registration says its major version and its variant, which add what that
+    // version and Pro have. A property a version doesn't declare isn't set on its material.
     public abstract class PoiyomiOutputShader : IAtlasOutputShader
     {
         private readonly int major;
+        private readonly bool pro;
 
-        protected PoiyomiOutputShader(int major)
+        protected PoiyomiOutputShader(int major, AtlasPoiyomiVariant variant = AtlasPoiyomiVariant.Toon)
         {
             this.major = major;
-            Capabilities = Build(major);
+            pro = variant == AtlasPoiyomiVariant.Pro;
+            Capabilities = Build(major, pro);
         }
 
         public abstract string ShaderId { get; }
         public abstract string DisplayName { get; }
         public string Family => AtlasShaderFamilies.Poiyomi;
-        // The major version × 10.
-        public int Rank => major * 10;
+        // The major version × 10, plus 1 for Pro.
+        public int Rank => major * 10 + (pro ? 1 : 0);
 
         // Every version names its shader the same; one installed next to a newer version lives
         // under Old Versions. The shader's master label says which version it is.
         public Shader FindShader()
         {
-            foreach (string name in new[] { ".poiyomi/Poiyomi Toon", ".poiyomi/Old Versions/" + major + ".0/Poiyomi Toon" })
+            string variant = pro ? "Poiyomi Pro" : "Poiyomi Toon";
+            foreach (string name in new[] { ".poiyomi/" + variant, ".poiyomi/Old Versions/" + major + ".0/" + variant })
             {
                 var shader = Shader.Find(name);
                 if (shader == null) continue;
@@ -46,7 +49,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         public AtlasOutputCapabilities Capabilities { get; }
 
-        private static AtlasOutputCapabilities Build(int major)
+        private static AtlasOutputCapabilities Build(int major, bool pro)
         {
             var capabilities = new AtlasOutputCapabilities
             {
@@ -170,6 +173,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 capabilities.Textures.Add(new AtlasOutputTexture("Backlight2", "Backlight 2 color") { SizeMode = AtlasTextureSizeMode.MainAspect, MainDivisor = 2 }
                     .With(AtlasVirtualMap.BacklightColor2, AtlasTextureChannels.RGB, Color.black));
             }
+            if (pro)
+            {
+                // Pro's own sections: GT7 tone mapping, screen-space ambient occlusion and contact
+                // shadows; Pro 11 also has the neutral surface emission.
+                capabilities.ToneMapping = true;
+                capabilities.NeutralEmission = major >= 11;
+                capabilities.ScreenOcclusion = true;
+                capabilities.ContactShadows = true;
+            }
             return capabilities;
         }
 
@@ -231,6 +243,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
             WriteGlitter(output, material);
             WriteSubsurface(output, material);
             WriteProximityColor(output, material);
+            if (pro)
+            {
+                WriteToneMapping(output, material);
+                WriteScreenOcclusion(output, material);
+                WriteContactShadows(output, material);
+            }
             WriteHueCycling(output, material);
             WriteCyclingEmission(output, material);
             WriteAudioLinkGlobals(output, material);
@@ -1018,6 +1036,129 @@ namespace NordicWind.AdvancedAtlaser.Editor
             m.SetFloat("_FXProximityColorBackFace", 0);
         }
 
+        // Pro's own sections, as the Poiyomi parser reads them (AtlasPoiyomiPro).
+
+        // GT7 tone mapping of the final color (GT7_TONEMAPPING), and Pro 11's neutral surface
+        // emission.
+        private static void WriteToneMapping(AtlasUnifiedMaterial output, Material m)
+        {
+            var tone = AtlasToneMappingFeature.Of(output, AtlasColorOperation.ToneMapGt7);
+            m.SetFloat("_GT7ToneMapping", tone != null ? 1 : 0);
+            if (tone != null) m.EnableKeyword("GT7_TONEMAPPING");
+            else m.DisableKeyword("GT7_TONEMAPPING");
+            if (tone != null)
+            {
+                m.SetFloat("_GT7TM_ColorAccuracy", tone.Settings.x);
+                m.SetFloat("_GT7TM_ChromaFadeStart", tone.Settings.y);
+                m.SetFloat("_GT7TM_ChromaFadeEnd", tone.Settings.z);
+            }
+            var neutral = AtlasToneMappingFeature.Of(output, AtlasColorOperation.NeutralEmission);
+            m.SetFloat("_NeutralEmission", neutral != null ? 1 : 0);
+            if (neutral == null) return;
+            m.SetFloat("_NeutralEmissionHDRRetention", neutral.Settings.x);
+            m.SetFloat("_NeutralEmissionHueCorrection", neutral.Settings.y);
+        }
+
+        // Screen-space ambient occlusion (POI_SSAO): its color by the layer's blend, its mask by
+        // channel.
+        private static void WriteScreenOcclusion(AtlasUnifiedMaterial output, Material m)
+        {
+            var layer = AtlasScreenOcclusionFeature.Of(output);
+            var ao = layer?.AmbientOcclusion;
+            m.SetFloat("_SSAOEnabled", ao != null ? 1 : 0);
+            if (ao != null) m.EnableKeyword("POI_SSAO");
+            else m.DisableKeyword("POI_SSAO");
+            if (ao == null) return;
+            m.SetFloat("_SSAOAnimationToggle", 1);
+            m.SetFloat("_SSAOIntensity", ao.Intensity);
+            m.SetFloat("_SSAORadius", ao.Radius);
+            m.SetFloat("_SSAOQuality", ao.Quality);
+            m.SetFloat("_SSAOCenterImportance", ao.CenterImportance);
+            m.SetFloat("_SSAOBias", ao.DepthBias);
+            m.SetFloat("_SSAOCone", ao.ConeBias);
+            m.SetFloat("_SSAORandomScale", ao.Jitter);
+            m.SetFloat("_SSAOUseNormals", ao.NormalAmount);
+            m.SetFloat("_SSAONormalBias", ao.NormalRejection);
+            m.SetTexture("_SSAOColorMap", ao.ColorMap?.Texture);
+            m.SetTextureScale("_SSAOColorMap", Vector2.one);
+            m.SetTextureOffset("_SSAOColorMap", Vector2.zero);
+            m.SetVector("_SSAOColorMapPan", Vector4.zero);
+            m.SetFloat("_SSAOColorMapUV", 0);
+            m.SetFloat("_SSAOAsRamp", ao.ColorMap != null && ao.ColorMapAsRamp ? 1 : 0);
+            m.SetVector("_SSAOHSV", ao.Hsvg);
+            m.SetFloat("_SSAOUseSurfaceColor", ao.SurfaceColorMix);
+            m.SetFloat("_SSAOCameraClip", ao.CameraClip);
+            m.SetFloat("_SSAOHideByRampedLightMap", ao.HideInLight);
+            m.SetFloat("_SSAOAlphaFade", ao.AlphaFade);
+            m.SetFloat("_SSAOFalloffStart", ao.QualityFalloff.x);
+            m.SetFloat("_SSAOFalloffEnd", ao.QualityFalloff.y);
+            m.SetVector("_SSAOMaxDistanceFalloff", ao.MaxDistanceFalloff);
+            var color = layer.Color;
+            m.SetColor("_SSAOColor", new Color(color.r, color.g, color.b, 1f).gamma);
+            m.SetFloat("_SSAOColorThemeIndex", 0);
+            m.SetFloat("_SSAOBlendType", BlendType(layer.Blend));
+            WriteMaskSlot(m, "_SSAOMask", layer.Mask);
+            m.SetVector("_SSAOMaskPan", Vector4.zero);
+            m.SetFloat("_SSAOMaskChannel", MaskChannel(layer.Mask));
+            m.SetFloat("_SSAOMaskInvert", layer.Mask?.Map?.Texture != null && layer.Mask.Invert ? 1 : 0);
+            m.SetFloat("_SSAOGlobalMaskIndex", 0);
+            m.SetFloat("_SSAOApplyGlobalMaskIndex", 0);
+        }
+
+        // Contact shadows (POI_CONTACT_SHADOWS): blended into the base color (apply mode 0),
+        // multiplied into the light map (1) or both (2); the mask by channel.
+        private static void WriteContactShadows(AtlasUnifiedMaterial output, Material m)
+        {
+            var layer = AtlasContactShadowFeature.Of(output);
+            var shadow = layer?.ContactShadow;
+            m.SetFloat("_ContactShadowsEnabled", shadow != null ? 1 : 0);
+            if (shadow != null) m.EnableKeyword("POI_CONTACT_SHADOWS");
+            else m.DisableKeyword("POI_CONTACT_SHADOWS");
+            if (shadow == null) return;
+            m.SetFloat("_ContactShadowsAnimationToggle", 1);
+            m.SetFloat("_ContactShadowsApplyMode", shadow.ApplyToColor && shadow.ApplyToLightMap ? 2 : shadow.ApplyToLightMap ? 1 : 0);
+            m.SetFloat("_ContactShadowsIntensity", shadow.Intensity);
+            m.SetFloat("_ContactShadowsMaxDistance", shadow.MaxDistance);
+            m.SetFloat("_ContactShadowsQuality", shadow.Quality);
+            m.SetFloat("_ContactShadowsThickness", shadow.Thickness);
+            m.SetFloat("_ContactShadowsBias", shadow.DepthBias);
+            m.SetFloat("_ContactShadowsLightSource", shadow.CustomDirection ? 1 : 0);
+            m.SetVector("_ContactShadowsCustomLightDir", new Vector4(shadow.Direction.x, shadow.Direction.y, shadow.Direction.z, 0f));
+            m.SetFloat("_ContactShadowsCustomLightSpace", (int)shadow.DirectionSpace);
+            m.SetVector("_ContactShadowsCameraFalloff", new Vector4(shadow.CameraFalloff.x, shadow.CameraFalloff.y, 0f, 0f));
+            m.SetFloat("_ContactShadowsNormalBias", shadow.NormalRejection);
+            m.SetFloat("_ContactShadowsHideInLight", shadow.HideInLight);
+            m.SetFloat("_ContactShadowsNoiseScale", shadow.Dither);
+            m.SetFloat("_ContactShadowsRejectionDepth", shadow.RejectionDepth);
+            m.SetColor("_ContactShadowsColor", layer.Color.gamma);
+            m.SetFloat("_ContactShadowsColorThemeIndex", 0);
+            m.SetFloat("_ContactShadowsBlendType", BlendType(layer.Blend));
+            WriteMaskSlot(m, "_ContactShadowsMask", layer.Mask);
+            m.SetVector("_ContactShadowsMaskPan", Vector4.zero);
+            m.SetFloat("_ContactShadowsMaskChannel", MaskChannel(layer.Mask));
+            m.SetFloat("_ContactShadowsMaskInvert", layer.Mask?.Map?.Texture != null && layer.Mask.Invert ? 1 : 0);
+            m.SetFloat("_ContactShadowsGlobalMaskIndex", 0);
+            m.SetFloat("_ContactShadowsApplyGlobalMaskIndex", 0);
+            m.SetFloat("_ContactShadowsDebug", 0);
+        }
+
+        // A layer's blend as Poiyomi's blend type, the reverse of the parser's reading.
+        private static int BlendType(AtlasBlend blend)
+        {
+            switch (blend)
+            {
+                case AtlasBlend.Darken: return 1;
+                case AtlasBlend.Multiply: return 2;
+                case AtlasBlend.Lighten: return 5;
+                case AtlasBlend.Screen: return 6;
+                case AtlasBlend.Subtract: return 7;
+                case AtlasBlend.Add: return 8;
+                case AtlasBlend.Overlay: return 9;
+                case AtlasBlend.Mixed: return 20;
+                default: return 0;
+            }
+        }
+
         // Glitter (_SUNDISK_SIMPLE), as the Poiyomi parser reads it (AtlasPoiyomiPatterns).
         private static void WriteGlitter(AtlasUnifiedMaterial output, Material m)
         {
@@ -1629,6 +1770,23 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public PoiyomiToon11OutputShader() : base(11) { }
         public override string ShaderId => "poiyomi11";
         public override string DisplayName => "Poiyomi Toon 11";
+    }
+
+    // Pro has Toon's sections and its own: GT7 tone mapping, screen-space ambient occlusion and
+    // contact shadows.
+    public sealed class PoiyomiPro10OutputShader : PoiyomiOutputShader
+    {
+        public PoiyomiPro10OutputShader() : base(10, AtlasPoiyomiVariant.Pro) { }
+        public override string ShaderId => "poiyomipro10";
+        public override string DisplayName => "Poiyomi Pro 10";
+    }
+
+    // Pro 11 adds what Toon 11 does, and the neutral surface emission.
+    public sealed class PoiyomiPro11OutputShader : PoiyomiOutputShader
+    {
+        public PoiyomiPro11OutputShader() : base(11, AtlasPoiyomiVariant.Pro) { }
+        public override string ShaderId => "poiyomipro11";
+        public override string DisplayName => "Poiyomi Pro 11";
     }
 
     public sealed class VRChatMobileToonOutputShader : IAtlasOutputShader

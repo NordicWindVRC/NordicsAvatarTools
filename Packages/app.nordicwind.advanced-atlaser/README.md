@@ -69,6 +69,8 @@ Logging*.
 |---|---|
 | Poiyomi Toon 10 | Found under its usual name, or under *Old Versions* when Poiyomi Pro or 11 is installed |
 | Poiyomi Toon 11 | As Toon 10, and it keeps global mask contacts live and a second backlight |
+| Poiyomi Pro 10 | As Toon 10, and it keeps GT7 tone mapping, screen-space ambient occlusion and contact shadows |
+| Poiyomi Pro 11 | As Toon 11 and Pro 10, and it keeps the neutral surface emission |
 | VRChat Mobile Toon Standard | Opaque only; what it lacks is approximated, baked or left out |
 
 ## Limitations

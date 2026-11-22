@@ -30,34 +30,9 @@ it uses. How finished parts work is in the design; what each version added is in
 | **M1 — End to end** | An avatar builds with the sources' base color textures atlased into one, on both writers, and the manual bake writes the material and its texture | Done |
 | **M2 — Initial features** | Every feature in the design's *Feature inventory*, on both writers | Done |
 | **M4 — Matching by look** | Looks measured and tuned in every scene; matcaps placed by role and cost | Done |
-| **M3 — More Poiyomi writers** | Poiyomi Toon 11, Pro 10 and Pro 11 as outputs | In progress |
+| **M3 — More Poiyomi writers** | Poiyomi Toon 11, Pro 10 and Pro 11 as outputs | Done |
 | **M5 — More output families** | VRChat Mobile Diffuse, Unity Standard, VRChat Mobile Toon Lit and Standard Lite as outputs | Planned |
 | Later | Mochie Uber as an output, the later features, animation, GPU baking | — |
-
----
-
-## M3 — More Poiyomi writers
-
-Built so far: one Poiyomi writer registered as Toon 10 and Toon 11, with 11's global mask
-contacts kept live, its rim application stage and its second backlight (the design's
-*Output shaders*).
-
-### 3.1 The rest of Toon 11
-
-- The PBR lighting type as the output's lighting. It replaces Reflections & Specular and the
-  clear coat with its own controls (one packed map, a reflectance, no highlight or
-  reflection strengths, sheen and glints), so what the output can express changes with the
-  lighting chosen.
-- **Workable:** every feature of the design's inventory that Toon 11 has a control for is
-  written to it, with round trips.
-
-### 3.2 Poiyomi Pro 10 and Pro 11
-
-- The Poiyomi writer registered for Pro, by variant: Pro's added capabilities (more slots),
-  and its features natively for Pro sources (screen-space AO, contact shadows,
-  constellation, GT7 tone mapping, neutral emission and the others the unified material
-  types). Offered only where Pro is installed. The writer describes Pro in its own words.
-- **Workable — M3 reached:** Poiyomi Pro 10 and Pro 11 as outputs, with round trips.
 
 ---
 
@@ -76,7 +51,8 @@ Not planned in detail yet, in rough order:
 - Mochie Uber as an output (its parser in reverse);
 - the design's later features: outlines, fur, transition and dissolve, the other procedural
   patterns, refraction, highlight layers, parallax, deformations and geometry effects,
-  second pass and visibility, screen-space lighting;
+  second pass and visibility. Poiyomi Pro's remaining features come with them: the
+  constellation pattern, TPS and squish, three outlines and the outline bake (from 3.2);
 - animation support;
 - half-precision buffers or GPU baking, if the memory budget is too tight;
 - a typed-in value for shared values, next to *Automatic* and the sources in the reference
@@ -87,6 +63,11 @@ Not planned in detail yet, in rough order:
   the scenes; other shared values and values in maps tuned by look; every feature that
   reads the base color reading a shifted one; declared inputs, a smooth limit for maps
   without a carrier, and the range each contribution raised;
+- **Poiyomi 11's PBR lighting type as the output's lighting** (from 3.1). It replaces
+  Reflections & Specular and the clear coat with its own controls (one packed map, a
+  reflectance, no highlight or reflection strengths, sheen and glints), so what the output
+  can express changes with the lighting chosen: built with the output's look as the kept
+  material, above. Until then such a lighting is written as the nearest other type;
 - **a matcap's ways compared by their cost** (from 4.5): one side, two slots and a shifted
   base as candidates, with the blocked view's difference. Built with the first output that
   has two matcap slots of one blend each; until then *Base color shift* decides between
