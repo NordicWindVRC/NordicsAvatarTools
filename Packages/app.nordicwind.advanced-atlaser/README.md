@@ -72,7 +72,8 @@ Logging*.
 | Poiyomi Pro 10 | As Toon 10, and it keeps GT7 tone mapping, screen-space ambient occlusion and contact shadows |
 | Poiyomi Pro 11 | As Toon 11 and Pro 10, and it keeps the neutral surface emission |
 | VRChat Mobile Toon Standard | Opaque only; what it lacks is approximated, baked or left out |
-| VRChat Mobile Diffuse | One color texture, opaque only: normal maps, occlusion and matcaps are baked into it, and emission when you choose so; rims and highlights are left out |
+| VRChat Mobile Diffuse | One color texture, opaque only: normal maps and occlusion are baked into it, matcaps that light the surface as their average, and emission when you choose so; rims and highlights are left out |
+| Unity Standard | Its own maps and surface modes, with its own lighting; matcaps that light the surface are kept as their average in the color, vertex colors are baked, rims are left out |
 
 ## Limitations
 

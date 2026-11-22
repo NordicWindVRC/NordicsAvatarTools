@@ -78,10 +78,24 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(AtlasShaderFamilies.VRChat, new AtlasVRChatToonStandardParser().Family);
             Assert.AreEqual(AtlasShaderFamilies.VRChat, new AtlasVRChatToonLitParser().Family);
             Assert.AreEqual(AtlasShaderFamilies.VRChat, new AtlasVRChatStandardLiteParser().Family);
-            Assert.IsNull(new AtlasUnityStandardParser().Family);
+            Assert.AreEqual(AtlasShaderFamilies.Unity, new AtlasUnityStandardParser().Family);
+            Assert.AreEqual(AtlasShaderFamilies.Unity, new AtlasUnityStandardSpecularParser().Family);
             Assert.IsNull(new AtlasMochieUberParser().Family);
             Assert.AreEqual(AtlasShaderFamilies.Poiyomi, AtlasShaderRegistry.Output("poiyomi10").Family);
             Assert.AreEqual(AtlasShaderFamilies.VRChat, AtlasShaderRegistry.Output("mobiletoon").Family);
+            Assert.AreEqual(AtlasShaderFamilies.Unity, AtlasShaderRegistry.Output("standard").Family);
+        }
+
+        // Unity Standard is built in, so its family always has an output: its materials pick
+        // it, and it comes before VRChat Mobile where no family wins.
+        [Test]
+        public void UnityStandardMaterialsPickUnityStandard()
+        {
+            var standard = new Fake("standard", AtlasShaderFamilies.Unity, 10);
+            Assert.AreEqual("standard", Pick(new[] { "unity", "unity", "poiyomi" }, Toon10, standard, Mobile));
+            Assert.AreEqual("toon10", Pick(new[] { "unity", "poiyomi", "poiyomi" }, Toon10, standard, Mobile));
+            Assert.AreEqual("standard", Pick(new string[] { null }, standard, Mobile));
+            Assert.AreEqual("toon10", Pick(new string[] { null }, Toon10, standard, Mobile));
         }
 
         [Test]

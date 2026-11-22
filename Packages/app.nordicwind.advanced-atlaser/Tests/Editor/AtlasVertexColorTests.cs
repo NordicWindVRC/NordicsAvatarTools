@@ -150,7 +150,9 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 created.Add(material);
                 shader.Write(output, material);
                 var parsed = AtlasShaderRegistry.Detect(material).Parse(material).Surface.VertexColor;
-                Assert.IsTrue(parsed.MultiplyColor, shader.DisplayName);
+                // A shader without vertex colors (Unity Standard) shows none.
+                Assert.AreEqual((support & AtlasVertexColorSupport.Color) != 0, parsed.MultiplyColor, shader.DisplayName);
+                if ((support & AtlasVertexColorSupport.Color) == 0) continue;
                 Assert.AreEqual(vertex.Amount, parsed.Amount, 1e-5f, shader.DisplayName);
                 Assert.AreEqual(vertex.MultiplyAlpha, parsed.MultiplyAlpha, shader.DisplayName);
                 Assert.AreEqual(vertex.SrgbData, parsed.SrgbData, shader.DisplayName);

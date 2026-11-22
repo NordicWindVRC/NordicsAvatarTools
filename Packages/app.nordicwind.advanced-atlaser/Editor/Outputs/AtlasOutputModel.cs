@@ -233,8 +233,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public int Backlights;
         // Tiled layers kept live (a detail texture, a detail normal): the highest UV channel a
         // detail can read, the detail texture's blends, whether it has a tint and strength of its
-        // own, whether there's a detail normal, and whether the detail mask picks a channel (one
-        // allocated mask for both; otherwise DetailTextureMask and DetailNormalMask).
+        // own, whether there's a detail normal, and whether both details read one mask from a
+        // mask place (the channel the place is in: any on Toon Standard, the detail mask's alpha
+        // on Unity Standard; otherwise DetailTextureMask and DetailNormalMask).
         public int DetailUVChannels;
         public readonly System.Collections.Generic.HashSet<AtlasBlend> DetailTextureBlends = new System.Collections.Generic.HashSet<AtlasBlend>();
         public bool DetailStrength;

@@ -279,6 +279,43 @@ namespace NordicWind.AdvancedAtlaser.Editor
             output.Layers.OfType<AtlasSurfaceLayer>().FirstOrDefault(l => l.Targets.Any(t => t.Target == AtlasSurfaceTarget.Emission) &&
                 l.Mask != null && l.Mask.Bus >= 0);
 
+        /// <summary>The output has an emission map and the emission isn't turned off.</summary>
+        public static bool On(AtlasGeneratorJob job, AtlasOutputCapabilities capabilities)
+        {
+            var feature = AtlasOutputFeatures.Find("emission");
+            var choice = job.Features.Find(f => f.FeatureId == "emission");
+            return capabilities.Provides(AtlasVirtualMap.Emission) &&
+                   (feature == null || AtlasOutputFeatures.Effective(feature, choice?.ModeId, capabilities)?.Kind != AtlasFeatureModeKind.Off);
+        }
+
+        /// <summary>The plan's emission map and its layer's emission target, for a feature that
+        /// adds to the emission after this one resolved: this feature's map, or one made here,
+        /// dark, where no source has an emission. The target is null where the map has no
+        /// layer of its own.</summary>
+        public static AtlasMapRequest Map(AtlasGeneratorJob job, AtlasOutputPlan plan, out AtlasLayerTarget target)
+        {
+            var request = plan.Maps.FirstOrDefault(r => r.Map == AtlasVirtualMap.Emission);
+            AtlasSurfaceLayer output;
+            if (request == null)
+            {
+                request = new AtlasMapRequest
+                {
+                    Map = AtlasVirtualMap.Emission,
+                    Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Color },
+                    Content = (i, m, w, h) => AtlasMapEvaluator.Constant(AtlasVirtualMap.Emission, 0f, w, h)
+                };
+                for (int i = 0; i < job.Sources.Count; i++) request.Sources.Add(i);
+                plan.Maps.Add(request);
+                output = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission };
+                output.Source.Map = request.Reference;
+                output.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Emission, AtlasBlend.Add, 1f));
+                plan.Output.Layers.Add(output);
+            }
+            else output = plan.Output.Layers.OfType<AtlasSurfaceLayer>().FirstOrDefault(l => l.Source.Map == request.Reference);
+            target = output?.Targets.FirstOrDefault(t => t.Target == AtlasSurfaceTarget.Emission);
+            return request;
+        }
+
         // The output's emission layer, if any.
         public static AtlasSurfaceLayer Of(AtlasUnifiedMaterial output) =>
             output.Layers.OfType<AtlasSurfaceLayer>().FirstOrDefault(l => l.Targets.Any(t => t.Target == AtlasSurfaceTarget.Emission) &&

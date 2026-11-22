@@ -2086,4 +2086,151 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
         }
     }
+
+    // Unity's built-in Standard shader, metallic setup: the Standard parser's reading written
+    // back (UNIFIED_MATERIAL_UNITY_STANDARD.md). Every main map is on the albedo's tiling. It
+    // lights by its own physically based model and has no vertex colors, matcaps or rims: those
+    // go into the textures by the features' baked modes, or are left out. The keywords, blend
+    // state and emission flag are the ones the shader's inspector derives from a material's
+    // values, so a written material stays as it is when the inspector validates it.
+    public sealed class UnityStandardOutputShader : IAtlasOutputShader
+    {
+        public string ShaderId => "standard";
+        public string DisplayName => "Unity Standard";
+        public string Family => AtlasShaderFamilies.Unity;
+        public int Rank => 10;
+        public Shader FindShader() => Shader.Find("Standard");
+        public AtlasOutputCapabilities Capabilities { get; } = new AtlasOutputCapabilities
+        {
+            Textures =
+            {
+                // _MainTex: the albedo, the alpha in A.
+                new AtlasOutputTexture("BaseColor", "Base color") { SizeMode = AtlasTextureSizeMode.Main }
+                    .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB)
+                    .With(AtlasVirtualMap.Alpha, AtlasTextureChannels.A),
+                PoiyomiOutputShader.NormalTexture(),
+                // One texture for _MetallicGlossMap (R metallic, A smoothness) and _OcclusionMap (G).
+                new AtlasOutputTexture("Surface", "Metallic, occlusion and smoothness") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
+                    .With(AtlasVirtualMap.Metallic, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f))
+                    .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.G, AtlasOutputTexture.Gray(1f))
+                    .With(AtlasVirtualMap.Roughness, AtlasTextureChannels.A, AtlasOutputTexture.Gray(0f), invert: true),
+                PoiyomiOutputShader.EmissionTexture(),
+                // _DetailMask reads its alpha: one mask place, for both details.
+                new AtlasOutputTexture("DetailMask", "Detail mask") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false, MainDivisor = 2 }
+                    .With(AtlasVirtualMap.Mask1, AtlasTextureChannels.A, AtlasOutputTexture.Gray(0f))
+            },
+            SurfaceModes = { AtlasSurfaceMode.Cutout, AtlasSurfaceMode.Transparent, AtlasSurfaceMode.Fade },
+            // Detail albedo × 2 and detail normal on UV0 or UV1, without a tint or strength.
+            DetailUVChannels = 1,
+            DetailTextureBlends = { AtlasBlend.MultiplyDouble },
+            DetailNormal = true,
+            DetailMaskByChannel = true
+        };
+
+        // The rendering modes (_Mode), as the shader's inspector sets them up: the RenderType
+        // tag, the blend factors, depth writes, the mode's keyword and the queue.
+        private static readonly (AtlasSurfaceMode Mode, int Preset, string Type, UnityEngine.Rendering.BlendMode Src,
+            UnityEngine.Rendering.BlendMode Dst, int ZWrite, string Keyword, int Queue)[] Modes =
+        {
+            (AtlasSurfaceMode.Opaque, 0, "", UnityEngine.Rendering.BlendMode.One, UnityEngine.Rendering.BlendMode.Zero, 1, null, 2000),
+            (AtlasSurfaceMode.Cutout, 1, "TransparentCutout", UnityEngine.Rendering.BlendMode.One, UnityEngine.Rendering.BlendMode.Zero, 1,
+                "_ALPHATEST_ON", 2450),
+            (AtlasSurfaceMode.Fade, 2, "Transparent", UnityEngine.Rendering.BlendMode.SrcAlpha, UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha, 0,
+                "_ALPHABLEND_ON", 3000),
+            (AtlasSurfaceMode.Transparent, 3, "Transparent", UnityEngine.Rendering.BlendMode.One, UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha, 0,
+                "_ALPHAPREMULTIPLY_ON", 3000)
+        };
+
+        private static void Keyword(Material material, string keyword, bool on)
+        {
+            if (on) material.EnableKeyword(keyword);
+            else material.DisableKeyword(keyword);
+        }
+
+        public void Write(AtlasUnifiedMaterial output, Material material)
+        {
+            // Albedo: _Color (sRGB-authored) × _MainTex, whose alpha is the baked alpha.
+            var baseColor = output.Surface.BaseColor;
+            material.SetColor("_Color", baseColor.Color.gamma);
+            material.SetTexture("_MainTex", baseColor.Map?.Texture);
+            material.SetTextureScale("_MainTex", Vector2.one);
+            material.SetTextureOffset("_MainTex", Vector2.zero);
+
+            // Metallic and smoothness from the surface texture (R and A, the smoothness scale 1).
+            // Without one the surface is rough and not metallic, with highlights and reflections
+            // off. Smoothness never comes from the albedo's alpha, which holds the alpha.
+            var response = output.Surface.Response;
+            var surface = response.Metallic.Map?.Texture;
+            material.SetTexture("_MetallicGlossMap", surface);
+            Keyword(material, "_METALLICGLOSSMAP", surface != null);
+            material.SetFloat("_Metallic", 0);
+            material.SetFloat("_Glossiness", 0);
+            material.SetFloat("_GlossMapScale", 1);
+            material.SetFloat("_SmoothnessTextureChannel", 0);
+            material.DisableKeyword("_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A");
+            bool highlights = surface != null && response.Highlights.Enabled;
+            bool reflections = surface != null && response.Reflections.Enabled;
+            material.SetFloat("_SpecularHighlights", highlights ? 1 : 0);
+            Keyword(material, "_SPECULARHIGHLIGHTS_OFF", !highlights);
+            material.SetFloat("_GlossyReflections", reflections ? 1 : 0);
+            Keyword(material, "_GLOSSYREFLECTIONS_OFF", !reflections);
+
+            // Occlusion: lerp(1, G, strength).
+            var occlusion = response.Occlusion.Map?.Texture;
+            material.SetTexture("_OcclusionMap", occlusion);
+            material.SetFloat("_OcclusionStrength", occlusion != null ? Mathf.Clamp01(response.Occlusion.Constant) : 1f);
+
+            // The detail maps kept live (_DETAIL_MULX2), on UV0 or UV1 with one tiling: the
+            // albedo × 2, the normal at its scale, both faded in by the detail mask's alpha.
+            var detail = AtlasDetailFeatures.Of(output, AtlasSurfaceTarget.BaseColor);
+            var detailNormal = AtlasDetailFeatures.Of(output, AtlasSurfaceTarget.Normal);
+            var anyDetail = detail ?? detailNormal;
+            Keyword(material, "_DETAIL_MULX2", anyDetail != null);
+            material.SetTexture("_DetailAlbedoMap", detail?.Source.Map.Texture);
+            material.SetTextureScale("_DetailAlbedoMap", Vector2.one);
+            material.SetTextureOffset("_DetailAlbedoMap", Vector2.zero);
+            material.SetTexture("_DetailNormalMap", detailNormal?.Source.Map.Texture);
+            material.SetFloat("_DetailNormalMapScale", detailNormal != null ? detailNormal.Targets[0].Opacity : 1f);
+            material.SetTexture("_DetailMask", anyDetail?.Mask?.Map?.Texture);
+            material.SetFloat("_UVSec", anyDetail != null && AtlasDetailFeatures.UV(anyDetail) >= 1 ? 1 : 0);
+
+            // The normal map at its scale; _NORMALMAP also turns the detail normal on.
+            var normal = output.Surface.Normal;
+            material.SetTexture("_BumpMap", normal.Map?.Texture);
+            material.SetFloat("_BumpScale", normal.Map?.Texture != null ? normal.Strength : 1f);
+            Keyword(material, "_NORMALMAP", normal.Map?.Texture != null || detailNormal != null);
+
+            // Emission: _EmissionMap × _EmissionColor (set from the linear color's gamma value),
+            // which holds the whole strength. The inspector takes the _EMISSION keyword from the
+            // material's emission flag, so both are set.
+            var emission = AtlasEmissionFeature.Of(output);
+            var emissionMap = emission?.Source.Map?.Texture;
+            material.SetTexture("_EmissionMap", emissionMap);
+            Keyword(material, "_EMISSION", emissionMap != null);
+            if (emissionMap != null)
+            {
+                float total = emission.Targets.First(t => t.Target == AtlasSurfaceTarget.Emission).Opacity;
+                material.SetColor("_EmissionColor", new Color(total, total, total, 1f).gamma);
+                material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.BakedEmissive;
+            }
+            else
+            {
+                material.SetColor("_EmissionColor", Color.black);
+                material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.EmissiveIsBlack;
+            }
+
+            var render = output.Render;
+            var mode = Array.Find(Modes, m => m.Mode == render.SurfaceMode);
+            if (mode.Type == null) mode = Modes[0];
+            material.SetFloat("_Mode", mode.Preset);
+            material.SetOverrideTag("RenderType", mode.Type);
+            material.SetFloat("_SrcBlend", (float)mode.Src);
+            material.SetFloat("_DstBlend", (float)mode.Dst);
+            material.SetFloat("_ZWrite", mode.ZWrite);
+            foreach (var other in Modes)
+                if (other.Keyword != null) Keyword(material, other.Keyword, other.Keyword == mode.Keyword);
+            material.SetFloat("_Cutoff", mode.Mode == AtlasSurfaceMode.Cutout ? render.Cutoff : 0.5f);
+            material.renderQueue = render.Queue >= 0 ? render.Queue : mode.Queue;
+        }
+    }
 }

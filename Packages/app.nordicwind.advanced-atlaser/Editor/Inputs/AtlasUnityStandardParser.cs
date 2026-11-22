@@ -9,6 +9,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     /// </summary>
     public abstract class AtlasUnityStandardParserBase : AtlasParserBase
     {
+        public override string Family => AtlasShaderFamilies.Unity;
         protected abstract bool SpecularSetup { get; }
 
         protected override void Populate(Material m, AtlasUnifiedMaterial d)

@@ -426,14 +426,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     Switch(setting, conflictSwitch);
             // With one item in slots there is nothing to place, unless it can be kept as its
             // average or Automatic leaves it out: otherwise the mode and the per-material
-            // toggles decide. Baked, each item is baked, left out or left to Automatic.
+            // toggles decide. Baked, each item is baked, left out or left to Automatic; in a
+            // mode that keeps averages (an output without slots), averaged too.
             bool bakedMode = state.Mode != null && state.Mode.Kind == AtlasFeatureModeKind.Baked;
+            bool averagedMode = state.Mode != null && state.Mode.Kind == AtlasFeatureModeKind.Emulated;
             if (state.Instances.Count > 1 || state.Instances.Any(i => i.LeftOut) ||
                 ((bakedMode || state.InstancesCanAverage) && state.Instances.Count > 0))
                 using (new EditorGUI.IndentLevelScope())
                     foreach (var instance in state.Instances)
                         Placement(setting, instance, state.Instances, state.InstancesAsMatcap, state.InstancesCanBake, state.InstancesCanAverage,
-                            bakedMode, materials);
+                            bakedMode, averagedMode, materials);
             if (open)
                 using (new EditorGUI.IndentLevelScope())
                     Sources(setting, state, materials);
@@ -528,14 +530,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Where one item goes: Automatic, its own slot, baked, kept as its average, off, or
         // combined with another item.
         private static void Placement(SerializedProperty setting, AtlasFeatureInstance instance, List<AtlasFeatureInstance> instances, bool asMatcap,
-            bool canBake, bool canAverage, bool bakedMode, IReadOnlyList<Material> materials)
+            bool canBake, bool canAverage, bool bakedMode, bool averagedMode, IReadOnlyList<Material> materials)
         {
             var stored = StoredValue(setting, AtlasInstancePlacements.Id(instance.Key));
-            // Baked, there are no slots to share.
-            var others = bakedMode ? new List<AtlasFeatureInstance>() : instances.Where(i => i != instance).ToList();
+            // Baked or averaged, there are no slots to share.
+            bool noSlots = bakedMode || averagedMode;
+            var others = noSlots ? new List<AtlasFeatureInstance>() : instances.Where(i => i != instance).ToList();
             var placements = new List<AtlasInstancePlacement> { AtlasInstancePlacement.Automatic };
-            if (!bakedMode) placements.Add(AtlasInstancePlacement.Own);
-            if (asMatcap && !bakedMode) placements.Add(AtlasInstancePlacement.AsMatcap);
+            if (!noSlots) placements.Add(AtlasInstancePlacement.Own);
+            if (asMatcap && !noSlots) placements.Add(AtlasInstancePlacement.AsMatcap);
             if (canBake) placements.Add(AtlasInstancePlacement.Baked);
             if (canAverage) placements.Add(AtlasInstancePlacement.Averaged);
             placements.Add(AtlasInstancePlacement.Off);
@@ -557,6 +560,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var label = new GUIContent(instance.Label, (bakedMode
                 ? what + "Automatic bakes it into the color as seen from the front, unless it's a highlight that brightens (shine, glints), " +
                   "which would stay in place from every view; the build log says which."
+                : averagedMode
+                ? what + "Automatic keeps the average effect of a matcap that lights the surface, and leaves a rim or a highlight out; " +
+                  "the build log says which. Baked into color draws it into the textures as seen from the front, where it stays in place " +
+                  "from every view."
                 : what + "Automatic combines it with others on the same parts, or gives it a slot while one is free, " +
                   "and otherwise combines it with the most similar one; the build log says which." +
                   (canBake ? " Baked into color draws it into the textures as seen from the front, instead of sharing a slot." : "")) + averaged);

@@ -74,6 +74,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var kept = Read(written);
             if (kept == null) yield break;
+            // A minimum light kept through the emission is a minimum brightness.
+            if (plan.LightFloor > 0f) kept.Lighting.MinimumBrightness = Mathf.Max(kept.Lighting.MinimumBrightness, plan.LightFloor);
             foreach (var note in AtlasLightingFeature.Unkept(plan.Output, kept)) yield return note;
             foreach (var note in AtlasLook.LightingNotes(job, kept, plan.LevelApplied)) yield return note;
         }

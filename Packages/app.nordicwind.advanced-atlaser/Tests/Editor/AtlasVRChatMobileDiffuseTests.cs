@@ -124,7 +124,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual("native", Mode("color"));
             Assert.AreEqual("baked", Mode("normal"));
             Assert.AreEqual("baked", Mode("occlusion"));
-            Assert.AreEqual("baked", Mode(AtlasMatcapFeature.FeatureId));
+            Assert.AreEqual("average", Mode(AtlasMatcapFeature.FeatureId), "its own lighting shades the form");
             Assert.AreEqual("off", Mode("emission"), "drawn into the color only when chosen");
             Assert.IsNull(Mode("specular"));
             Assert.IsNull(Mode(AtlasRimFeature.FeatureId));

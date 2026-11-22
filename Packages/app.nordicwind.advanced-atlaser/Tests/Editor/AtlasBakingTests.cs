@@ -430,20 +430,25 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(Mathf.Sin(angle), Baked(Quaternion.identity, camera), 0.05f);
         }
 
+        // A bake is the user's choice: the baked mode, or a matcap placed Baked.
         [Test]
-        public void MatcapsAreBakedWhereTheOutputHasNoSlotsOrWhereTheyArePlacedBaked()
+        public void MatcapsAreBakedInTheBakedModeOrWhereTheyArePlacedBaked()
         {
             var material = new AtlasUnifiedMaterial();
             var layer = Matcap(new Color(0.2f, 0.4f, 0.6f, 1f), AtlasBlend.Add);
             material.Layers.Add(layer);
             var job = new AtlasGeneratorJob();
             job.Sources.Add(new AtlasGeneratorSource { Material = material, UVRegion = new Rect(0f, 0f, 1f, 1f), Surface = () => new[] { Square() } });
+            Assert.AreSame(AtlasMatcapFeature.Averaged, AtlasOutputPipeline.Resolve(job, BaseColorOnly()).Modes["matcaps"],
+                "the default without matcap slots keeps averages");
+            job.Features.Add(BakedMatcaps());
             var plan = AtlasOutputPipeline.Resolve(job, BaseColorOnly());
-            Assert.AreSame(AtlasMatcapFeature.Baked, plan.Modes["matcaps"], "the default without matcap slots");
+            Assert.AreSame(AtlasMatcapFeature.Baked, plan.Modes["matcaps"]);
             using (var color = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Evaluate(0, material, Size, Size))
                 Assert.AreEqual(1.4f, color.GetPixel(Size / 2, Size / 2).g, 1e-3f, "white + the matcap");
 
             // Placed Baked on an output with slots: no slot, and its glow in the emission.
+            job.Features.Clear();
             layer.EmissionAmount = 1f;
             var capabilities = AtlasShaderRegistry.Output("poiyomi10").Capabilities;
             var feature = (AtlasMatcapFeature)AtlasOutputFeatures.Find(AtlasMatcapFeature.FeatureId);
@@ -558,10 +563,14 @@ namespace NordicWind.AdvancedAtlaser.Tests
             return texture;
         }
 
+        // The matcaps' baked mode, chosen.
+        private static AtlasFeatureChoice BakedMatcaps() =>
+            new AtlasFeatureChoice { FeatureId = AtlasMatcapFeature.FeatureId, ModeId = AtlasMatcapFeature.Baked.Id };
+
         [Test]
         public void AutomaticBakesShadingMatcapsAndLeavesHighlightsOut()
         {
-            // The shading multiplies all over; the highlight is a small bright spot that adds.
+            // In the baked mode. The shading multiplies all over; the highlight is a small bright spot that adds.
             // Both look up the planar reflection, as Poiyomi's double-sided mode does for every
             // kind of matcap: the lookup makes neither an effect.
             var material = new AtlasUnifiedMaterial();
@@ -574,6 +583,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             material.Layers.Add(highlight);
             var job = new AtlasGeneratorJob();
             job.Sources.Add(new AtlasGeneratorSource { Material = material, UVRegion = new Rect(0f, 0f, 1f, 1f), Surface = () => new[] { Square() } });
+            job.Features.Add(BakedMatcaps());
             var plan = AtlasOutputPipeline.Resolve(job, BaseColorOnly());
             using (var color = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Evaluate(0, material, Size, Size))
                 Assert.AreEqual(0.5f, color.GetPixel(Size / 2, Size / 2).g, 1e-3f, "white × the shading matcap, without the highlight");
@@ -586,6 +596,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             lit.Layers.Add(light);
             job = new AtlasGeneratorJob();
             job.Sources.Add(new AtlasGeneratorSource { Material = lit, UVRegion = new Rect(0f, 0f, 1f, 1f), Surface = () => new[] { Square() } });
+            job.Features.Add(BakedMatcaps());
             plan = AtlasOutputPipeline.Resolve(job, BaseColorOnly());
             using (var color = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Evaluate(0, lit, Size, Size))
                 Assert.AreEqual(1.3f, color.GetPixel(Size / 2, Size / 2).g, 1e-3f, "white + the light");

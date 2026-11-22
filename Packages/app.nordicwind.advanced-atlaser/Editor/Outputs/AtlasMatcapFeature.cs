@@ -86,10 +86,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // - An output whose slot takes one blend at a time (Toon Standard) gets a matcap with
     //   several weights merged into one, or fitted.
     // - Each slot's mask goes through the mask allocator.
-    // - Baked (AtlasMatcapBake): a group placed Baked, or every group in the Baked mode (outputs
-    //   without slots), is drawn into the base color and the emission as the virtual view sees
-    //   it, instead of taking a slot. Automatic in the Baked mode leaves out effects that
-    //   brighten (Brightens): a baked highlight stays in place from every view.
+    // - Without slots (the Average in color mode, the default on an output without matcap
+    //   slots): a lighting matcap keeps its average effect in the base color, and the output's
+    //   own lighting shades the form, which a bake would shade a second time; a rim or a
+    //   highlight has no average to keep and is left out. An averaged matcap's glow keeps its
+    //   average in the emission, where the output has one turned on (AverageGlow).
+    // - Baked (AtlasMatcapBake): a group placed Baked, or every group in the Baked mode, is
+    //   drawn into the base color and the emission as the virtual view sees it, instead of
+    //   taking a slot. A bake stays in place from every view, so it is the user's choice.
+    //   Automatic in the Baked mode leaves out effects that brighten (Brightens): a baked
+    //   highlight stays in place from every view.
     // How far a matcap slot's fit may shift the base color (ATLAS_OUTPUT.md, "Base color shifts").
     public enum AtlasBaseColorShift { Automatic = 0, Keep = 1, Full = 2 }
 
@@ -154,6 +160,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             RequiredMaps = new[] { AtlasVirtualMap.BaseColor }
         };
 
+        // For an output without matcap slots, and the default there (it comes before Baked).
+        public static readonly AtlasFeatureMode Averaged = new AtlasFeatureMode
+        {
+            Id = "average", Label = "Average in color", Kind = AtlasFeatureModeKind.Emulated,
+            RequiredMaps = new[] { AtlasVirtualMap.BaseColor },
+            Requires = c => c.MatcapSlots == 0
+        };
+
         private static readonly AtlasFeatureMode[] ModeList =
         {
             new AtlasFeatureMode
@@ -162,6 +176,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 OptionalMaps = new[] { AtlasVirtualMap.Mask1 },
                 Requires = c => c.MatcapSlots > 0
             },
+            Averaged,
             Baked,
             AtlasFeatureMode.Off
         };
@@ -459,12 +474,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var groups = Groups(job, context.Sources, context.Notes);
             // Matcaps that change nothing where they're looked up.
             var unseen = groups.Where(g => g.Members.All(NoEffect)).ToList();
+            // Without slots, a glow keeps its average in the emission where the output has one
+            // turned on; only the part of it that follows the light goes into the color.
+            bool glowInEmission = context.Mode == Averaged && EmissionOn(context);
             if (!capabilities.MatcapEmission)
             {
-                var glowing = GlowAsColor(groups.Except(unseen).ToList());
+                var glowing = GlowAsColor(groups.Except(unseen).ToList(), glowInEmission);
                 if (glowing.Count > 0)
-                    context.Notes.Add("The output's matcaps don't glow, so the matcap glow of " + string.Join(", ", glowing) +
-                                      " is added to the color instead (lit, so it doesn't glow in the dark).");
+                    context.Notes.Add(glowInEmission
+                        ? "The part of the matcap glow of " + string.Join(", ", glowing) + " that follows the light is added to the color."
+                        : "The output's matcaps don't glow, so the matcap glow of " + string.Join(", ", glowing) +
+                          " is added to the color instead (lit, so it doesn't glow in the dark).");
             }
             var measured = groups.Except(unseen).ToList();
             if (measured.Count > 0)
@@ -492,6 +512,33 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Average(context, kept, PlacedAverage);
                 foreach (var g in automaticUnseen) SetWay(context, g, WayUnseen, true);
                 foreach (var g in effects) SetWay(context, g, "Left out: a baked highlight would stay in place", true);
+                return;
+            }
+            if (context.Mode == Averaged)
+            {
+                var leftOut = groups.Where(g => Placed(g).Mode == AtlasInstancePlacement.Off).ToList();
+                var drawn = groups.Where(g => Placed(g).Mode == AtlasInstancePlacement.Baked && CanBake(capabilities)).ToList();
+                var chosen = groups.Where(g => Placed(g).Mode == AtlasInstancePlacement.Averaged).ToList();
+                // Every other placement needs a slot: Automatic decides.
+                var rest = groups.Except(leftOut).Except(drawn).Except(chosen).ToList();
+                var restUnseen = rest.Where(unseen.Contains).ToList();
+                var lighting = rest.Except(restUnseen).Where(g => KeepsAverage(g, capabilities)).ToList();
+                var effects = rest.Except(restUnseen).Except(lighting).ToList();
+                if (restUnseen.Count > 0)
+                    context.Notes.Add("Matcaps that change nothing where they're looked up are left out: " + string.Join(", ", restUnseen.Select(g => g.Label)) + ".");
+                if (effects.Count > 0)
+                    context.Notes.Add("The output shader has no matcap slots, so these matcap rims and highlights are left out: " +
+                                      string.Join(", ", effects.Select(g => g.Label)) +
+                                      ". Placing one Baked into color draws it into the textures, where it stays in place from every view.");
+                if (leftOut.Count > 0)
+                    context.Notes.Add("Matcaps left out: " + string.Join(", ", leftOut.Select(g => g.Label)) + ".");
+                Bake(context, drawn);
+                Average(context, chosen.Concat(lighting).ToList(),
+                    "The output shader has no matcap slots; its own lighting shades the form, and these matcaps keep their average effect " +
+                    "in the base color: {0}. Baked into color draws their shading into the textures instead");
+                if (glowInEmission) AverageGlow(context, chosen.Concat(lighting).ToList());
+                foreach (var g in restUnseen) SetWay(context, g, WayUnseen, true);
+                foreach (var g in effects) SetWay(context, g, "Left out: the output shader has no matcap slots", true);
                 return;
             }
             var baked = groups.Where(g => Placed(g).Mode == AtlasInstancePlacement.Baked && CanBake(capabilities)).ToList();
@@ -701,10 +748,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             context.Notes.Add("Matcaps baked into the textures as seen from the front: " + string.Join(", ", groups.Select(g => g.Label)) + ".");
             foreach (var group in groups) SetWay(context, group, WayBaked);
             if (strength <= 0f) return;
-            var emissionFeature = AtlasOutputFeatures.Find("emission");
-            var emissionChoice = job.Features.Find(f => f.FeatureId == "emission");
-            bool emissionOn = context.Capabilities.Provides(AtlasVirtualMap.Emission) &&
-                              (emissionFeature == null || AtlasOutputFeatures.Effective(emissionFeature, emissionChoice?.ModeId, context.Capabilities)?.Kind != AtlasFeatureModeKind.Off);
+            bool emissionOn = EmissionOn(context);
             // Each source's baked layers in its layer order (not GlowAsColor's: the bake splits a
             // glow between the emission and the color itself).
             var layers = new Dictionary<int, List<AtlasLookupLayer>>();
@@ -775,30 +819,84 @@ namespace NordicWind.AdvancedAtlaser.Editor
             : before != null ? baseColor.Before(before, index, material, width, height)
             : baseColor.Before(AtlasMapStage.Layers, index, material, width, height);
 
+        private static bool EmissionOn(AtlasFeatureContext context) => AtlasEmissionFeature.On(context.Job, context.Capabilities);
+
+        // The emission map (the emission feature resolves before this one) and its target.
+        private static AtlasMapRequest EmissionMap(AtlasFeatureContext context, out AtlasLayerTarget target) =>
+            AtlasEmissionFeature.Map(context.Job, context.Plan, out target);
+
+        // Without slots: the glows of matcaps kept as their average go into the emission, each
+        // as Poiyomi glows (matcap × its color × strength × mask × lerp(1, base color, mix)) with
+        // the matcap at its mean over the lookup disc, for the share that doesn't follow the
+        // light (AtlasMatcapBake.GlowShare).
+        private static void AverageGlow(AtlasFeatureContext context, List<Group> groups)
+        {
+            var glows = new Dictionary<int, List<(AtlasMask Mask, Color Color, float Mix)>>();
+            var labels = new List<string>();
+            foreach (var group in groups)
+            {
+                bool any = false;
+                foreach (var member in group.Members)
+                {
+                    var mean = MeanColor(member.Layers[0]);
+                    foreach (var layer in member.Layers.Where(l => !member.Added.Contains(l)))
+                    {
+                        float amount = Mathf.Max(0f, layer.EmissionAmount) * AtlasMatcapBake.GlowShare(layer);
+                        if (amount <= 0f) continue;
+                        if (!glows.TryGetValue(member.Source, out var list))
+                            glows[member.Source] = list = new List<(AtlasMask Mask, Color Color, float Mix)>();
+                        var tint = layer.Source.Color;
+                        list.Add((member.Mask, new Color(mean.r * tint.r * amount, mean.g * tint.g * amount, mean.b * tint.b * amount, 1f),
+                            Mathf.Clamp01(layer.BaseColorMix)));
+                        any = true;
+                    }
+                }
+                if (any) labels.Add(group.Label);
+            }
+            if (glows.Count == 0) return;
+            var request = EmissionMap(context, out var target);
+            if (target == null) return;
+            var color = AtlasLiveMasks.Request(context, AtlasVirtualMap.BaseColor);
+            // The map gives its value in full, so the glow is added as it is.
+            request.Add(new AtlasMapContribution
+            {
+                Feature = FeatureId, Label = "matcap glow averages", Stage = AtlasMapStage.Overlays, CanRaise = true,
+                Applies = glows.ContainsKey,
+                Apply = content =>
+                {
+                    int i = content.Source, w = content.Width, h = content.Height;
+                    var list = glows[i];
+                    var pixels = content.Map.GetPixels();
+                    using (var baseColor = list.Any(g => g.Mix > 0f) ? BaseColorAt(color, null, i, content.Material, w, h) : null)
+                    {
+                        var bases = baseColor?.GetPixels();
+                        foreach (var glow in list)
+                            using (var mask = AtlasMapEvaluator.ScaledMask(glow.Mask, 1f, w, h, content.Material))
+                            {
+                                var masks = mask.GetPixels();
+                                for (int p = 0; p < pixels.Length; p++)
+                                {
+                                    var b = bases != null ? bases[p] : Color.white;
+                                    float m = masks[p].r;
+                                    pixels[p].r += glow.Color.r * m * Mathf.Lerp(1f, b.r, glow.Mix);
+                                    pixels[p].g += glow.Color.g * m * Mathf.Lerp(1f, b.g, glow.Mix);
+                                    pixels[p].b += glow.Color.b * m * Mathf.Lerp(1f, b.b, glow.Mix);
+                                }
+                            }
+                    }
+                    content.Map.SetPixels(pixels);
+                }
+            });
+            if (request.Carry == null) AtlasEmissionFeature.CarryInStrength(request, target);
+            context.Notes.Add("The matcap glow of " + string.Join(", ", labels) + " is kept as its average in the emission.");
+        }
+
         private static void BakeEmission(AtlasFeatureContext context, Dictionary<int, List<AtlasLookupLayer>> layers, Dictionary<int, AtlasLightRig> rigs,
             Dictionary<int, Vector3> cameras, float strength, System.Func<int, List<AtlasLookupLayer>, int, int, NordicsTextureWrapper> normalsOf,
             AtlasMapRequest color)
         {
             var job = context.Job;
-            var request = context.Maps.FirstOrDefault(r => r.Map == AtlasVirtualMap.Emission);
-            AtlasSurfaceLayer output;
-            if (request == null)
-            {
-                request = new AtlasMapRequest
-                {
-                    Map = AtlasVirtualMap.Emission,
-                    Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Color },
-                    Content = (i, m, w, h) => AtlasMapEvaluator.Constant(AtlasVirtualMap.Emission, 0f, w, h)
-                };
-                for (int i = 0; i < job.Sources.Count; i++) request.Sources.Add(i);
-                context.Maps.Add(request);
-                output = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission };
-                output.Source.Map = request.Reference;
-                output.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Emission, AtlasBlend.Add, 1f));
-                context.Output.Layers.Add(output);
-            }
-            else output = context.Output.Layers.OfType<AtlasSurfaceLayer>().FirstOrDefault(l => l.Source.Map == request.Reference);
-            var target = output?.Targets.FirstOrDefault(t => t.Target == AtlasSurfaceTarget.Emission);
+            var request = EmissionMap(context, out var target);
             if (target == null) return;
             // The map gives its value in full, so the glow is added as it is.
             request.Add(new AtlasMapContribution
@@ -842,14 +940,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // An output whose matcaps don't glow adds the glow to the color: one more add layer of
         // the matcap at the glow's strength with its base color mix, as Poiyomi glows by matcap
         // × strength × mask × lerp(1, base color, mix), only after the lighting.
-        private static List<string> GlowAsColor(List<Group> groups)
+        // `litShareOnly`: only the part of the glow that follows the light, where the rest goes
+        // into the emission.
+        private static List<string> GlowAsColor(List<Group> groups, bool litShareOnly = false)
         {
             var labels = new List<string>();
             foreach (var group in groups)
             {
                 foreach (var member in group.Members)
                 {
-                    float glow = Glow(member);
+                    float glow = litShareOnly
+                        ? member.Layers.Sum(l => Mathf.Max(0f, l.EmissionAmount) * (1f - AtlasMatcapBake.GlowShare(l)))
+                        : Glow(member);
                     if (glow <= 0f) continue;
                     var first = member.Layers[0];
                     var added = Copy(first, first.Mask, AtlasBlend.Add, AtlasPlacement.Surface, glow, first.Source.Map, first.Source.Color);

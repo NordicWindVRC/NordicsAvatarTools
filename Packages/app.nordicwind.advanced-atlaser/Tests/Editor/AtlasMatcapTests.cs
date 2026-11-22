@@ -31,6 +31,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
 
         private static AtlasOutputCapabilities Poiyomi => AtlasShaderRegistry.Output("poiyomi10").Capabilities;
         private static AtlasOutputCapabilities ToonStandard => AtlasShaderRegistry.Output("mobiletoon").Capabilities;
+        private static AtlasOutputCapabilities Standard => AtlasShaderRegistry.Output("standard").Capabilities;
 
         private static AtlasGeneratorJob Job(params AtlasUnifiedMaterial[] materials)
         {
@@ -717,6 +718,75 @@ namespace NordicWind.AdvancedAtlaser.Tests
             // The matcap's mean 0.5 at weight 0.8 × the mask 0.5.
             Assert.AreEqual(0.5f * Mathf.Lerp(1f, 0.5f, 0.4f), Evaluate(plan, AtlasVirtualMap.BaseColor, job, 0) * plan.Output.Surface.BaseColor.Color.r, 2e-3f);
             Assert.IsTrue(plan.Notes.Any(n => n.Contains("No matcap slot is left")), string.Join(" | ", plan.Notes));
+        }
+
+        // An output without matcap slots lights the form itself. A lighting matcap keeps its
+        // average effect in the base color there: baked as shading it would shade the form a
+        // second time, and stay in place from every view. A highlight has no average to keep.
+        // A bake is the user's choice.
+        [Test]
+        public void WithoutSlotsALightingMatcapKeepsItsAverageAndAHighlightIsLeftOut()
+        {
+            var gray = new Color(0.5f, 0.5f, 0.5f, 1f);
+            var lit = WithMatcap(Solid(gray), null, Color.white, (AtlasBlend.Multiply, 0.8f));
+            lit.Surface.BaseColor.Color = gray;
+            var shiny = WithMatcap(Glint("glint"), null, Color.white, (AtlasBlend.Add, 1f));
+            shiny.Surface.BaseColor.Color = gray;
+            var job = Job(lit, shiny);
+            var feature = new AtlasMatcapFeature();
+            CollectionAssert.AreEqual(new[] { "average", "baked", "off" }, AtlasOutputFeatures.Available(feature, Standard).Select(m => m.Id).ToArray());
+            Assert.IsFalse(AtlasOutputFeatures.Available(feature, Poiyomi).Any(m => m.Id == "average"), "only without slots");
+
+            var plan = AtlasOutputPipeline.Resolve(job, Standard);
+            Assert.AreEqual("average", plan.Modes[AtlasMatcapFeature.FeatureId].Id);
+            Assert.IsEmpty(Lookups(plan));
+            float tint = plan.Output.Surface.BaseColor.Color.r;
+            Assert.AreEqual(0.5f * Mathf.Lerp(1f, 0.5f, 0.8f), Evaluate(plan, AtlasVirtualMap.BaseColor, job, 0) * tint, 2e-3f, "× the matcap's mean");
+            Assert.AreEqual(0.5f, Evaluate(plan, AtlasVirtualMap.BaseColor, job, 1) * tint, 2e-3f, "the highlight is left out");
+            string notes = string.Join(" | ", plan.Notes);
+            StringAssert.Contains("these matcaps keep their average effect in the base color: matcap (source 1)", notes);
+            StringAssert.Contains("these matcap rims and highlights are left out: glint (source 2)", notes);
+            Assert.IsFalse(plan.Notes.Any(n => n.Contains("baked into the textures")), notes);
+            Assert.IsTrue(plan.Ways.Values.Any(w => w.LeftOut), "the inspector says the highlight is left out");
+
+            // Chosen, the lighting matcap is drawn as shading.
+            job.Features.Add(new AtlasFeatureChoice { FeatureId = AtlasMatcapFeature.FeatureId, ModeId = "baked" });
+            plan = AtlasOutputPipeline.Resolve(job, Standard);
+            Assert.AreEqual("baked", plan.Modes[AtlasMatcapFeature.FeatureId].Id);
+            StringAssert.Contains("Matcaps baked into the textures", string.Join(" | ", plan.Notes));
+        }
+
+        // An averaged matcap's glow keeps its average in the emission, where the output has an
+        // emission map: it still glows in the dark. Without one it goes into the color, lit.
+        [Test]
+        public void WithoutSlotsAMatcapsGlowKeepsItsAverageInTheEmission()
+        {
+            var gray = new Color(0.5f, 0.5f, 0.5f, 1f);
+            var material = WithMatcap(Solid(gray), null, Color.white, (AtlasBlend.Multiply, 0.8f));
+            material.Surface.BaseColor.Color = gray;
+            ((AtlasLookupLayer)material.Layers[0]).EmissionAmount = 0.6f;
+            var job = Job(material, new AtlasUnifiedMaterial());
+            var plan = AtlasOutputPipeline.Resolve(job, Standard);
+            string notes = string.Join(" | ", plan.Notes);
+            StringAssert.Contains("is kept as its average in the emission", notes);
+            Assert.IsFalse(plan.Notes.Any(n => n.Contains("added to the color")), notes);
+            var emission = plan.Maps.Single(m => m.Map == AtlasVirtualMap.Emission);
+            var target = plan.Output.Layers.OfType<AtlasSurfaceLayer>().Single(l => l.Source.Map == emission.Reference)
+                .Targets.Single(t => t.Target == AtlasSurfaceTarget.Emission);
+            using (var glow = emission.Evaluate(0, job.Sources[0].Material, 4, 4))
+            using (var none = emission.Evaluate(1, job.Sources[1].Material, 4, 4))
+            {
+                Assert.AreEqual(0.5f * 0.6f, glow.GetPixel(1, 1).r * target.Opacity, 2e-3f, "the matcap's mean × its glow");
+                Assert.AreEqual(0f, none.GetPixel(1, 1).r, 1e-4f, "dark on the source without one");
+            }
+            // The color holds the matcap's blend alone.
+            Assert.AreEqual(0.5f * Mathf.Lerp(1f, 0.5f, 0.8f), Evaluate(plan, AtlasVirtualMap.BaseColor, job, 0) * plan.Output.Surface.BaseColor.Color.r, 2e-3f);
+
+            // A glow that follows the light is lit: it goes into the color.
+            ((AtlasLookupLayer)material.Layers[0]).HideInShadow = 1f;
+            plan = AtlasOutputPipeline.Resolve(job, Standard);
+            Assert.IsFalse(plan.Maps.Any(m => m.Map == AtlasVirtualMap.Emission), "nothing glows without light");
+            StringAssert.Contains("that follows the light is added to the color", string.Join(" | ", plan.Notes));
         }
 
         [Test]

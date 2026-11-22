@@ -26,7 +26,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         string DisplayName { get; }
         // Its family (as on the parsers) and its rank within the family. Poiyomi: the major
         // version × 10, plus 1 for Pro, so the highest version wins and Pro comes before Toon at
-        // the same one. VRChat Mobile: higher for the shader that keeps more.
+        // the same one. VRChat Mobile and Unity: higher for the shader that keeps more.
         string Family { get; }
         int Rank { get; }
         // The installed Unity shader the new materials are made with, or null when it isn't

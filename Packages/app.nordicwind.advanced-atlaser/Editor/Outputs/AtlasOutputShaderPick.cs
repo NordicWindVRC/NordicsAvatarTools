@@ -10,6 +10,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public static class AtlasShaderFamilies
     {
         public const string Poiyomi = "poiyomi";
+        public const string Unity = "unity";
         public const string VRChat = "vrchat";
     }
 

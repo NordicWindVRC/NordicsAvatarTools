@@ -155,6 +155,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
             AtlasEvaluationCache.Copy(("map before stage", this, stage, index, width, height),
                 () => Partway(index, material, width, height, contributions.Where(c => c.Stage < stage).ToList()));
 
+        /// <summary>The same with every contribution: the surface's value as the map shows
+        /// it.</summary>
+        public NordicsTextureWrapper Shown(int index, AtlasUnifiedMaterial material, int width, int height) =>
+            AtlasEvaluationCache.Copy(("map shown", this, index, width, height),
+                () => Partway(index, material, width, height, contributions.ToList()));
+
         /// <summary>The same as one contribution finds it: with the contributions that run
         /// before it.</summary>
         public NordicsTextureWrapper Before(AtlasMapContribution contribution, int index, AtlasUnifiedMaterial material, int width, int height) =>

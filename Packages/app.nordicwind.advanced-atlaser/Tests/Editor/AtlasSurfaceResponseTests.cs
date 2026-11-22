@@ -317,7 +317,8 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 response.Highlights.Strength = 1f;
                 response.Reflections.Strength = 1f;
                 response.Occlusion.Constant = 1f;
-                // Poiyomi keeps occlusion in its own texture; Toon Standard in the surface texture.
+                // Poiyomi keeps occlusion in its own texture; Toon Standard and Unity Standard in
+                // the surface texture.
                 response.Occlusion.Map = new AtlasTextureReference { Texture = shader.Family == AtlasShaderFamilies.Poiyomi ? occlusionTexture : surface };
                 var material = new Material(shader.FindShader());
                 created.Add(material);
@@ -326,7 +327,9 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 Assert.AreSame(surface, parsed.Metallic.Map?.Texture, shader.DisplayName + ": metallic");
                 Assert.AreEqual(AtlasChannel.Red, parsed.Metallic.Channel, shader.DisplayName);
                 Assert.AreSame(surface, parsed.Roughness.Map?.Texture, shader.DisplayName + ": roughness");
-                Assert.AreEqual(AtlasChannel.Green, parsed.Roughness.Channel, shader.DisplayName);
+                // Unity Standard reads smoothness from the alpha.
+                Assert.AreEqual(shader.Family == AtlasShaderFamilies.Unity ? AtlasChannel.Alpha : AtlasChannel.Green, parsed.Roughness.Channel,
+                    shader.DisplayName);
                 Assert.IsTrue(parsed.Roughness.InvertResult, shader.DisplayName + ": stored as smoothness");
                 Assert.AreSame(response.Occlusion.Map.Texture, parsed.Occlusion.Map?.Texture, shader.DisplayName + ": occlusion");
                 Assert.AreEqual(1f, parsed.Occlusion.Constant, 1e-5f, shader.DisplayName);

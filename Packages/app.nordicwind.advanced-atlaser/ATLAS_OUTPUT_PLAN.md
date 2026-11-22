@@ -31,7 +31,7 @@ it uses. How finished parts work is in the design; what each version added is in
 | **M2 — Initial features** | Every feature in the design's *Feature inventory*, on both writers | Done |
 | **M4 — Matching by look** | Looks measured and tuned in every scene; matcaps placed by role and cost | Done |
 | **M3 — More Poiyomi writers** | Poiyomi Toon 11, Pro 10 and Pro 11 as outputs | Done |
-| **M5 — More output families** | VRChat Mobile Diffuse, Unity Standard, VRChat Mobile Toon Lit and Standard Lite as outputs | In progress |
+| **M5 — More output families** | VRChat Mobile Diffuse, Unity Standard (both setups), VRChat Mobile Toon Lit and Standard Lite as outputs | In progress |
 | Later | Mochie Uber as an output, the later features, animation, GPU baking | — |
 
 ---
@@ -40,22 +40,34 @@ it uses. How finished parts work is in the design; what each version added is in
 
 Each output starts from its shader's source and uses its parser for the kept material.
 
-Built so far: VRChat Mobile Diffuse as an input (with Bumped Diffuse) and as an output with
-one color texture, where every feature it keeps is a contribution to that texture, emission
-included when the user chooses so (the design's *Output shaders*).
-
-### 5.3 Unity Standard
-
-- A writer for Unity Standard and Standard (Specular setup), mostly its parser in reverse;
-  its family and rank for auto setup.
-- **Workable:** Unity Standard as an output, with round trips.
+Built so far (the design's *Output shaders*):
+- VRChat Mobile Diffuse as an input (with Bumped Diffuse) and as an output with one color
+  texture, where every feature it keeps is a contribution to that texture, emission included
+  when the user chooses so;
+- Unity Standard (metallic setup) as an output with its own maps, and the Unity family for
+  auto setup.
 
 ### 5.4 VRChat Mobile Toon Lit and Standard Lite
 
 - Toon Lit: one texture, as Diffuse, lit without shading across the surface, so its form
-  comes from baked shading (the design's *form shading*).
+  comes from baked shading (the design's *form shading*): lighting matcaps are baked there
+  by default, where an output that shades the form itself keeps their average.
 - Standard Lite: Standard's maps on the albedo's tiling, opaque only.
-- **Workable — M5 reached:** the four shaders as outputs, with round trips.
+- **Workable:** both shaders as outputs, with round trips.
+
+### 5.5 Unity Standard (Specular setup)
+
+- A specular color map as a virtual map, with the smoothness in its alpha: a source of the
+  specular workflow keeps its specular color (today it is left out and the source counts as
+  non-metallic); a source of the metallic workflow is converted, its specular color
+  `lerp(F0, base color, metallic)` and its base color scaled so the diffuse the shader takes
+  off for the specular color comes out as the source's.
+- Each source's highlight and reflection strengths go into the specular color, so a source
+  with weaker highlights, or none, isn't given the metallic setup's 4% at full strength (its
+  gray sheen on dark, rough surfaces).
+- The writer for Standard (Specular setup), sharing Unity Standard's; its rank in the
+  Unity family.
+- **Workable — M5 reached:** Standard (Specular setup) as an output, with round trips.
 
 ---
 

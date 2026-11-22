@@ -16,6 +16,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly List<string> Notes = new List<string>();
         // The lighting as the output shader shows it; null when resolved without the shader.
         public AtlasLighting KeptLighting;
+        // The minimum brightness added through the emission, where the output shader has no
+        // minimum light of its own (AtlasLightFloor); 0: none.
+        public float LightFloor;
         // Level compensation: the base color scale that gives a source the level its own
         // lighting had, by index into the job's sources (applied unless turned off), and what
         // the bake applied of it within the map's range.
@@ -79,8 +82,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         /// <summary>The plan for an output shader: resolved by its capabilities, then matched
         /// by look against the lighting the shader keeps. The lighting is tuned where the shader
-        /// shows it differently (AtlasLightingTuning), and the sources it still shows brighter or
-        /// darker than their own get their base color scaled (AtlasLevelCompensation).</summary>
+        /// shows it differently (AtlasLightingTuning), a minimum light the shader lacks goes into
+        /// the emission (AtlasLightFloor), and the sources it still shows brighter or darker than
+        /// their own get their base color scaled (AtlasLevelCompensation).</summary>
         public static AtlasOutputPlan Resolve(AtlasGeneratorJob job, IAtlasOutputShader shader)
         {
             var plan = Resolve(job, shader.Capabilities);
@@ -89,6 +93,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (kept == null) return plan;
                 AtlasLightingTuning.Tune(job, plan, kept);
                 plan.KeptLighting = kept.Of(plan.Output.Lighting);
+                AtlasLightFloor.Apply(job, plan, shader.Capabilities, plan.KeptLighting);
                 AtlasLevelCompensation.Apply(job, plan, plan.KeptLighting);
             }
             return plan;
