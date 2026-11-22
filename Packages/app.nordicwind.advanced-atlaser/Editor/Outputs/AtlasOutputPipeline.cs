@@ -20,6 +20,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // of it is added through the emission (AtlasLightFloor: all of it unless turned off).
         public float LightFloorMissing;
         public float LightFloor;
+        // The lit bakes that shade it (the Baking section's settings apply to them).
+        public readonly List<AtlasLitBake> LightFloorBakes = new List<AtlasLitBake>();
         // Level compensation: the base color scale that gives a source the level its own
         // lighting had, by index into the job's sources (applied unless turned off), and what
         // the bake applied of it within the map's range.

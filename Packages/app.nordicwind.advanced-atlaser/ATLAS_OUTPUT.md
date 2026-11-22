@@ -476,6 +476,14 @@ before the level compensation:
   brightness is (Toon Standard's own floor works so), so the kept lighting carries it as
   one, and the level compensation and the comparison after writing count it. It adds to
   the world's light where a minimum light only raises it (listed).
+- **Shaded by the lit bakes:** the shader lights its normal map and darkens by its
+  occlusion map only what the world's light reaches, so the emission alone would show the
+  surface flat. The floor is shaded as the baked modes shade the base color (see [*Virtual
+  light rigs*](#virtual-light-rigs)): each source's normal-map shading and occlusion, where
+  the output keeps them as maps, with the *Baking* section's rig and strengths, which shows
+  while they apply. Where they are baked into the base color, the color as shown has them
+  already. A matcap that lights the surface is in the floor as its average, as in the base
+  color: its shading isn't drawn.
 - **The control:** where no source glows, the floor is what the atlas has an emission
   texture for, so the user can turn it off (*Minimum light in the emission*, with the
   lighting's settings, shown while the output shader can't keep the whole floor). Off, the
@@ -1736,7 +1744,9 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
   × the floor to the emission, and the kept lighting carries it as a minimum brightness;
   there is none without a floor or with the emission turned off; turned off by its control,
   the floor is still known to be missing, so the control stays; on Toon Standard the part
-  its own floor can't hold is added, and the two together are the atlas's floor.
+  its own floor can't hold is added, and the two together are the atlas's floor; the floor
+  is darker where a source's occlusion map is and names its lit bakes, flat with their
+  strengths at 0, and not occluded twice where the occlusion is baked into the color.
 - **Level compensation:** a source the atlas lights darker is scaled by what its own lighting
   had over it, and none of its texels goes above 1; a raise that doesn't fit is applied in
   full below the knee and less above it, in order and without a step, so a white part of a

@@ -59,6 +59,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public readonly List<AtlasFeatureState> Features = new List<AtlasFeatureState>();
         public readonly List<AtlasTextureUse> Textures = new List<AtlasTextureUse>();
+        // The lit bakes the plan uses outside a feature's baked mode: the minimum light's
+        // shading in the emission.
+        public readonly List<AtlasLitBake> OtherBakes = new List<AtlasLitBake>();
         // The enabled textures' totals.
         public long PcBytes, AndroidBytes;
 
@@ -119,6 +122,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     // The minimum light in the emission, while the output shader can't keep it all.
                     if (plan.LightFloorMissing > 0f) state.Switches.Add(AtlasLightFloor.Switch);
                 }
+            if (plan != null) overview.OtherBakes.AddRange(plan.LightFloorBakes);
             overview.AddTextures(config, capabilities, plan);
             if (plan != null) overview.AddOtherTextures(plan, config, capabilities);
             return overview;

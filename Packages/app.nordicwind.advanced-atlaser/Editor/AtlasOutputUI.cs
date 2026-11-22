@@ -291,6 +291,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                                                                 Mathf.RoundToInt(v.FindPropertyRelative("number").floatValue) == (int)AtlasInstancePlacement.Baked))
                     bakes.Add(AtlasLitBake.Matcaps);
             }
+            bakes.AddRange(overview.OtherBakes);
             bakes = bakes.Distinct().OrderBy(b => b).ToList();
             if (bakes.Count == 0) return;
             EditorGUILayout.Space();
@@ -327,11 +328,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                             break;
                         case AtlasLitBake.NormalShading:
                             EditorGUILayout.PropertyField(baking.FindPropertyRelative("normalShading"), new GUIContent("Normal-Map Shading",
-                                "How strongly the shading of normal maps baked into color shows."));
+                                "How strongly the shading of normal maps shows where it is baked: into the color, or into the minimum light's emission."));
                             break;
                         case AtlasLitBake.Occlusion:
                             EditorGUILayout.PropertyField(baking.FindPropertyRelative("occlusion"), new GUIContent("Occlusion",
-                                "How strongly ambient occlusion baked into color darkens it."));
+                                "How strongly ambient occlusion darkens where it is baked: the color, or the minimum light's emission."));
                             break;
                     }
                 if (Fold("baking.lights", "Lights", false))

@@ -360,6 +360,56 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsTrue(plan.Maps.Any(m => m.Map == AtlasVirtualMap.Emission));
         }
 
+        // The shader lights its normal map and darkens by its occlusion map only what the
+        // world's light reaches, so the floor in the emission is shaded by the lit bakes: flat
+        // otherwise. Where a map is baked into the base color, the color has it already.
+        [Test]
+        public void TheMinimumLightInTheEmissionIsShadedByTheLitBakes()
+        {
+            var gray = new Color(0.5f, 0.5f, 0.5f, 1f);
+            var occlusionTexture = Texture("occlusion");
+            occlusionTexture.SetPixels(Enumerable.Repeat(gray, 16).ToArray());
+            occlusionTexture.Apply();
+            var lit = new AtlasUnifiedMaterial();
+            lit.Surface.BaseColor.Color = gray;
+            lit.Lighting.MinimumLight = 0.2f;
+            lit.Surface.Response.Occlusion.Map = new AtlasTextureReference { Texture = occlusionTexture, Interpretation = AtlasTextureInterpretation.Data };
+            lit.Surface.Normal.Map = new AtlasTextureReference { Texture = Texture("normal"), Interpretation = AtlasTextureInterpretation.TangentNormal };
+            var job = Job(lit);
+
+            float Glow(AtlasOutputPlan plan, out float flat)
+            {
+                var emission = plan.Maps.Single(m => m.Map == AtlasVirtualMap.Emission);
+                var target = plan.Output.Layers.OfType<AtlasSurfaceLayer>().Single(l => l.Source.Map == emission.Reference)
+                    .Targets.Single(t => t.Target == AtlasSurfaceTarget.Emission);
+                using (var glow = emission.Evaluate(0, lit, 4, 4))
+                using (var shown = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Shown(0, lit, 4, 4))
+                {
+                    flat = shown.GetPixel(1, 1).r * plan.LightFloor;
+                    return glow.GetPixel(1, 1).r * target.Opacity;
+                }
+            }
+
+            var shaded = AtlasOutputPipeline.Resolve(job, Shader);
+            CollectionAssert.AreEquivalent(new[] { AtlasLitBake.NormalShading, AtlasLitBake.Occlusion }, shaded.LightFloorBakes);
+            StringAssert.Contains("with normal-map shading and occlusion baked in", Notes(shaded));
+            StringAssert.Contains("normal-map shading needs the meshes", Notes(shaded), "no meshes in this job");
+            Assert.Less(Glow(shaded, out float unshaded), unshaded - 1e-3f, "darker where the occlusion map is");
+
+            // Turned down in the Baking section, the floor is flat.
+            job.Baking = new AtlasBakeSettings { occlusion = 0f, normalShading = 0f };
+            var plain = AtlasOutputPipeline.Resolve(job, Shader);
+            Assert.IsEmpty(plain.LightFloorBakes);
+            Assert.AreEqual(Glow(plain, out unshaded), unshaded, 2e-3f);
+
+            // Baked into the base color, the color as shown is occluded already.
+            job.Baking = null;
+            job.Features.Add(new AtlasFeatureChoice { FeatureId = "occlusion", ModeId = "baked" });
+            var baked = AtlasOutputPipeline.Resolve(job, Shader);
+            CollectionAssert.DoesNotContain(baked.LightFloorBakes, AtlasLitBake.Occlusion);
+            Assert.AreEqual(Glow(baked, out unshaded), unshaded, 2e-3f, "not occluded twice");
+        }
+
         // What Standard has no control for goes into its textures or is left out, and its
         // lighting is its own whatever the atlas chose.
         [Test]
