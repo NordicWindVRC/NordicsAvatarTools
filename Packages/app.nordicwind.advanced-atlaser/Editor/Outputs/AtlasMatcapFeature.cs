@@ -27,11 +27,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // - The user places each group: its own slot, combined with another group's slot, or off
     //   (stored by the group's key). Automatic, where the user hasn't: matcaps that change
     //   nothing are left out; groups on the same parts with the same lookup are combined; effects
-    //   get their own slots, the most visible first, keeping one for the environment matcaps
+    //   get their own slots, those with the most impact first, keeping one for the environment matcaps
     //   where none has one, and those that don't fit are left out; environment matcaps take the rest and share what
     //   doesn't fit, with the environment slot most like them: one that does the same (blends,
     //   glows or both) first, since a slot has one blend and one glow strength.
-    // - How visible a group is (Visible): its sources' area × each weight's effect (the shown
+    // - Slots are taken in the order of the groups' impact (Impact): the measured impact × the
+    //   area the group's masks cover.
+    // - How visible a group is (Visible), for its share of a combined texture and the weight
+    //   of its losses in a slot: its sources' area × each weight's effect (the shown
     //   brightness where it adds, screens or glows; its darkness where it multiplies) × its
     //   mask's average × the base color mix's darkening, lerp(1, luminance(base), mix), over the
     //   sources' base colors (AtlasSourceSamples). A glow on a dark base with a strong mix barely
@@ -207,8 +210,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             public string Key, Look, Lookup, Label, Name;
             public float Area;
-            // Area × visible strength: the order of own slots and the shares of a combined texture.
+            // Area × visible strength: the shares of a combined texture and the weights of a
+            // slot's losses.
             public float Visible;
+            // The measured impact × the area its masks cover: how much the group changes the
+            // look, and the order slots are taken in.
+            public float Impact;
             public bool Effect;
             // Lighting with a highlight on it, which sharing would smear.
             public bool Guarded;
@@ -303,6 +310,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     job.Sources[s.Key].UVRegion.width * job.Sources[s.Key].UVRegion.height * Visibility(s.First(), job.Sources[s.Key].Material));
                 var largest = group.Members.OrderByDescending(m => job.Sources[m.Source].UVRegion.width * job.Sources[m.Source].UVRegion.height).First();
                 group.Measure = AtlasMatcapLook.Measure(largest.Layers, job.Sources[largest.Source].Material);
+                group.Impact = group.Measure.Impact * group.Members.GroupBy(m => m.Source).Sum(s =>
+                    job.Sources[s.Key].UVRegion.width * job.Sources[s.Key].UVRegion.height * Mathf.Clamp01(AtlasSourceSamples.MaskAverage(s.First().Mask)));
                 group.Effect = group.Measure.Role == AtlasMatcapRole.Highlight;
                 group.Guarded = group.Measure.HasHighlight;
                 group.Label += " (" + (members.Count == 1 ? "source " : "sources ") + string.Join(", ", members.Select(i => i + 1)) + ")";
@@ -310,7 +319,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     .Select(m => m.Source + ":" + AtlasMaskKeys.Of(m.Mask, 1f, job.Sources[m.Source].Material)));
             }
             if (live > 0) notes?.Add("Live matcaps (animated, audio-driven) aren't merged yet; they're left out.");
-            return groups.OrderByDescending(g => g.Visible).ThenByDescending(g => g.Area).ToList();
+            return groups.OrderByDescending(g => g.Impact).ThenByDescending(g => g.Visible).ThenByDescending(g => g.Area).ToList();
         }
 
         // How strongly a matcap shows on its source, per unit of area (Visible).
@@ -522,7 +531,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             automatic.RemoveAll(unseen.Contains);
             // On the same parts with the same lookup, one texture shows exactly what both did.
             List<Group> Same(Group g) => slots.Find(s => s[0].Parts == g.Parts && s[0].Lookup == g.Lookup && s[0].Effect == g.Effect);
-            // Effects get their own slots, the most visible first (the groups' order), keeping one
+            // Effects get their own slots, those with the most impact first (the groups' order), keeping one
             // for the environment matcaps where none has one yet; the ones that don't fit are left out.
             var cut = new List<Group>();
             bool environmentNeedsSlot = automatic.Any(g => !g.Effect) && !slots.Any(s => s.Any(x => !x.Effect));

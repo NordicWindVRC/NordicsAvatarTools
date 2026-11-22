@@ -167,7 +167,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var textures = new[] { Solid(Color.red, "red"), Solid(Color.green, "green"), Solid(Color.blue, "blue") };
             var materials = textures.Select(t => WithMatcap(t, null, Color.white, (AtlasBlend.Add, 1f))).ToArray();
 
-            // Toon Standard's one slot, automatic: the most visible gets it, the rest are combined in.
+            // Toon Standard's one slot, automatic: the one with the most impact gets it, the rest are combined in.
             var job = Job(materials);
             var instances = new AtlasMatcapFeature().Instances(job, new[] { 0, 1, 2 });
             Assert.AreEqual(3, instances.Count);
@@ -220,15 +220,15 @@ namespace NordicWind.AdvancedAtlaser.Tests
             foreach (var step in plan.BeforeWrite) step();
         }
 
-        // Poiyomi's four slots and five matcaps: the smallest, which only glows, joins the other
-        // one that only glows, not the blend with the nearest color.
+        // Poiyomi's four slots and five matcaps: the one with the least impact, which only
+        // glows, joins the other one that only glows, not the blend with the nearest color.
         [Test]
         public void AMatcapThatOnlyGlowsIsCombinedWithAnotherThatGlows()
         {
             var materials = new[]
             {
                 WithMatcap(Solid(Color.white, "first"), null, Color.white, (AtlasBlend.Add, 1f)),
-                WithMatcap(Solid(Color.white, "second"), null, new Color(0.2f, 0.2f, 0.2f), (AtlasBlend.Add, 1f)),
+                WithMatcap(Solid(Color.white, "second"), null, new Color(0.6f, 0.6f, 0.6f), (AtlasBlend.Add, 1f)),
                 Glowing("glow", new Color(0.2f, 0.2f, 0.2f), 0.4f),
                 WithMatcap(Solid(Color.white, "third"), null, new Color(0.2f, 0.2f, 0.2f), (AtlasBlend.Multiply, 1f)),
                 Glowing("small glow", Color.white, 0.5f)
@@ -360,7 +360,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var glass = Glowing("glass", Color.white, 0.5f);
             var job = Job(faint, glass);
             var keys = new AtlasMatcapFeature().Instances(job, new[] { 0, 1 }).Select(i => i.Key).ToList();
-            Assert.AreEqual("glass (source 2)", new AtlasMatcapFeature().Instances(job, new[] { 0, 1 })[0].Label, "the more visible first");
+            Assert.AreEqual("glass (source 2)", new AtlasMatcapFeature().Instances(job, new[] { 0, 1 })[0].Label, "the one that changes the look more first");
             Place(job, keys[1], AtlasInstancePlacement.Combined, keys[0]);
             var plan = AtlasOutputPipeline.Resolve(job, Poiyomi);
             // Regions 2/3 and 1/3: by area alone the faint glow would take 2/3 of the texture.
@@ -370,6 +370,22 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var pixel = plan.GeneratedTextures.Single().Pixels()[0];
             // Glass at weight 1 (the strongest glow), the faint one at 0.34 / 0.5.
             Assert.AreEqual((1f - faintShare) * 1f + faintShare * 0.68f, pixel.r, 1e-3f);
+        }
+
+        // Slots are taken in the order of the matcaps' measured impact. A faint add on a white
+        // base changes the look less than a similar one on a dark base, though it is on more
+        // of the atlas and adds almost as much.
+        [Test]
+        public void SlotsAreTakenInTheOrderOfMeasuredImpact()
+        {
+            var onWhite = WithMatcap(Solid(Color.white, "on white"), null, Color.white, (AtlasBlend.Add, 0.2f));
+            var onDark = WithMatcap(Solid(Color.white, "on dark"), null, Color.white, (AtlasBlend.Add, 0.3f));
+            onDark.Surface.BaseColor.Color = new Color(0.1f, 0.1f, 0.1f, 1f);
+            var job = Job(onWhite, onDark);
+            Assert.AreEqual("on dark (source 2)", new AtlasMatcapFeature().Instances(job, new[] { 0, 1 })[0].Label);
+            var plan = AtlasOutputPipeline.Resolve(job, Poiyomi);
+            Assert.AreEqual("on dark", Lookups(plan)[0].Source.Map.Texture.name, "the first slot");
+            Assert.AreEqual("on white", Lookups(plan)[1].Source.Map.Texture.name);
         }
 
         // Brighter toward the right: its value is its horizontal coordinate; upright, brighter

@@ -227,11 +227,10 @@ Built (*Comparing layers* and the matcaps' and rims' rows in the output design):
 matcap's shading (level and contrast) and what each way keeps of it; step 4 for a lighting
 matcap between a slot shared across parts and the average in color, and for a rim or a
 highlight between a shared slot and being left out, point by point; the same for rims in
-rim slots and drawn into matcap slots; and step 5, with the inspector saying how each one
+rim slots and drawn into matcap slots; the order of step 3, by the measured impact × the
+area the masks cover, effects first; and step 5, with the inspector saying how each one
 ends up shown. What remains:
 
-- **The order of step 3.** Slots are taken by how visible a matcap is (its area × its
-  blends' strength × its mask's average), effects first, not yet by its measured impact.
 - **The ways of step 3.** A group takes its own slot as it is, or fitted through the base
   color by the user's *Base color shift*. One side, two slots and a shifted base aren't
   compared by their cost yet, with the blocked view's difference.
