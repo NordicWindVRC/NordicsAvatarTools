@@ -235,34 +235,31 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     };
                     for (int i = 0; i < job.Sources.Count; i++) request.Sources.Add(i);
                     context.Maps.Add(request);
+                    // The glitter's own emission glows at its brightness, so its points fill
+                    // the map's range.
                     emission = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission };
                     emission.Source.Map = request.Reference;
-                    emission.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Emission, AtlasBlend.Add, 0f));
+                    emission.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Emission, AtlasBlend.Add, peak));
                     output.Layers.Add(emission);
+                    request.SharedColor = new Color(peak, peak, peak, 1f);
                 }
                 var target = emission.Targets.First(t => t.Target == AtlasSurfaceTarget.Emission);
                 if (request.Carry == null) AtlasEmissionFeature.CarryInStrength(request, target);
-                float before = target.Opacity, after = Mathf.Max(before, peak);
-                target.Opacity = after;
-                // The map is relative to the emission's strength: what it held is rescaled to
-                // the raised strength in every source, and the points are added where drawn.
-                bool rescaled = before > 0f && before < after;
+                // The map gives its value in full (× the emission's strength): the points are
+                // added where they are drawn, and what goes above the map's range goes into
+                // the strength.
                 request.Add(new AtlasMapContribution
                 {
-                    // A point on a part that already glows can go above 1.
                     Feature = FeatureId, Label = "glitter glow", Stage = AtlasMapStage.Overlays, CanRaise = true,
-                    Applies = rescaled ? (System.Func<int, bool>)null : drawn.ContainsKey,
+                    Applies = drawn.ContainsKey,
                     Apply = content =>
                     {
-                        if (rescaled)
-                            AtlasPixels.Map(content.Map, c => new Color(c.r * before / after, c.g * before / after, c.b * before / after, c.a));
-                        if (drawn.ContainsKey(content.Source))
-                            using (var points = Points(content.Source, content.Material, content.Width, content.Height))
-                                AtlasPixels.Map(content.Map, points, (c, p) =>
-                                {
-                                    float k = p.a * glow / after;
-                                    return new Color(c.r + p.r * k, c.g + p.g * k, c.b + p.b * k, c.a);
-                                });
+                        using (var points = Points(content.Source, content.Material, content.Width, content.Height))
+                            AtlasPixels.Map(content.Map, points, (c, p) =>
+                            {
+                                float k = p.a * glow;
+                                return new Color(c.r + p.r * k, c.g + p.g * k, c.b + p.b * k, c.a);
+                            });
                     }
                 });
                 targets.Add("glow");

@@ -341,7 +341,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var tiling = uv0 ? reference.Tiling : Vector2.one;
             var offset = uv0 ? reference.Offset : Vector2.zero;
             float rotation = uv0 ? reference.Rotation : 0f;
-            return AtlasEvaluationCache.Copy(("sample", texture, type, tiling, offset, rotation, width, height), () =>
+            return AtlasEvaluationCache.Copy(("sample", texture, type, tiling, offset, rotation, width, height, AtlasSourceSamples.Sampling), () =>
             {
                 var loaded = Loaded(texture, type, out bool owned);
                 try
@@ -360,9 +360,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         /// <summary>A texture loaded as the wrapper reads it, only to be read; shared within an
-        /// evaluation (AtlasEvaluationCache). <paramref name="owned"/>: the caller disposes it.</summary>
+        /// evaluation (AtlasEvaluationCache). <paramref name="owned"/>: the caller disposes it.
+        /// An evaluation for samples reads a small copy instead (AtlasSourceSamples).</summary>
         public static NordicsTextureWrapper Loaded(Texture2D texture, TextureDataType type, out bool owned) =>
-            AtlasEvaluationCache.Shared(("load", texture, type), () => new NordicsTextureWrapper(texture, type), out owned);
+            AtlasSourceSamples.Sampling
+                ? AtlasEvaluationCache.Shared(("load small", texture, type), () => AtlasSourceSamples.SmallTexture(texture, type), out owned)
+                : AtlasEvaluationCache.Shared(("load", texture, type), () => new NordicsTextureWrapper(texture, type), out owned);
 
         // One channel of a same-size map into the target's RGB, in one pass.
         private static void ChannelToRgb(NordicsTextureWrapper target, NordicsTextureWrapper source, TextureChannel channel) =>
@@ -431,7 +434,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 white.Fill(Color.white);
                 return white;
             }
-            using (var loaded = new NordicsTextureWrapper(texture, TextureDataType.Color))
+            using (var loaded = AtlasSourceSamples.Sampling
+                       ? AtlasSourceSamples.SmallTexture(texture, TextureDataType.Color) : new NordicsTextureWrapper(texture, TextureDataType.Color))
             {
                 bool uv0 = reference.Space == AtlasTextureSpace.UV0;
                 var tiling = uv0 ? reference.Tiling : Vector2.one;

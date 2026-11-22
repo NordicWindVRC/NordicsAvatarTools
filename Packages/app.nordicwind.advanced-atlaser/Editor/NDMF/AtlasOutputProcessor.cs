@@ -50,7 +50,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (root != null)
                 {
                     var material = source.Input.SourceMaterial;
-                    generatorSource.Surface = () => AtlasSurfaceGeometry.Sections(material, renderers, root);
+                    generatorSource.Surface = AtlasSurfaceGeometry.Once(() => AtlasSurfaceGeometry.Sections(material, renderers, root));
                 }
                 generatorJob.Sources.Add(generatorSource);
             }

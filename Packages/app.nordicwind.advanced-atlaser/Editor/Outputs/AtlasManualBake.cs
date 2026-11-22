@@ -121,7 +121,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     if (root != null && renderers != null)
                     {
                         var material = entry.material;
-                        source.Surface = () => AtlasSurfaceGeometry.Sections(material, renderers, root);
+                        source.Surface = AtlasSurfaceGeometry.Once(() => AtlasSurfaceGeometry.Sections(material, renderers, root));
                     }
                     job.Sources.Add(source);
                 }

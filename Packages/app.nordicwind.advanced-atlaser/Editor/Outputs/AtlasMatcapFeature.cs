@@ -761,13 +761,23 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 });
             if (!emissionOn || !layers.Values.Any(list => list.Any(l => (AtlasMatcapBake.AddsAfterLighting(l) || l.EmissionAmount > 0f) &&
                                                                         AtlasMatcapBake.GlowShare(l) > 0f))) return;
-            // Into the emission map, relative to its strength. The emission feature resolves before
-            // this one (AtlasOutputFeatures), so its map is there if any source has an emission.
-            BakeEmission(context, layers, rigs, cameras, strength, NormalsOf);
+            // Into the emission map. The emission feature resolves before this one
+            // (AtlasOutputFeatures), so its map is there if any source has an emission.
+            BakeEmission(context, layers, rigs, cameras, strength, NormalsOf, request);
         }
 
+        // The surface's base color where a matcap's glow, mask or fit needs it: the base color
+        // map's value before its layers stage, or as a contribution finds it (`before`), read
+        // from the map. Without a base color map, the color stack.
+        private static NordicsTextureWrapper BaseColorAt(AtlasMapRequest baseColor, AtlasMapContribution before, int index, AtlasUnifiedMaterial material,
+            int width, int height) =>
+            baseColor == null ? AtlasColorStack.Evaluate(material, width, height, multiplyColor: true)
+            : before != null ? baseColor.Before(before, index, material, width, height)
+            : baseColor.Before(AtlasMapStage.Layers, index, material, width, height);
+
         private static void BakeEmission(AtlasFeatureContext context, Dictionary<int, List<AtlasLookupLayer>> layers, Dictionary<int, AtlasLightRig> rigs,
-            Dictionary<int, Vector3> cameras, float strength, System.Func<int, List<AtlasLookupLayer>, int, int, NordicsTextureWrapper> normalsOf)
+            Dictionary<int, Vector3> cameras, float strength, System.Func<int, List<AtlasLookupLayer>, int, int, NordicsTextureWrapper> normalsOf,
+            AtlasMapRequest color)
         {
             var job = context.Job;
             var request = context.Maps.FirstOrDefault(r => r.Map == AtlasVirtualMap.Emission);
@@ -790,7 +800,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             else output = context.Output.Layers.OfType<AtlasSurfaceLayer>().FirstOrDefault(l => l.Source.Map == request.Reference);
             var target = output?.Targets.FirstOrDefault(t => t.Target == AtlasSurfaceTarget.Emission);
             if (target == null) return;
-            float glowAt = Mathf.Max(target.Opacity, 1e-4f);
+            // The map gives its value in full, so the glow is added as it is.
             request.Add(new AtlasMapContribution
             {
                 Feature = FeatureId, Label = "baked matcap glow", Stage = AtlasMapStage.Overlays, CanRaise = true,
@@ -802,9 +812,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     if (sections == null || sections.Count == 0) return;
                     var list = layers[i];
                     bool mixes = list.Any(l => l.BaseColorMix > 0f);
-                    using (var baseColor = mixes ? AtlasColorStack.Evaluate(content.Material, w, h, multiplyColor: true) : null)
+                    using (var baseColor = mixes ? BaseColorAt(color, null, i, content.Material, w, h) : null)
                     using (var normals = normalsOf(i, list, w, h))
-                        AtlasMatcapBake.ApplyEmission(content.Map, baseColor, content.Material, list, sections, normals, rigs[i], strength / glowAt, cameras[i]);
+                        AtlasMatcapBake.ApplyEmission(content.Map, baseColor, content.Material, list, sections, normals, rigs[i], strength, cameras[i]);
                 }
             });
             // Brighter than the emission's strength: the map's brightest value goes into the
@@ -913,7 +923,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // Without a base color mix in the slot, or with matcaps combined that mix differently.
             bool mixesDiffer = combined && slot.Any(g => Mathf.Abs(BaseColorMix(g.Members[0]) - BaseColorMix(slot[0].Members[0])) > 1e-4f);
             bool fold = fits == null && (!capabilities.MatcapBaseColorMix || mixesDiffer) && slot.Any(g => BaseColorMix(g.Members[0]) > 0f);
-            var request = MaskRequest(job, slot, index, fold, capabilities.MatcapMaskInvert, fits);
+            // The slot's shift of the base color, once it is added: the fitted strength reads
+            // the base color as the shift finds it.
+            AtlasMapContribution shift = null;
+            var request = MaskRequest(job, slot, index, fold, capabilities.MatcapMaskInvert, fits, baseColor, () => shift);
             int live = AtlasLiveMasks.Split(context, FeatureId, "matcap slot " + (index + 1), request,
                 i => Member(slot, i) is Instance member ? AtlasLiveMasks.Of(member.Mask) : null);
             var mask = AtlasMaskAllocator.Allocate(context, request);
@@ -921,7 +934,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 fold = false;
                 fits = null;
-                request = MaskRequest(job, slot, index, false, capabilities.MatcapMaskInvert, null);
+                request = MaskRequest(job, slot, index, false, capabilities.MatcapMaskInvert, null, baseColor, () => shift);
                 mask = AtlasMaskAllocator.Allocate(context, request);
             }
             if (fold && !capabilities.MatcapBaseColorMix) approximated.AddRange(slot.Where(g => BaseColorMix(g.Members[0]) > 0f).Select(g => g.Label));
@@ -934,7 +947,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (mask.IsConstant && mask.Constant <= 0f) return true;
             if (fits != null)
             {
-                FitBaseColor(baseColor, fits);
+                shift = FitBaseColor(baseColor, fits);
                 context.Plan.BaseColorShifts |= capabilities.VRChatFallback;
                 var shared = fits.Where(f => f.Value.Shared).Select(f => f.Key).OrderBy(i => i).ToList();
                 if (shared.Count > 0)
@@ -1017,7 +1030,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             var job = context.Job;
             var target = layers[0];
-            context.Plan.BeforeWrite.Add(() => target.EmissionAmount = FitGlow(job, slot, request, mask, parts, mixOut));
+            var baseColor = AtlasLiveMasks.Request(context, AtlasVirtualMap.BaseColor);
+            context.Plan.BeforeWrite.Add(() => target.EmissionAmount = FitGlow(job, slot, request, mask, parts, mixOut, baseColor));
         }
 
         // Each matcap's part of the slot's texture: its weight (its blend, or its glow in a slot
@@ -1049,7 +1063,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // matcap's strength × mask × lerp(1, b, its mix), with b the base color's luminance
         // before the matcaps.
         private static float FitGlow(AtlasGeneratorJob job, List<Group> slot, AtlasMaskRequest request, AtlasAllocatedMask mask,
-            Dictionary<Instance, float> parts, float mixOut)
+            Dictionary<Instance, float> parts, float mixOut, AtlasMapRequest baseColor)
         {
             double ay = 0.0, aa = 0.0;
             using (AtlasEvaluationCache.Scope())
@@ -1059,7 +1073,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     var material = source.Material;
                     double area = Mathf.Max(1e-6f, source.UVRegion.width * source.UVRegion.height) / (GlowSize * GlowSize);
                     using (var written = mask.IsConstant ? null : request.Evaluate(members.Key, material, GlowSize, GlowSize))
-                    using (var color = AtlasColorStack.Evaluate(material, GlowSize, GlowSize, multiplyColor: true))
+                    using (var color = BaseColorAt(baseColor, null, members.Key, material, GlowSize, GlowSize))
                         foreach (var member in members)
                         {
                             float glow = Glow(member), mix = BaseColorMix(member), part = parts[member];
@@ -1081,7 +1095,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static float BaseColorMix(Instance instance) => Mathf.Clamp01(instance.Layers[0].BaseColorMix);
 
         private static AtlasMaskRequest MaskRequest(AtlasGeneratorJob job, List<Group> slot, int index, bool fold, bool canInvert,
-            Dictionary<int, SlotFit> fits)
+            Dictionary<int, SlotFit> fits, AtlasMapRequest baseColor, Func<AtlasMapContribution> shift)
         {
             float Mix(int i) => fold && Member(slot, i) is Instance m ? BaseColorMix(m) : 0f;
             bool Fitted(int i) => fits != null && fits.ContainsKey(i);
@@ -1104,7 +1118,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     var result = AtlasMapEvaluator.ScaledMask(m.Mask, 1f, w, h, material);
                     float mix = Mix(i);
                     if (mix <= 0f && !Fitted(i)) return result;
-                    using (var color = AtlasColorStack.Evaluate(material, w, h, multiplyColor: true))
+                    using (var color = BaseColorAt(baseColor, Fitted(i) ? shift() : null, i, material, w, h))
                     {
                         if (Fitted(i))
                         {
@@ -1748,9 +1762,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // The base color map as the fits make it where their sources are: a shift, right only
         // together with the slot. It can come out above 1 (the map's range step), unless the
         // base color is kept.
-        private static void FitBaseColor(AtlasMapRequest request, Dictionary<int, SlotFit> fits)
+        private static AtlasMapContribution FitBaseColor(AtlasMapRequest request, Dictionary<int, SlotFit> fits)
         {
-            request.Add(new AtlasMapContribution
+            var shift = new AtlasMapContribution
             {
                 Feature = FeatureId, Label = "matcap slot fit", Stage = AtlasMapStage.Layers, Kind = AtlasContributionKind.Shift,
                 CanRaise = fits.Values.Any(f => f.Shift != AtlasBaseColorShift.Keep),
@@ -1761,7 +1775,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     using (var mask = AtlasMapEvaluator.ScaledMask(fit.Mask, 1f, content.Width, content.Height, content.Material))
                         AtlasPixels.Map(content.Map, mask, (c, m) => Solve(fit, m.r, c, out _));
                 }
-            });
+            };
+            request.Add(shift);
+            return shift;
         }
 
         // The source's member of the slot (the first, if several).

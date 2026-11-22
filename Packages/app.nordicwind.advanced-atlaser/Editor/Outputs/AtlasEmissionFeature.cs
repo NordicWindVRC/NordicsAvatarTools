@@ -8,7 +8,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // Emission (ATLAS_OUTPUT.md, "Feature inventory"): each source's static emission layers
     // added up into the output's emission map, relative to the strongest source's emission, which
     // the output glows at. Sources without emission are dark. Only the native mode: emission
-    // baked into the color wouldn't glow.
+    // baked into the color wouldn't glow. Other features add their glow to the map in full
+    // (a baked matcap's glow, glitter points): the map gives them its value × the strength,
+    // and what goes above the map's range goes into the strength (CarryInStrength).
     public sealed class AtlasEmissionFeature : IAtlasOutputFeature
     {
         private static readonly AtlasFeatureMode[] ModeList =
@@ -52,6 +54,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     : AtlasMapEvaluator.Constant(AtlasVirtualMap.Emission, 0f, width, height)
             };
             for (int i = 0; i < job.Sources.Count; i++) request.Sources.Add(i);
+            // The map is relative to the strength, which the output multiplies it by:
+            // contributions work with the full emission.
+            request.SharedColor = new Color(strength, strength, strength, 1f);
             context.Maps.Add(request);
             // The output's emission: one layer, the map at the strongest source's strength.
             var layer = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission };

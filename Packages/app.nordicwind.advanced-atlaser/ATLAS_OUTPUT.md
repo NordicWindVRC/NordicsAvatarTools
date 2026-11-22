@@ -186,10 +186,13 @@ resolved in:
 | Level | Level compensation: the whole of a source's part scaled to the level its own lighting gave it |
 
 The map owns what each feature would otherwise have to know:
-- **The shared color.** The base color map leaves out a color that every source shares; it
-  stays in the output's color. Contributions get the content × that color, the surface's real
-  color, and the map divides it out again when they are done. A source that no contribution
-  changes keeps its content exactly.
+- **What the output multiplies it by.** The base color map leaves out a color that every
+  source shares; it stays in the output's color. The emission map is relative to the
+  emission's strength. Contributions get the content × that color or strength, the
+  surface's real value, and the map divides it out again when they are done, so a feature
+  adds its part in full and needs to know nothing of the scale: a baked matcap's glow and
+  glitter points go into the emission as they are. A source that no contribution changes
+  keeps its content exactly.
 - **The range.** Once the whole map is baked, a map whose content or contributions can go
   above 1 is divided by its brightest value, which the map's carrier takes: the base color's
   shared color, a layer's color or strength. A map marked as stretched is divided whatever its
@@ -198,8 +201,19 @@ The map owns what each feature would otherwise have to know:
 A feature that needs the map as it was before a change takes a snapshot of it: the highlight
 mask copied before the occlusion goes into the reflection mask, the live part of a split map.
 
+A reader that needs the map partway asks the map for its value before a stage, or as one
+contribution finds it, at the size it needs (`Before`), with what the output multiplies the
+map by in it: the base color for a baked matcap glow's base color mix and for a combined
+slot's glow fit, both before the layers stage, and for a fitted matcap slot's strength as
+the slot's shift finds it, so the mask and the shifted base color start from the same
+color. Within a source's evaluation the value is made once per size.
+
 No contribution is kept as a layer of its own: each changes the source's content and releases
-its temporaries before the next one runs (see [*Memory budget*](#memory-budget)).
+its temporaries before the next one runs (see [*Memory budget*](#memory-budget)). A source's
+mesh surface is made when the first bake asks for it and shared by the bakes after it (the
+matcaps in the color and in the emission, the normal-map shading). Normal maps are
+evaluated by each bake at its own size, since keeping one between stages would hold a
+full-size map.
 
 ---
 
@@ -350,7 +364,10 @@ What the fits and the build's checks share (`AtlasLook`):
   scene without a main light gives a rim that follows the light. The highlight fit uses all
   four as well: its diffuse light and the light of its highlights are what each source's
   own lighting makes of the scene.
-- **Base colors.** A source's look is judged on its base colors: its color × its base color
+- **Base colors.** A source's look is judged on its base colors. Where layers or
+  adjustments change the base color (a decal, a hue shift), they are the base color stack
+  as it is baked, evaluated at sample size from small copies of its textures, kept by
+  texture and content. Otherwise they are its color × its base color
   texture where its meshes use it (the UV0 triangles' texels, as up to 16 samples from the
   darkest to the brightest), `AtlasSourceSamples`. A texture's unused parts, often black and
   often most of it, would otherwise make a dark material count for almost nothing. The
@@ -1285,7 +1302,7 @@ allocator (see [*Masks*](#masks)). *Merge* uses the strategies above.
 | **Environmental rim** | 4.4 color source environment | 1. Native<br>2. In the rim (outputs whose rim adds after lighting and can be lit by the scene: Toon Standard)<br>3. Off | mask (allocated) | Shared value: the settings from the reference source (*Environmental Rim from*), each source's strength in the mask relative to the strongest. *In the rim*: where rim lighting leaves the output's rim free, the reference source's rim draws it, × the scene's light and ambient (Toon Standard's *Environmental*) instead of the reflection probe; its curve is fitted to the band by the writer. Its strength and base color mix are the ones that look most like the probe's rim on the sources that have it (`AtlasRimResponse`, listed): the probe along the normal is taken as the scene's ambient light, less the rim's threshold, where the output's rim is × the light and the ambient together. Without a mask, it shows on every part (listed); otherwise the note says what takes the rim |
 | **Backlight** | 4.4 edge source backlight | 1. Native<br>2. Baked with the rig's back light (form shading)<br>3. Off | backlight color, half size, where the sources' colors differ | Shared value: the settings from the reference source (*Backlight from*); each source's color × texture in the backlight color map (black without), normalized to its brightest value. Light dependent, so no matcap emulation. *In the rim*: where the output's rim is free (after rim lighting and the environmental rim), a band fitted (`AtlasRimCurve.FitBand`) to the backlight's strength at each facing under the rig's back light, seen from the front, where it shows (the brightest direction around the view, × the directivity), × the scene's light, in the reference source's color. It shows on every lit edge, not only against a light behind (listed) |
 | **Emission** | 4.1 layers targeting emission<br>emission amounts of other layers | 1. Native<br>2. Off | emission **(Required)**, for the native mode | Bake, relative to the strongest source's emission, which the output glows at. An emission that takes the base color (*source times base color*) takes it at the end of S1, as Poiyomi does: after the surface layers, with the matcaps and rims on the surface at their average look over the view (`AtlasViewLayers`: a matcap's mean over its lookup disc × its color; a rim's strength averaged over the visible surface, ∫ rim(f) 2f df). An emission that also overrides the base color is baked into both: the emission map, and the base color map as its last step, `lerp(b, saturate(e), max(e))`. No *baked into color*: it wouldn't glow, so it isn't the effect (see *Decisions*). Live parts (blinking, scrolling, audio) stay native only where the output has the same modulator; otherwise they are left out |
-| **Glitter and sparkle** | 4.6 glitter pattern<br>2.4 glints | 1. Native<br>2. Points in the maps (outputs without glitter; only when chosen, so the default there is Off)<br>3. Off | mask (allocated), native<br>a preserved UV channel, native<br>emission, metallic and roughness, base color, points | Native: a shared value from the reference source (*Glitter from*); the cells read a preserved UV channel holding each source's UV × (its density ÷ the output's), so each source keeps its particle size; opacity × mask in the mask. *Points in the maps* draws the cells as still points in UV space (`AtlasGlitterPattern`) into any of three targets, each with its own strength (*Glow*, *Shine*, *Color*): glowing points in the emission map (the emission strength raised to the glitter's brightness), metallic and smooth points that catch the light and reflections, the glitter's color in the base color. A target whose map the output lacks is left out; the points don't twinkle, and the shape texture, color map and rotation aren't drawn (listed) |
+| **Glitter and sparkle** | 4.6 glitter pattern<br>2.4 glints | 1. Native<br>2. Points in the maps (outputs without glitter; only when chosen, so the default there is Off)<br>3. Off | mask (allocated), native<br>a preserved UV channel, native<br>emission, metallic and roughness, base color, points | Native: a shared value from the reference source (*Glitter from*); the cells read a preserved UV channel holding each source's UV × (its density ÷ the output's), so each source keeps its particle size; opacity × mask in the mask. *Points in the maps* draws the cells as still points in UV space (`AtlasGlitterPattern`) into any of three targets, each with its own strength (*Glow*, *Shine*, *Color*): glowing points in the emission map (added in full; an emission made for them glows at the glitter's brightness, and what goes above the map's range goes into the strength), metallic and smooth points that catch the light and reflections, the glitter's color in the base color. A target whose map the output lacks is left out; the points don't twinkle, and the shape texture, color map and rotation aren't drawn (listed) |
 | **Subsurface scattering** | 4.5 subsurface | 1. Native<br>2. Off | subsurface color and thickness **(Required)** | Shared value from the reference source (*Subsurface from*); spatial values for each source's color × strength (relative to the strongest; black where a source has none, which turns it off there) and thickness (relative to the smallest offset). Too dependent on the light to bake or emulate |
 
 ### Effects and render
@@ -1564,8 +1581,11 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
 - **Capabilities:** a test output shader with chosen capabilities offers exactly the modes they
   allow.
 - **Map contributions:** contributions run by stage whatever order they were added in, a
-  map's content is set once, and a contribution works on the color with the shared color in
-  it.
+  map's content is set once, a contribution works on the color with the shared color in
+  it, and a reader gets the map's value before a stage or as a contribution finds it;
+  glitter points are added in full to an emission of any strength.
+- **Base colors with layers:** a layer on the base color is part of the base colors, by
+  position and where the mesh uses the texture, read from small copies.
 - **Bakes:** small synthetic meshes (a quad, a sphere, mirrored halves) give the expected
   values at known texels.
 - **The look model:** a lighting's level and contrast in a scene, the sources listed where

@@ -109,6 +109,57 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.Less(AtlasSourceSamples.Bases(material).Min(AtlasSourceSamples.Luminance), 0.01f, "without triangles: the whole texture again");
         }
 
+        // A layer or an adjustment on the base color changes what shows, so the base colors a
+        // look is judged on are the base color stack's, read at sample size.
+        [Test]
+        public void BaseColorsIncludeTheLayersOnThem()
+        {
+            var material = new AtlasUnifiedMaterial();
+            material.Surface.BaseColor.Color = new Color(0.2f, 0.2f, 0.2f, 1f);
+            Assert.AreEqual(0.2f, AtlasSourceSamples.Bases(material).Single().r, 1e-5f, "the color alone");
+            var layer = new AtlasSurfaceLayer();
+            layer.Source.Color = new Color(0.8f, 0.4f, 0.2f, 1f);
+            layer.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.BaseColor, AtlasBlend.Replace, 0.5f));
+            material.Layers.Add(layer);
+            Assert.IsTrue(AtlasColorStack.HasStack(material));
+            var placed = AtlasSourceSamples.BasesByPosition(material);
+            Assert.AreEqual(16, placed.Count);
+            foreach (var color in placed)
+            {
+                Assert.AreEqual(0.5f, color.r, 1e-4f, "halfway to the layer's color");
+                Assert.AreEqual(0.3f, color.g, 1e-4f);
+            }
+
+            // Under a texture, read as a small copy: its black half stays black, the other
+            // half is halfway to the layer's color.
+            const int size = 16;
+            var texture = new Texture2D(size, size, TextureFormat.RGBAFloat, false, true);
+            var pixels = new Color[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                    pixels[y * size + x] = x < size / 2 ? Color.black : Color.white;
+            texture.SetPixels(pixels);
+            texture.Apply();
+            created.Add(texture);
+            material.Surface.BaseColor.Map = new AtlasTextureReference { Texture = texture };
+            layer.Targets.Clear();
+            layer.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.BaseColor, AtlasBlend.Multiply, 1f));
+            placed = AtlasSourceSamples.BasesByPosition(material);
+            for (int i = 0; i < placed.Count; i++) Assert.AreEqual(i % 4 < 2 ? 0f : 0.2f * 0.8f, placed[i].r, 0.01f, "sample " + i);
+
+            // Where the mesh uses it, the same: only the lit half here.
+            var mesh = new AtlasUVTriangles
+            {
+                UV = new[] { new Vector2(0.6f, 0.1f), new Vector2(0.95f, 0.1f), new Vector2(0.95f, 0.9f), new Vector2(0.6f, 0.9f) },
+                Triangles = new[] { 0, 1, 2, 0, 2, 3 }
+            };
+            AtlasSourceSamples.Cover(material, new[] { mesh });
+            var used = AtlasSourceSamples.Bases(material);
+            Assert.IsNotEmpty(used);
+            foreach (var color in used) Assert.AreEqual(0.2f * 0.8f, color.r, 0.01f, "only what the mesh shows");
+            AtlasSourceSamples.Cover(material, null);
+        }
+
         [Test]
         public void TheKeptLightingIsTheWrittenMaterialsLighting()
         {

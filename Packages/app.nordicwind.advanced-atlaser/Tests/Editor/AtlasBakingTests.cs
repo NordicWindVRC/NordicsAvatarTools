@@ -516,15 +516,29 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 Feature = "test", Stage = AtlasMapStage.Shading,
                 Apply = c => AtlasPixels.Map(c.Map, p => new Color(p.r * 2f, p.g * 2f, p.b * 2f, p.a))
             });
-            request.Add(new AtlasMapContribution
+            var layer = new AtlasMapContribution
             {
                 Feature = "test", Stage = AtlasMapStage.Layers, Applies = i => i == 0,
                 Apply = c => AtlasPixels.Map(c.Map, p => new Color(p.r + 0.25f, p.g + 0.25f, p.b + 0.25f, p.a))
-            });
+            };
+            request.Add(layer);
             using (var map = request.Evaluate(0, new AtlasUnifiedMaterial(), 2, 2))
                 Assert.AreEqual(1.5f, map.GetPixel(0, 0).r, 1e-5f, "(0.5 + 0.25) × 2: the layer, then the shading");
             using (var map = request.Evaluate(1, new AtlasUnifiedMaterial(), 2, 2))
                 Assert.AreEqual(1f, map.GetPixel(0, 0).r, 1e-5f, "the layer isn't on this source");
+
+            // A reader asks for the map partway: before a stage, or as a contribution finds it.
+            using (var map = request.Before(AtlasMapStage.Shading, 0, new AtlasUnifiedMaterial(), 2, 2))
+                Assert.AreEqual(0.75f, map.GetPixel(0, 0).r, 1e-5f, "before the shading: the content and the layer");
+            using (var map = request.Before(AtlasMapStage.Layers, 0, new AtlasUnifiedMaterial(), 2, 2))
+                Assert.AreEqual(0.5f, map.GetPixel(0, 0).r, 1e-5f, "before the layers: the content");
+            using (var map = request.Before(layer, 0, new AtlasUnifiedMaterial(), 2, 2))
+                Assert.AreEqual(0.5f, map.GetPixel(0, 0).r, 1e-5f, "as the layer finds it");
+            // With what the output multiplies the map by in it: the surface's real value.
+            request.SharedColor = new Color(2f, 2f, 2f, 1f);
+            using (var map = request.Before(AtlasMapStage.Shading, 0, new AtlasUnifiedMaterial(), 2, 2))
+                Assert.AreEqual(1.25f, map.GetPixel(0, 0).r, 1e-5f, "0.5 × 2 + 0.25");
+            request.SharedColor = Color.white;
             Assert.Throws<System.InvalidOperationException>(() => request.Content = (i, m, w, h) => null,
                 "later features add contributions; they don't replace the content");
         }

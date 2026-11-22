@@ -2,8 +2,8 @@
 
 What's next and later for the design in [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md), whose section names
 it uses. How finished parts work is in the design; what each version added is in
-[CHANGELOG.md](CHANGELOG.md). The design that M4 builds is in
-[ATLAS_OUTPUT_LOOK.md](ATLAS_OUTPUT_LOOK.md) until it is built.
+[CHANGELOG.md](CHANGELOG.md). What matching by look still plans beyond M4 is in
+[ATLAS_OUTPUT_LOOK.md](ATLAS_OUTPUT_LOOK.md).
 
 ## How the plan works
 
@@ -27,8 +27,8 @@ it uses. How finished parts work is in the design; what each version added is in
 |---|---|---|
 | **M1 — End to end** | An avatar builds with the sources' base color textures atlased into one, on both writers, and the manual bake writes the material and its texture | Done |
 | **M2 — Initial features** | Every feature in the design's *Feature inventory*, on both writers | Done |
-| **M4 — Matching by look** | Looks measured and tuned in every scene; matcaps placed by role and cost | Next |
-| **M3 — More Poiyomi writers** | Poiyomi Toon 11, Pro 10 and Pro 11 as outputs | After M4 |
+| **M4 — Matching by look** | Looks measured and tuned in every scene; matcaps placed by role and cost | Built; builds are being compared |
+| **M3 — More Poiyomi writers** | Poiyomi Toon 11, Pro 10 and Pro 11 as outputs | Next |
 | **M5 — More output families** | VRChat Mobile Diffuse, Unity Standard, VRChat Mobile Toon Lit and Standard Lite as outputs | Planned |
 | Later | Mochie Uber as an output, the later features, animation, GPU baking | — |
 
@@ -36,33 +36,10 @@ it uses. How finished parts work is in the design; what each version added is in
 
 ## M4 — Matching by look
 
-The design is in [ATLAS_OUTPUT_LOOK.md](ATLAS_OUTPUT_LOOK.md), whose section names the phases
-use. Built so far: maps made from contributions, the four scenes with each shader's rule
-for worlds without a main light, a lighting's level and contrast, the kept material read
-back, the sources listed where the kept lighting looks different from their own, the
-lighting's shared values and a generated ramp's shape tuned where the output shader shows
-the chosen lighting differently, and the base color scaled for sources the atlas's lighting
-shows brighter or darker than their own, each matcap's effect measured and named by its
-role, base color shifts bounded by what viewers who block the shader see, each source's own
-average look kept in a slot shared across parts, a matcap kept as its average in the
-base color where the user places it so or no slot is left for it, a lighting matcap
-without a slot of its own placed by what its level and contrast lose, a view layer's look
-in the unified evaluation stages, rims and the matcaps that are rims or highlights placed
-by their cost point by point, matcap slots taken in the order of measured impact, the
-inspector saying how each matcap and rim ends up shown, and what an output shader has no
-settings for read from its parser instead of its capabilities: the fresnel of its
-highlights and reflections and what its rim slot shows of a rim, and the reflectance fitted
-in the reference look, each source drawn with its own shader's fresnel (the design's *Map
-contributions*, *The look model*, *Comparing layers*, *What a matcap is for* and *Base color
-shifts*). Each remaining part of the look model is built in the phase that first uses it.
-
-### 4.6 Shader formulas out of the capabilities
-
-- Sample points with the values at the same places (masks, roughness, metallic), read from
-  a map at a stage (*The reference look*, *Map contributions*).
-- What remains of *Map contributions*: full values in the emission map and declared inputs.
-- **Workable — M4 reached:** a new output shader adds its writer and capabilities that hold
-  counts and availability only.
+Its phases are built; how each part works is in the design (*Map contributions*, *The look
+model*, *Comparing layers*, *What a matcap is for* and *Base color shifts*). What comparing
+builds with their originals turns up is fixed here, as general rules with tests, before M3
+starts. What [ATLAS_OUTPUT_LOOK.md](ATLAS_OUTPUT_LOOK.md) still plans is under *Later*.
 
 ---
 
@@ -104,6 +81,12 @@ Not planned in detail yet, in rough order:
 - half-precision buffers or GPU baking, if the memory budget is too tight;
 - a typed-in value for shared values, next to *Automatic* and the sources in the reference
   source drop-down;
+- **the rest of matching by look** ([ATLAS_OUTPUT_LOOK.md](ATLAS_OUTPUT_LOOK.md)): the
+  reference look computed from a source's unified material as a whole; the output's look as
+  the reference look of the kept material, for every feature; the matcap slot fit judged in
+  the scenes; other shared values and values in maps tuned by look; every feature that
+  reads the base color reading a shifted one; declared inputs, a smooth limit for maps
+  without a carrier, and the range each contribution raised;
 - **a matcap's ways compared by their cost** (from 4.5): one side, two slots and a shifted
   base as candidates, with the blocked view's difference. Built with the first output that
   has two matcap slots of one blend each; until then *Base color shift* decides between

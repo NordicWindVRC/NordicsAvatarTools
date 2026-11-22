@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using NordicWind.TextureWrapper;
 using UnityEngine;
 
@@ -66,6 +67,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // - its content, the map's own value, under the views added to it;
     // - the contributions of other features, in place, by stage;
     // - its range, once for the whole baked map (Finish).
+    // A reader that needs the map partway asks for its value before a stage (Before).
     public sealed class AtlasMapRequest
     {
         public AtlasVirtualMap Map;
@@ -95,8 +97,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // content ends up at in the texture, for evaluations that depend on it.
         public Func<int, AtlasUnifiedMaterial, int, int, Vector2Int, NordicsTextureWrapper> ContentPlaced;
 
-        // The color the output multiplies the map by, which the content leaves out (the base
-        // color's shared color). Contributions see the content × it, the surface's real value.
+        // What the output multiplies the map by, which the content leaves out: the base color's
+        // shared color, the emission's strength. Contributions see the content × it, the
+        // surface's real value, so each one adds its part in full.
         public Color SharedColor = Color.white;
 
         // The content itself can go above 1 (colors multiplied into it).
@@ -143,6 +146,30 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return (index, material, width, height) => Fold(index, material, width, height, null, count, edits);
         }
 
+        /// <summary>The map's value for a source as the contributions of a stage find it: its
+        /// content under its views with the contributions of the stages before, the shared
+        /// color included. For a reader that needs the map partway (the base color before the
+        /// matcaps). Made once per size within a source's evaluation (AtlasEvaluationCache);
+        /// the caller owns the copy.</summary>
+        public NordicsTextureWrapper Before(AtlasMapStage stage, int index, AtlasUnifiedMaterial material, int width, int height) =>
+            AtlasEvaluationCache.Copy(("map before stage", this, stage, index, width, height),
+                () => Partway(index, material, width, height, contributions.Where(c => c.Stage < stage).ToList()));
+
+        /// <summary>The same as one contribution finds it: with the contributions that run
+        /// before it.</summary>
+        public NordicsTextureWrapper Before(AtlasMapContribution contribution, int index, AtlasUnifiedMaterial material, int width, int height) =>
+            AtlasEvaluationCache.Copy(("map before", this, contribution, index, width, height),
+                () => Partway(index, material, width, height, contributions.TakeWhile(c => c != contribution).ToList()));
+
+        private NordicsTextureWrapper Partway(int index, AtlasUnifiedMaterial material, int width, int height, IReadOnlyList<AtlasMapContribution> edits)
+        {
+            var map = Fold(index, material, width, height, null, views.Count, edits);
+            if (Tinted) Scale(map, Factor(SharedColor.r), Factor(SharedColor.g), Factor(SharedColor.b));
+            return map;
+        }
+
+        private bool Tinted => Mathf.Abs(SharedColor.r - 1f) + Mathf.Abs(SharedColor.g - 1f) + Mathf.Abs(SharedColor.b - 1f) > 1e-6f;
+
         private NordicsTextureWrapper Fold(int index, AtlasUnifiedMaterial material, int width, int height, Vector2Int? placed, int viewCount,
             IReadOnlyList<AtlasMapContribution> edits)
         {
@@ -158,7 +185,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (applying == null) return map;
             try
             {
-                bool tinted = Mathf.Abs(SharedColor.r - 1f) + Mathf.Abs(SharedColor.g - 1f) + Mathf.Abs(SharedColor.b - 1f) > 1e-6f;
+                bool tinted = Tinted;
                 if (tinted) Scale(map, Factor(SharedColor.r), Factor(SharedColor.g), Factor(SharedColor.b));
                 var target = new AtlasMapContent { Source = index, Material = material, Width = width, Height = height, Placed = placed, Map = map };
                 foreach (var edit in applying) edit.Apply(target);

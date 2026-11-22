@@ -1,10 +1,11 @@
 # Nordic's Advanced Atlaser — Matching by look (planned design)
 
-A planned extension of the output design in [ATLAS_OUTPUT.md](ATLAS_OUTPUT.md): how a
-source's look is measured and compared with the output's, how matcaps are placed and tuned
-with that measure, and what remains of building maps from contributions. It isn't built yet.
-[ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md) lists its phases. When a phase is built, its part
-of this document moves into the output design and leaves this one.
+The planned rest of matching by look, an extension of the output design in
+[ATLAS_OUTPUT.md](ATLAS_OUTPUT.md): how a source's look is measured and compared with the
+output's, how matcaps are placed and tuned with that measure, and how maps are built from
+contributions. What is built is in the output design; this document keeps the goals and what
+remains planned, which [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md) lists under *Later*.
+When a part is built, it moves into the output design and leaves this one.
 
 Names in *italics* are sections of the output design, or of this document where marked
 *below*. Shader behavior stated here was read in the shaders' sources and in VRChat's
@@ -46,20 +47,13 @@ documentation of its shader fallback system.
 
 ## Map contributions
 
-Maps are built from contributions: see *Map contributions* in the output design. What remains
-planned:
+Maps are built from contributions: see *Map contributions* in the output design, where a
+reader gets a map's value at a stage, the emission map gives its contributions full values,
+and a source's mesh surface is shared by its bakes. What remains planned:
 
-- **Reading a map at a stage.** A contribution or a fit that needs a map's value partway (the
-  base color before the matcaps, or after the surface layers) asks the map for its value at a
-  stage, at the size it needs. Within a source's bake the result is shared between its
-  readers. Today such readers evaluate the color stack themselves, or take a snapshot.
-- **Declared inputs.** A contribution declares what it reads (the world normal, the mesh's
-  sections), so shared inputs are made once per source and released when the last reader is
-  done.
-- **Full values in every carried map.** The emission map is relative to its layer's strength,
-  and a feature that raises the strength rescales what the map held (glitter). With the map
-  holding full values and dividing by its carrier at the end, as the base color does with its
-  shared color, a feature only adds its part.
+- **Declared inputs.** A contribution declares what it reads besides the map (the normal
+  map at its size), so an input that several contributions of one map read is made once and
+  released when the last reader is done. Today each bake evaluates its normal map itself.
 - **Maps with nothing to carry their range** are limited smoothly (*A limit must never step*),
   and the log says so.
 - **Reporting.** The map reports which contribution raised its range and by how much, which
@@ -92,9 +86,10 @@ source's own lighting and its own shader's fresnel. What remains planned:
   term of Unity's reflections) isn't part of the lighting stage; the same on both sides
   today.
 - **The matcap slot fit** works on the base color before the light, so it uses no scene.
-- **Sample points** are a source's base colors alone. With the values at the same places
-  (masks, roughness, metallic), read from a map at a stage (*Map contributions*, above),
-  one set of points serves every fit.
+- **Sample points.** The base colors include the layers on them, and the reflectance fit
+  reads them with the smoothness, metallic and masks at the same places. Read from the
+  maps' requests instead of the sources' textures, they would also hold what the mask bus
+  and the vertex colors change.
 - **One evaluator from the unified material.** Today each feature describes its layers to
   the reference look. Computed from a source's unified material as a whole, in the stages
   S1–S7, it is the unified definition in executable form, and what it doesn't cover is

@@ -125,6 +125,31 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(0.5f, shared * Pixel(plan, AtlasVirtualMap.BaseColor, job, 0, 4, 4).r, 1e-3f, "between the points: the color as it is");
         }
 
+        // The emission map gives its value in full, so the points are added as they are
+        // whatever the emission's strength; what goes above the map's range goes into the
+        // strength.
+        [Test]
+        public void GlitterPointsAreAddedInFullToAnEmissionOfAnyStrength()
+        {
+            var material = Glittery(2f);
+            var glow = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission };
+            glow.Source.Color = Color.white;
+            glow.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Emission, AtlasBlend.Add, 0.5f));
+            material.Layers.Add(glow);
+            var job = Job(material);
+            job.Features.Add(new AtlasFeatureChoice { FeatureId = AtlasGlitterFeature.FeatureId, ModeId = "emulated" });
+            var plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
+            var target = AtlasEmissionFeature.Of(plan.Output).Targets[0];
+            var request = plan.Maps.Single(m => m.Map == AtlasVirtualMap.Emission);
+            using (var map = request.Evaluate(0, material, 16, 16))
+            {
+                request.Finish(map);
+                Assert.AreEqual(0.5f + 3f, map.GetPixel(0, 0).r * target.Opacity, 1e-2f, "on a point: the emission and the point");
+                Assert.AreEqual(0.5f, map.GetPixel(4, 4).r * target.Opacity, 1e-3f, "between the points: the emission as it was");
+                Assert.LessOrEqual(map.GetPixel(0, 0).r, 1f + 1e-4f, "the map stays within 0–1");
+            }
+        }
+
         [Test]
         public void AGlitterPointOnAGlowingPartGoesIntoTheEmissionsStrength()
         {
