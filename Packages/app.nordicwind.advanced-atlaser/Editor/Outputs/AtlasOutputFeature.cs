@@ -116,6 +116,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public string Name;
         // What the item is, in a few words, shown under its name; null: nothing to add.
         public string Kind;
+        // How the item ends up shown with the settings as they are, in a few words, shown
+        // after what it is; null: not known (the output isn't resolved).
+        public string Way;
+        // It is left out though the user didn't turn it off, so its placement is shown.
+        public bool LeftOut;
         // The item is shown with its texture (or its color alone, without one) next to it, so
         // it can be recognized and found in the project.
         public bool HasPreview;
@@ -123,6 +128,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Linear.
         public UnityEngine.Color PreviewColor = UnityEngine.Color.white;
         public List<int> Sources = new List<int>();
+    }
+
+    // How an item the user places ends up shown: a few words for the inspector, and whether
+    // it is left out though the user didn't turn it off.
+    public readonly struct AtlasInstanceWay
+    {
+        public readonly string Text;
+        public readonly bool LeftOut;
+
+        public AtlasInstanceWay(string text, bool leftOut = false)
+        {
+            Text = text;
+            LeftOut = leftOut;
+        }
     }
 
     // Where the user puts an item: Automatic (the feature's choice), its own place, combined
@@ -134,6 +153,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         // The stored value's ID for an item: its number the placement, its text the item combined with.
         public static string Id(string key) => "instance:" + key;
+
+        // How much of an item's look a way of showing it keeps, in plain words for the
+        // inspector; nothing where it keeps nearly all of it.
+        public static string Kept(float share) =>
+            share >= 0.85f ? "" : share >= 0.6f ? "keeps most of its look" : share >= 0.35f ? "keeps about half of its look" : "keeps little of its look";
     }
 
     // A feature whose items the user places one by one.

@@ -69,6 +69,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // stayed, as is the spot of lighting with a highlight.
         public float BakeCost => Role == AtlasMatcapRole.Lighting && !HasHighlight ? BakeShadingLoss : BakeLoss;
 
+        // Its average effect with its direction: above 0 where it mostly brightens.
+        public float SignedLevel => Brightens >= 0.5f ? Level : -Level;
+
         // A lighting matcap with a highlight on it: a pearl or a lit sphere with a hot spot.
         public bool HasHighlight => Role == AtlasMatcapRole.Lighting && Standout >= AtlasMatcapLook.HighlightStandout;
 
@@ -175,21 +178,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 return (new Color(color.r * sample.r, color.g * sample.g, color.b * sample.b, 1f), opacity);
             }
 
-            // The light each scene gives the surface on average, by the source's own lighting.
-            var lights = AtlasLook.Scenes.Select(scene => LightLevel(material.Lighting, scene)).ToArray();
+            // The light each scene gives the surface on average, by the source's own lighting:
+            // a matcap's place on the surface doesn't follow the light.
+            var lights = AtlasLook.Scenes.Select(scene => AtlasLookLight.Average(material.Lighting, scene)).ToArray();
             int combos = bases.Count * lights.Length;
+            var parts = new AtlasLookLayer[layers.Count];
             // The effect on each base color in each scene: the displayed look with the matcap
-            // minus the look without it.
+            // minus the look without it (AtlasReferenceLook).
             void Effects((Color Color, float Opacity) look, Color[] into)
             {
+                Parts(layers, look.Color, look.Opacity, parts);
                 int n = 0;
                 foreach (var b in bases)
-                    foreach (float light in lights)
-                    {
-                        var with = AtlasLightingResponse.Display(With(layers, b, look.Color, look.Opacity, light));
-                        var without = AtlasLightingResponse.Display(new Color(b.r * light, b.g * light, b.b * light, 1f));
-                        into[n++] = new Color(with.r - without.r, with.g - without.g, with.b - without.b, 0f);
-                    }
+                    foreach (var light in lights)
+                        into[n++] = AtlasReferenceLook.Effect(b, parts, light);
             }
 
             var seen = new Color[combos];
@@ -410,38 +412,23 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return AtlasMatcapRole.Lighting;
         }
 
-        /// <summary>The surface's color with the matcap's layers on base color
-        /// <paramref name="b"/>, under <paramref name="light"/>: surface blends before the light,
-        /// overlay adds and glows after it, the part that follows the light lit.</summary>
-        public static Color With(IReadOnlyList<AtlasLookupLayer> layers, Color b, Color matcap, float opacity, float light)
+        /// <summary>A matcap's layers as layers of the reference look, where the matcap shows
+        /// <paramref name="matcap"/> at <paramref name="opacity"/>: surface blends before the
+        /// light; overlay adds and glows after it, the part that follows the light lit.</summary>
+        public static void Parts(IReadOnlyList<AtlasLookupLayer> layers, Color matcap, float opacity, AtlasLookLayer[] into)
         {
-            var c = b;
-            var lit = Color.black;
-            var glow = Color.black;
-            foreach (var layer in layers)
+            for (int i = 0; i < layers.Count; i++)
             {
-                float mix = Mathf.Clamp01(layer.BaseColorMix);
-                var tinted = new Color(matcap.r * Mathf.Lerp(1f, c.r, mix), matcap.g * Mathf.Lerp(1f, c.g, mix), matcap.b * Mathf.Lerp(1f, c.b, mix), 1f);
+                var layer = layers[i];
                 bool after = AtlasMatcapBake.AddsAfterLighting(layer);
-                if (!after) c = AtlasBlendMath.Apply(layer.Blend, c, tinted, opacity * layer.Opacity);
-                float added = (after ? layer.Opacity : 0f) + Mathf.Max(0f, layer.EmissionAmount);
-                if (added <= 0f) continue;
+                float added = opacity * ((after ? layer.Opacity : 0f) + Mathf.Max(0f, layer.EmissionAmount));
                 float unlit = AtlasMatcapBake.GlowShare(layer);
-                glow += tinted * (opacity * added * unlit);
-                lit += tinted * (opacity * added * (1f - unlit));
+                into[i] = new AtlasLookLayer
+                {
+                    Color = matcap, BaseColorMix = Mathf.Clamp01(layer.BaseColorMix), Blend = layer.Blend,
+                    Surface = after ? 0f : opacity * layer.Opacity, Lit = added * (1f - unlit), Unlit = added * unlit
+                };
             }
-            return new Color((c.r + lit.r) * light + glow.r, (c.g + lit.g) * light + glow.g, (c.b + lit.b) * light + glow.b, 1f);
-        }
-
-        /// <summary>The light a lighting gives a white surface in a scene, on average over the
-        /// angles to the light.</summary>
-        public static float LightLevel(AtlasLighting lighting, AtlasLookScene scene)
-        {
-            var ramp = AtlasLightingResponse.RampOf(lighting);
-            float sum = 0f;
-            for (int k = 0; k < AtlasLook.Angles; k++)
-                sum += AtlasSourceSamples.Luminance(AtlasLightingResponse.Lit(lighting, Color.white, -1f + 2f * k / (AtlasLook.Angles - 1), scene, ramp));
-            return sum / AtlasLook.Angles;
         }
 
         // Turns the lookup around its center, by degrees, as the bake does.

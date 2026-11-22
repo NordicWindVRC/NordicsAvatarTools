@@ -78,25 +78,27 @@ without a main light, a lighting's level and contrast, the kept material read ba
 written material, the sources listed where the kept lighting looks different from their own,
 the lighting's shared values and a generated ramp's shape tuned where the output shader
 shows the chosen lighting differently, the base color scaled for sources the atlas's lighting
-shows brighter or darker than their own, and a layer's cost as a measure. What remains
-planned:
+shows brighter or darker than their own, a layer's cost as a measure, and a view layer's
+look in the unified evaluation stages. What remains planned:
 
 ### The reference look
 
-The look model covers the lighting today, and the rim fit is lit by it in all four scenes.
-The highlight fit assumes plain Lambert light whatever lighting was chosen, so it uses the
-scenes with a main light only, and the matcap slot fit works on the base color before the
-light, so it uses no scene.
+Built (*The look model* in the output design): a view layer's look at a sample point, in
+the stages S1–S5, which the matcap measures, the rim fit and the rims' costs use. What
+remains planned:
 
-One evaluator computes a source's look from its unified material, at sample points, in the
-unified evaluation stages (S1–S7): the surface inputs, the lighting family with highlights and
-reflections, the layers that follow the light, the overlays (matcaps over the lookup disc,
-rims over the facing angle), emission and the final color. It is the unified definition in
-executable form. The fits' own models become its parts and take their light from it. What it
-doesn't cover yet is listed in one place.
-
-Sample points are a source's base color samples with the values at the same places (masks,
-roughness, metallic), in each scene, over the angles to the light and the view.
+- **Highlights and reflections.** The highlight fit has its own model, which assumes plain
+  Lambert light whatever lighting was chosen, so it uses the scenes with a main light only.
+  With highlights and reflections as part of the lighting stage, it takes its light from
+  the reference look.
+- **The matcap slot fit** works on the base color before the light, so it uses no scene.
+- **Sample points** are a source's base colors alone. With the values at the same places
+  (masks, roughness, metallic), read from a map at a stage (*Map contributions*, above),
+  one set of points serves every fit.
+- **One evaluator from the unified material.** Today each feature describes its layers to
+  the reference look. Computed from a source's unified material as a whole, in the stages
+  S1–S7, it is the unified definition in executable form, and what it doesn't cover is
+  listed in one place.
 
 ### The kept material
 
@@ -146,18 +148,17 @@ from its unified material needs a parser fix or a field in the model.
 
 Each matcap is measured by its effect and given a role, which the inspector and the log name
 (*What a matcap is for* in the output design), and *Automatic* placement follows the role:
-highlights are effects, and lighting with a highlight is guarded. What remains planned is
-that the role sets which ways of showing a matcap are offered:
+highlights are effects, and lighting with a highlight is guarded. What a role can share
+follows from the cost (*Comparing layers* in the output design):
 
-| Role | Can share a slot | Can be baked |
+| Role | Shares a slot | Baked by *Automatic* |
 |---|---|---|
-| Lighting | With other lighting matcaps | Yes |
-| Rim | On the same parts | No |
-| Highlight | On the same parts, with the same lookup | No |
+| Lighting | With other lighting matcaps, by what its level and contrast lose | In the baked mode |
+| Rim | On the same parts, where the stack is exact; across parts only where that costs less than leaving it out, point by point | In the baked mode |
+| Highlight | On the same parts, with the same lookup | In the baked mode, only one that mostly darkens |
 
-Among the ways offered, the cost decides. The rules in use today (an effect keeps its own
-slot, a highlight isn't baked by *Automatic*) follow from the cost: a highlight frozen by a
-bake is missing where it should be and added where it stayed. They are kept as tests.
+The rules in use before (an effect keeps its own slot, a highlight isn't baked by
+*Automatic*) are kept as tests.
 
 ### Brightening, darkening or both
 
@@ -191,7 +192,8 @@ keeps the part as bright as it was, which is most of what a lighting matcap does
 (*Base color shifts* in the output design): for every source of a slot shared across parts,
 as a placement the user chooses, and for a lighting matcap that ends up without a slot. A
 matcap shown on one side is covered by the shift's bounds, which stop at its average look.
-What remains: *Automatic* choosing it by its cost.
+*Automatic* chooses it by its cost for a lighting matcap without a slot of its own
+(*Automatic*, below).
 
 ### Base color shifts
 
@@ -221,13 +223,18 @@ design). What remains planned:
 5. The log names each group's role, the way it is shown and how much of it is kept. The
    inspector shows the same next to the group's placement.
 
-Built (*Comparing layers* and the matcaps' row in the output design): a lighting matcap's
-shading (level and contrast) and what each way keeps of it, and step 4 for lighting
-matcaps between a slot shared across parts and the average in color, with the log's line
-on what a shared slot keeps. What remains:
+Built (*Comparing layers* and the matcaps' and rims' rows in the output design): a lighting
+matcap's shading (level and contrast) and what each way keeps of it; step 4 for a lighting
+matcap between a slot shared across parts and the average in color, and for a rim or a
+highlight between a shared slot and being left out, point by point; the same for rims in
+rim slots and drawn into matcap slots; and step 5, with the inspector saying how each one
+ends up shown. What remains:
 
-- **The inspector** showing each matcap's way and how much of it is kept.
-- **Rims and highlights** by cost (step 3), with the reference look.
+- **The order of step 3.** Slots are taken by how visible a matcap is (its area × its
+  blends' strength × its mask's average), effects first, not yet by its measured impact.
+- **The ways of step 3.** A group takes its own slot as it is, or fitted through the base
+  color by the user's *Base color shift*. One side, two slots and a shifted base aren't
+  compared by their cost yet, with the blocked view's difference.
 
 ### Controls
 
@@ -235,7 +242,8 @@ on what a shared slot keeps. What remains:
   baked, off.
 - **Base color shift**, as built (*Base color shifts* in the output design).
 
-Rims use the same cost for their fits (`AtlasRimResponse` today).
+Rims are placed by the same cost, and their fit takes its light from the reference look
+(`AtlasRimResponse`).
 
 ---
 

@@ -7,7 +7,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
 {
     // The look model (ATLAS_OUTPUT.md, "The look model"): a lighting's level and contrast in
     // the standard scenes, the sources whose own lighting looks different from the kept one,
-    // and a layer's cost.
+    // a layer's cost, and the reference look's stages.
     public sealed class AtlasLookTests
     {
         private static readonly Color[] Gray = { new Color(0.5f, 0.5f, 0.5f, 1f) };
@@ -127,6 +127,30 @@ namespace NordicWind.AdvancedAtlaser.Tests
             colors.Add(new Color(0.3f, 0.3f, 0.3f), new Color(0.3f, 0.3f, 0.3f));
             Assert.AreEqual(0.3f, colors.Kept, 1e-6f, "the mean of the channels");
             Assert.AreEqual(0f, colors.Cost, 1e-6f, "the same effect costs nothing");
+        }
+
+        // The reference look evaluates a layer where it acts: on the surface before the light,
+        // over the lit color, added with the light, or added without it.
+        [Test]
+        public void TheReferenceLookEvaluatesALayerAtItsStage()
+        {
+            var gray = new Color(0.5f, 0.5f, 0.5f, 1f);
+            var white = Color.white;
+            var light = AtlasLookLight.Even(0.5f);
+            float Look(AtlasLookLayer layer) => AtlasReferenceLook.Linear(gray, new[] { layer }, light).r;
+            Assert.AreEqual(0.25f, AtlasReferenceLook.Linear(gray, new AtlasLookLayer[0], light).r, 1e-6f, "the base color under the light");
+            Assert.AreEqual(0.35f, Look(new AtlasLookLayer { Color = white, Blend = AtlasBlend.Add, Surface = 0.2f }), 1e-6f, "on the surface: lit with it");
+            Assert.AreEqual(0.45f, Look(new AtlasLookLayer { Color = white, Blend = AtlasBlend.Add, Overlay = 0.2f }), 1e-6f, "over the lit color, ignoring the light");
+            Assert.AreEqual(0.35f, Look(new AtlasLookLayer { Color = white, Blend = AtlasBlend.Add, Overlay = 0.2f, Response = AtlasLightResponse.ScaleByLight }),
+                1e-6f, "over the lit color, following the light");
+            Assert.AreEqual(0.35f, Look(new AtlasLookLayer { Color = white, Lit = 0.2f }), 1e-6f, "added with the light");
+            Assert.AreEqual(0.45f, Look(new AtlasLookLayer { Color = white, Unlit = 0.2f }), 1e-6f, "added without it");
+            Assert.AreEqual(0.3f, Look(new AtlasLookLayer { Color = white, BaseColorMix = 1f, Unlit = 0.1f }), 1e-6f, "mixed with the base color");
+
+            var effect = AtlasReferenceLook.Effect(gray, new[] { new AtlasLookLayer { Color = white, Unlit = 0.2f } }, light);
+            Assert.AreEqual(Mathf.LinearToGammaSpace(0.45f) - Mathf.LinearToGammaSpace(0.25f), effect.r, 1e-5f, "the effect: as displayed, with it minus without it");
+            Assert.AreEqual(AtlasLook.Scenes.Length * AtlasReferenceLook.LightAngles, AtlasReferenceLook.Points(new[] { gray }, new AtlasLighting()).Count,
+                "each color in each scene, over the angles to the light");
         }
     }
 }

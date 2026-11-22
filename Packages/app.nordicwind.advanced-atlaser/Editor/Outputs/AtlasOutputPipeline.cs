@@ -45,6 +45,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly List<AtlasGeneratedTexture> GeneratedTextures = new List<AtlasGeneratedTexture>();
         // The output's matcap slots the matcaps took; later features (rims) use the rest.
         public int MatcapSlotsUsed;
+        // How each item the user places (a matcap, a rim) ends up shown, by its feature and
+        // its key.
+        public readonly Dictionary<(string Feature, string Key), AtlasInstanceWay> Ways = new Dictionary<(string, string), AtlasInstanceWay>();
         // A matcap slot is fitted through the base color (a base color shift) where viewers who
         // block the shader see the base color alone, so the inspector offers how far it may go.
         public bool BaseColorShifts;

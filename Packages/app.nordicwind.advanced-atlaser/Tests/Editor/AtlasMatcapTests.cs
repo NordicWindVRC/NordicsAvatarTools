@@ -860,6 +860,8 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var plain = WithMatcap(Solid(Color.white), null, Color.white, (AtlasBlend.Add, 0.5f));
             overview = AtlasOutputOverview.Build(new AtlasOutputConfiguration(), WithFallback(), new Material[] { null }, new[] { plain });
             Assert.IsFalse(overview.Features.Single(s => s.Feature is AtlasMatcapFeature).Options.Any(o => o.Id == AtlasMatcapFeature.ShiftOptionId));
+            // Each matcap's row says how it ends up shown.
+            Assert.AreEqual("In matcap slot 1", overview.Features.Single(s => s.Feature is AtlasMatcapFeature).Instances.Single().Way);
         }
 
         [Test]

@@ -425,10 +425,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 using (new EditorGUI.IndentLevelScope())
                     Switch(setting, conflictSwitch);
             // With one item in slots there is nothing to place, unless it can be kept as its
-            // average: otherwise the mode and the per-material toggles decide. Baked, each item
-            // is baked, left out or left to Automatic.
+            // average or Automatic leaves it out: otherwise the mode and the per-material
+            // toggles decide. Baked, each item is baked, left out or left to Automatic.
             bool bakedMode = state.Mode != null && state.Mode.Kind == AtlasFeatureModeKind.Baked;
-            if (state.Instances.Count > 1 || ((bakedMode || state.InstancesCanAverage) && state.Instances.Count > 0))
+            if (state.Instances.Count > 1 || state.Instances.Any(i => i.LeftOut) ||
+                ((bakedMode || state.InstancesCanAverage) && state.Instances.Count > 0))
                 using (new EditorGUI.IndentLevelScope())
                     foreach (var instance in state.Instances)
                         Placement(setting, instance, state.Instances, state.InstancesAsMatcap, state.InstancesCanBake, state.InstancesCanAverage,
@@ -594,16 +595,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private const float PreviewSize = 36f;
 
         // An item's row with its texture next to it (tinted by its color, or the color alone):
-        // its name and the choice on the first line; below, what the item is and the materials
-        // it is on, wrapped onto as many lines as it needs. A click on the texture shows where it
-        // is in the Project window.
+        // its name and the choice on the first line; below, what the item is, how it ends up
+        // shown and the materials it is on, wrapped onto as many lines as it needs. A click on
+        // the texture shows where it is in the Project window.
         private static int PreviewRow(GUIContent label, AtlasFeatureInstance instance, IReadOnlyList<Material> materials, int index, string[] options)
         {
             float line = EditorGUIUtility.singleLineHeight;
             var names = instance.Sources.Where(i => i >= 0 && i < materials.Count && materials[i] != null).Select(i => materials[i].name).ToList();
             string on = names.Count == 0 ? ""
                 : "On " + (names.Count <= 2 ? string.Join(" and ", names) : names[0] + ", " + names[1] + " and " + (names.Count - 2) + " more") + ".";
-            var kind = new GUIContent(string.IsNullOrEmpty(instance.Kind) ? on : instance.Kind + ". " + on, string.Join(", ", names));
+            string about = string.Join(" ", new[] { instance.Kind, instance.Way }.Where(s => !string.IsNullOrEmpty(s)).Select(s => s + ".")
+                .Concat(new[] { on }.Where(s => s.Length > 0)));
+            var kind = new GUIContent(about, string.Join(", ", names));
             // The second line's height at the width it gets, so nothing is cut off.
             float indent = EditorGUI.indentLevel * 15f;
             float kindWidth = Mathf.Max(60f, EditorGUIUtility.currentViewWidth - 40f - indent - PreviewSize - 4f);

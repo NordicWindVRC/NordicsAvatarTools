@@ -45,18 +45,21 @@ the chosen lighting differently, and the base color scaled for sources the atlas
 shows brighter or darker than their own, each matcap's effect measured and named by its
 role, base color shifts bounded by what viewers who block the shader see, each source's own
 average look kept in a slot shared across parts, a matcap kept as its average in the
-base color where the user places it so or no slot is left for it, and a lighting matcap
-without a slot of its own placed by what its level and contrast lose (the design's
-*Map contributions*, *The look model*, *What a matcap is for* and *Base color shifts*). Each
-remaining part of the look model is built in the phase that first uses it.
+base color where the user places it so or no slot is left for it, a lighting matcap
+without a slot of its own placed by what its level and contrast lose, a view layer's look
+in the unified evaluation stages, rims and the matcaps that are rims or highlights placed
+by their cost point by point, and the inspector saying how each matcap and rim ends up
+shown (the design's *Map contributions*, *The look model*, *Comparing layers*, *What a
+matcap is for* and *Base color shifts*). Each remaining part of the look model is built in
+the phase that first uses it.
 
 ### 4.5 Matcaps by look
 
-- The reference look beyond the lighting (*The reference look*): matcaps and rims lit by the
-  chosen lighting, with highlights and reflections, read from a map at a stage (*Map
-  contributions*).
-- What remains of *Automatic* by cost (*Matcaps*): the inspector showing each matcap's way
-  and how much of it is kept; rims and highlights by cost, with the reference look.
+- The rest of the reference look (*The reference look*): highlights and reflections in its
+  lighting stage, and sample points with the values at the same places, read from a map at
+  a stage (*Map contributions*).
+- The rest of *Automatic* by cost (*Matcaps*, *Automatic*): slots taken in the order of the
+  matcaps' measured impact, and a group's ways compared by their cost.
 - **Workable:** *Automatic* places matcaps by role and cost on every writer, and the rules in
   use before (effects keep their slots, highlights aren't baked) hold as tests.
 

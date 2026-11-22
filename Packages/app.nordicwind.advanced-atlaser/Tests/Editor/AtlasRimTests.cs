@@ -130,14 +130,48 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(1f, Evaluate(plan, AtlasVirtualMap.Mask1, job, 0), 1e-4f);
             Assert.AreEqual(0f, Evaluate(plan, AtlasVirtualMap.Mask1, job, 1), 1e-4f);
 
-            // A matcap takes the slot: the rim shows on every part, listed.
-            var withMatcap = new AtlasUnifiedMaterial();
-            var lookup = new AtlasLookupLayer { Blend = AtlasBlend.Add, Projection = AtlasLookupProjection.ViewCorrected };
-            lookup.Source.Map = new AtlasTextureReference { Texture = Solid(Color.white), Space = AtlasTextureSpace.View };
-            withMatcap.Layers.Add(lookup);
-            job = Job(Material(band), withMatcap);
+            // A matcap takes the slot, and the rim slot has no mask. A rim on most of the atlas
+            // shows on every part, listed: it adds less there than leaving it out would lose.
+            var gray = new Color(0.4f, 0.4f, 0.4f, 1f);
+            AtlasUnifiedMaterial WithRim()
+            {
+                var material = Material(With(new AtlasAngleLayer { Profile = AtlasAngleProfile.Band, Width = 0.3f, Softness = 0.1f }, Color.white));
+                material.Surface.BaseColor.Color = gray;
+                return material;
+            }
+            AtlasUnifiedMaterial WithMatcap()
+            {
+                var material = new AtlasUnifiedMaterial();
+                material.Surface.BaseColor.Color = gray;
+                var lookup = new AtlasLookupLayer { Blend = AtlasBlend.Add, Projection = AtlasLookupProjection.ViewCorrected };
+                lookup.Source.Map = new AtlasTextureReference { Texture = Solid(Color.white), Space = AtlasTextureSpace.View };
+                material.Layers.Add(lookup);
+                return material;
+            }
+            AtlasGeneratorJob Parts(AtlasUnifiedMaterial large, AtlasUnifiedMaterial small)
+            {
+                var parts = Job(large, small);
+                parts.Sources[0].UVRegion = new Rect(0f, 0f, 0.8f, 1f);
+                parts.Sources[1].UVRegion = new Rect(0.8f, 0f, 0.2f, 1f);
+                return parts;
+            }
+            job = Parts(WithRim(), WithMatcap());
+            string key = new AtlasRimFeature().Instances(job, new[] { 0 }).Single().Key;
             plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
-            Assert.AreEqual(1, Rims(plan).Count);
+            Assert.AreEqual(1, Rims(plan).Count, Notes(plan));
+            StringAssert.Contains("shows on every part", Notes(plan));
+            Assert.AreEqual("In rim slot 1, on every part", plan.Ways[(AtlasRimFeature.FeatureId, key)].Text);
+
+            // A rim on a small part would add more on the rest than it keeps: left out, listed.
+            job = Parts(WithMatcap(), WithRim());
+            plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
+            Assert.AreEqual(0, Rims(plan).Count, Notes(plan));
+            StringAssert.Contains("would add more than they keep", Notes(plan));
+            Assert.IsTrue(plan.Ways[(AtlasRimFeature.FeatureId, key)].LeftOut);
+            // In its own slot by the user's choice, it shows on every part.
+            Place(job, key, AtlasInstancePlacement.Own);
+            plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
+            Assert.AreEqual(1, Rims(plan).Count, Notes(plan));
             StringAssert.Contains("shows on every part", Notes(plan));
 
             // Every material has it: the rim itself, exactly.
@@ -174,6 +208,27 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(Color.red, rim.Color.Color, "the slot's rim");
             Assert.AreEqual(1f, Evaluate(plan, AtlasVirtualMap.Mask1, job, 1), 1e-4f, "shown on the second material too");
             Assert.AreEqual(0f, Evaluate(plan, AtlasVirtualMap.Mask1, job, 2), 1e-4f);
+        }
+
+        // A rim's effect is taken over the facing angles, on the sources' base colors. Shown
+        // where there was none, it costs twice what leaving it out does.
+        [Test]
+        public void ARimsEffectSaysWhatShowingItElsewhereCosts()
+        {
+            var points = AtlasReferenceLook.Points(new[] { new Color(0.3f, 0.3f, 0.3f, 1f) }, new AtlasLighting());
+            var band = With(new AtlasAngleLayer { Profile = AtlasAngleProfile.Band, Width = 0.3f, Softness = 0.1f }, Color.white);
+            var effects = AtlasRimResponse.Effects(new[] { (band, 1f) }, points);
+            Assert.AreEqual(points.Count * AtlasRimResponse.Facings, effects.Length);
+            Assert.Greater(effects[0].r, 0.1f, "toward the edge, the rim brightens");
+            Assert.AreEqual(0f, effects[AtlasRimResponse.Facings - 1].r, 1e-5f, "facing the viewer, nothing");
+
+            var own = AtlasRimResponse.Cost(effects, null);
+            Assert.Greater(own.Impact, 0f);
+            Assert.AreEqual(own.Impact, own.Cost, 1e-6f, "left out, it costs what it does");
+            Assert.AreEqual(0f, AtlasRimResponse.Cost(effects, effects).Cost, 1e-6f, "shown as it is, nothing");
+            Assert.AreEqual(2f * own.Impact, AtlasRimResponse.Cost(null, effects).Cost, 1e-5f, "where there was none, what it adds counts double");
+            var half = AtlasRimResponse.Effects(new[] { (band, 0.5f) }, points);
+            Assert.Less(AtlasRimResponse.Cost(effects, half).Cost, own.Impact, "a weaker rim is still the rim");
         }
 
         private static List<(IReadOnlyList<Color> Bases, float Weight)> Bases(params Color[] colors) =>

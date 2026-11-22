@@ -13,10 +13,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // - The user places each group: its own rim slot, as a matcap, combined with another group,
     //   or off. Automatic gives it a rim slot while one is free (on an output whose rim has no
     //   mask, only when the rim is the same everywhere), then a free matcap slot, then a rim slot
-    //   anyway (shown on every part, listed), and otherwise combines it with the most similar.
+    //   anyway, which shows it on every part (listed), and otherwise combines it with another.
     // - Combined in a rim slot, the slot's first group's rim shows on each member's parts.
     //   Combined in a matcap slot, the rims are drawn into one texture: added on the same parts,
     //   averaged by area on different parts.
+    // - Automatic uses a way that shows a rim otherwise than it is only where that costs less
+    //   than leaving the rim out (AtlasLayerCost, ATLAS_OUTPUT.md, "Comparing layers"): a rim
+    //   on every part adds it where it wasn't, and a shared slot shows another rim in its
+    //   place. The rims' effects are taken on their sources' base colors under the atlas's
+    //   lighting, over the facing angles (AtlasRimResponse.Effects), by the area each rim's
+    //   mask covers. Among the slots a rim can share, it joins the one that costs the least.
+    //   A rim the user places goes where the user put it.
+    // - How each rim ends up shown goes into the plan in a few words (Ways), for the inspector.
     // - A rim depending only on the view angle draws into a matcap exactly (AtlasRimCurve).
     public sealed class AtlasRimFeature : IAtlasInstanceFeature
     {
@@ -57,7 +65,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         private sealed class Group
         {
-            public string Key, Look, Label, Parts;
+            public string Key, Look, Label, Name, Parts;
             public float Area;
             public readonly List<Instance> Members = new List<Instance>();
             public AtlasAngleLayer First => Members[0].Layers[0];
@@ -129,7 +137,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     var group = groups.Find(g => g.Look == look);
                     if (group == null)
                     {
-                        group = new Group { Look = look, Key = Hash(look), Label = Label(instance.Layers[0]) };
+                        group = new Group { Look = look, Key = Hash(look), Label = Label(instance.Layers[0]), Name = Label(instance.Layers[0]) };
                         groups.Add(group);
                     }
                     group.Members.Add(instance);
@@ -157,7 +165,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public IReadOnlyList<AtlasFeatureInstance> Instances(AtlasGeneratorJob job, IReadOnlyList<int> sources) =>
             Groups(job, sources, null).Select(g => new AtlasFeatureInstance
             {
-                Key = g.Key, Label = g.Label, Sources = g.Members.Select(m => m.Source).Distinct().ToList()
+                Key = g.Key, Label = g.Label, Name = g.Name, Sources = g.Members.Select(m => m.Source).Distinct().ToList(),
+                // A rim is recognized by its color.
+                HasPreview = true, PreviewColor = g.First.Color.Color
             }).ToList();
 
         // The source's member of the slot (the first, if several).
@@ -176,11 +186,119 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static bool Everywhere(AtlasGeneratorJob job, Group g) =>
             Keys(job, new List<Group> { g }).All(k => k == AtlasMaskKeys.Constant(1f));
 
+        // The rims' effects on the sources, for placing them by cost: each source's sample
+        // points (its darkest, average and brightest base color under the atlas's lighting).
+        private sealed class Looks
+        {
+            private readonly AtlasGeneratorJob job;
+            private readonly AtlasLighting lighting;
+            private readonly Dictionary<int, List<AtlasLookPoint>> points = new Dictionary<int, List<AtlasLookPoint>>();
+
+            public Looks(AtlasGeneratorJob job, AtlasLighting lighting)
+            {
+                this.job = job;
+                this.lighting = lighting;
+            }
+
+            public int Count => job.Sources.Count;
+
+            public float Area(int source) => job.Sources[source].UVRegion.width * job.Sources[source].UVRegion.height;
+
+            // The part of its source's area a member's mask covers, by the mask's average.
+            public float Cover(Instance member) => Area(member.Source) * Mathf.Clamp01(AtlasSourceSamples.MaskAverage(member.Mask));
+
+            // A rim's effect on a source; null for a source without a material.
+            public Color[] Effects(IReadOnlyList<(AtlasAngleLayer Layer, float Share)> rim, int source)
+            {
+                var material = job.Sources[source].Material;
+                if (material == null) return null;
+                if (!points.TryGetValue(source, out var list))
+                    points[source] = list = AtlasReferenceLook.Points(AtlasLook.Representative(AtlasSourceSamples.Bases(material)), lighting);
+                return AtlasRimResponse.Effects(rim, list);
+            }
+        }
+
+        private static List<(AtlasAngleLayer Layer, float Share)> Whole(IEnumerable<AtlasAngleLayer> layers) => layers.Select(l => (l, 1f)).ToList();
+
+        // How much a rim changes its sources' look, by area: what leaving it out costs.
+        private static float Impact(Group group, Looks looks) =>
+            group.Members.Sum(m => looks.Cover(m) * AtlasRimResponse.Cost(looks.Effects(Whole(m.Layers), m.Source), null).Impact);
+
+        // What a rim costs in a rim slot it shares, by area: the slot's first rim shows in its
+        // place.
+        private static float SharedCost(Group group, List<Group> slot, Looks looks)
+        {
+            if (group == slot[0]) return 0f;
+            var shown = Whole(slot[0].Members[0].Layers);
+            return group.Members.Sum(m =>
+                looks.Cover(m) * AtlasRimResponse.Cost(looks.Effects(Whole(m.Layers), m.Source), looks.Effects(shown, m.Source)).Cost);
+        }
+
+        // What a rim slot costs: each member's rim shown as the slot's first and, where the
+        // slot has no mask, that rim on every part that has none of the slot's.
+        private static float RimSlotCost(List<Group> slot, Looks looks, bool masked)
+        {
+            float cost = slot.Sum(g => SharedCost(g, slot, looks));
+            if (masked) return cost;
+            var shown = Whole(slot[0].Members[0].Layers);
+            var covered = new Dictionary<int, float>();
+            foreach (var member in slot.SelectMany(g => g.Members))
+                covered[member.Source] = (covered.TryGetValue(member.Source, out float c) ? c : 0f) + looks.Cover(member);
+            for (int i = 0; i < looks.Count; i++)
+            {
+                float rest = looks.Area(i) - (covered.TryGetValue(i, out float c) ? c : 0f);
+                if (rest > 1e-6f) cost += rest * AtlasRimResponse.Cost(null, looks.Effects(shown, i)).Cost;
+            }
+            return cost;
+        }
+
+        // What each stack of a matcap slot with drawn rims costs and how much it changes its
+        // sources' look, by area. Rims on the same parts are stacked exactly. Stacks on
+        // different parts are averaged by area, so each part shows every stack's rims at its
+        // share.
+        private static List<(List<Group> Stack, float Cost, float Impact)> StackCosts(List<Group> slot, Looks looks)
+        {
+            var stacks = slot.GroupBy(g => g.Parts).Select(s => s.ToList()).ToList();
+            float total = stacks.Sum(s => Mathf.Max(0f, s[0].Area));
+            var shown = new List<(AtlasAngleLayer Layer, float Share)>();
+            foreach (var stack in stacks)
+            {
+                float share = stacks.Count == 1 ? 1f : total > 0f ? Mathf.Max(0f, stack[0].Area) / total : 1f / stacks.Count;
+                shown.AddRange(stack.SelectMany(g => g.Members[0].Layers).Select(l => (l, share)));
+            }
+            var result = new List<(List<Group> Stack, float Cost, float Impact)>();
+            foreach (var stack in stacks)
+            {
+                var own = Whole(stack.SelectMany(g => g.Members[0].Layers));
+                float cost = 0f, impact = 0f;
+                foreach (var member in stack[0].Members)
+                {
+                    var effects = looks.Effects(own, member.Source);
+                    float cover = looks.Cover(member);
+                    impact += cover * AtlasRimResponse.Cost(effects, null).Impact;
+                    if (stacks.Count > 1) cost += cover * AtlasRimResponse.Cost(effects, looks.Effects(shown, member.Source)).Cost;
+                }
+                result.Add((stack, cost, impact));
+            }
+            return result;
+        }
+
+        private static float SlotCost(List<Group> slot, bool rim, Looks looks, bool masked) =>
+            rim ? RimSlotCost(slot, looks, masked) : StackCosts(slot, looks).Sum(s => s.Cost);
+
         public void Resolve(AtlasFeatureContext context)
         {
             var job = context.Job;
             var capabilities = context.Capabilities;
             var groups = Groups(job, context.Sources, context.Notes);
+            var looks = new Looks(job, context.Output.Lighting);
+            // A way of showing a rim is worth using where it costs less than leaving it out.
+            bool Worth(Group g, float cost)
+            {
+                float impact = Impact(g, looks);
+                return impact <= 0f || cost < impact;
+            }
+            void Way(Group g, string way, bool leftOut = false) => context.Plan.Ways[(FeatureId, g.Key)] = new AtlasInstanceWay(way, leftOut);
             var choice = job.Features.Find(f => f.FeatureId == FeatureId);
             (AtlasInstancePlacement Mode, string Target) Placed(Group g) =>
                 choice != null && choice.Values.TryGetValue(AtlasInstancePlacements.Id(g.Key), out var value)
@@ -191,6 +309,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var matcapSlots = new List<List<Group>>();
             var waiting = new List<Group>();
             var off = new List<Group>();
+            // Left out by Automatic: a rim the slot would show on every part, and a rim a
+            // shared slot would show as another.
+            var spread = new List<Group>();
+            var costly = new List<Group>();
             bool Rim(Group g)
             {
                 if (rimSlots.Count >= capabilities.RimSlots) return false;
@@ -218,7 +340,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (same != null) same.Add(g);
                 else if ((capabilities.RimMask || Everywhere(job, g)) && Rim(g)) { }
                 else if (Matcap(g)) { }
-                else if (!Rim(g)) waiting.Add(g);
+                else if (rimSlots.Count >= capabilities.RimSlots) waiting.Add(g);
+                // A slot without a mask shows the rim on every part.
+                else if (Worth(g, RimSlotCost(new List<Group> { g }, looks, capabilities.RimMask))) Rim(g);
+                else spread.Add(g);
             }
             foreach (var g in groups.Where(g => Placed(g).Mode == AtlasInstancePlacement.Combined))
             {
@@ -229,15 +354,66 @@ namespace NordicWind.AdvancedAtlaser.Editor
             foreach (var g in waiting)
             {
                 var candidates = rimSlots.Concat(matcapSlots.Where(s => g.Drawable)).ToList();
-                if (candidates.Count == 0) off.Add(g);
-                else candidates.OrderByDescending(s => Similarity(s[0], g)).First().Add(g);
+                if (candidates.Count == 0)
+                {
+                    off.Add(g);
+                    Way(g, "Left out: no slot is free", true);
+                    continue;
+                }
+                var target = candidates.OrderByDescending(s => Similarity(s[0], g)).First();
+                if (Placed(g).Mode == AtlasInstancePlacement.Automatic)
+                {
+                    // Where the least is lost, and only where that is less than leaving it out.
+                    float Added(List<Group> s)
+                    {
+                        bool rim = rimSlots.Contains(s);
+                        return SlotCost(s.Concat(new[] { g }).ToList(), rim, looks, capabilities.RimMask) - SlotCost(s, rim, looks, capabilities.RimMask);
+                    }
+                    target = candidates.OrderBy(Added).ThenByDescending(s => Similarity(s[0], g)).First();
+                    if (!Worth(g, Added(target)))
+                    {
+                        costly.Add(g);
+                        continue;
+                    }
+                }
+                target.Add(g);
             }
 
             var notes = context.Notes;
+            // How each rim is shown; a slot that can't be placed says so instead.
+            for (int k = 0; k < rimSlots.Count; k++)
+            {
+                var keys = Keys(job, rimSlots[k]);
+                // Without a mask, a rim that isn't the same everywhere shows on every part.
+                bool everyPart = !capabilities.RimMask && !(keys.All(key => key == keys[0]) && AtlasMaskKeys.IsConstant(keys[0], out _));
+                foreach (var g in rimSlots[k])
+                {
+                    float impact = Impact(g, looks);
+                    string kept = AtlasInstancePlacements.Kept(impact > 0f ? 1f - SharedCost(g, rimSlots[k], looks) / impact : 1f);
+                    Way(g, (rimSlots[k].Count > 1 ? "Shares rim slot " : "In rim slot ") + (k + 1) + (everyPart ? ", on every part" : "") +
+                           (kept.Length > 0 ? "; " + kept : ""));
+                }
+            }
+            for (int k = 0; k < matcapSlots.Count; k++)
+                foreach (var (stack, cost, impact) in StackCosts(matcapSlots[k], looks))
+                {
+                    string kept = AtlasInstancePlacements.Kept(impact > 0f ? 1f - cost / impact : 1f);
+                    foreach (var g in stack)
+                        Way(g, (matcapSlots[k].Count > 1 ? "Shares matcap slot " : "Drawn into matcap slot ") + (context.Plan.MatcapSlotsUsed + k + 1) +
+                               (kept.Length > 0 ? "; " + kept : ""));
+                }
+            foreach (var g in spread) Way(g, "Left out: the rim slot would show it on every part", true);
+            foreach (var g in costly) Way(g, "Left out: sharing a slot would change it too much", true);
             for (int k = 0; k < rimSlots.Count; k++) PlaceRim(context, rimSlots[k], k);
             for (int k = 0; k < matcapSlots.Count; k++) PlaceMatcap(context, matcapSlots[k], context.Plan.MatcapSlotsUsed + k);
             context.Plan.MatcapSlotsUsed += matcapSlots.Count;
             if (off.Count > 0) notes.Add("Rims left out: " + string.Join(", ", off.Select(g => g.Label)) + ".");
+            if (spread.Count > 0)
+                notes.Add("The output shader's rim has no mask, and on every part these rims would add more than they keep, so they are left out: " +
+                          string.Join(", ", spread.Select(g => g.Label)) + ". Placing one in its own slot shows it on every part.");
+            if (costly.Count > 0)
+                notes.Add("A shared slot would show another rim in place of these and change them more than it keeps, so they are left out: " +
+                          string.Join(", ", costly.Select(g => g.Label)) + ". Placing one combined with another shares the slot.");
             foreach (var slot in rimSlots.Concat(matcapSlots).Where(s => s.Count > 1))
                 notes.Add((rimSlots.Contains(slot) ? "A rim slot shows " + slot[0].Label + " for " : "A matcap slot draws ") +
                           string.Join(", ", slot.Select(g => g.Label)) + ".");
@@ -289,6 +465,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 if (allocated == null)
                 {
                     context.Notes.Add($"No mask place is left for rim slot {index + 1}; " + string.Join(", ", slot.Select(g => g.Label)) + " left out.");
+                    foreach (var g in slot) context.Plan.Ways[(FeatureId, g.Key)] = new AtlasInstanceWay("Left out: no mask place is free", true);
                     return;
                 }
                 mask = allocated.Mask ?? new AtlasMask();
@@ -358,6 +535,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (allocated == null)
             {
                 context.Notes.Add($"No mask place is left for matcap slot {index + 1}; " + string.Join(", ", slot.Select(g => g.Label)) + " left out.");
+                foreach (var g in slot) context.Plan.Ways[(FeatureId, g.Key)] = new AtlasInstanceWay("Left out: no mask place is free", true);
                 return;
             }
             if (allocated.IsConstant && allocated.Constant <= 0f) return;

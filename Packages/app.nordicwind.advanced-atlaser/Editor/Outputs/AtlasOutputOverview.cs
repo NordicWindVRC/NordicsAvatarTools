@@ -102,6 +102,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 foreach (var state in overview.Features)
                 {
                     if (plan.LiveSetups.TryGetValue(state.Feature.Id, out var setups)) state.LiveSetups.AddRange(setups);
+                    // How each placed item ends up shown.
+                    foreach (var instance in state.Instances)
+                        if (plan.Ways.TryGetValue((state.Feature.Id, instance.Key), out var way))
+                        {
+                            instance.Way = way.Text;
+                            instance.LeftOut = way.LeftOut;
+                        }
                     // How far a matcap slot's fit may shift the base color, while one does.
                     if (state.Feature is AtlasMatcapFeature && plan.BaseColorShifts) state.Options.Add(AtlasMatcapFeature.ShiftOption);
                     // How a world-fixed matcap is shown in a slot that follows the view, while one is.

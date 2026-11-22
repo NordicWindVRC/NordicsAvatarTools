@@ -224,6 +224,46 @@ namespace NordicWind.AdvancedAtlaser.Tests
             StringAssert.Contains("facets (source 2): highlight", toon.Notes.Single(n => n.Contains("Matcap roles")));
         }
 
+        // A rim is where it is: sharing a slot with a matcap on other parts would show it
+        // there too and weaken it on its own, which costs more than it keeps. It is left out,
+        // the inspector says so, and the user can still combine it.
+        [Test]
+        public void ARimMatcapIsLeftOutRatherThanSharedAcrossParts()
+        {
+            var capabilities = AtlasShaderRegistry.Output("mobiletoon").Capabilities;
+            var sky = Texture(Sky, "sky");
+            var job = Job(With(sky, AtlasBlend.Add), With(Texture((x, y) => x * x + y * y > 0.85f * 0.85f ? 0.6f : 0f, "ring"), AtlasBlend.Add));
+            var instances = new AtlasMatcapFeature().Instances(job, new[] { 0, 1 });
+            string skyKey = instances.Single(i => i.Name == "sky").Key, ringKey = instances.Single(i => i.Name == "ring").Key;
+
+            var plan = AtlasOutputPipeline.Resolve(job, capabilities);
+            string notes = string.Join(" | ", plan.Notes);
+            StringAssert.Contains("ring (source 2): rim", plan.Notes.Single(n => n.Contains("Matcap roles")));
+            Assert.AreSame(sky, plan.Output.Layers.OfType<AtlasLookupLayer>().Single().Source.Map.Texture, "the slot shows the lighting alone: " + notes);
+            Assert.IsFalse(plan.Notes.Any(n => n.Contains("combines")), notes);
+            StringAssert.Contains("ring", plan.Notes.Single(n => n.Contains("move or weaken")));
+            Assert.IsTrue(plan.Ways[(AtlasMatcapFeature.FeatureId, ringKey)].LeftOut);
+            StringAssert.StartsWith("Left out", plan.Ways[(AtlasMatcapFeature.FeatureId, ringKey)].Text);
+            Assert.AreEqual("In matcap slot 1", plan.Ways[(AtlasMatcapFeature.FeatureId, skyKey)].Text);
+
+            var choice = new AtlasFeatureChoice { FeatureId = AtlasMatcapFeature.FeatureId };
+            choice.Values[AtlasInstancePlacements.Id(ringKey)] = ((int)AtlasInstancePlacement.Combined, skyKey);
+            job.Features.Add(choice);
+            plan = AtlasOutputPipeline.Resolve(job, capabilities);
+            Assert.IsTrue(plan.Notes.Any(n => n.Contains("combines") && n.Contains("ring")), string.Join(" | ", plan.Notes));
+            StringAssert.StartsWith("Shares matcap slot 1", plan.Ways[(AtlasMatcapFeature.FeatureId, ringKey)].Text);
+            Assert.IsFalse(plan.Ways[(AtlasMatcapFeature.FeatureId, ringKey)].LeftOut);
+        }
+
+        [Test]
+        public void TheInspectorSaysHowMuchAWayKeepsInPlainWords()
+        {
+            Assert.AreEqual("", AtlasInstancePlacements.Kept(0.9f), "nearly all of it: nothing to say");
+            Assert.AreEqual("keeps most of its look", AtlasInstancePlacements.Kept(0.7f));
+            Assert.AreEqual("keeps about half of its look", AtlasInstancePlacements.Kept(0.5f));
+            Assert.AreEqual("keeps little of its look", AtlasInstancePlacements.Kept(-0.4f));
+        }
+
         [Test]
         public void LightingWithAHighlightTakesItsOwnSlotAndPlainLightingSharesAnother()
         {
@@ -272,6 +312,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
 
             var plan = AtlasOutputPipeline.Resolve(job, AtlasShaderRegistry.Output("poiyomi10").Capabilities);
             StringAssert.Contains("warm (source 1): lighting", plan.Notes.Single(n => n.Contains("Matcap roles")));
+            Assert.AreEqual("In matcap slot 1", plan.Ways[(AtlasMatcapFeature.FeatureId, instance.Key)].Text, "how it ends up shown");
         }
     }
 }
