@@ -71,6 +71,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static void RegisterOutput(IAtlasOutputShader shader)
         {
             if (shader == null || Outputs.Any(p => p.ShaderId == shader.ShaderId)) throw new ArgumentException("Duplicate or null output shader");
+            // The capabilities name their shader, so what its parser says of it can be found.
+            shader.Capabilities.ShaderId = shader.ShaderId;
             Outputs.Add(shader);
         }
         public static IAtlasSourceShaderParser Detect(Material material)

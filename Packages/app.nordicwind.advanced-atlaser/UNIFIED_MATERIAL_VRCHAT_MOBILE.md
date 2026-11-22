@@ -233,7 +233,8 @@ GGX highlights and reflection probe reflections, with a toon option.
   - **Reflectance:** specular strength for non-metals, also multiplied by the gloss map.
 - **Behavior:** dielectric F0 = 0.16 × reflectance² × gloss map, the Filament convention;
   0.5 gives the usual 4%. Metallic darkens the diffuse color. Geometric specular
-  anti-aliasing is always on.
+  anti-aliasing is always on. One fresnel for highlights and reflections,
+  `F0 + (1 − F0)((1 − V·H)(1 − V·N))⁵`, × `saturate((reflectance + metallic) × 4)`.
 - **Live or baked:** maps baked; the highlight is live.
 - **Unified:** surface response: metallic, roughness, reflectance (F0 for non-metals), and a
   highlight style parameter running from smooth to stylized step. Reflectance is
@@ -362,7 +363,8 @@ that's off maps to nothing.
 - **Specular:** metallic and gloss maps with their channels × strengths; reflectance × the gloss
   map (`F0 = 0.16 × r²`, as the unified reflectance); highlight sharpness; specular
   anti-aliasing on (the shader's own geometric roughening, mapped to the unified filtering).
-  Off: no highlights and no reflections.
+  Off: no highlights and no reflections. The fresnel *view-half × view-normal* and a
+  reflectance fade of 0.25 are set whatever the material holds: they are the shader's own.
 - **Matcap:** a lookup layer, projection *view stabilized*, placement *surface* (lit), blend
   add or multiply, strength as opacity, mask with channel; the texture's tiling is ignored, as
   in the shader.

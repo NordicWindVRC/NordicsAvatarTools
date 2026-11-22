@@ -39,9 +39,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 .ThenBy(i => i).First();
         }
 
-        // Drawn by the output's rim (outputs with a rim that adds after lighting and can be lit by
-        // the scene, but without this feature of their own).
-        public static bool RimCanTakeIt(AtlasOutputCapabilities c) => c.RimSlots > 0 && c.RimAddsAfterLighting;
+        // Drawn by the output's rim (outputs with a rim that can follow the scene's light, but
+        // without this feature of their own).
+        public static bool RimCanTakeIt(AtlasOutputCapabilities c) => c.RimSlots > 0 && c.RimFollowsSceneLight;
 
         // Whether the rims already in the output fill its rim slots (rim lighting resolves first).
         public static bool RimTaken(AtlasFeatureContext context) =>

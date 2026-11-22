@@ -8,13 +8,63 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // the output shader shows it, in unified terms. The writer maps the output unified material
     // into its shader's properties, and the shader's own parser reads them back, so what a writer
     // approximates or drops shows without rules of its own, and an output shader is described
-    // once, by its parser.
+    // once, by its parser: also in how it computes what it has no settings for (Described).
     public static class AtlasKeptMaterial
     {
         /// <summary>The written material read back by its shader's parser; null for a shader
         /// without one.</summary>
         public static AtlasUnifiedMaterial Read(Material written) =>
             written == null ? null : AtlasShaderRegistry.Detect(written)?.Parse(written);
+
+        // What each output shader's parser reads of a material of the shader with nothing set,
+        // by shader ID.
+        private static readonly Dictionary<string, AtlasUnifiedMaterial> Shaders = new Dictionary<string, AtlasUnifiedMaterial>();
+
+        /// <summary>The output shader as its own parser describes it: what it reads of a
+        /// material of the shader with nothing set. How the shader computes what it has no
+        /// settings for (its fresnel) is there, in unified terms. Null for capabilities that
+        /// aren't a registered output shader's, or whose shader isn't installed or has no
+        /// parser: the unified defaults apply.</summary>
+        public static AtlasUnifiedMaterial Described(AtlasOutputCapabilities capabilities)
+        {
+            string id = capabilities?.ShaderId;
+            if (string.IsNullOrEmpty(id)) return null;
+            if (Shaders.TryGetValue(id, out var known)) return known;
+            var shader = AtlasShaderRegistry.Output(id)?.FindShader();
+            if (shader == null) return null;
+            var scratch = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+            AtlasUnifiedMaterial described;
+            try
+            {
+                described = Read(scratch);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(scratch);
+            }
+            if (described != null) Shaders[id] = described;
+            return described;
+        }
+
+        /// <summary>A part of an output unified material as the output shader shows it: written
+        /// alone to a scratch material of the shader and read back by its parser. Null where
+        /// the shader isn't known (as for Described).</summary>
+        public static AtlasUnifiedMaterial Shown(AtlasOutputCapabilities capabilities, AtlasUnifiedMaterial part)
+        {
+            var output = string.IsNullOrEmpty(capabilities?.ShaderId) ? null : AtlasShaderRegistry.Output(capabilities.ShaderId);
+            var shader = output?.FindShader();
+            if (shader == null) return null;
+            var scratch = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+            try
+            {
+                output.Write(part, scratch);
+                return Read(scratch);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(scratch);
+            }
+        }
 
         /// <summary>What the written material shows differently from what the plan asked for
         /// and from the sources' own looks, one line each: the lighting settings the shader can't

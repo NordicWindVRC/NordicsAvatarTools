@@ -272,7 +272,8 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsFalse(fit.Lit, "the atlas's lighting lights the surface the rim is on");
             Assert.AreEqual(0.4f, fit.Strength, 0.02f);
 
-            // In a build: the slot's rim is the fitted one, listed.
+            // In a build: the slot's rim is the fitted one, listed. What the output shader
+            // shows of a rim is read from a material of the shader, so it has to be installed.
             var first = Material(mixed);
             first.Surface.BaseColor.Color = dark;
             var copy = Rim(Color.white);
@@ -280,6 +281,8 @@ namespace NordicWind.AdvancedAtlaser.Tests
             copy.EmissionAmount = 0.2f;
             var second = Material(copy);
             second.Surface.BaseColor.Color = dark;
+            Assert.AreEqual(AtlasBlend.Mixed, Rims(AtlasOutputPipeline.Resolve(Job(first, second), Poiyomi)).Single().Blend, "Poiyomi keeps it");
+            if (AtlasShaderRegistry.Output("mobiletoon").FindShader() == null) Assert.Ignore("VRChat Mobile Toon Standard is not installed.");
             var plan = AtlasOutputPipeline.Resolve(Job(first, second), ToonStandard);
             var rim = Rims(plan).Single();
             Assert.AreEqual(AtlasPlacement.Overlay, rim.Placement, Notes(plan));
@@ -288,7 +291,26 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(AtlasLightResponse.IgnoreLight, rim.LightResponse);
             Assert.AreEqual(0.2f, rim.Opacity, 0.03f);
             StringAssert.Contains("fitted to it", Notes(plan));
-            Assert.AreEqual(AtlasBlend.Mixed, Rims(AtlasOutputPipeline.Resolve(Job(first, second), Poiyomi)).Single().Blend, "Poiyomi keeps it");
+            StringAssert.Contains("rim is a band", Notes(plan));
+        }
+
+        // What a rim slot shows of a rim is read from a rim written to a material of the
+        // shader: Toon Standard shows any rim as a band added after lighting.
+        [Test]
+        public void WhatARimSlotShowsIsReadFromAWrittenRim()
+        {
+            var shader = AtlasShaderRegistry.Output("mobiletoon");
+            if (shader.FindShader() == null) Assert.Ignore("VRChat Mobile Toon Standard is not installed.");
+            var rim = Rim(Color.white);
+            rim.Blend = AtlasBlend.Mixed;
+            rim.EmissionAmount = 0.2f;
+            var kept = AtlasKeptMaterial.Shown(shader.Capabilities, Material(rim)).Layers.OfType<AtlasAngleLayer>().Single();
+            Assert.AreEqual(AtlasAngleProfile.Band, kept.Profile);
+            Assert.AreEqual(AtlasPlacement.Overlay, kept.Placement);
+            Assert.AreEqual(AtlasBlend.Add, kept.Blend);
+            Assert.AreEqual(0f, kept.EmissionAmount);
+            Assert.IsTrue(AtlasRimResponse.AddsAsIs(kept));
+            Assert.IsNull(AtlasKeptMaterial.Shown(new AtlasOutputCapabilities(), Material(rim)), "capabilities of no registered shader");
         }
 
         private static AtlasAngleLayer EnvironmentalRim(float opacity, AtlasMask mask = null) => new AtlasAngleLayer

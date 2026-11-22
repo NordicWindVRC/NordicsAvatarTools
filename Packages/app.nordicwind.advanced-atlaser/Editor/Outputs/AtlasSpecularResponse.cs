@@ -14,7 +14,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     //
     // The response: GGX highlights, D × V × F × N·L (V Smith-GGX correlated), from a white light,
     // and reflections of a uniform environment as bright as the ambient light, × F; F by the
-    // output's fresnel and faded below its reflectance fade. They're added to a gray diffuse of
+    // output shader's fresnel and its reflectance fade, as its own parser describes the shader
+    // (AtlasKeptMaterial.Described; the unified defaults where it isn't known). They're added to a gray diffuse of
     // the base color's luminance, and the displayed (sRGB) results are compared over the scenes
     // with a main light (AtlasLook), a few light angles and the view angles in the light's plane. Tints, fresnel
     // strengths, steps, occlusion and normal maps aren't part of it.
@@ -83,12 +84,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         /// equal ones, the lowest.</summary>
         public static float Fit(IReadOnlyList<Source> sources, AtlasOutputCapabilities capabilities)
         {
+            var shown = Shown(capabilities);
             float best = 0f;
             double lowest = double.MaxValue;
             for (int k = 0; k <= Steps; k++)
             {
                 float value = k / (float)Steps;
-                double cost = Cost(sources, capabilities, value);
+                double cost = Cost(sources, capabilities, value, shown);
                 if (cost < lowest - 1e-9)
                 {
                     lowest = cost;
@@ -99,29 +101,32 @@ namespace NordicWind.AdvancedAtlaser.Editor
             float a = Mathf.Max(0f, best - 1f / Steps), b = Mathf.Min(1f, best + 1f / Steps);
             const float ratio = 0.618034f;
             float c = b - ratio * (b - a), d = a + ratio * (b - a);
-            double fc = Cost(sources, capabilities, c), fd = Cost(sources, capabilities, d);
+            double fc = Cost(sources, capabilities, c, shown), fd = Cost(sources, capabilities, d, shown);
             while (b - a > Tolerance)
             {
                 if (fc <= fd)
                 {
                     b = d; d = c; fd = fc;
                     c = b - ratio * (b - a);
-                    fc = Cost(sources, capabilities, c);
+                    fc = Cost(sources, capabilities, c, shown);
                 }
                 else
                 {
                     a = c; c = d; fc = fd;
                     d = a + ratio * (b - a);
-                    fd = Cost(sources, capabilities, d);
+                    fd = Cost(sources, capabilities, d, shown);
                 }
             }
             float refined = (a + b) * 0.5f;
-            return Cost(sources, capabilities, refined) < lowest ? refined : best;
+            return Cost(sources, capabilities, refined, shown) < lowest ? refined : best;
         }
 
         /// <summary>The sources' weighted mean visible difference with the output's reflectance at
         /// <paramref name="value"/>.</summary>
-        public static double Cost(IReadOnlyList<Source> sources, AtlasOutputCapabilities capabilities, float value)
+        public static double Cost(IReadOnlyList<Source> sources, AtlasOutputCapabilities capabilities, float value) =>
+            Cost(sources, capabilities, value, Shown(capabilities));
+
+        private static double Cost(IReadOnlyList<Source> sources, AtlasOutputCapabilities capabilities, float value, AtlasSurfaceResponse shown)
         {
             bool keepsHighlights = capabilities.Provides(AtlasVirtualMap.SpecularMask);
             bool keepsReflections = capabilities.Provides(AtlasVirtualMap.ReflectionMask);
@@ -129,7 +134,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             double sum = 0.0;
             foreach (var source in sources)
             {
-                Prepare(source, capabilities);
+                Prepare(source, shown);
                 if (source.Entries.Length == 0) continue;
                 double difference = 0.0;
                 for (int i = 0; i < source.Entries.Length; i++)
@@ -137,7 +142,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     var entry = source.Entries[i];
                     var texel = source.Texels[entry.Texel];
                     float output = Look(entry, texel, follows ? texel.Smoothness * value : value,
-                        keepsHighlights ? texel.Highlights : 1f, keepsReflections ? texel.Reflections : 1f, capabilities);
+                        keepsHighlights ? texel.Highlights : 1f, keepsReflections ? texel.Reflections : 1f, shown);
                     difference += Mathf.Abs(output - source.Looks[i]);
                 }
                 sum += source.Weight * difference / source.Entries.Length;
@@ -145,11 +150,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return sum;
         }
 
+        private static readonly AtlasSurfaceResponse Unified = new AtlasSurfaceResponse();
+
+        // The output shader's surface response as its parser describes the shader: its fresnel
+        // and its reflectance fade.
+        private static AtlasSurfaceResponse Shown(AtlasOutputCapabilities capabilities) =>
+            AtlasKeptMaterial.Described(capabilities)?.Surface.Response ?? Unified;
+
         // The entries and the source's own looks, once per source.
-        private static void Prepare(Source source, AtlasOutputCapabilities capabilities)
+        private static void Prepare(Source source, AtlasSurfaceResponse shown)
         {
             if (source.Entries != null) return;
-            bool oneFalloff = capabilities.SpecularFresnel == AtlasSpecularFresnel.ViewHalfTimesViewNormal;
+            bool oneFalloff = shown.Fresnel == AtlasFresnel.ViewHalfTimesViewNormal;
             var entries = new List<Entry>();
             for (int t = 0; t < source.Texels.Count; t++)
             {
@@ -187,15 +199,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
             for (int i = 0; i < source.Entries.Length; i++)
             {
                 var texel = source.Texels[source.Entries[i].Texel];
-                source.Looks[i] = Look(source.Entries[i], texel, texel.Reflectance, texel.Highlights, texel.Reflections, capabilities);
+                source.Looks[i] = Look(source.Entries[i], texel, texel.Reflectance, texel.Highlights, texel.Reflections, shown);
             }
         }
 
         // The displayed gray of an entry with the reflectance and strengths given.
-        private static float Look(Entry entry, Texel texel, float reflectance, float highlights, float reflections, AtlasOutputCapabilities capabilities)
+        private static float Look(Entry entry, Texel texel, float reflectance, float highlights, float reflections, AtlasSurfaceResponse shown)
         {
             float f0 = 0.16f * reflectance * reflectance * (1f - texel.Metallic) + texel.Base * texel.Metallic;
-            float fade = capabilities.ReflectanceFade > 0f ? Mathf.Clamp01((reflectance + texel.Metallic) / capabilities.ReflectanceFade) : 1f;
+            float fade = shown.ReflectanceFade > 0f ? Mathf.Clamp01((reflectance + texel.Metallic) / shown.ReflectanceFade) : 1f;
             float specular = highlights * entry.Highlight * (f0 + (1f - f0) * entry.HighlightFalloff) +
                              reflections * entry.Ambient * (f0 + (1f - f0) * entry.ReflectionFalloff);
             return Mathf.LinearToGammaSpace(Mathf.Clamp01(entry.Diffuse + specular * fade));

@@ -490,23 +490,31 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 AtlasHueCycling.CopyLayerHue(context.Output, job.Sources[slot[0].Members[0].Source].Material, layer, copy);
                 AtlasAudio.CopyLayerAudio(context.Output, job.Sources[slot[0].Members[0].Source].Material, layer, copy);
             }
-            if (capabilities.RimBandOnly && slot[0].Members[0].Layers.Any(l => l.Profile != AtlasAngleProfile.Band || !AtlasRimCurve.ViewOnly(l)))
+            // The slot's rim as the output shader shows it: written alone to a material of the
+            // shader and read back, layer by layer. Nothing where the shader isn't known.
+            int first = context.Output.Layers.Count - slot[0].Members[0].Layers.Count;
+            var holder = new AtlasUnifiedMaterial();
+            for (int k = first; k < context.Output.Layers.Count; k++) holder.Layers.Add(context.Output.Layers[k]);
+            var kept = AtlasKeptMaterial.Shown(capabilities, holder)?.Layers.Where(IsRim).Cast<AtlasAngleLayer>().ToList() ?? new List<AtlasAngleLayer>();
+            if (kept.Count > 0 && kept[0].Profile == AtlasAngleProfile.Band &&
+                slot[0].Members[0].Layers.Any(l => l.Profile != AtlasAngleProfile.Band || !AtlasRimCurve.ViewOnly(l)))
                 context.Notes.Add($"The output shader's rim is a band; {slot[0].Label} is fitted to it.");
-            if (capabilities.RimAddsAfterLighting) FitAddedAfterLighting(context, slot, context.Output.Layers.Count - slot[0].Members[0].Layers.Count);
+            FitAddedAfterLighting(context, slot, first, kept);
         }
 
-        // An output whose rim only adds after lighting: each rim that blends otherwise, sits on
-        // the surface or glows gets the strength, base color mix and lighting that look most like
-        // it on its group's sources (AtlasRimResponse).
-        private static void FitAddedAfterLighting(AtlasFeatureContext context, List<Group> slot, int first)
+        // Where the output shader shows a rim as one added after lighting (its kept form) and
+        // the rim blends otherwise, sits on the surface or glows, the rim gets the strength,
+        // base color mix and lighting that look most like it on its group's sources
+        // (AtlasRimResponse).
+        private static void FitAddedAfterLighting(AtlasFeatureContext context, List<Group> slot, int first, List<AtlasAngleLayer> kept)
         {
             var job = context.Job;
             var sources = slot[0].Members.Select(m => m.Source).Distinct()
                 .Select(i => ((IReadOnlyList<Color>)AtlasSourceSamples.Bases(job.Sources[i].Material), job.Sources[i].UVRegion.width * job.Sources[i].UVRegion.height))
                 .ToList();
-            for (int k = first; k < context.Output.Layers.Count; k++)
+            for (int k = first; k < context.Output.Layers.Count && k - first < kept.Count; k++)
             {
-                if (!(context.Output.Layers[k] is AtlasAngleLayer copy) || AtlasRimResponse.AddsAsIs(copy)) continue;
+                if (!(context.Output.Layers[k] is AtlasAngleLayer copy) || AtlasRimResponse.AddsAsIs(copy) || !AtlasRimResponse.AddsAsIs(kept[k - first])) continue;
                 if (!AtlasRimCurve.FitBand(copy, out _, out _, out float peak) || peak <= 0f) continue;
                 var fitted = AtlasRimResponse.Fit(copy, peak, sources, context.Output.Lighting);
                 var color = copy.Color.Color;

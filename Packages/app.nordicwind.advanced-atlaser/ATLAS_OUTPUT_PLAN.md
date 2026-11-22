@@ -48,26 +48,19 @@ average look kept in a slot shared across parts, a matcap kept as its average in
 base color where the user places it so or no slot is left for it, a lighting matcap
 without a slot of its own placed by what its level and contrast lose, a view layer's look
 in the unified evaluation stages, rims and the matcaps that are rims or highlights placed
-by their cost point by point, matcap slots taken in the order of measured impact, and the
-inspector saying how each matcap and rim ends up shown (the design's *Map contributions*, *The look model*, *Comparing layers*, *What a
-matcap is for* and *Base color shifts*). Each remaining part of the look model is built in
-the phase that first uses it.
-
-### 4.5 Matcaps by look
-
-- The rest of *Automatic* by cost (*Matcaps*, *Automatic*): a group's ways (one side, two
-  slots, a shifted base) compared by their cost.
-- **Workable:** *Automatic* places matcaps by role and cost on every writer, and the rules in
-  use before (effects keep their slots, highlights aren't baked) hold as tests.
+by their cost point by point, matcap slots taken in the order of measured impact, the
+inspector saying how each matcap and rim ends up shown, and what an output shader has no
+settings for read from its parser instead of its capabilities: the fresnel of its
+highlights and reflections and what its rim slot shows of a rim (the design's *Map
+contributions*, *The look model*, *Comparing layers*, *What a matcap is for* and *Base color
+shifts*). Each remaining part of the look model is built in the phase that first uses it.
 
 ### 4.6 Shader formulas out of the capabilities
 
 - The rest of the reference look (*The reference look*): highlights and reflections in its
   lighting stage, and sample points with the values at the same places (masks, roughness,
   metallic).
-- The formulas that describe a shader in the capabilities become unified modes its parser
-  sets, read by the reference look (*The kept material*). The highlight and reflection fit
-  moves onto the reference look.
+- The highlight and reflection fit moves onto the reference look (*The kept material*).
 - What remains of *Map contributions*: reading a map at a stage, which the sample points
   use, full values in the emission map and declared inputs.
 - **Workable — M4 reached:** a new output shader adds its writer and capabilities that hold
@@ -113,6 +106,10 @@ Not planned in detail yet, in rough order:
 - half-precision buffers or GPU baking, if the memory budget is too tight;
 - a typed-in value for shared values, next to *Automatic* and the sources in the reference
   source drop-down;
+- **a matcap's ways compared by their cost** (from 4.5): one side, two slots and a shifted
+  base as candidates, with the blocked view's difference. Built with the first output that
+  has two matcap slots of one blend each; until then *Base color shift* decides between
+  one side and a shifted base;
 - **depth rims** (from 2.7b): Poiyomi's depth rim lighting natively, one setup from the
   reference source;
 - **rim color textures** (from 2.7b): a rim's texture on UV0 baked into a color map;

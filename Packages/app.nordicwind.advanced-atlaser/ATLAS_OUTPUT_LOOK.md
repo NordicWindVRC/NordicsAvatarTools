@@ -108,13 +108,14 @@ tuning, the kept lighting is read from a scratch material before the atlas's mat
 - **Every feature.** The output's look is the reference look of the kept material, compared
   with each source's reference look.
 - **Formulas leave the capabilities.** Formulas that describe a shader in the capabilities
-  (`SpecularFresnel`, `ReflectanceFade`, `RimAddsAfterLighting`) become unified modes that its
-  parser sets and the reference look reads. Capabilities keep counts and availability (slots,
-  maps, UV channels). Every output shader needs a parser for this; each current and planned
-  output is an input too.
-- **Beyond the lighting.** The scratch material holds the lighting alone. A fit of another
-  feature (a matcap, a rim) reads its kept part the same way, with that feature's part of the
-  output unified material written to it.
+  become unified modes that its parser sets and the reference look reads. Capabilities keep
+  counts and availability (slots, maps, UV channels). Every output shader needs a parser
+  for this; each current and planned output is an input too. Built (*The look model* in
+  the output design): the fresnel of highlights and reflections and the reflectance they
+  fade below, and what a rim slot shows of a rim.
+- **Beyond the lighting.** The rim fit reads its kept part from a scratch material with the
+  rim written to it, as the lighting is read. The other fits (the matcap slot, highlights
+  and reflections) read theirs the same way once they compare the kept material's look.
 
 ### Differences
 

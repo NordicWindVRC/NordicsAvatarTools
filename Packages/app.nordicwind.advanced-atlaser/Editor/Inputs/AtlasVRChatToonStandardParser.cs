@@ -110,6 +110,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static void Specular(Material m, AtlasUnifiedMaterial d)
         {
             var response = d.Surface.Response;
+            // The shader's own fresnel, whatever is set: one term for highlights and
+            // reflections, pow((1 − V·H)(1 − V·N), 5), × saturate((reflectance + metallic) × 4).
+            response.Fresnel = AtlasFresnel.ViewHalfTimesViewNormal;
+            response.ReflectanceFade = 0.25f;
             if (!Keyword(m, "USE_SPECULAR"))
             {
                 response.Highlights.Enabled = false;

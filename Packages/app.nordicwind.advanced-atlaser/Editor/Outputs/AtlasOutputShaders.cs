@@ -1564,9 +1564,6 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     .With(AtlasVirtualMap.AudioLinkColor, AtlasTextureChannels.RGB, Color.black)
             },
             Reflectance = AtlasReflectanceSupport.FollowsSmoothness,
-            // fresnel = F_Schlick(f0, V·H, V·N) × saturate((reflectance + metallic) × 4).
-            ReflectanceFade = 0.25f,
-            SpecularFresnel = AtlasSpecularFresnel.ViewHalfTimesViewNormal,
             // _VertexColor: the base color × the vertex RGB as stored.
             VertexColors = AtlasVertexColorSupport.Color,
             // _Ramp is its only shading control.
@@ -1574,10 +1571,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // One matcap, added or multiplied; its mask picks a channel.
             MatcapSlots = 1,
             MatcapBlends = AtlasMatcapBlends.Add | AtlasMatcapBlends.Multiply,
-            // One band rim without a mask, added after lighting.
+            // One rim without a mask, which can follow the scene's light.
             RimSlots = 1,
-            RimBandOnly = true,
-            RimAddsAfterLighting = true,
+            RimFollowsSceneLight = true,
             // Detail albedo by mode and detail normal on UV0 or UV1, one mask by channel.
             DetailUVChannels = 1,
             DetailTextureBlends = { AtlasBlend.Replace, AtlasBlend.Add, AtlasBlend.Multiply, AtlasBlend.MultiplyDouble },
