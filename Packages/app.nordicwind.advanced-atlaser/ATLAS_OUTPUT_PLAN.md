@@ -44,8 +44,13 @@ Built so far (the design's *Output shaders*):
 - VRChat Mobile Diffuse as an input (with Bumped Diffuse) and as an output with one color
   texture, where every feature it keeps is a contribution to that texture, emission included
   when the user chooses so;
-- Unity Standard (metallic setup) as an output with its own maps, and the Unity family for
-  auto setup.
+- Unity Standard as an output in both setups, with its own maps, and the Unity family for
+  auto setup. The specular setup keeps each source's reflectance, metallic and highlight and
+  reflection strengths in its specular color;
+- on outputs without matcap slots, lighting matcaps kept as their average in the color
+  (*Average in color*);
+- the minimum light an output shader can't keep itself, added through the emission and
+  shaded by the lit bakes.
 
 ### 5.4 VRChat Mobile Toon Lit and Standard Lite
 
@@ -53,21 +58,7 @@ Built so far (the design's *Output shaders*):
   comes from baked shading (the design's *form shading*): lighting matcaps are baked there
   by default, where an output that shades the form itself keeps their average.
 - Standard Lite: Standard's maps on the albedo's tiling, opaque only.
-- **Workable:** both shaders as outputs, with round trips.
-
-### 5.5 Unity Standard (Specular setup)
-
-- A specular color map as a virtual map, with the smoothness in its alpha: a source of the
-  specular workflow keeps its specular color (today it is left out and the source counts as
-  non-metallic); a source of the metallic workflow is converted, its specular color
-  `lerp(F0, base color, metallic)` and its base color scaled so the diffuse the shader takes
-  off for the specular color comes out as the source's.
-- Each source's highlight and reflection strengths go into the specular color, so a source
-  with weaker highlights, or none, isn't given the metallic setup's 4% at full strength (its
-  gray sheen on dark, rough surfaces).
-- The writer for Standard (Specular setup), sharing Unity Standard's; its rank in the
-  Unity family.
-- **Workable — M5 reached:** Standard (Specular setup) as an output, with round trips.
+- **Workable — M5 reached:** both shaders as outputs, with round trips.
 
 ---
 

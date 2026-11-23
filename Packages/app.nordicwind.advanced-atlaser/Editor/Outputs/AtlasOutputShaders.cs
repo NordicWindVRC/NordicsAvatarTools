@@ -2087,45 +2087,78 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
     }
 
-    // Unity's built-in Standard shader, metallic setup: the Standard parser's reading written
+    // Unity's built-in Standard shader, both setups: the Standard parser's reading written
     // back (UNIFIED_MATERIAL_UNITY_STANDARD.md). Every main map is on the albedo's tiling. It
     // lights by its own physically based model and has no vertex colors, matcaps or rims: those
     // go into the textures by the features' baked modes, or are left out. The keywords, blend
     // state and emission flag are the ones the shader's inspector derives from a material's
-    // values, so a written material stays as it is when the inspector validates it.
-    public sealed class UnityStandardOutputShader : IAtlasOutputShader
+    // values, so a written material stays as it is when the inspector validates it. The setups
+    // differ in what holds the reflectivity: metallic (with the shader's 4% on everything that
+    // isn't metal), or a specular color, which also holds each source's reflectance and its
+    // highlight and reflection strengths (AtlasSpecularColor).
+    public abstract class UnityStandardOutputShaderBase : IAtlasOutputShader
     {
-        public string ShaderId => "standard";
-        public string DisplayName => "Unity Standard";
-        public string Family => AtlasShaderFamilies.Unity;
-        public int Rank => 10;
-        public Shader FindShader() => Shader.Find("Standard");
-        public AtlasOutputCapabilities Capabilities { get; } = new AtlasOutputCapabilities
+        private readonly bool specular;
+
+        protected UnityStandardOutputShaderBase(bool specular)
         {
-            Textures =
+            this.specular = specular;
+            Capabilities = Build(specular);
+        }
+
+        public abstract string ShaderId { get; }
+        public abstract string DisplayName { get; }
+        public string Family => AtlasShaderFamilies.Unity;
+        public abstract int Rank { get; }
+        public Shader FindShader() => Shader.Find(specular ? "Standard (Specular setup)" : "Standard");
+        public AtlasOutputCapabilities Capabilities { get; }
+
+        private static AtlasOutputCapabilities Build(bool specular)
+        {
+            var capabilities = new AtlasOutputCapabilities
             {
-                // _MainTex: the albedo, the alpha in A.
-                new AtlasOutputTexture("BaseColor", "Base color") { SizeMode = AtlasTextureSizeMode.Main }
-                    .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB)
-                    .With(AtlasVirtualMap.Alpha, AtlasTextureChannels.A),
-                PoiyomiOutputShader.NormalTexture(),
+                Textures =
+                {
+                    // _MainTex: the albedo, the alpha in A.
+                    new AtlasOutputTexture("BaseColor", "Base color") { SizeMode = AtlasTextureSizeMode.Main }
+                        .With(AtlasVirtualMap.BaseColor, AtlasTextureChannels.RGB)
+                        .With(AtlasVirtualMap.Alpha, AtlasTextureChannels.A),
+                    PoiyomiOutputShader.NormalTexture()
+                },
+                SurfaceModes = { AtlasSurfaceMode.Cutout, AtlasSurfaceMode.Transparent, AtlasSurfaceMode.Fade },
+                // Detail albedo × 2 and detail normal on UV0 or UV1, without a tint or strength.
+                DetailUVChannels = 1,
+                DetailTextureBlends = { AtlasBlend.MultiplyDouble },
+                DetailNormal = true,
+                DetailMaskByChannel = true
+            };
+            if (specular)
+            {
+                // _SpecGlossMap: the specular color (sRGB) with the smoothness in A.
+                capabilities.Textures.Add(new AtlasOutputTexture("Specular", "Specular color and smoothness") { SizeMode = AtlasTextureSizeMode.MainAspect }
+                    .With(AtlasVirtualMap.SpecularColor, AtlasTextureChannels.RGB, Color.black)
+                    .With(AtlasVirtualMap.Roughness, AtlasTextureChannels.A, AtlasOutputTexture.Gray(0f), invert: true));
+                // One texture for _OcclusionMap (G) and _DetailMask (A): the one mask place, for
+                // both details.
+                capabilities.Textures.Add(new AtlasOutputTexture("Occlusion", "Occlusion and detail mask") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
+                    .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.G, AtlasOutputTexture.Gray(1f))
+                    .With(AtlasVirtualMap.Mask1, AtlasTextureChannels.A, AtlasOutputTexture.Gray(0f)));
+                capabilities.Textures.Add(PoiyomiOutputShader.EmissionTexture());
+            }
+            else
+            {
                 // One texture for _MetallicGlossMap (R metallic, A smoothness) and _OcclusionMap (G).
-                new AtlasOutputTexture("Surface", "Metallic, occlusion and smoothness") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
+                capabilities.Textures.Add(new AtlasOutputTexture("Surface", "Metallic, occlusion and smoothness") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false }
                     .With(AtlasVirtualMap.Metallic, AtlasTextureChannels.R, AtlasOutputTexture.Gray(0f))
                     .With(AtlasVirtualMap.Occlusion, AtlasTextureChannels.G, AtlasOutputTexture.Gray(1f))
-                    .With(AtlasVirtualMap.Roughness, AtlasTextureChannels.A, AtlasOutputTexture.Gray(0f), invert: true),
-                PoiyomiOutputShader.EmissionTexture(),
+                    .With(AtlasVirtualMap.Roughness, AtlasTextureChannels.A, AtlasOutputTexture.Gray(0f), invert: true));
+                capabilities.Textures.Add(PoiyomiOutputShader.EmissionTexture());
                 // _DetailMask reads its alpha: one mask place, for both details.
-                new AtlasOutputTexture("DetailMask", "Detail mask") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false, MainDivisor = 2 }
-                    .With(AtlasVirtualMap.Mask1, AtlasTextureChannels.A, AtlasOutputTexture.Gray(0f))
-            },
-            SurfaceModes = { AtlasSurfaceMode.Cutout, AtlasSurfaceMode.Transparent, AtlasSurfaceMode.Fade },
-            // Detail albedo × 2 and detail normal on UV0 or UV1, without a tint or strength.
-            DetailUVChannels = 1,
-            DetailTextureBlends = { AtlasBlend.MultiplyDouble },
-            DetailNormal = true,
-            DetailMaskByChannel = true
-        };
+                capabilities.Textures.Add(new AtlasOutputTexture("DetailMask", "Detail mask") { SizeMode = AtlasTextureSizeMode.MainAspect, Srgb = false, MainDivisor = 2 }
+                    .With(AtlasVirtualMap.Mask1, AtlasTextureChannels.A, AtlasOutputTexture.Gray(0f)));
+            }
+            return capabilities;
+        }
 
         // The rendering modes (_Mode), as the shader's inspector sets them up: the RenderType
         // tag, the blend factors, depth writes, the mode's keyword and the queue.
@@ -2156,14 +2189,27 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetTextureScale("_MainTex", Vector2.one);
             material.SetTextureOffset("_MainTex", Vector2.zero);
 
-            // Metallic and smoothness from the surface texture (R and A, the smoothness scale 1).
-            // Without one the surface is rough and not metallic, with highlights and reflections
-            // off. Smoothness never comes from the albedo's alpha, which holds the alpha.
+            // Metallic and smoothness from the surface texture (R and A, the smoothness scale 1),
+            // or the specular color and smoothness from the specular texture (RGB and A). Without
+            // one the surface is rough and reflects nothing (not metallic, or a black specular
+            // color), with highlights and reflections off. Smoothness never comes from the
+            // albedo's alpha, which holds the alpha.
             var response = output.Surface.Response;
-            var surface = response.Metallic.Map?.Texture;
-            material.SetTexture("_MetallicGlossMap", surface);
-            Keyword(material, "_METALLICGLOSSMAP", surface != null);
-            material.SetFloat("_Metallic", 0);
+            Texture surface;
+            if (specular)
+            {
+                surface = response.SpecularColor?.Map?.Texture;
+                material.SetTexture("_SpecGlossMap", surface);
+                Keyword(material, "_SPECGLOSSMAP", surface != null);
+                material.SetColor("_SpecColor", Color.black);
+            }
+            else
+            {
+                surface = response.Metallic.Map?.Texture;
+                material.SetTexture("_MetallicGlossMap", surface);
+                Keyword(material, "_METALLICGLOSSMAP", surface != null);
+                material.SetFloat("_Metallic", 0);
+            }
             material.SetFloat("_Glossiness", 0);
             material.SetFloat("_GlossMapScale", 1);
             material.SetFloat("_SmoothnessTextureChannel", 0);
@@ -2232,5 +2278,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
             material.SetFloat("_Cutoff", mode.Mode == AtlasSurfaceMode.Cutout ? render.Cutoff : 0.5f);
             material.renderQueue = render.Queue >= 0 ? render.Queue : mode.Queue;
         }
+    }
+
+    public sealed class UnityStandardOutputShader : UnityStandardOutputShaderBase
+    {
+        public UnityStandardOutputShader() : base(false) { }
+        public override string ShaderId => "standard";
+        public override string DisplayName => "Unity Standard";
+        public override int Rank => 10;
+    }
+
+    // Above the metallic setup: its specular color keeps what that setup has no control for.
+    public sealed class UnityStandardSpecularOutputShader : UnityStandardOutputShaderBase
+    {
+        public UnityStandardSpecularOutputShader() : base(true) { }
+        public override string ShaderId => "standardspecular";
+        public override string DisplayName => "Unity Standard (Specular setup)";
+        public override int Rank => 20;
     }
 }

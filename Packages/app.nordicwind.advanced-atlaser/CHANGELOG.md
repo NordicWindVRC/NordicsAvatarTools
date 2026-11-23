@@ -9,15 +9,16 @@ EditMode tests pass in Unity 2022.3.22. Verified on builds of a test avatar with
 and AAO 1.9.19.
 
 First public beta. Builds combine an avatar's materials into atlased materials for Poiyomi
-Toon or Pro (10 and 11), VRChat Mobile Toon Standard or Diffuse, or Unity Standard, feature
-by feature, from the source shaders the README lists. Requires NDMF 1.7.0 or later and
-Nordic's Texture Wrapper 0.10.0 or later. Settings may still change between beta versions.
+Toon or Pro (10 and 11), VRChat Mobile Toon Standard or Diffuse, or Unity Standard (either
+setup), feature by feature, from the source shaders the README lists. Requires NDMF 1.7.0
+or later and Nordic's Texture Wrapper 0.10.0 or later. Settings may still change between
+beta versions.
 
 ## Pre-release history
 
 | Version | Summary |
 |---|---|
-| 0.40.0 (development) | Atlas outputs end to end: the output model and inspector, auto setup, every initial feature on Poiyomi Toon 10 and VRChat Mobile Toon Standard, Poiyomi Toon 11, Pro 10 and Pro 11 as outputs, VRChat Mobile Diffuse as an input and output, Unity Standard as an output, matching by look, the mesh remapper, Bake to Assets, the baking toolkit (normal-map shading, occlusion and matcaps baked), the Normal Baker window. |
+| 0.40.0 (development) | Atlas outputs end to end: the output model and inspector, auto setup, every initial feature on Poiyomi Toon 10 and VRChat Mobile Toon Standard, Poiyomi Toon 11, Pro 10 and Pro 11 as outputs, VRChat Mobile Diffuse as an input and output, Unity Standard and Standard (Specular setup) as outputs, matching by look, the mesh remapper, Bake to Assets, the baking toolkit (normal-map shading, occlusion and matcaps baked), the Normal Baker window. |
 | 0.39.0 | Blend-shape geometry exclusion with a threshold and *Any* / *All Vertices* mode per entry. Normal corrections use full dilation. |
 | 0.38.0 | Nested AAO Merge Skinned Mesh sources are discovered. |
 | 0.37.0 | Fixed a hang at 4096² caused by a per-pixel loop after dilation. |

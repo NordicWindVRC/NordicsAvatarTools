@@ -15,6 +15,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // Automatic fits all sources by area; a chosen source is fitted alone.
     public sealed class AtlasSpecularFeature : IAtlasSharedValueFeature, IAtlasAutomaticReference
     {
+        // For an output of the specular workflow (AtlasSpecularColor).
+        public static readonly AtlasFeatureMode SpecularColor = new AtlasFeatureMode
+        {
+            Id = "specularcolor", Label = "Specular color and smoothness maps", Kind = AtlasFeatureModeKind.Native,
+            RequiredMaps = new[] { AtlasVirtualMap.SpecularColor, AtlasVirtualMap.Roughness }
+        };
+
         private static readonly AtlasFeatureMode[] ModeList =
         {
             new AtlasFeatureMode
@@ -23,6 +30,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 RequiredMaps = new[] { AtlasVirtualMap.Metallic, AtlasVirtualMap.Roughness },
                 OptionalMaps = new[] { AtlasVirtualMap.ReflectionMask, AtlasVirtualMap.SpecularMask }
             },
+            SpecularColor,
             AtlasFeatureMode.Off
         };
 
@@ -123,6 +131,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var job = context.Job;
             var active = new HashSet<int>(context.Sources);
+            if (context.Mode == SpecularColor)
+            {
+                AtlasSpecularColor.Resolve(context, active);
+                Notes(context, active, specularColor: true);
+                return;
+            }
             float reflections = 0f, highlights = 0f;
             foreach (int i in active)
             {
@@ -314,7 +328,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return request.Reference;
         }
 
-        private static void Notes(AtlasFeatureContext context, IEnumerable<int> active)
+        // `specularColor`: the output keeps a specular color, and the strengths are in it.
+        private static void Notes(AtlasFeatureContext context, IEnumerable<int> active, bool specularColor = false)
         {
             var materials = active.Select(i => context.Job.Sources[i].Material).ToList();
             var responses = materials.Select(m => m.Surface.Response).ToList();
@@ -323,7 +338,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (materials.Any(m => (m.Surface.Response.Highlights.Mask != null && !AtlasMapEvaluator.CanEvaluate(m.Surface.Response.Highlights.Mask, m)) ||
                                    (m.Surface.Response.Reflections.Mask != null && !AtlasMapEvaluator.CanEvaluate(m.Surface.Response.Reflections.Mask, m))))
                 context.Notes.Add("A highlight or reflection mask on another UV or a global mask written by layers or the second pass isn't baked yet; it counts as 1.");
-            if (responses.Any(r => r.SpecularColor != null))
+            if (!specularColor && responses.Any(r => r.SpecularColor != null))
                 context.Notes.Add("The specular workflow's specular color isn't converted yet; the metallic and roughness are used.");
             context.Notes.Add("Highlight and reflection settings other than their strengths and masks (tints, fresnel, steps, anisotropy, cubemaps) aren't merged yet; the output shader's defaults are used.");
         }

@@ -73,7 +73,8 @@ Logging*.
 | Poiyomi Pro 11 | As Toon 11 and Pro 10, and it keeps the neutral surface emission |
 | VRChat Mobile Toon Standard | Opaque only; what it lacks is approximated, baked or left out |
 | VRChat Mobile Diffuse | One color texture, opaque only: normal maps and occlusion are baked into it, matcaps that light the surface as their average, and emission when you choose so; rims and highlights are left out |
-| Unity Standard | Its own maps and surface modes, with its own lighting; matcaps that light the surface are kept as their average in the color, vertex colors are baked, rims are left out |
+| Unity Standard | Its own maps and surface modes, with its own lighting; matcaps that light the surface are kept as their average in the color, vertex colors are baked, rims are left out. Everything that isn't metal reflects 4% at full strength |
+| Unity Standard (Specular setup) | As Unity Standard, and its specular color keeps each material's reflectance and highlight and reflection strengths, including none |
 
 ## Limitations
 

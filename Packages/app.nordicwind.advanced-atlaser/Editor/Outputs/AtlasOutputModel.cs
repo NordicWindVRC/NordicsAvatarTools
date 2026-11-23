@@ -54,7 +54,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // RGB: the AudioLink emission's color × gain per source, black without (Toon Standard).
         AudioLinkColor,
         // RGB (4.4): the second backlight's color, as BacklightColor (Poiyomi 11).
-        BacklightColor2
+        BacklightColor2,
+        // RGB (2.4): the specular color of an output of the specular workflow, which holds each
+        // source's reflectance, metallic and highlight and reflection strengths
+        // (AtlasSpecularColor); black where a source has neither highlights nor reflections.
+        SpecularColor
     }
 
     // Which channels of a texture a virtual map fills.
