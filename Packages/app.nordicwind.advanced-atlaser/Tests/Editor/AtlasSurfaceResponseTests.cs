@@ -65,6 +65,22 @@ namespace NordicWind.AdvancedAtlaser.Tests
             return material;
         }
 
+        // A material of Toon Standard, as its parser reads the shader's own fresnel.
+        private static AtlasUnifiedMaterial OfToonStandard(AtlasUnifiedMaterial material)
+        {
+            material.Surface.Response.Fresnel = AtlasFresnel.ViewHalfTimesViewNormal;
+            material.Surface.Response.ReflectanceFade = 0.25f;
+            return material;
+        }
+
+        // The fit reads the output shader's fresnel from a material of the shader.
+        private static AtlasOutputCapabilities ToonStandardInstalled()
+        {
+            var shader = AtlasShaderRegistry.Output("mobiletoon");
+            if (shader.FindShader() == null) Assert.Ignore("VRChat Mobile Toon Standard is not installed.");
+            return shader.Capabilities;
+        }
+
         private static AtlasGeneratorJob Job(params AtlasUnifiedMaterial[] materials)
         {
             var job = new AtlasGeneratorJob();
@@ -290,7 +306,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         {
             var surface = Solid(new Color(0.6f, 0.75f, 0.5f, 1f));
             var occlusionTexture = Solid(new Color(0.5f, 0.5f, 0.5f, 1f));
-            foreach (var shader in AtlasShaderRegistry.InstalledOutputShaders)
+            foreach (var shader in AtlasShaderRegistry.InstalledOutputShaders.Where(s => s.Capabilities.Provides(AtlasVirtualMap.Metallic)))
             {
                 var unified = new AtlasUnifiedMaterial();
                 var response = unified.Surface.Response;
@@ -301,8 +317,9 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 response.Highlights.Strength = 1f;
                 response.Reflections.Strength = 1f;
                 response.Occlusion.Constant = 1f;
-                // Poiyomi keeps occlusion in its own texture; Toon Standard in the surface texture.
-                response.Occlusion.Map = new AtlasTextureReference { Texture = shader.ShaderId == "poiyomi10" ? occlusionTexture : surface };
+                // Poiyomi keeps occlusion in its own texture; Toon Standard and Unity Standard in
+                // the surface texture.
+                response.Occlusion.Map = new AtlasTextureReference { Texture = shader.Family == AtlasShaderFamilies.Poiyomi ? occlusionTexture : surface };
                 var material = new Material(shader.FindShader());
                 created.Add(material);
                 shader.Write(unified, material);
@@ -310,7 +327,9 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 Assert.AreSame(surface, parsed.Metallic.Map?.Texture, shader.DisplayName + ": metallic");
                 Assert.AreEqual(AtlasChannel.Red, parsed.Metallic.Channel, shader.DisplayName);
                 Assert.AreSame(surface, parsed.Roughness.Map?.Texture, shader.DisplayName + ": roughness");
-                Assert.AreEqual(AtlasChannel.Green, parsed.Roughness.Channel, shader.DisplayName);
+                // Unity Standard reads smoothness from the alpha.
+                Assert.AreEqual(shader.Family == AtlasShaderFamilies.Unity ? AtlasChannel.Alpha : AtlasChannel.Green, parsed.Roughness.Channel,
+                    shader.DisplayName);
                 Assert.IsTrue(parsed.Roughness.InvertResult, shader.DisplayName + ": stored as smoothness");
                 Assert.AreSame(response.Occlusion.Map.Texture, parsed.Occlusion.Map?.Texture, shader.DisplayName + ": occlusion");
                 Assert.AreEqual(1f, parsed.Occlusion.Constant, 1e-5f, shader.DisplayName);
@@ -343,12 +362,13 @@ namespace NordicWind.AdvancedAtlaser.Tests
         public void ReflectanceIsChosenOnlyWhereTheOutputSetsItAndTheSourcesDiffer()
         {
             var gloss = new AtlasTextureReference { Texture = Solid(Color.white), Interpretation = AtlasTextureInterpretation.Data };
-            var toon = AtlasShaderRegistry.Output("mobiletoon").Capabilities;
+            var toon = ToonStandardInstalled();
             var feature = new AtlasSpecularFeature();
             // Toon Standard's output reflectance is its smoothness map × one value: reflectance over smoothness strength.
-            var a = Glossy(gloss, 0.4f, 0.8f);
-            var b = Glossy(gloss, 0.25f, 0.5f);
-            var c = Lit(1f, 1f, roughness: 0.5f);
+            // The sources are Toon Standard's own, so the same values give the same look.
+            var a = OfToonStandard(Glossy(gloss, 0.4f, 0.8f));
+            var b = OfToonStandard(Glossy(gloss, 0.25f, 0.5f));
+            var c = OfToonStandard(Lit(1f, 1f, roughness: 0.5f));
             Assert.AreEqual(0.5f, AtlasSpecularFeature.OutputReflectance(a.Surface.Response, toon.Reflectance, out bool exact), 1e-5f);
             Assert.IsTrue(exact);
             Assert.AreEqual(1f, AtlasSpecularFeature.OutputReflectance(c.Surface.Response, toon.Reflectance, out exact), 1e-5f, "0.5 over smoothness 0.5");
@@ -383,23 +403,63 @@ namespace NordicWind.AdvancedAtlaser.Tests
         [Test]
         public void StrengthsTheOutputLacksAreFittedIntoTheReflectance()
         {
-            var toon = AtlasShaderRegistry.Output("mobiletoon").Capabilities;
+            var toon = ToonStandardInstalled();
+            AtlasUnifiedMaterial Own(float highlights, float reflections) => OfToonStandard(Lit(highlights, reflections, roughness: 0.228f));
             // Reflectance 0.5 (4%) at smoothness 0.772: 0.5 / 0.772 at full strengths.
             float full = 0.5f / 0.772f;
-            Assert.AreEqual(full, AtlasSpecularFeature.OwnReflectance(Lit(1f, 1f, roughness: 0.228f), toon), 1e-5f, "exact");
-            Assert.AreEqual(full, AtlasSpecularResponse.Fit(new[] { AtlasSpecularResponse.Sample(Lit(1f, 1f, roughness: 0.228f)) }, toon), 0.003f,
+            Assert.AreEqual(full, AtlasSpecularFeature.OwnReflectance(Own(1f, 1f), toon), 1e-5f, "exact");
+            Assert.AreEqual(full, AtlasSpecularResponse.Fit(new[] { AtlasSpecularResponse.Sample(Own(1f, 1f)) }, toon), 0.003f,
                 "the fit finds the exact value");
 
-            float weak = AtlasSpecularFeature.OwnReflectance(Lit(0.28f, 0.041f, roughness: 0.228f), toon);
-            float weaker = AtlasSpecularFeature.OwnReflectance(Lit(0.1f, 0.041f, roughness: 0.228f), toon);
-            // F0 = 0.16 × r², so a highlight strength of 0.28 is about √0.28 of the reflectance.
-            Assert.AreEqual(full * Mathf.Sqrt(0.28f), weak, 0.06f, "highlights at 0.28");
-            Assert.Less(weaker, weak, "weaker highlights, lower reflectance");
+            float weak = AtlasSpecularFeature.OwnReflectance(Own(0.28f, 0.041f), toon);
+            float weaker = AtlasSpecularFeature.OwnReflectance(Own(0.1f, 0.041f), toon);
+            // F0 = 0.16 × r², so a strength is about its square root of the reflectance: the
+            // fitted value lies between what the reflections and the highlights ask for.
+            Assert.That(weak, Is.InRange(full * Mathf.Sqrt(0.041f) - 0.03f, full * Mathf.Sqrt(0.28f) + 0.06f), "highlights at 0.28, reflections at 0.041");
+            Assert.Less(weak, full - 0.05f, "dimmer than at full strengths");
+            Assert.LessOrEqual(weaker, weak, "weaker highlights, no higher reflectance");
 
-            var plan = AtlasOutputPipeline.Resolve(Job(Lit(0.28f, 0.041f, roughness: 0.228f)), toon);
+            var plan = AtlasOutputPipeline.Resolve(Job(Own(0.28f, 0.041f)), toon);
             Assert.AreEqual(weak, plan.Output.Surface.Response.Reflectance.Constant, 1e-5f);
             Assert.IsTrue(plan.Notes.Any(n => n.Contains("highlights of source 1 are approximated through its reflectance")));
             Assert.IsTrue(plan.Notes.Any(n => n.Contains("reflections of source 1 are approximated through its reflectance")));
+        }
+
+        // A source is drawn with its own shader's fresnel and the output with the output
+        // shader's: the same values look the same only where the two shaders agree.
+        [Test]
+        public void ASourceIsDrawnWithItsOwnShadersFresnel()
+        {
+            var toon = ToonStandardInstalled();
+            float value = 0.5f / 0.772f;
+            double Cost(AtlasUnifiedMaterial material) => AtlasSpecularResponse.Cost(new[] { AtlasSpecularResponse.Sample(material) }, toon, value);
+
+            var own = OfToonStandard(Lit(1f, 1f, roughness: 0.228f));
+            Assert.IsTrue(AtlasSpecularResponse.SameShading(own.Surface.Response, toon));
+            Assert.AreEqual(0.0, Cost(own), 1e-6, "the output's own shader: the same look at the same values");
+
+            // Schlick's fresnel rises toward grazing angles where Toon Standard's barely does.
+            var other = Lit(1f, 1f, roughness: 0.228f);
+            Assert.IsFalse(AtlasSpecularResponse.SameShading(other.Surface.Response, toon));
+            Assert.Greater(Cost(other), 1e-4, "another shader's fresnel looks different at the same values");
+            Assert.AreNotEqual(value, AtlasSpecularFeature.OwnReflectance(other, toon), "so it is fitted, not taken as it is");
+
+            // Reflections that rise less are closer to Toon Standard's.
+            var faint = Lit(1f, 1f, roughness: 0.228f);
+            faint.Surface.Response.Reflections.FresnelStrength = 0.25f;
+            Assert.Less(Cost(faint), Cost(other));
+        }
+
+        // Poiyomi's fresnel strength slider and the unified strength: the slider's rise is
+        // lerp(F0, 1, s) × s, the unified one (1 − F0) × strength.
+        [Test]
+        public void PoiyomisFresnelStrengthIsConvertedBothWays()
+        {
+            Assert.AreEqual(0f, AtlasPoiyomiFresnel.Strength(0f), 1e-6f);
+            Assert.AreEqual(0.5f * 0.52f / 0.96f, AtlasPoiyomiFresnel.Strength(0.5f), 1e-5f, "the shader's default: about a quarter of the full rise");
+            Assert.AreEqual(1f / 0.96f, AtlasPoiyomiFresnel.Strength(1f), 1e-5f);
+            foreach (float slider in new[] { 0f, 0.1f, 0.5f, 0.75f, 1f })
+                Assert.AreEqual(slider, AtlasPoiyomiFresnel.Slider(AtlasPoiyomiFresnel.Strength(slider)), 1e-5f);
         }
     }
 }

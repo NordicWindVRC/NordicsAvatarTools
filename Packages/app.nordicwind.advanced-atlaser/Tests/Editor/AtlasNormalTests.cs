@@ -197,7 +197,7 @@ namespace NordicWind.AdvancedAtlaser.Tests
         public void TheWritersSetTheNormalMapTheParsersReadBack()
         {
             var texture = NormalTexture(new Vector3(0.6f, 0f, 0.8f));
-            foreach (var shader in AtlasShaderRegistry.InstalledOutputShaders)
+            foreach (var shader in AtlasShaderRegistry.InstalledOutputShaders.Where(s => s.Capabilities.Provides(AtlasVirtualMap.Normal)))
             {
                 var unified = new AtlasUnifiedMaterial();
                 unified.Surface.Normal.Map = new AtlasTextureReference { Texture = texture, Interpretation = AtlasTextureInterpretation.TangentNormal };

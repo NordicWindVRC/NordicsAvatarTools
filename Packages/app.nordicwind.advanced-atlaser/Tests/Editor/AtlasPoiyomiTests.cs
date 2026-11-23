@@ -348,6 +348,17 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
+        public void StandardLightColorStandsInForAMissingMainLight()
+        {
+            AtlasTestMaterials.AddSavedFloat(material, "_LightingColorMode", 1f);
+            var lighting = ParseSaved().Lighting;
+            Assert.AreEqual(AtlasLightColorModel.Separate, lighting.ColorModel);
+            Assert.AreEqual(0.6f, lighting.Contributions.AmbientAsMainLight, 1e-5f, "60% of the ambient light as the main light");
+            Assert.AreEqual(0.5f, lighting.Contributions.AmbientWithoutMainLight, 1e-5f, "50% stays ambient");
+            Assert.AreEqual(AtlasAmbientStandIn.Ambient, lighting.Contributions.AmbientStandIn, "the ambient light at the normal");
+        }
+
+        [Test]
         public void LightDataModesShadowsAndLimits()
         {
             AtlasTestMaterials.AddSavedFloat(material, "_LightingMode", 0f);

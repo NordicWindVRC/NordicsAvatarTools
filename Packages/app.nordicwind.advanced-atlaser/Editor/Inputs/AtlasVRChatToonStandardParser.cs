@@ -83,6 +83,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var lighting = d.Lighting;
             lighting.Family = AtlasLightingFamily.RampToon;
             lighting.Ambient = AtlasAmbientModel.Average;
+            // Without a real-time main light, the probes along their dominant direction are the
+            // light, and their average stays the ambient light.
+            lighting.Contributions.AmbientAsMainLight = 1f;
+            lighting.Contributions.AmbientStandIn = AtlasAmbientStandIn.Brightest;
             lighting.ReceiveShadows = 0f;
             lighting.Ramp.Ramp = AtlasSourceMapping.Texture(m, "_Ramp");
             lighting.Ramp.Preset = Preset(lighting.Ramp.Ramp);
@@ -96,7 +100,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             lighting.Ramp.UntintedAmbient = 1f;
             lighting.Ramp.LitAmbient = 1f;
             lighting.MinimumBrightness = Float(m, "_MinBrightness", 0f);
+            // The limit: saturate(the shaded direct light + the ambient light).
             lighting.LimitBrightness = Float(m, "_LimitBrightness", 1f) > 0.5f;
+            lighting.LimitTotal = true;
         }
 
         // Specular: metallic and gloss maps (each a channel) times their strengths; reflectance is
@@ -104,6 +110,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static void Specular(Material m, AtlasUnifiedMaterial d)
         {
             var response = d.Surface.Response;
+            // The shader's own fresnel, whatever is set: one term for highlights and
+            // reflections, pow((1 − V·H)(1 − V·N), 5), × saturate((reflectance + metallic) × 4).
+            response.Fresnel = AtlasFresnel.ViewHalfTimesViewNormal;
+            response.ReflectanceFade = 0.25f;
             if (!Keyword(m, "USE_SPECULAR"))
             {
                 response.Highlights.Enabled = false;

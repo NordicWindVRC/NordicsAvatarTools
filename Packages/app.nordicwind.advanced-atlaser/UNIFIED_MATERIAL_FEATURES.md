@@ -6,7 +6,7 @@ and formulas for every feature a parser maps. Atlasing concerns are left out on 
 get their own pass later.
 
 **Inputs:**
-- [VRChat Mobile](UNIFIED_MATERIAL_VRCHAT_MOBILE.md): Toon Lit, Standard Lite, Toon Standard.
+- [VRChat Mobile](UNIFIED_MATERIAL_VRCHAT_MOBILE.md): Toon Lit, Diffuse, Bumped Diffuse, Standard Lite, Toon Standard.
 - [Unity Standard](UNIFIED_MATERIAL_UNITY_STANDARD.md).
 - [Mochie Uber](UNIFIED_MATERIAL_MOCHIE_UBER.md).
 - [Poiyomi Toon 10 and 11, and Poiyomi Pro](UNIFIED_MATERIAL_POIYOMI.md), with both kinds of fur.
@@ -418,8 +418,10 @@ How the surface reflects light (S2).
 | occlusion | scalar, strength around one | 1, no map | darkens ambient light and reflections, not direct light |
 | highlights | group | on | direct-light highlights: enabled; strength (1); tint (white); mask; roughness override (off, value); sharpness (below); **steps** (0: smooth, else `floor(h × steps) / steps`); **real-time light only**; **base color mix** (the highlight color toward the base color); **ignore light color** (not scaled by the diffuse light); **ignore shadows** (not darkened by the received shadow); a **second lobe** (strength, 0 = none, and its roughness input's constant, the map and inversion shared; the brighter lobe shows); **shape** (below) |
 | highlight shape | round, stretched, both | round | *stretched* (hair, brushed metal) along the bitangent: `D = saturate(1 / (w × f²))`, `f = (T·H)² + (B·H)² / w² + (N·H)²` with width `w`, a second layer of width `w₂` added with a strength (or laid over by its own value), strand ripples along U (frequency, amplitude, strength, continuity), its own strength and steps; fresnel scaled by metallic. *Both*: blended by a mask (1 = round) |
-| reflections | group | on | environment reflections: enabled (off: none); strength (1); tint (white); mask; fresnel strength (1, 0 = no fresnel falloff); roughness override (off, value); **steps** (0: smooth, else quantized, less on rough surfaces); **light based** (0–1: stronger where lit, `lerp(1, N·L + 0.3, amount)`); source *probes*, a fixed *cubemap* (lit by the surroundings or not), or *ambient color* (a flat color from the sky's ambient specular, Unity's reflections off); a fallback cubemap for scenes without probes; **exposure occlusion** (0–1: fades where the direct light is dim) |
+| reflections | group | on | environment reflections: enabled (off: none); strength (1); tint (white); mask; fresnel strength (1; how far reflections rise from F0 toward grazing angles, `F0 + (1 − F0) × strength × (1 − N·V)⁵`; 0 = no rise; parsers convert their shader's setting); roughness override (off, value); **steps** (0: smooth, else quantized, less on rough surfaces); **light based** (0–1: stronger where lit, `lerp(1, N·L + 0.3, amount)`); source *probes*, a fixed *cubemap* (lit by the surroundings or not), or *ambient color* (a flat color from the sky's ambient specular, Unity's reflections off); a fallback cubemap for scenes without probes; **exposure occlusion** (0–1: fades where the direct light is dim) |
 | highlight sharpness | 0–1 | 0 | blends the highlight toward a hard edge: `lerp(h, smoothstep(0.5, 0.51, h), sharpness)` |
+| fresnel | Schlick, view-half × view-normal | Schlick | how highlights and reflections grow toward grazing angles, from F0. *Schlick*: `F0 + (1 − F0)(1 − V·H)⁵` for highlights, `(1 − N·V)⁵` for reflections. *View-half × view-normal*: one term for both, `F0 + (1 − F0)((1 − V·H)(1 − N·V))⁵` (Toon Standard) |
+| reflectance fade | 0–1 | 0 | highlights and reflections × `saturate((reflectance + metallic) / fade)`, so they fade out below it; 0: no fade (Toon Standard: 0.25) |
 | occlusion: direct | 0–1 | 0 | how much occlusion also darkens direct light |
 | occlusion: indirect | 0–1 | 1 | how much occlusion darkens ambient light |
 | occlusion tint | color input, or none | none | occlusion darkens toward this color instead of black: `lerp(tint, 1, occlusion)` |
@@ -581,14 +583,16 @@ Poiyomi.*
 | contribution: additional lights | 0–1 | 1 | other per-pixel lights |
 | contribution: vertex lights | 0–1 | 1 | Unity's four per-vertex lights |
 | contribution: ambient | 0–1 | 1 | ambient and light probes, including lights Unity folds into them |
-| without a main light: ambient as main light | ≥ 0 | 0 | in a world lit by probes alone, the ambient color × this stands in for the main light (Toon Lit: 0.2; Uber's baked direct contribution) |
-| without a main light: ambient | 0–1 | 1 | the ambient contribution then, instead of *contribution: ambient* (Uber's baked indirect contribution) |
-| limit brightness | bool, ceiling | off, 1 | clamps the light (direct + ambient) per channel to the ceiling, so bright worlds don't blow out colors |
+| without a main light: ambient as main light | ≥ 0 | 0 | in a world lit by probes alone, in the *separate* light color model: the ambient light × this stands in for the main light (Toon Lit: 0.2; Poiyomi's Standard light color: 0.6; Toon Standard: 1; Uber's baked direct contribution). The other light color models make their direct light of the probes themselves |
+| without a main light: stand-in | ambient, brightest | ambient | which ambient light stands in. *Ambient*: as the surface gets it (the ambient model's). *Brightest*: the probes along their dominant direction (Toon Standard) |
+| without a main light: ambient | 0–1 | 1 | the ambient contribution then, instead of *contribution: ambient* (Poiyomi's Standard light color: 0.5; Uber's baked indirect contribution) |
+| limit brightness | bool, ceiling | off, 1 | clamps the direct and the ambient light, each per channel, to the ceiling, so bright worlds don't blow out colors |
+| limit applies to | each light, the shaded light | each light | *the shaded light*: the limit clamps the direct light through the shading + the ambient light instead, so the lit side never passes the ceiling (Toon Standard) |
 | limit by luminance | 0–1 | 0 | the direct light's limit blends from per channel to scaling by luminance, keeping the hue |
 | limit keeps hue | bool | off | the limit scales the color so its brightest channel is at the ceiling |
-| minimum light | 0–1 | 0 | raises the light's luminance (direct and ambient) to at least this, keeping the hue |
+| minimum light | 0–1 | 0 | raises the luminance of the direct and of the ambient light to at least this, keeping the hue, before the limit |
 | minimum brightness | 0–1 | 0 | `base × value` is added after lighting, like emission, so the surface never goes fully dark |
-| light multiplier, light addition | floats | 1, 0 | every light color (direct, ambient, additional) × multiplier + addition, at least 0 |
+| light multiplier, light addition | floats | 1, 0 | every light color (direct, ambient, additional) × multiplier + addition, at least 0, after the minimum light and the limit on each light |
 | flat light map | bool | off | *flat* family: features reading the shading's light map see `smoothstep(0.4, 0.6, half-Lambert)` (the vertex normal's for additional lights) instead of 1 |
 
 **Additional lights** (point, spot, and directional lights beyond the main one):
@@ -1390,41 +1394,42 @@ flip their normal, so they light like front faces). Also:
 
 ✓ the source has it; ~ partly or as a special case; blank: not present.
 
-| Unified feature | Toon Lit | Std Lite | Toon Std | Unity Std | Uber | Poiyomi | Poiyomi Pro adds |
-|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| 1.1 Mapping beyond UV0/1, placement, frames | | | | | ~ | ✓ | |
-| 1.5 Mask bus | | | | | | ✓ | |
-| 1.6 Palette | | | | | | ~ | |
-| 1.9 Modulators | | | ~ | | ✓ | ✓ | |
-| 1.10 Color adjustment | | | ✓ | | ✓ | ✓ | GT7, neutral emission |
-| 2.1 Base color | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| 2.2 Alpha | | | | ✓ | ✓ | ✓ | |
-| 2.3 Normals | | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| 2.4 Surface response | | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| 2.5 Parallax | | | | ✓ | ✓ | ✓ | |
-| 3 Lighting: unlit | | | | | ✓ | ✓ | |
-| 3 Lighting: flat | ✓ | | | | | ✓ | |
-| 3 Lighting: ramp toon | | | ✓ | | ✓ | ✓ | |
-| 3 Lighting: physically based | | ✓ | | ✓ | ✓ | ✓ | |
-| 3.5 External lighting | | | | | ✓ | ✓ | |
-| 3.6 Screen-space lighting | | | | | | | ✓ |
-| 4.1 Surface layer | | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| 4.2 Transition | | | | | ✓ | ✓ | |
-| 4.3 Lookup layer | | | ✓ | | ✓ | ✓ | |
-| 4.4 Angle layer | | | ✓ | | ✓ | ✓ | |
-| 4.5 Subsurface | | | | | ✓ | ✓ | |
-| 4.6 Procedural pattern | | | | | ~ | ✓ | constellation, lava lamp |
-| 4.7 Refraction | | | | | ✓ | ✓ | self grab, lava lamp |
-| 5.1 Outline | | | ~ | | ✓ | ✓ | layers, curvature |
-| 5.2 Fur | | | | | | ✓ | shells |
-| 5.3 Deformation | | | | | ✓ | ✓ | squish, TPS |
-| 5.4 Geometry effects | | | | | | | tessellation (dissolve, shatter, particles reported) |
-| 6 Visibility | | | | | ✓ | ✓ | |
-| 6 Second pass, depth prepass | | | | | | ✓ | |
+| Unified feature | Toon Lit | Diffuse | Std Lite | Toon Std | Unity Std | Uber | Poiyomi | Poiyomi Pro adds |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| 1.1 Mapping beyond UV0/1, placement, frames | | | | | | ~ | ✓ | |
+| 1.5 Mask bus | | | | | | | ✓ | |
+| 1.6 Palette | | | | | | | ~ | |
+| 1.9 Modulators | | | | ~ | | ✓ | ✓ | |
+| 1.10 Color adjustment | | | | ✓ | | ✓ | ✓ | GT7, neutral emission |
+| 2.1 Base color | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| 2.2 Alpha | | | | | ✓ | ✓ | ✓ | |
+| 2.3 Normals | | ~ | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| 2.4 Surface response | | | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| 2.5 Parallax | | | | | ✓ | ✓ | ✓ | |
+| 3 Lighting: unlit | | | | | | ✓ | ✓ | |
+| 3 Lighting: flat | ✓ | | | | | | ✓ | |
+| 3 Lighting: ramp toon | | | | ✓ | | ✓ | ✓ | |
+| 3 Lighting: physically based | | ✓ | ✓ | | ✓ | ✓ | ✓ | |
+| 3.5 External lighting | | | | | | ✓ | ✓ | |
+| 3.6 Screen-space lighting | | | | | | | | ✓ |
+| 4.1 Surface layer | | | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| 4.2 Transition | | | | | | ✓ | ✓ | |
+| 4.3 Lookup layer | | | | ✓ | | ✓ | ✓ | |
+| 4.4 Angle layer | | | | ✓ | | ✓ | ✓ | |
+| 4.5 Subsurface | | | | | | ✓ | ✓ | |
+| 4.6 Procedural pattern | | | | | | ~ | ✓ | constellation, lava lamp |
+| 4.7 Refraction | | | | | | ✓ | ✓ | self grab, lava lamp |
+| 5.1 Outline | | | | ~ | | ✓ | ✓ | layers, curvature |
+| 5.2 Fur | | | | | | | ✓ | shells |
+| 5.3 Deformation | | | | | | ✓ | ✓ | squish, TPS |
+| 5.4 Geometry effects | | | | | | | | tessellation (dissolve, shatter, particles reported) |
+| 6 Visibility | | | | | | ✓ | ✓ | |
+| 6 Second pass, depth prepass | | | | | | | ✓ | |
 
 Single-source features, described generically so other shaders can map into them later: mask
 bus, palette and the back-face condition (Poiyomi); screen-space lighting and geometry effects
-(Poiyomi Pro). The Poiyomi column is Poiyomi 10 and 11 (Grab Pass and Two Pass
+(Poiyomi Pro). The Diffuse column is VRChat Mobile Diffuse and Bumped Diffuse, whose normal
+map is the ~. The Poiyomi column is Poiyomi 10 and 11 (Grab Pass and Two Pass
 included); 7.3 to 9.3 are read on the same parser with version tables. *Palette* is ~ because
 theme colors are resolved to the colors they produce (1.6).
 

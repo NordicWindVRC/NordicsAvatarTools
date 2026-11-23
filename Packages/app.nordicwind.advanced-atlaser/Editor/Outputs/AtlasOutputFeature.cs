@@ -112,17 +112,52 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public string Key;
         public string Label;
+        // The item's own name, without the sources it is on; null: the label.
+        public string Name;
+        // What the item is, in a few words, shown under its name; null: nothing to add.
+        public string Kind;
+        // How the item ends up shown with the settings as they are, in a few words, shown
+        // after what it is; null: not known (the output isn't resolved).
+        public string Way;
+        // It is left out though the user didn't turn it off, so its placement is shown.
+        public bool LeftOut;
+        // The item is shown with its texture (or its color alone, without one) next to it, so
+        // it can be recognized and found in the project.
+        public bool HasPreview;
+        public UnityEngine.Texture Preview;
+        // Linear.
+        public UnityEngine.Color PreviewColor = UnityEngine.Color.white;
         public List<int> Sources = new List<int>();
     }
 
+    // How an item the user places ends up shown: a few words for the inspector, and whether
+    // it is left out though the user didn't turn it off.
+    public readonly struct AtlasInstanceWay
+    {
+        public readonly string Text;
+        public readonly bool LeftOut;
+
+        public AtlasInstanceWay(string text, bool leftOut = false)
+        {
+            Text = text;
+            LeftOut = leftOut;
+        }
+    }
+
     // Where the user puts an item: Automatic (the feature's choice), its own place, combined
-    // with another item (the stored text names it), or off.
-    public enum AtlasInstancePlacement { Automatic = 0, Own = 1, Combined = 2, Off = 3, AsMatcap = 4, Baked = 5 }
+    // with another item (the stored text names it), off, in a matcap slot, baked into the
+    // textures, or kept as its average in the base color.
+    public enum AtlasInstancePlacement { Automatic = 0, Own = 1, Combined = 2, Off = 3, AsMatcap = 4, Baked = 5, Averaged = 6 }
 
     public static class AtlasInstancePlacements
     {
         // The stored value's ID for an item: its number the placement, its text the item combined with.
         public static string Id(string key) => "instance:" + key;
+
+        // How much of an item's look a way of showing it keeps, in plain words for the
+        // inspector; nothing where it keeps nearly all of it.
+        public static string Kept(float share) =>
+            share >= 0.85f ? "" : share >= 0.6f ? "keeps most of its look" : share >= 0.35f ? "keeps about half of its look" : "keeps little of its look";
     }
 
     // A feature whose items the user places one by one.
@@ -133,6 +168,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         bool CanPlaceAsMatcap(AtlasOutputCapabilities capabilities);
         // Whether an item can be baked into the textures instead.
         bool CanBake(AtlasOutputCapabilities capabilities);
+        // Whether an item can be kept as its average effect in the base color instead.
+        bool CanAverage(AtlasOutputCapabilities capabilities);
     }
 
     // A setting a feature offers in some of its modes (a strength, 0–1 by default), stored in its
@@ -144,6 +181,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public string Tooltip;
         public float Default;
         public float Min, Max = 1f;
+        // A choice among these instead of a strength; the value is the chosen one's index.
+        public string[] Choices;
 
         public static string ValueId(string id) => "option:" + id;
     }
@@ -166,24 +205,6 @@ namespace NordicWind.AdvancedAtlaser.Editor
     public interface IAtlasSourceAwareFeature : IAtlasOutputFeature
     {
         bool IsPresent(AtlasGeneratorSource source);
-    }
-
-    // A virtual map the output needs, the sources that contribute to it, and the texture
-    // reference in the output unified material that points at it once it is packed.
-    public sealed class AtlasMapRequest
-    {
-        public AtlasVirtualMap Map;
-        public AtlasTextureReference Reference;
-        // Indices into AtlasGeneratorJob.Sources.
-        public readonly List<int> Sources = new List<int>();
-        // How one source's map is evaluated (source index, its material, width, height), when
-        // the feature converts it for the output; null: AtlasMapEvaluator.Evaluate.
-        public Func<int, AtlasUnifiedMaterial, int, int, NordicsTextureWrapper> Evaluate;
-        // Optional: Evaluate for the map baker, which also passes the size the source's content
-        // ends up at in the texture (its region, in pixels), for evaluations that depend on it.
-        public Func<int, AtlasUnifiedMaterial, int, int, UnityEngine.Vector2Int, NordicsTextureWrapper> EvaluatePlaced;
-        // Run on the whole baked map before it is packed; null: nothing.
-        public Action<NordicsTextureWrapper> Finish;
     }
 
     // What a feature's Resolve works with.
@@ -222,7 +243,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         private static readonly List<IAtlasOutputFeature> Registered = new List<IAtlasOutputFeature>();
 
-        // Every feature, by section and then order.
+        // Every feature, by section, then order, then ID: the order they are listed and resolved
+        // in, the same in every session.
         public static IReadOnlyList<IAtlasOutputFeature> All => Registered;
 
         static AtlasOutputFeatures()
@@ -235,7 +257,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     throw new ArgumentException($"[Nordic's Advanced Atlaser] Duplicate output feature ID '{feature.Id}'.");
                 Registered.Add(feature);
             }
-            Registered.Sort((a, b) => a.Section != b.Section ? a.Section.CompareTo(b.Section) : a.Order.CompareTo(b.Order));
+            Registered.Sort((a, b) => a.Section != b.Section ? a.Section.CompareTo(b.Section)
+                : a.Order != b.Order ? a.Order.CompareTo(b.Order) : string.CompareOrdinal(a.Id, b.Id));
         }
 
         public static IAtlasOutputFeature Find(string id) => Registered.FirstOrDefault(f => f.Id == id);
@@ -250,14 +273,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return modes;
         }
 
-        // The mode in use: the stored one when the output shader supports it, otherwise the
-        // default. Null when the feature isn't offered.
+        // A conflict switch's value: the user's, or its default.
         public static bool Switch(AtlasGeneratorJob job, string featureId, AtlasConflictSwitch conflictSwitch)
         {
             var choice = job.Features.Find(f => f.FeatureId == featureId);
             return choice != null && choice.Switches.TryGetValue(conflictSwitch.Id, out bool value) ? value : conflictSwitch.Default;
         }
 
+        // The mode in use: the stored one when the output shader supports it, otherwise the
+        // default. Null when the feature isn't offered.
         public static AtlasFeatureMode Effective(IAtlasOutputFeature feature, string storedMode, AtlasOutputCapabilities capabilities)
         {
             var modes = Available(feature, capabilities);

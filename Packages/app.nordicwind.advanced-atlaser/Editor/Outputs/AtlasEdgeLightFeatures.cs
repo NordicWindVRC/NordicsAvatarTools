@@ -11,6 +11,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
     internal static class AtlasEdgeLight
     {
         // The first enabled, static angle layer that matches.
+        // Every static layer of the material that matches, in order.
+        public static List<AtlasAngleLayer> Layers(AtlasUnifiedMaterial material, System.Func<AtlasAngleLayer, bool> match)
+        {
+            var result = new List<AtlasAngleLayer>();
+            if (material == null) return result;
+            for (int i = 0; i < material.Layers.Count; i++)
+                if (material.Layers[i] is AtlasAngleLayer layer && layer.Enabled && match(layer) &&
+                    AtlasColorStack.IsStatic(material, "layers[" + i + "]"))
+                    result.Add(layer);
+            return result;
+        }
+
         public static AtlasAngleLayer Layer(AtlasUnifiedMaterial material, System.Func<AtlasAngleLayer, bool> match)
         {
             if (material == null) return null;
@@ -39,9 +51,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 .ThenBy(i => i).First();
         }
 
-        // Drawn by the output's rim (outputs with a rim that adds after lighting and can be lit by
-        // the scene, but without this feature of their own).
-        public static bool RimCanTakeIt(AtlasOutputCapabilities c) => c.RimSlots > 0 && c.RimAddsAfterLighting;
+        // Drawn by the output's rim (outputs with a rim that can follow the scene's light, but
+        // without this feature of their own).
+        public static bool RimCanTakeIt(AtlasOutputCapabilities c) => c.RimSlots > 0 && c.RimFollowsSceneLight;
 
         // Whether the rims already in the output fill its rim slots (rim lighting resolves first).
         public static bool RimTaken(AtlasFeatureContext context) =>
@@ -83,7 +95,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static readonly string[] PerSource = { "Mask", "Opacity", "Enabled" };
 
         // Drawn by the output's rim, × the scene's light and ambient instead of the reflection
-        // probe (Toon Standard's Environmental rim).
+        // probe (Toon Standard's Environmental rim), at the strength that looks most like it.
         public static readonly AtlasFeatureMode InRim = new AtlasFeatureMode
         {
             Id = "rim", Label = "In the rim (lit by the scene)", Kind = AtlasFeatureModeKind.Emulated,
@@ -142,8 +154,25 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 rim.Color.Map = null;
                 rim.LightResponse = AtlasLightResponse.ScaleByLight;
                 rim.Mask = null;
+                // The scene's light and ambient are brighter than what its probe shows less the
+                // threshold: the strength and base color mix are the ones that look most like
+                // the probe's rim on the sources that have it (AtlasRimResponse).
+                string fit = "";
+                if (AtlasRimCurve.FitBand(rim, out _, out _, out float peak) && peak > 0f)
+                {
+                    var sources = context.Sources
+                        .Select(i => ((IReadOnlyList<Color>)AtlasSourceSamples.Bases(job.Sources[i].Material),
+                            job.Sources[i].UVRegion.width * job.Sources[i].UVRegion.height))
+                        .ToList();
+                    var fitted = AtlasRimResponse.Fit(template, peak, sources, context.Output.Lighting, true);
+                    rim.Opacity = fitted.Strength;
+                    rim.BaseColorMix = fitted.BaseColorMix;
+                    var culture = System.Globalization.CultureInfo.InvariantCulture;
+                    fit = $", at the strength that looks most like it (strength {fitted.Strength.ToString("0.##", culture)}, " +
+                          $"base color mix {fitted.BaseColorMix.ToString("0.##", culture)})";
+                }
                 context.Output.Layers.Add(rim);
-                context.Notes.Add("The environmental rim is drawn by the output's rim, lit by the scene's light and ambient instead of the reflection probe.");
+                context.Notes.Add("The environmental rim is drawn by the output's rim, lit by the scene's light and ambient instead of the reflection probe" + fit + ".");
                 AtlasEdgeLight.EveryPartNote(context, "environmental rim", Layer);
                 AtlasEdgeLight.DifferNote(context, reference, "environmental rim", Layer, "Enabled");
                 return;
@@ -187,7 +216,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static readonly AtlasFeatureMode InRim = new AtlasFeatureMode
         {
             Id = "rim", Label = "In the rim (every lit edge)", Kind = AtlasFeatureModeKind.Emulated,
-            Requires = c => !c.Backlight && AtlasEdgeLight.RimCanTakeIt(c)
+            Requires = c => c.Backlights == 0 && AtlasEdgeLight.RimCanTakeIt(c)
         };
 
         private static readonly AtlasFeatureMode[] ModeList =
@@ -195,8 +224,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             new AtlasFeatureMode
             {
                 Id = "native", Label = "Native", Kind = AtlasFeatureModeKind.Native,
-                OptionalMaps = new[] { AtlasVirtualMap.BacklightColor },
-                Requires = c => c.Backlight
+                OptionalMaps = new[] { AtlasVirtualMap.BacklightColor, AtlasVirtualMap.BacklightColor2 },
+                Requires = c => c.Backlights > 0
             },
             InRim,
             AtlasFeatureMode.Off
@@ -213,10 +242,23 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
         public static AtlasAngleLayer Layer(AtlasUnifiedMaterial material) => AtlasEdgeLight.Layer(material, Match);
 
+        /// <summary>A material's backlights, in order: one, or Poiyomi 11's two.</summary>
+        public static List<AtlasAngleLayer> Layers(AtlasUnifiedMaterial material) => AtlasEdgeLight.Layers(material, Match);
+
+        private static AtlasAngleLayer Layer(AtlasUnifiedMaterial material, int slot)
+        {
+            var layers = Layers(material);
+            return slot < layers.Count ? layers[slot] : null;
+        }
+
+        // The maps of the output's backlights, by slot.
+        private static readonly AtlasVirtualMap[] ColorMaps = { AtlasVirtualMap.BacklightColor, AtlasVirtualMap.BacklightColor2 };
+
         public bool IsPresent(AtlasUnifiedMaterial source) => Layer(source) != null;
 
         public bool SharedValuesDiffer(IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasOutputCapabilities capabilities) =>
-            AtlasEdgeLight.Differ(sources.Select(Layer), PerSource);
+            Enumerable.Range(0, Mathf.Clamp(capabilities.Backlights, 1, ColorMaps.Length))
+                .Any(slot => AtlasEdgeLight.Differ(sources.Select(s => Layer(s, slot)), PerSource));
 
         // The output's rim as the backlight: a band with the backlight's strength at each facing
         // under the rig's back light, seen from the front, where it shows (the brightest direction
@@ -282,19 +324,48 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var active = new HashSet<int>(context.Sources);
             int reference = AtlasEdgeLight.Reference(context, FeatureId);
             var template = Layer(job.Sources[reference].Material);
-            AtlasAngleLayer Of(int i) => active.Contains(i) ? Layer(job.Sources[i].Material) : null;
             if (context.Mode == InRim)
             {
                 InTheRim(context, template, reference);
                 return;
             }
+            // Each of the output's backlights: its settings from the reference source or, where
+            // that has no such backlight, from the largest source that has one.
+            int slots = Mathf.Clamp(context.Capabilities.Backlights, 1, ColorMaps.Length);
+            for (int slot = 0; slot < slots; slot++)
+            {
+                int k = slot;
+                int from = Layer(job.Sources[reference].Material, k) != null ? reference
+                    : context.Sources.Where(i => Layer(job.Sources[i].Material, k) != null)
+                        .OrderByDescending(i => job.Sources[i].UVRegion.width * job.Sources[i].UVRegion.height).ThenBy(i => i).DefaultIfEmpty(-1).First();
+                if (from < 0) break;
+                Place(context, k, Layer(job.Sources[from].Material, k), from, i => active.Contains(i) ? Layer(job.Sources[i].Material, k) : null);
+            }
+            var extra = context.Sources.Where(i => Layers(job.Sources[i].Material).Count > slots).ToList();
+            if (extra.Count > 0)
+                context.Notes.Add((slots == 1 ? "The output shader has one backlight" : "The output shader has " + slots + " backlights") +
+                                  "; the further backlights of " + AtlasLiveMasks.Numbers(extra) + " are left out.");
+            var unbaked = context.Sources.Where(i => Layers(job.Sources[i].Material).Take(slots).Any(l => l.Color.Map != null && !Bakeable(l.Color.Map)))
+                .Select(i => (i + 1).ToString()).ToList();
+            if (unbaked.Count > 0)
+                context.Notes.Add("A backlight color texture on another UV or moving isn't baked; its color is used (" +
+                                  (unbaked.Count == 1 ? "source " : "sources ") + string.Join(", ", unbaked) + ").");
+            if (context.Sources.Any(i => AtlasEdgeLight.Live(job.Sources[i].Material, Match)))
+                context.Notes.Add("A live backlight (animated, audio-driven) isn't merged yet; it's left out.");
+        }
+
+        // One backlight of the output: the template's settings, each source's color × texture
+        // in the slot's map (black where a source has none), or the one color without a map.
+        private static void Place(AtlasFeatureContext context, int slot, AtlasAngleLayer template, int from, System.Func<int, AtlasAngleLayer> of)
+        {
+            var job = context.Job;
             var copy = new AtlasAngleLayer();
             AtlasFieldwise.Copy(template, copy);
             copy.Mask = null;
             context.Output.Layers.Add(copy);
 
             // One color everywhere: no map.
-            var colors = Enumerable.Range(0, job.Sources.Count).Select(i => Of(i)).ToList();
+            var colors = Enumerable.Range(0, job.Sources.Count).Select(of).ToList();
             if (colors.All(l => l != null && l.Color.Map == null && l.Color.Color == colors[0].Color.Color))
             {
                 copy.Color.Map = null;
@@ -302,44 +373,37 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             else
             {
+                var map = ColorMaps[slot];
                 var request = new AtlasMapRequest
                 {
-                    Map = AtlasVirtualMap.BacklightColor,
+                    Map = map,
                     Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Color },
-                    Evaluate = (i, material, w, h) =>
+                    Content = (i, material, w, h) =>
                     {
-                        var layer = Of(i);
-                        if (layer == null) return AtlasMapEvaluator.Constant(AtlasVirtualMap.BacklightColor, 0f, w, h);
+                        var layer = of(i);
+                        if (layer == null) return AtlasMapEvaluator.Constant(map, 0f, w, h);
                         var color = layer.Color.Color;
                         NordicsTextureWrapper result;
                         if (Bakeable(layer.Color.Map)) result = AtlasMapEvaluator.SampleColor(layer.Color.Map, (Texture2D)layer.Color.Map.Texture, w, h);
-                        else result = AtlasMapEvaluator.Constant(AtlasVirtualMap.BacklightColor, 1f, w, h);
+                        else result = AtlasMapEvaluator.Constant(map, 1f, w, h);
                         AtlasPixels.Map(result, c => new Color(c.r * color.r, c.g * color.g, c.b * color.b, 1f));
                         return result;
                     }
                 };
                 for (int i = 0; i < job.Sources.Count; i++) request.Sources.Add(i);
-                request.Finish = map =>
-                {
-                    float peak = AtlasColorFeature.Peak(map);
-                    copy.Color.Color = peak > 1f ? new Color(peak, peak, peak, 1f) : Color.white;
-                    if (peak <= 1f) return;
-                    map.ApplyColor(new ColorOperation
-                    {
-                        Opcode = ColorOperationCode.Tint, Parameters = { Color = new Color(1f / peak, 1f / peak, 1f / peak, 1f) }
-                    });
-                };
+                // Colors above 1: the map's brightest value goes into the layer's color.
+                request.ContentCanRaise = true;
+                request.Carry = peak => copy.Color.Color = new Color(peak, peak, peak, 1f);
                 context.Maps.Add(request);
                 copy.Color.Color = Color.white;
                 copy.Color.Map = request.Reference;
             }
-            AtlasEdgeLight.DifferNote(context, reference, "backlight", Layer, PerSource);
-            var unbaked = context.Sources.Where(i => Of(i)?.Color.Map != null && !Bakeable(Of(i).Color.Map)).Select(i => (i + 1).ToString()).ToList();
-            if (unbaked.Count > 0)
-                context.Notes.Add("A backlight color texture on another UV or moving isn't baked; its color is used (" +
-                                  (unbaked.Count == 1 ? "source " : "sources ") + string.Join(", ", unbaked) + ").");
-            if (context.Sources.Any(i => AtlasEdgeLight.Live(job.Sources[i].Material, Match)))
-                context.Notes.Add("A live backlight (animated, audio-driven) isn't merged yet; it's left out.");
+            // The sources whose backlight here has other settings than the one used.
+            string used = AtlasFieldwise.Signature(template, PerSource);
+            var differ = context.Sources.Where(i => of(i) != null && AtlasFieldwise.Signature(of(i), PerSource) != used).ToList();
+            if (differ.Count > 0)
+                context.Notes.Add((slot == 0 ? "The backlight" : "The second backlight") + $" is taken from source {from + 1}; the backlight of " +
+                                  AtlasLiveMasks.Numbers(differ) + " differs.");
         }
     }
 }

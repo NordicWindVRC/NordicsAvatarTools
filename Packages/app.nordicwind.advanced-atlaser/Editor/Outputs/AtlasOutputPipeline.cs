@@ -14,6 +14,23 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly Dictionary<string, AtlasFeatureMode> Modes = new Dictionary<string, AtlasFeatureMode>();
         // What the features leave out, one line each.
         public readonly List<string> Notes = new List<string>();
+        // The lighting as the output shader shows it; null when resolved without the shader.
+        public AtlasLighting KeptLighting;
+        // The part of the atlas's minimum light the output shader can't keep itself, and what
+        // of it is added through the emission (AtlasLightFloor: all of it unless turned off).
+        public float LightFloorMissing;
+        public float LightFloor;
+        // The lit bakes that shade it (the Baking section's settings apply to them).
+        public readonly List<AtlasLitBake> LightFloorBakes = new List<AtlasLitBake>();
+        // The matcaps the output shows, at their average on a source's own color, and where no
+        // slot shows them, drawn as shading: for what shows the surface without the output
+        // shader's light.
+        public readonly List<AtlasMatcapForm> MatcapForms = new List<AtlasMatcapForm>();
+        // Level compensation: the base color scale that gives a source the level its own
+        // lighting had, by index into the job's sources (applied unless turned off), and what
+        // the bake applied of it within the map's range.
+        public readonly Dictionary<int, float> LevelScales = new Dictionary<int, float>();
+        public readonly Dictionary<int, float> LevelApplied = new Dictionary<int, float>();
         // How the remap rewrites each source's vertex colors, by index into the job's sources;
         // sources without an entry keep theirs.
         public readonly Dictionary<int, System.Func<Color, Color>> VertexColors = new Dictionary<int, System.Func<Color, Color>>();
@@ -38,12 +55,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly List<AtlasGeneratedTexture> GeneratedTextures = new List<AtlasGeneratedTexture>();
         // The output's matcap slots the matcaps took; later features (rims) use the rest.
         public int MatcapSlotsUsed;
+        // How each item the user places (a matcap, a rim) ends up shown, by its feature and
+        // its key.
+        public readonly Dictionary<(string Feature, string Key), AtlasInstanceWay> Ways = new Dictionary<(string, string), AtlasInstanceWay>();
+        // A matcap slot is fitted through the base color (a base color shift) where viewers who
+        // block the shader see the base color alone, so the inspector offers how far it may go.
+        public bool BaseColorShifts;
+        // A matcap whose lookup is fixed to the world is in a slot that follows the view, so
+        // the inspector offers how it is shown there.
+        public bool MatcapViews;
         // Steps that set output values from the sources' maps, run just before the material is
         // written, not when the plan is resolved (the glow of combined matcap slots).
         public readonly List<System.Action> BeforeWrite = new List<System.Action>();
-        // Steps run once every feature has resolved, in order: the lit bakes wrap the base color
-        // here, so they light it after every feature's edits (baked matcaps included).
-        public readonly List<System.Action> AfterResolve = new List<System.Action>();
 
         public AtlasSourceRemap Remap(int source)
         {
@@ -60,10 +83,46 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
     }
 
+    // Matcaps the output shows (AtlasMatcapFeature) as they change a source's own color: at
+    // their average, and, for those no slot shows (kept as their average, or baked), drawn as
+    // the virtual view sees them. Both change a color map of the source in place, from the
+    // color before its matcaps, so their ratio is the matcaps' form alone.
+    public sealed class AtlasMatcapForm
+    {
+        public System.Func<int, bool> Applies;
+        public System.Action<NordicWind.TextureWrapper.NordicsTextureWrapper, int, AtlasUnifiedMaterial> Average;
+        // Null for matcaps in a slot: the live one follows the view. False where the source's
+        // meshes aren't known: nothing is drawn.
+        public System.Func<NordicWind.TextureWrapper.NordicsTextureWrapper, int, AtlasUnifiedMaterial, bool> Draw;
+        // Lerps the drawn form toward the average: the bakes' and the baked matcaps' strengths.
+        public float Strength;
+    }
+
     // Steps 1 and 2 of the output pipeline (ATLAS_OUTPUT.md, "Pipeline"): collect each
     // feature's sources and resolve it in its mode into one unified material.
     public static class AtlasOutputPipeline
     {
+        /// <summary>The plan for an output shader: resolved by its capabilities, then matched
+        /// by look against the lighting the shader keeps. The lighting is tuned where the shader
+        /// shows it differently (AtlasLightingTuning), the minimum light the shader can't keep goes
+        /// into the emission (AtlasLightFloor), and the sources it still shows brighter or darker than
+        /// their own get their base color scaled (AtlasLevelCompensation).</summary>
+        public static AtlasOutputPlan Resolve(AtlasGeneratorJob job, IAtlasOutputShader shader)
+        {
+            var plan = Resolve(job, shader.Capabilities);
+            using (var kept = AtlasKeptLighting.For(shader))
+            {
+                if (kept == null) return plan;
+                // The floor of the lighting the atlas chose, before it is tuned to the shader.
+                float floor = AtlasLightingFeature.Floor(plan.Output.Lighting);
+                AtlasLightingTuning.Tune(job, plan, kept);
+                plan.KeptLighting = kept.Of(plan.Output.Lighting);
+                AtlasLightFloor.Apply(job, plan, shader.Capabilities, plan.KeptLighting, floor);
+                AtlasLevelCompensation.Apply(job, plan, plan.KeptLighting);
+            }
+            return plan;
+        }
+
         public static AtlasOutputPlan Resolve(AtlasGeneratorJob job, AtlasOutputCapabilities capabilities)
         {
             var plan = new AtlasOutputPlan();
@@ -72,10 +131,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 AtlasVertexColors.Detach(source.Material);
                 AtlasLiveLayers.Clear(source.Material);
+                // The look is judged on the base color texels the source's meshes use.
+                AtlasSourceSamples.Cover(source.Material, source.Coverage);
             }
             foreach (var feature in AtlasOutputFeatures.All)
                 Resolve(job, capabilities, feature, plan);
-            foreach (var step in plan.AfterResolve) step();
+            // An output that always multiplies by the mesh's vertex colors: the sources whose
+            // colors no feature rewrote (they are baked, turned off or unused) get white.
+            if ((capabilities.VertexColors & AtlasVertexColorSupport.Always) != 0)
+                for (int i = 0; i < job.Sources.Count; i++)
+                    if (!plan.VertexColors.ContainsKey(i))
+                        plan.VertexColors[i] = color => new Color(1f, 1f, 1f, color.a);
             var live = new List<string>();
             for (int i = 0; i < job.Sources.Count; i++)
             {
@@ -163,7 +229,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             plan.Modes[feature.Id] = mode;
             // Off adds nothing: the output unified material starts without any feature.
-            if (mode.Kind == AtlasFeatureModeKind.Off) return;
+            if (mode.Kind == AtlasFeatureModeKind.Off)
+            {
+                // Off without being chosen: the output's only way to show the feature is one
+                // used when chosen, which is said so it isn't left out unnoticed.
+                var optIn = feature.Modes.FirstOrDefault(m => m.OptIn && m.IsSupported(capabilities));
+                if (optIn != null && choice?.ModeId != mode.Id)
+                    plan.Notes.Add($"{feature.DisplayName} is off: the output shader has none of its own, and \"{optIn.Label}\" is used only when chosen (" +
+                        (sources.Count == 1 ? "source " : "sources ") + string.Join(", ", sources.Select(i => i + 1)) + ").");
+                return;
+            }
             feature.Resolve(new AtlasFeatureContext
             {
                 Job = job, Capabilities = capabilities, Mode = mode, Sources = sources,

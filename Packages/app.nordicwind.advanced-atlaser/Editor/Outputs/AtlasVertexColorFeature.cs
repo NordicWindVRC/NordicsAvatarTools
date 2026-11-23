@@ -13,6 +13,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
     //   get white. Masks and bus steps that read vertex colors are baked.
     // - Baked: everything that reads vertex colors is baked, from the colors painted in UV space.
     // - Off: vertex colors are ignored (read as white).
+    // An output that always multiplies by the vertex colors shows them in every mode, so the
+    // sources no mode rewrote them for get white on the mesh (AtlasOutputPipeline).
     public sealed class AtlasVertexColorFeature : IAtlasOutputFeature, IAtlasConflictSwitchFeature
     {
         public const string FeatureId = "vertex-colors";
@@ -65,8 +67,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return new AtlasConflictSwitch
             {
                 Id = "srgb", Label = "Vertex colors as sRGB", Default = srgb * 2 >= colored.Count,
-                Tooltip = "Some materials read their vertex colors as sRGB and some as linear values, and the atlas material reads them one way. " +
-                          "The others' vertex colors are converted on the mesh, which matches at the vertices and can differ slightly between them."
+                Tooltip = "Your materials read vertex colors in two different ways, and the atlas material can use only one. The others " +
+                          "are converted on the mesh, which can look slightly different between vertices."
             };
         }
 
@@ -105,7 +107,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 var colored = materials.Where(m => m.Surface.VertexColor.MultiplyColor).ToList();
                 var alphaed = materials.Where(m => m.Surface.VertexColor.MultiplyAlpha).ToList();
-                output.MultiplyColor = colored.Count > 0;
+                output.MultiplyColor = colored.Count > 0 || (support & AtlasVertexColorSupport.Always) != 0;
                 output.MultiplyAlpha = alphaed.Count > 0 && (support & AtlasVertexColorSupport.Alpha) != 0;
                 output.Amount = Common(colored.Select(m => m.Surface.VertexColor.Amount), (support & AtlasVertexColorSupport.Amount) != 0);
                 output.AlphaAmount = Common(alphaed.Select(m => m.Surface.VertexColor.AlphaAmount), (support & AtlasVertexColorSupport.Amount) != 0);

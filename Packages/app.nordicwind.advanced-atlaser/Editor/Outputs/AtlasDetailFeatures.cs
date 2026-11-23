@@ -228,7 +228,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 Map = MaskMap,
                 Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Data },
-                Evaluate = Evaluate
+                Content = Evaluate
             };
             for (int i = 0; i < job.Sources.Count; i++) request.Sources.Add(i);
             context.Maps.Add(request);

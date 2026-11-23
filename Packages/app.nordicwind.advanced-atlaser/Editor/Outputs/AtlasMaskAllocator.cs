@@ -105,7 +105,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 {
                     Map = place,
                     Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Data },
-                    Evaluate = request.Evaluate
+                    Content = request.Evaluate
                 };
                 for (int i = 0; i < count; i++) map.Sources.Add(i);
                 context.Maps.Add(map);

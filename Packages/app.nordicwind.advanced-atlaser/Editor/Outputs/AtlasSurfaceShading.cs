@@ -9,6 +9,24 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // The current meshes' surface for bakes that light it (ATLAS_OUTPUT.md, "Geometry buffers").
     public static class AtlasSurfaceGeometry
     {
+        /// <summary>A source's surface, made when the first bake asks for it and shared by
+        /// the bakes after it: the matcaps in the color and in the emission, the normal-map
+        /// shading. It lasts as long as the source of the job that holds it.</summary>
+        public static System.Func<IReadOnlyList<AtlasMeshSection>> Once(System.Func<IReadOnlyList<AtlasMeshSection>> make)
+        {
+            IReadOnlyList<AtlasMeshSection> sections = null;
+            bool made = false;
+            return () =>
+            {
+                if (!made)
+                {
+                    sections = make();
+                    made = true;
+                }
+                return sections;
+            };
+        }
+
         // The sections of every submesh of these renderers that uses the material, in the space
         // of `root` (skinned meshes in their current pose).
         public static List<AtlasMeshSection> Sections(Material material, IEnumerable<Renderer> renderers, Transform root)

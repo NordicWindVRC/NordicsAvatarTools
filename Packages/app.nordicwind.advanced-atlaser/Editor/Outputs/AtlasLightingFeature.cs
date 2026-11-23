@@ -27,8 +27,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public IReadOnlyList<AtlasFeatureMode> Modes => ModeList;
         public string SharedValueName => "Lighting";
         public string AutomaticRule =>
-            "Automatic takes the lighting that changes the materials' look least: each material's colors lit by it, compared with " +
-            "their own lighting and weighted by area. Dark materials show lighting differences less.";
+            "Automatic uses the lighting that changes the look of your materials the least.";
 
         public bool IsPresent(AtlasUnifiedMaterial source) => source != null;
 
@@ -226,6 +225,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             if (c.Ambient != AtlasAmbientModel.Directional) c.DirectionalAmount = defaults.DirectionalAmount;
             if (c.ColorModel != AtlasLightColorModel.Floored) c.FloorIntensity = defaults.FloorIntensity;
+            // What stands in for a missing main light counts in the separate model alone.
+            if (c.ColorModel != AtlasLightColorModel.Separate)
+            {
+                c.Contributions.AmbientAsMainLight = defaults.Contributions.AmbientAsMainLight;
+                c.Contributions.AmbientWithoutMainLight = defaults.Contributions.AmbientWithoutMainLight;
+            }
+            if (c.ColorModel != AtlasLightColorModel.Separate || c.Contributions.AmbientAsMainLight <= 0f)
+                c.Contributions.AmbientStandIn = defaults.Contributions.AmbientStandIn;
             if (c.Direction != AtlasLightDirectionModel.Fixed)
             {
                 c.LightDirection = defaults.LightDirection;
@@ -236,6 +243,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (!c.LimitBrightness)
             {
                 c.BrightnessCeiling = defaults.BrightnessCeiling;
+                c.LimitTotal = defaults.LimitTotal;
                 c.LimitByLuminance = defaults.LimitByLuminance;
                 c.LimitKeepsHue = defaults.LimitKeepsHue;
             }
@@ -270,16 +278,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 lighting.ColorModel == AtlasLightColorModel.Floored ? 0.05f * lighting.FloorIntensity : 0f));
 
         /// <summary>Whether the build generates a ramp texture for the output: one that shades
-        /// only through a ramp, whose ramp is described by keys.</summary>
+        /// only through a ramp, whose ramp is described by keys (a ramp toon source's, or the
+        /// ones fitted to the chosen lighting, whatever its family).</summary>
         public static bool NeedsGeneratedRamp(AtlasUnifiedMaterial output, AtlasOutputCapabilities capabilities) =>
-            capabilities.GeneratedRamp && output.Lighting.Family == AtlasLightingFamily.RampToon &&
+            capabilities.GeneratedRamp && output.Lighting.Family != AtlasLightingFamily.Unlit &&
             output.Lighting.Ramp.Ramp == null && output.Lighting.Ramp.Keys.Count > 0;
 
         /// <summary>The lighting settings the written material doesn't hold the same way, read
         /// back by its parser: one line, or none.</summary>
-        public static IEnumerable<string> Unkept(AtlasUnifiedMaterial output, Material material)
+        public static IEnumerable<string> Unkept(AtlasUnifiedMaterial output, Material material) =>
+            Unkept(output, AtlasKeptMaterial.Read(material));
+
+        /// <summary>The same, from the kept material (the written material read back).</summary>
+        public static IEnumerable<string> Unkept(AtlasUnifiedMaterial output, AtlasUnifiedMaterial parsed)
         {
-            var parsed = AtlasShaderRegistry.Detect(material)?.Parse(material);
             if (parsed == null) yield break;
             var paths = AtlasFieldwise.Differences(Canonical(output.Lighting), Canonical(parsed.Lighting));
             if (paths.Count == 0) yield break;

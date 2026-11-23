@@ -27,6 +27,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool InstancesAsMatcap;
         // Whether an item can be baked into the textures instead.
         public bool InstancesCanBake;
+        // Whether an item can be kept as its average effect in the base color instead.
+        public bool InstancesCanAverage;
         // Sources with different live global mask setups for the feature, one of each (Live from).
         public readonly List<int> LiveSetups = new List<int>();
         // The feature's own settings in its mode (IAtlasOptionFeature).
@@ -57,11 +59,23 @@ namespace NordicWind.AdvancedAtlaser.Editor
     {
         public readonly List<AtlasFeatureState> Features = new List<AtlasFeatureState>();
         public readonly List<AtlasTextureUse> Textures = new List<AtlasTextureUse>();
+        // The lit bakes the plan uses outside a feature's baked mode: the minimum light's
+        // shading in the emission.
+        public readonly List<AtlasLitBake> OtherBakes = new List<AtlasLitBake>();
         // The enabled textures' totals.
         public long PcBytes, AndroidBytes;
 
+        // For an output shader: resolved as the build does, with the lighting matched by look.
+        public static AtlasOutputOverview Build(AtlasOutputConfiguration config, IAtlasOutputShader shader,
+            IReadOnlyList<Material> materials, IReadOnlyList<AtlasUnifiedMaterial> unified) =>
+            Build(config, shader?.Capabilities, shader, materials, unified);
+
         // `unified` holds each source's unified material, null where it couldn't be read.
         public static AtlasOutputOverview Build(AtlasOutputConfiguration config, AtlasOutputCapabilities capabilities,
+            IReadOnlyList<Material> materials, IReadOnlyList<AtlasUnifiedMaterial> unified) =>
+            Build(config, capabilities, null, materials, unified);
+
+        private static AtlasOutputOverview Build(AtlasOutputConfiguration config, AtlasOutputCapabilities capabilities, IAtlasOutputShader shader,
             IReadOnlyList<Material> materials, IReadOnlyList<AtlasUnifiedMaterial> unified)
         {
             var overview = new AtlasOutputOverview();
@@ -80,15 +94,35 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     state.Instances.AddRange(items.Instances(probe ?? (probe = Probe(config, materials, unified)), state.Active));
                     state.InstancesAsMatcap = items.CanPlaceAsMatcap(capabilities);
                     state.InstancesCanBake = items.CanBake(capabilities);
+                    state.InstancesCanAverage = items.CanAverage(capabilities);
                 }
                 overview.Features.Add(state);
             }
             // What only a resolve knows: the live global mask setups the user picks between, the
             // textures the build makes and the sources' textures it uses as they are.
-            var plan = unified.Count > 0 && unified.All(u => u != null) ? Resolved(config, capabilities, materials, unified) : null;
+            var plan = unified.Count > 0 && unified.All(u => u != null) ? Resolved(config, capabilities, shader, materials, unified) : null;
             if (plan != null)
                 foreach (var state in overview.Features)
+                {
                     if (plan.LiveSetups.TryGetValue(state.Feature.Id, out var setups)) state.LiveSetups.AddRange(setups);
+                    // How each placed item ends up shown.
+                    foreach (var instance in state.Instances)
+                        if (plan.Ways.TryGetValue((state.Feature.Id, instance.Key), out var way))
+                        {
+                            instance.Way = way.Text;
+                            instance.LeftOut = way.LeftOut;
+                        }
+                    // How far a matcap slot's fit may shift the base color, while one does.
+                    if (state.Feature is AtlasMatcapFeature && plan.BaseColorShifts) state.Options.Add(AtlasMatcapFeature.ShiftOption);
+                    // How a world-fixed matcap is shown in a slot that follows the view, while one is.
+                    if (state.Feature is AtlasMatcapFeature && plan.MatcapViews) state.Options.Add(AtlasMatcapFeature.ViewOption);
+                    if (!(state.Feature is AtlasLightingFeature)) continue;
+                    // Level compensation, while a material would be scaled.
+                    if (plan.LevelScales.Count > 0) state.Switches.Add(AtlasLevelCompensation.Switch);
+                    // The minimum light in the emission, while the output shader can't keep it all.
+                    if (plan.LightFloorMissing > 0f) state.Switches.Add(AtlasLightFloor.Switch);
+                }
+            if (plan != null) overview.OtherBakes.AddRange(plan.LightFloorBakes);
             overview.AddTextures(config, capabilities, plan);
             if (plan != null) overview.AddOtherTextures(plan, config, capabilities);
             return overview;
@@ -99,14 +133,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static string resolvedKey;
         private static AtlasOutputPlan resolvedPlan;
 
-        private static AtlasOutputPlan Resolved(AtlasOutputConfiguration config, AtlasOutputCapabilities capabilities,
+        private static AtlasOutputPlan Resolved(AtlasOutputConfiguration config, AtlasOutputCapabilities capabilities, IAtlasOutputShader shader,
             IReadOnlyList<Material> materials, IReadOnlyList<AtlasUnifiedMaterial> unified)
         {
             string key = JsonUtility.ToJson(config) + "|" + System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(capabilities) + "|" +
+                         (shader?.ShaderId ?? "") + "|" +
                          string.Join(",", unified.Select(u => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(u)));
             if (key == resolvedKey) return resolvedPlan;
             AtlasOutputPlan plan;
-            try { plan = AtlasOutputPipeline.Resolve(Probe(config, materials, unified), capabilities); }
+            try
+            {
+                var job = Probe(config, materials, unified);
+                plan = shader != null ? AtlasOutputPipeline.Resolve(job, shader) : AtlasOutputPipeline.Resolve(job, capabilities);
+            }
             catch (System.Exception e)
             {
                 Debug.LogException(e);
@@ -206,7 +245,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static AtlasGeneratorJob Probe(AtlasOutputConfiguration config, IReadOnlyList<Material> materials, IReadOnlyList<AtlasUnifiedMaterial> unified)
         {
             var job = new AtlasGeneratorJob();
-            foreach (var material in unified) job.Sources.Add(new AtlasGeneratorSource { Material = material });
+            // With each source's area in the layout, so the automatic choices are the build's.
+            for (int i = 0; i < unified.Count; i++)
+            {
+                var material = i < materials.Count ? materials[i] : null;
+                var entry = material == null ? null : config.sources?.Find(e => e != null && e.material == material);
+                job.Sources.Add(new AtlasGeneratorSource { Material = unified[i], UVRegion = entry?.uvRegion ?? default });
+            }
             AtlasOutputPipeline.AddChoices(config, materials, job);
             return job;
         }

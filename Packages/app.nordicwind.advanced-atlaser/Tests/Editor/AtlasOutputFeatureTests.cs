@@ -50,6 +50,16 @@ namespace NordicWind.AdvancedAtlaser.Tests
         }
 
         [Test]
+        public void FeaturesAreOrderedBySectionOrderAndId()
+        {
+            var all = AtlasOutputFeatures.All.ToList();
+            var sorted = all.OrderBy(f => f.Section).ThenBy(f => f.Order).ThenBy(f => f.Id, System.StringComparer.Ordinal).ToList();
+            CollectionAssert.AreEqual(sorted, all, "the same order in every session");
+            Assert.Less(all.FindIndex(f => f.Id == "emission"), all.FindIndex(f => f.Id == AtlasMatcapFeature.FeatureId),
+                "baked matcaps add their glow to the emission's map");
+        }
+
+        [Test]
         public void ColorIsRegisteredInTheSurfaceSection()
         {
             Assert.NotNull(Color());

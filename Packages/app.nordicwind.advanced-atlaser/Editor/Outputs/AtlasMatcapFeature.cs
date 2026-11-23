@@ -13,25 +13,41 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // - What a matcap shows (Content): its texture sampled as the slot looks it up, over the
     //   lookup disc through its scale and offset. One that reads black where it adds, screens,
     //   mixes or glows (white where it multiplies, without base color mix) changes nothing.
-    // - An effect (shine, glints, reflections) carries at least half its light in its brightest
-    //   tenth, or uses the reflection projection; the others are environment matcaps (shading,
-    //   soft light). A shared slot shows its one texture on every member's parts, which an effect
-    //   can't share without putting its highlights where they don't belong.
+    // - Each group is measured on its largest source (AtlasMatcapLook): its impact, whether it
+    //   brightens or darkens, and its role (lighting, rim, highlight), which
+    //   the inspector shows under the matcap, next to its texture, and the build's log lists.
+    // - An effect is a matcap whose role is highlight (shine, glints, facets); the others are
+    //   environment matcaps (lighting, rims). A shared slot shows its one texture on every
+    //   member's parts, which an effect can't share without putting its highlights where they
+    //   don't belong.
+    // - Lighting with a highlight (a pearl, a lit sphere with a hot spot) is an environment
+    //   matcap that is guarded: it takes its own slot before the other environment matcaps do,
+    //   and they share its slot only where no other will do. Out of slots it shares, since
+    //   most of what it does is its body.
     // - The user places each group: its own slot, combined with another group's slot, or off
     //   (stored by the group's key). Automatic, where the user hasn't: matcaps that change
     //   nothing are left out; groups on the same parts with the same lookup are combined; effects
-    //   get their own slots, the most visible first, keeping one for the environment matcaps
+    //   get their own slots, those with the most impact first, keeping one for the environment matcaps
     //   where none has one, and those that don't fit are left out; environment matcaps take the rest and share what
     //   doesn't fit, with the environment slot most like them: one that does the same (blends,
     //   glows or both) first, since a slot has one blend and one glow strength.
-    // - How visible a group is (Visible): its sources' area × each weight's effect (the shown
+    // - Slots are taken in the order of the groups' impact (Impact): the measured impact × the
+    //   area the group's masks cover.
+    // - How visible a group is (Visible), for its share of a combined texture and the weight
+    //   of its losses in a slot: its sources' area × each weight's effect (the shown
     //   brightness where it adds, screens or glows; its darkness where it multiplies) × its
     //   mask's average × the base color mix's darkening, lerp(1, luminance(base), mix), over the
     //   sources' base colors (AtlasSourceSamples). A glow on a dark base with a strong mix barely
     //   shows.
     // - A combined slot holds one generated texture, made with each texture's scale and offset.
     //   Stacks on different parts are averaged by how visible they are, not by area alone.
-    //   An output whose slot has no texture transform also gets one for a matcap with them. Groups on the same parts stack: their
+    //   An output whose slot has no texture transform also gets one for a matcap with them, and
+    //   an output whose slot looks up by the view-space normal alone (Toon Standard) for a
+    //   matcap with a border or a rotation: the texture is redrawn for the slot's lookup
+    //   (Relook). A lookup fixed to the world (Poiyomi's double-sided mode) can't be shown by
+    //   a slot that follows the view: its texture is looked up by the view instead (without
+    //   its sideways offset, SlotMap), or redrawn as it looks from the front, by the user's
+    //   choice. Groups on the same parts stack: their
     //   textures × colors × weights added (for add) or multiplied (for multiply), with every
     //   blend converted to one of the two. Stacks on different parts are averaged by area,
     //   since each part shows the one texture.
@@ -40,9 +56,27 @@ namespace NordicWind.AdvancedAtlaser.Editor
     //   multiply. Listed as approximated.
     // - Where a slot can't do a source's matcaps as they are (blends it lacks, or base color
     //   mix it doesn't have), it is fitted to them per texel (SlotFit): its strength goes into
-    //   the mask and the rest into the base color map, which may come out brighter than the
-    //   source's. Without a base color map, the base color mix goes into the mask: the mask ×
-    //   lerp(1, the base color's luminance, mix).
+    //   the mask and the rest into the base color map, a base color shift, which may come out
+    //   brighter or darker than the source's. Where viewers who block the shader see the base
+    //   color alone (the output sets a fallback shader), how far it goes is the user's (Base
+    //   color shift, shown while a slot is fitted): Automatic stays between the surface's own
+    //   color and its average look with the matcap; Keep the base color shows one side of the
+    //   matcap; Full shifts as far as the matcap needs, as an output whose blocked view is the
+    //   same look always does. Without a base color map, the base color mix goes into the
+    //   mask: the mask × lerp(1, the base color's luminance, mix).
+    // - A slot shared by matcaps on different parts shows their averaged texture on each
+    //   part. A fitted source keeps its own average look there (average in color): its fit
+    //   is moved by the difference between its matcaps' average and the shared texture's.
+    // - Average in color: a matcap without a slot keeps its average effect in the base color
+    //   (Average). The user places a matcap so, and a lighting matcap that ends up without
+    //   a slot is kept so. What changes with the view is lost.
+    // - A matcap without a slot of its own goes where the least is lost (SlotLosses). Lighting
+    //   is judged by its shading: it joins the slot that keeps the most of its members' level
+    //   and contrast, or goes into the base color as its average where sharing would cost
+    //   more. A rim or a highlight is where it is, so it is judged point by point
+    //   (AtlasLayerCost), and is left out where sharing would cost more than it keeps.
+    // - How each matcap ends up shown goes into the plan in a few words (Ways), for the
+    //   inspector.
     // - A combined slot whose matcaps mix in the base color differently has none: each one's
     //   mix goes into its mask, as where the slot has no base color mix.
     // - A slot that only glows has its texture made from the glows. The slot's one glow
@@ -52,19 +86,82 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // - An output whose slot takes one blend at a time (Toon Standard) gets a matcap with
     //   several weights merged into one, or fitted.
     // - Each slot's mask goes through the mask allocator.
-    // - Baked (AtlasMatcapBake): a group placed Baked, or every group in the Baked mode (outputs
-    //   without slots), is drawn into the base color and the emission as the virtual view sees
-    //   it, instead of taking a slot. Automatic in the Baked mode leaves out effects that
-    //   brighten (Brightens): a baked highlight stays in place from every view.
+    // - Without slots (the Average in color mode, the default on an output without matcap
+    //   slots): a lighting matcap keeps its average effect in the base color, and the output's
+    //   own lighting shades the form, which a bake would shade a second time; a rim or a
+    //   highlight has no average to keep and is left out. An averaged matcap's glow keeps its
+    //   average in the emission, where the output has one turned on (AverageGlow).
+    // - Baked (AtlasMatcapBake): a group placed Baked, or every group in the Baked mode, is
+    //   drawn into the base color and the emission as the virtual view sees it, instead of
+    //   taking a slot. A bake stays in place from every view, so it is the user's choice.
+    //   Automatic in the Baked mode leaves out effects that brighten (Brightens): a baked
+    //   highlight stays in place from every view.
+    // How far a matcap slot's fit may shift the base color (ATLAS_OUTPUT.md, "Base color shifts").
+    public enum AtlasBaseColorShift { Automatic = 0, Keep = 1, Full = 2 }
+
+    // How a matcap whose lookup is fixed to the world is shown by a slot that follows the view
+    // (ATLAS_OUTPUT.md, the matcaps' row of the feature inventory): its texture looked up by
+    // the view, or redrawn as it looks from the front.
+    public enum AtlasMatcapView { ByView = 0, Front = 1 }
+
     public sealed class AtlasMatcapFeature : IAtlasInstanceFeature, IAtlasLitBakeFeature
     {
         public const string FeatureId = "matcaps";
+        public const string ShiftOptionId = "base-color-shift";
+
+        // The control, shown while a slot is fitted through the base color and viewers who
+        // block the shader see the base color alone.
+        public static AtlasFeatureOption ShiftOption => new AtlasFeatureOption
+        {
+            Id = ShiftOptionId, Label = "Base color shift", Default = 0f, Max = 2f,
+            Choices = new[] { "Automatic", "Keep the base color", "Full" },
+            Tooltip = "Some matcaps both brighten and darken, and the output shader's matcap can only do one of the two. The base color " +
+                      "is adjusted to make up for it. Automatic: a balanced adjustment that also looks right to viewers who have " +
+                      "your shaders blocked. Keep the base color: no adjustment, so part of the matcap is lost. Full: exact with " +
+                      "the shader, but too bright or too dark for viewers who block it."
+        };
+
+        private static AtlasBaseColorShift Shift(AtlasGeneratorJob job)
+        {
+            var choice = job.Features.Find(f => f.FeatureId == FeatureId);
+            return choice != null && choice.Values.TryGetValue(AtlasFeatureOption.ValueId(ShiftOptionId), out var value)
+                ? (AtlasBaseColorShift)Mathf.Clamp(Mathf.RoundToInt(value.Number), 0, 2) : AtlasBaseColorShift.Automatic;
+        }
+
+        public const string ViewOptionId = "world-fixed-lookup";
+
+        // The control, shown while a matcap whose lookup is fixed to the world is in a slot
+        // that follows the view.
+        public static AtlasFeatureOption ViewOption => new AtlasFeatureOption
+        {
+            Id = ViewOptionId, Label = "World-fixed matcaps", Default = 0f, Max = 1f,
+            Choices = new[] { "Follow the view", "As seen from the front" },
+            Tooltip = "Some of your matcaps are fixed to the world instead of following the view, which the output shader can't do. " +
+                      "Follow the view: they work like any other matcap. As seen from the front: they look exact from the front, " +
+                      "and show the same pattern from every other side."
+        };
+
+        private static AtlasMatcapView View(AtlasGeneratorJob job)
+        {
+            var choice = job.Features.Find(f => f.FeatureId == FeatureId);
+            return choice != null && choice.Values.TryGetValue(AtlasFeatureOption.ValueId(ViewOptionId), out var value)
+                ? (AtlasMatcapView)Mathf.Clamp(Mathf.RoundToInt(value.Number), 0, 1) : AtlasMatcapView.ByView;
+        }
+
         public const int CombinedSize = 512;
 
         public static readonly AtlasFeatureMode Baked = new AtlasFeatureMode
         {
             Id = "baked", Label = "Baked into color", Kind = AtlasFeatureModeKind.Baked,
             RequiredMaps = new[] { AtlasVirtualMap.BaseColor }
+        };
+
+        // For an output without matcap slots, and the default there (it comes before Baked).
+        public static readonly AtlasFeatureMode Averaged = new AtlasFeatureMode
+        {
+            Id = "average", Label = "Average in color", Kind = AtlasFeatureModeKind.Emulated,
+            RequiredMaps = new[] { AtlasVirtualMap.BaseColor },
+            Requires = c => c.MatcapSlots == 0
         };
 
         private static readonly AtlasFeatureMode[] ModeList =
@@ -75,6 +172,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 OptionalMaps = new[] { AtlasVirtualMap.Mask1 },
                 Requires = c => c.MatcapSlots > 0
             },
+            Averaged,
             Baked,
             AtlasFeatureMode.Off
         };
@@ -82,6 +180,23 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasLitBake? LitBake(AtlasFeatureMode mode) => mode == Baked ? AtlasLitBake.Matcaps : (AtlasLitBake?)null;
 
         public bool CanBake(AtlasOutputCapabilities capabilities) => capabilities.Provides(AtlasVirtualMap.BaseColor);
+
+        public bool CanAverage(AtlasOutputCapabilities capabilities) => capabilities.Provides(AtlasVirtualMap.BaseColor);
+
+        // A matcap that is kept as its average where it ends up without a slot: one that stands
+        // in for the light, which is as bright on average as it was. A rim's or a highlight's
+        // average would light the whole surface.
+        private bool KeepsAverage(Group group, AtlasOutputCapabilities capabilities) =>
+            group.Measure.Role == AtlasMatcapRole.Lighting && CanAverage(capabilities);
+
+        // How a matcap ends up shown, for the inspector (AtlasOutputPlan.Ways).
+        private const string WayUnseen = "Left out: it changes nothing";
+        private const string WayAveraged = "Kept as its average in the base color";
+        private const string WayBaked = "Baked into the color";
+        private const string WayNoSlot = "Left out: no slot is free";
+
+        private static void SetWay(AtlasFeatureContext context, Group group, string way, bool leftOut = false) =>
+            context.Plan.Ways[(FeatureId, group.Key)] = new AtlasInstanceWay(way, leftOut);
 
         public string Id => FeatureId;
         public string DisplayName => "Matcaps";
@@ -104,11 +219,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Matcaps that look the same in several sources.
         private sealed class Group
         {
-            public string Key, Look, Lookup, Label;
+            public string Key, Look, Lookup, Label, Name;
             public float Area;
-            // Area × visible strength: the order of own slots and the shares of a combined texture.
+            // Area × visible strength: the shares of a combined texture and the weights of a
+            // slot's losses.
             public float Visible;
+            // The measured impact × the area its masks cover: how much the group changes the
+            // look, and the order slots are taken in.
+            public float Impact;
             public bool Effect;
+            // Lighting with a highlight on it, which sharing would smear.
+            public bool Guarded;
+            // The group's look on its largest source: its impact, direction and role.
+            public AtlasMatcapMeasure Measure;
             public readonly List<Instance> Members = new List<Instance>();
             public string Parts;
         }
@@ -184,7 +307,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     var group = groups.Find(g => g.Look == look);
                     if (group == null)
                     {
-                        group = new Group { Look = look, Lookup = Lookup(instance), Key = Hash(look), Label = Label(instance) };
+                        group = new Group { Look = look, Lookup = Lookup(instance), Key = Hash(look), Label = Label(instance), Name = Label(instance) };
                         groups.Add(group);
                     }
                     group.Members.Add(instance);
@@ -196,13 +319,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 group.Area = members.Sum(i => job.Sources[i].UVRegion.width * job.Sources[i].UVRegion.height);
                 group.Visible = group.Members.GroupBy(m => m.Source).Sum(s =>
                     job.Sources[s.Key].UVRegion.width * job.Sources[s.Key].UVRegion.height * Visibility(s.First(), job.Sources[s.Key].Material));
-                group.Effect = IsEffect(group.Members[0]);
+                var largest = group.Members.OrderByDescending(m => job.Sources[m.Source].UVRegion.width * job.Sources[m.Source].UVRegion.height).First();
+                group.Measure = AtlasMatcapLook.Measure(largest.Layers, job.Sources[largest.Source].Material);
+                group.Impact = group.Measure.Impact * group.Members.GroupBy(m => m.Source).Sum(s =>
+                    job.Sources[s.Key].UVRegion.width * job.Sources[s.Key].UVRegion.height * Mathf.Clamp01(AtlasSourceSamples.MaskAverage(s.First().Mask)));
+                group.Effect = group.Measure.Role == AtlasMatcapRole.Highlight;
+                group.Guarded = group.Measure.HasHighlight;
                 group.Label += " (" + (members.Count == 1 ? "source " : "sources ") + string.Join(", ", members.Select(i => i + 1)) + ")";
                 group.Parts = string.Join(";", group.Members.OrderBy(m => m.Source)
                     .Select(m => m.Source + ":" + AtlasMaskKeys.Of(m.Mask, 1f, job.Sources[m.Source].Material)));
             }
             if (live > 0) notes?.Add("Live matcaps (animated, audio-driven) aren't merged yet; they're left out.");
-            return groups.OrderByDescending(g => g.Visible).ThenByDescending(g => g.Area).ToList();
+            return groups.OrderByDescending(g => g.Impact).ThenByDescending(g => g.Visible).ThenByDescending(g => g.Area).ToList();
         }
 
         // How strongly a matcap shows on its source, per unit of area (Visible).
@@ -221,11 +349,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         }
 
         // What a matcap texture shows as its slot looks it up: luminance (linear, before its
-        // color) over the lookup disc, its darkest, mean and brightest value, and the share of its
-        // light in its brightest tenth; and its mean color (alpha included).
+        // color) over the lookup disc, its darkest, mean and brightest value; and its mean color
+        // (alpha included).
         private sealed class Content
         {
-            public float Min, Mean, Max, Concentration;
+            public float Min, Mean, Max;
             public Color MeanColor = Color.white;
         }
 
@@ -239,7 +367,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static Content ContentOf(AtlasLookupLayer layer)
         {
             var map = layer.Source.Map;
-            if (!(map?.Texture is Texture2D texture)) return new Content { Min = 1f, Mean = 1f, Max = 1f, Concentration = 0.1f };
+            if (!(map?.Texture is Texture2D texture)) return new Content { Min = 1f, Mean = 1f, Max = 1f };
             bool line = layer.Projection == AtlasLookupProjection.Gradient;
             string key = texture.GetInstanceID() + "|" + texture.imageContentsHash + "|" + map.Tiling + "|" + map.Offset + "|" + layer.Tiling + "|" + line;
             if (Contents.TryGetValue(key, out var content)) return content;
@@ -270,11 +398,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     }
             values.Sort();
             float total = values.Sum();
-            int top = Mathf.Max(1, values.Count / 10);
             content = new Content
             {
                 Min = values[0], Max = values[values.Count - 1], Mean = total / values.Count,
-                Concentration = total > 1e-6f ? values.Skip(values.Count - top).Sum() / total : 0.1f,
                 MeanColor = sum / values.Count
             };
             Contents[key] = content;
@@ -290,21 +416,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return Color.Lerp(Color.Lerp(At(x0, y0), At(x0 + 1, y0), fx), Color.Lerp(At(x0, y0 + 1), At(x0 + 1, y0 + 1), fx), fy);
         }
 
-        // An effect: half its light or more in its brightest tenth, or a reflection lookup.
         // Whether a group mostly brightens (its heaviest blend adds, or it only glows): an
         // effect that does is a highlight, which a bake would freeze in place. One that mostly
-        // multiplies is shading, even through a reflection lookup.
+        // multiplies is shading.
         private static bool Brightens(Group group) => group.Members.Any(m =>
         {
             var shown = Shown(m.Layers.Where(l => !m.Added.Contains(l)).ToList());
             return shown.Count == 0 ? Glow(m) > 0f : Main(shown) == AtlasBlend.Add;
         });
 
-        private static bool IsEffect(Instance instance)
-        {
-            var first = instance.Layers[0];
-            return first.Projection == AtlasLookupProjection.ReflectionPlanar || ContentOf(first).Concentration >= 0.5f;
-        }
 
         // A matcap that changes nothing where its slot looks it up: black where it adds, screens,
         // mixes or glows; white where it multiplies, without base color or light color mix.
@@ -339,7 +459,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public IReadOnlyList<AtlasFeatureInstance> Instances(AtlasGeneratorJob job, IReadOnlyList<int> sources) =>
             Groups(job, sources, null).Select(g => new AtlasFeatureInstance
             {
-                Key = g.Key, Label = g.Label, Sources = g.Members.Select(m => m.Source).Distinct().ToList()
+                Key = g.Key, Label = g.Label, Name = g.Name, Kind = g.Measure.Summary(), Sources = g.Members.Select(m => m.Source).Distinct().ToList(),
+                HasPreview = true, Preview = g.Members[0].Layers[0].Source.Map?.Texture, PreviewColor = g.Members[0].Layers[0].Source.Color
             }).ToList();
 
         public void Resolve(AtlasFeatureContext context)
@@ -349,13 +470,22 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var groups = Groups(job, context.Sources, context.Notes);
             // Matcaps that change nothing where they're looked up.
             var unseen = groups.Where(g => g.Members.All(NoEffect)).ToList();
+            // Without slots, a glow keeps its average in the emission where the output has one
+            // turned on; only the part of it that follows the light goes into the color.
+            bool glowInEmission = context.Mode == Averaged && EmissionOn(context);
             if (!capabilities.MatcapEmission)
             {
-                var glowing = GlowAsColor(groups.Except(unseen).ToList());
+                var glowing = GlowAsColor(groups.Except(unseen).ToList(), glowInEmission);
                 if (glowing.Count > 0)
-                    context.Notes.Add("The output's matcaps don't glow, so the matcap glow of " + string.Join(", ", glowing) +
-                                      " is added to the color instead (lit, so it doesn't glow in the dark).");
+                    context.Notes.Add(glowInEmission
+                        ? "The part of the matcap glow of " + string.Join(", ", glowing) + " that follows the light is added to the color."
+                        : "The output's matcaps don't glow, so the matcap glow of " + string.Join(", ", glowing) +
+                          " is added to the color instead (lit, so it doesn't glow in the dark).");
             }
+            var measured = groups.Except(unseen).ToList();
+            if (measured.Count > 0)
+                context.Notes.Add("Matcap roles, as measured on their materials: " +
+                                  string.Join(", ", measured.Select(g => g.Label + ": " + g.Measure.RoleLabel)) + ".");
             var choice = job.Features.Find(f => f.FeatureId == FeatureId);
             (AtlasInstancePlacement Mode, string Target) Placed(Group g) =>
                 choice != null && choice.Values.TryGetValue(AtlasInstancePlacements.Id(g.Key), out var value)
@@ -373,16 +503,56 @@ namespace NordicWind.AdvancedAtlaser.Editor
                                       string.Join(", ", effects.Select(g => g.Label)) + ". Placing one Baked keeps it.");
                 if (leftOut.Count > 0)
                     context.Notes.Add("Matcaps left out: " + string.Join(", ", leftOut.Select(g => g.Label)) + ".");
-                Bake(context, groups.Except(leftOut).Except(automaticUnseen).Except(effects).ToList());
+                var kept = groups.Where(g => Placed(g).Mode == AtlasInstancePlacement.Averaged && CanAverage(capabilities)).ToList();
+                Bake(context, groups.Except(leftOut).Except(automaticUnseen).Except(effects).Except(kept).ToList());
+                Average(context, kept, PlacedAverage);
+                foreach (var g in automaticUnseen) SetWay(context, g, WayUnseen, true);
+                foreach (var g in effects) SetWay(context, g, "Left out: a baked highlight would stay in place", true);
+                return;
+            }
+            if (context.Mode == Averaged)
+            {
+                var leftOut = groups.Where(g => Placed(g).Mode == AtlasInstancePlacement.Off).ToList();
+                var drawn = groups.Where(g => Placed(g).Mode == AtlasInstancePlacement.Baked && CanBake(capabilities)).ToList();
+                var chosen = groups.Where(g => Placed(g).Mode == AtlasInstancePlacement.Averaged).ToList();
+                // Every other placement needs a slot: Automatic decides.
+                var rest = groups.Except(leftOut).Except(drawn).Except(chosen).ToList();
+                var restUnseen = rest.Where(unseen.Contains).ToList();
+                var lighting = rest.Except(restUnseen).Where(g => KeepsAverage(g, capabilities)).ToList();
+                var effects = rest.Except(restUnseen).Except(lighting).ToList();
+                if (restUnseen.Count > 0)
+                    context.Notes.Add("Matcaps that change nothing where they're looked up are left out: " + string.Join(", ", restUnseen.Select(g => g.Label)) + ".");
+                if (effects.Count > 0)
+                    context.Notes.Add("The output shader has no matcap slots, so these matcap rims and highlights are left out: " +
+                                      string.Join(", ", effects.Select(g => g.Label)) +
+                                      ". Placing one Baked into color draws it into the textures, where it stays in place from every view.");
+                if (leftOut.Count > 0)
+                    context.Notes.Add("Matcaps left out: " + string.Join(", ", leftOut.Select(g => g.Label)) + ".");
+                Bake(context, drawn);
+                Average(context, chosen.Concat(lighting).ToList(),
+                    "The output shader has no matcap slots; its own lighting shades the form, and these matcaps keep their average effect " +
+                    "in the base color: {0}. Baked into color draws their shading into the textures instead", glowInEmission);
+                if (glowInEmission) AverageGlow(context, chosen.Concat(lighting).ToList());
+                foreach (var g in restUnseen) SetWay(context, g, WayUnseen, true);
+                foreach (var g in effects) SetWay(context, g, "Left out: the output shader has no matcap slots", true);
                 return;
             }
             var baked = groups.Where(g => Placed(g).Mode == AtlasInstancePlacement.Baked && CanBake(capabilities)).ToList();
             Bake(context, baked);
+            Average(context, groups.Where(g => Placed(g).Mode == AtlasInstancePlacement.Averaged && CanAverage(capabilities)).ToList(), PlacedAverage);
 
             var slots = new List<List<Group>>();
             var slotOf = new Dictionary<string, List<Group>>();
             var waiting = new List<Group>();
             var off = new List<Group>();
+            // Without a slot, though not by the user's choice.
+            var stranded = new List<Group>();
+            // Kept as their average, where sharing a slot would cost more shading.
+            var apart = new List<Group>();
+            // Rims and highlights left out, where sharing a slot would cost more than it keeps.
+            var costly = new List<Group>();
+            var view = View(job);
+            var discs = new Dictionary<Group, float[]>();
             bool Own(Group g)
             {
                 if (slots.Count >= capabilities.MatcapSlots) return false;
@@ -404,7 +574,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             automatic.RemoveAll(unseen.Contains);
             // On the same parts with the same lookup, one texture shows exactly what both did.
             List<Group> Same(Group g) => slots.Find(s => s[0].Parts == g.Parts && s[0].Lookup == g.Lookup && s[0].Effect == g.Effect);
-            // Effects get their own slots, the most visible first (the groups' order), keeping one
+            // Effects get their own slots, those with the most impact first (the groups' order), keeping one
             // for the environment matcaps where none has one yet; the ones that don't fit are left out.
             var cut = new List<Group>();
             bool environmentNeedsSlot = automatic.Any(g => !g.Effect) && !slots.Any(s => s.Any(x => !x.Effect));
@@ -416,7 +586,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 else if (forEffects > 0 && Own(g)) forEffects--;
                 else cut.Add(g);
             }
-            foreach (var g in automatic.Where(g => !g.Effect))
+            // The guarded ones first, so a slot of their own goes to them while there is one.
+            foreach (var g in automatic.Where(g => !g.Effect).OrderByDescending(g => g.Guarded))
             {
                 var same = Same(g);
                 if (same != null) Join(same, g);
@@ -431,13 +602,48 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 if (slots.Count == 0)
                 {
-                    off.Add(g);
+                    if (KeepsAverage(g, capabilities)) stranded.Add(g);
+                    else
+                    {
+                        off.Add(g);
+                        SetWay(context, g, WayNoSlot, true);
+                    }
                     continue;
                 }
                 // An environment matcap shares an environment slot where there is one.
                 var candidates = g.Effect ? slots : slots.Where(s => s.Any(x => !x.Effect)).ToList();
                 if (candidates.Count == 0) candidates = slots;
-                Join(candidates.OrderByDescending(s => Similarity(s, g)).First(), g);
+                // A guarded slot isn't shared while another will do.
+                var unguarded = candidates.Where(s => !s.Any(x => x.Guarded)).ToList();
+                if (unguarded.Count > 0) candidates = unguarded;
+                var target = candidates.OrderByDescending(s => Similarity(s, g)).First();
+                // A matcap that blends goes where the least is lost, among the slots that do
+                // what it does.
+                var alike = Blends(g.Members[0])
+                    ? candidates.Where(s => Kind(s.Select(x => x.Members[0])) == Kind(new[] { g.Members[0] })).ToList() : new List<List<Group>>();
+                if (alike.Count > 0)
+                {
+                    float Added(List<Group> s) => SlotCost(s.Concat(new[] { g }).ToList(), capabilities, view, discs) - SlotCost(s, capabilities, view, discs);
+                    target = alike.OrderBy(Added).ThenByDescending(s => Similarity(s, g)).First();
+                    float visible = Mathf.Max(0f, g.Visible);
+                    if (g.Measure.Role == AtlasMatcapRole.Lighting)
+                    {
+                        // As its average it loses its contrast and costs the others nothing.
+                        if (CanAverage(capabilities) && Added(target) > visible * (g.Measure.AverageLoss + LiveMargin))
+                        {
+                            apart.Add(g);
+                            continue;
+                        }
+                    }
+                    // A rim or a highlight has no average to keep: left out, it costs all of
+                    // itself and the others nothing.
+                    else if (visible > 0f && Added(target) >= visible)
+                    {
+                        costly.Add(g);
+                        continue;
+                    }
+                }
+                Join(target, g);
             }
             if (unseen.Count > 0)
                 context.Notes.Add("Matcaps that change nothing where they're looked up (black where they add or glow, white where they multiply) are left out: " +
@@ -445,16 +651,83 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (cut.Count > 0)
                 context.Notes.Add("Matcap effects (shine, glints, reflections) don't share a slot, so the weakest are left out where the slots run out: " +
                                   string.Join(", ", cut.Select(g => g.Label)) + ". Placing one in its own slot keeps it.");
+            if (costly.Count > 0)
+                context.Notes.Add("Sharing a slot would move or weaken these matcap rims and highlights more than it keeps of them, so they are left out: " +
+                                  string.Join(", ", costly.Select(g => g.Label)) + ". Placing one combined with another shares the slot.");
+            foreach (var g in unseen) SetWay(context, g, WayUnseen, true);
+            foreach (var g in cut) SetWay(context, g, WayNoSlot, true);
+            foreach (var g in costly) SetWay(context, g, "Left out: sharing a slot would change it too much", true);
 
             var approximated = new List<string>();
+            // The slots that got no mask place.
+            var unplaced = new HashSet<int>();
             context.Plan.MatcapSlotsUsed = slots.Count;
             for (int k = 0; k < slots.Count; k++)
-                Place(context, slots[k], k, approximated);
+            {
+                if (Place(context, slots[k], k, approximated)) continue;
+                unplaced.Add(k);
+                var lost = slots[k].Where(g => !KeepsAverage(g, capabilities)).ToList();
+                stranded.AddRange(slots[k].Except(lost));
+                foreach (var g in lost) SetWay(context, g, "Left out: no mask place is free", true);
+                if (lost.Count > 0)
+                    context.Notes.Add($"No mask place is left for matcap slot {k + 1}; " + string.Join(", ", lost.Select(g => g.Label)) + " left out.");
+            }
+            Average(context, stranded, "No matcap slot is left for {0}; the average effect is kept in the base color instead");
+            Average(context, apart, "Sharing a slot would change the shading of {0} and of the slot's own matcaps more than it keeps, so the average " +
+                                    "effect is kept in the base color instead; placing one combined with another shares the slot");
+            if (context.Plan.BaseColorShifts)
+            {
+                var shift = Shift(job);
+                context.Notes.Add(shift == AtlasBaseColorShift.Keep
+                    ? "The base color is kept as it is (Base color shift), so a matcap slot that lacks a matcap's blends shows only the " +
+                      "side of it that its blend can."
+                    : shift == AtlasBaseColorShift.Full
+                        ? "The base color is shifted as far as the fitted matcap slots need (Base color shift: Full); viewers who " +
+                          "block the avatar's shaders see it brighter or darker than the material."
+                        : "The base color is shifted for the fitted matcap slots no further than the material's average look with the " +
+                          "matcap, since viewers who block the avatar's shaders see the base color alone; the matcap shows weaker " +
+                          "there. Base color shift: Full shows it exactly.");
+            }
             if (off.Count > 0)
                 context.Notes.Add("Matcaps left out: " + string.Join(", ", off.Select(g => g.Label)) + ".");
             for (int k = 0; k < slots.Count; k++)
                 if (slots[k].Count > 1)
                     context.Notes.Add($"Matcap slot {k + 1} combines " + string.Join(", ", slots[k].Select(g => g.Label)) + ".");
+            // What a slot shared across parts keeps of each lighting matcap's shading. A bake
+            // isn't chosen here on its own: it stays in place from every view and is made with
+            // the light rig's settings. Where one would keep clearly more, the log says so.
+            string Percent(float share) => Mathf.RoundToInt(100f * Mathf.Clamp01(share)) + "%";
+            var bakes = new List<string>();
+            void Hint(Group g, float loss)
+            {
+                if (CanBake(capabilities) && BakeKeepsMore(g.Measure, loss))
+                    bakes.Add(g.Label + " (" + Percent(1f - g.Measure.BakeCost) + " instead of " + Percent(1f - loss) + ")");
+            }
+            for (int k = 0; k < slots.Count; k++)
+            {
+                if (unplaced.Contains(k)) continue;
+                var losses = SlotLosses(slots[k], capabilities, view, discs);
+                var lit = slots[k].Where(g => g.Measure.Role == AtlasMatcapRole.Lighting && losses[g] > 0.005f).ToList();
+                if (lit.Count > 0)
+                    context.Notes.Add($"Matcap slot {k + 1} shows one texture on different parts; of each matcap's level and contrast it keeps: " +
+                                      string.Join(", ", lit.Select(g => g.Label + " " + Percent(1f - losses[g]))) + ".");
+                var placed = slots[k].Where(g => g.Measure.Role != AtlasMatcapRole.Lighting && losses[g] > 0.005f).ToList();
+                if (placed.Count > 0)
+                    context.Notes.Add($"Matcap slot {k + 1} shows one texture on different parts; of each rim's and highlight's look, point by point, it keeps: " +
+                                      string.Join(", ", placed.Select(g => g.Label + " " + Percent(1f - losses[g]))) + ".");
+                foreach (var g in slots[k])
+                {
+                    Hint(g, losses[g]);
+                    string kept = AtlasInstancePlacements.Kept(1f - losses[g]);
+                    SetWay(context, g, (slots[k].Count > 1 ? "Shares matcap slot " : "In matcap slot ") + (k + 1) + (kept.Length > 0 ? "; " + kept : ""));
+                }
+            }
+            foreach (var g in apart.Concat(stranded)) Hint(g, g.Measure.AverageLoss);
+            // The matcaps in slots, for what shows the surface without the shader's light.
+            Form(context, slots.Where((s, k) => !unplaced.Contains(k)).SelectMany(s => s).ToList(), false, draw: false);
+            if (bakes.Count > 0)
+                context.Notes.Add("A bake would keep more of the shading of " + string.Join(", ", bakes) +
+                                  ". Placing one Baked into color does that; its shading then stays where it is drawn, from every side.");
             if (approximated.Count > 0)
                 context.Notes.Add("Matcap blends the output shader doesn't have are approximated with add or multiply: " + string.Join(", ", approximated.Distinct()) + ".");
         }
@@ -471,11 +744,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var settings = job.Baking ?? new AtlasBakeSettings();
             float strength = Mathf.Clamp01(settings.strength) * Mathf.Clamp01(settings.matcaps);
             context.Notes.Add("Matcaps baked into the textures as seen from the front: " + string.Join(", ", groups.Select(g => g.Label)) + ".");
+            foreach (var group in groups) SetWay(context, group, WayBaked);
             if (strength <= 0f) return;
-            var emissionFeature = AtlasOutputFeatures.Find("emission");
-            var emissionChoice = job.Features.Find(f => f.FeatureId == "emission");
-            bool emissionOn = context.Capabilities.Provides(AtlasVirtualMap.Emission) &&
-                              (emissionFeature == null || AtlasOutputFeatures.Effective(emissionFeature, emissionChoice?.ModeId, context.Capabilities)?.Kind != AtlasFeatureModeKind.Off);
+            bool emissionOn = EmissionOn(context);
+            Form(context, groups, emissionOn, draw: true);
             // Each source's baked layers in its layer order (not GlowAsColor's: the bake splits a
             // glow between the emission and the color itself).
             var layers = new Dictionary<int, List<AtlasLookupLayer>>();
@@ -515,77 +787,136 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var request = AtlasLiveMasks.Request(context, AtlasVirtualMap.BaseColor);
             if (request == null) context.Notes.Add("Matcaps are baked into the base color, which is off; their color is left out.");
             else
-            {
-                var inner = request.Evaluate ?? ((i, m, w, h) => AtlasMapEvaluator.Evaluate(AtlasVirtualMap.BaseColor, m, w, h));
-                request.Evaluate = (i, material, w, h) =>
+                // A matcap that adds or screens can take the color above 1.
+                request.Add(new AtlasMapContribution
                 {
-                    var result = inner(i, material, w, h);
-                    if (!layers.TryGetValue(i, out var list) || job.Sources[i].Surface == null) return result;
-                    var sections = job.Sources[i].Surface();
-                    if (sections == null || sections.Count == 0) return result;
-                    using (var normals = NormalsOf(i, list, w, h))
-                        AtlasMatcapBake.ApplyColor(result, material, list, sections, normals, rigs[i], strength, emissionOn, cameras[i]);
-                    return result;
-                };
-            }
+                    Feature = FeatureId, Label = "baked matcaps", Stage = AtlasMapStage.Layers, CanRaise = true,
+                    Applies = i => layers.ContainsKey(i) && job.Sources[i].Surface != null,
+                    Apply = content =>
+                    {
+                        int i = content.Source;
+                        var sections = job.Sources[i].Surface();
+                        if (sections == null || sections.Count == 0) return;
+                        var list = layers[i];
+                        using (var normals = NormalsOf(i, list, content.Width, content.Height))
+                            AtlasMatcapBake.ApplyColor(content.Map, content.Material, list, sections, normals, rigs[i], strength, emissionOn, cameras[i]);
+                    }
+                });
             if (!emissionOn || !layers.Values.Any(list => list.Any(l => (AtlasMatcapBake.AddsAfterLighting(l) || l.EmissionAmount > 0f) &&
                                                                         AtlasMatcapBake.GlowShare(l) > 0f))) return;
-            // Once the emission feature has made its map (or not): into it, relative to its strength.
-            context.Plan.AfterResolve.Add(() => BakeEmission(context, layers, rigs, cameras, strength, NormalsOf));
+            // Into the emission map. The emission feature resolves before this one
+            // (AtlasOutputFeatures), so its map is there if any source has an emission.
+            BakeEmission(context, layers, rigs, cameras, strength, NormalsOf, request);
+        }
+
+        // The surface's base color where a matcap's glow, mask or fit needs it: the base color
+        // map's value before its layers stage, or as a contribution finds it (`before`), read
+        // from the map. Without a base color map, the color stack.
+        private static NordicsTextureWrapper BaseColorAt(AtlasMapRequest baseColor, AtlasMapContribution before, int index, AtlasUnifiedMaterial material,
+            int width, int height) =>
+            baseColor == null ? AtlasColorStack.Evaluate(material, width, height, multiplyColor: true)
+            : before != null ? baseColor.Before(before, index, material, width, height)
+            : baseColor.Before(AtlasMapStage.Layers, index, material, width, height);
+
+        private static bool EmissionOn(AtlasFeatureContext context) => AtlasEmissionFeature.On(context.Job, context.Capabilities);
+
+        // The emission map (the emission feature resolves before this one) and its target.
+        private static AtlasMapRequest EmissionMap(AtlasFeatureContext context, out AtlasLayerTarget target) =>
+            AtlasEmissionFeature.Map(context.Job, context.Plan, out target);
+
+        // Without slots: the glows of matcaps kept as their average go into the emission, each
+        // as Poiyomi glows (matcap × its color × strength × mask × lerp(1, base color, mix)) with
+        // the matcap at its mean over the lookup disc, for the share that doesn't follow the
+        // light (AtlasMatcapBake.GlowShare).
+        private static void AverageGlow(AtlasFeatureContext context, List<Group> groups)
+        {
+            var glows = new Dictionary<int, List<(AtlasMask Mask, Color Color, float Mix)>>();
+            var labels = new List<string>();
+            foreach (var group in groups)
+            {
+                bool any = false;
+                foreach (var member in group.Members)
+                {
+                    var mean = MeanColor(member.Layers[0]);
+                    foreach (var layer in member.Layers.Where(l => !member.Added.Contains(l)))
+                    {
+                        float amount = Mathf.Max(0f, layer.EmissionAmount) * AtlasMatcapBake.GlowShare(layer);
+                        if (amount <= 0f) continue;
+                        if (!glows.TryGetValue(member.Source, out var list))
+                            glows[member.Source] = list = new List<(AtlasMask Mask, Color Color, float Mix)>();
+                        var tint = layer.Source.Color;
+                        list.Add((member.Mask, new Color(mean.r * tint.r * amount, mean.g * tint.g * amount, mean.b * tint.b * amount, 1f),
+                            Mathf.Clamp01(layer.BaseColorMix)));
+                        any = true;
+                    }
+                }
+                if (any) labels.Add(group.Label);
+            }
+            if (glows.Count == 0) return;
+            var request = EmissionMap(context, out var target);
+            if (target == null) return;
+            var color = AtlasLiveMasks.Request(context, AtlasVirtualMap.BaseColor);
+            // The map gives its value in full, so the glow is added as it is.
+            request.Add(new AtlasMapContribution
+            {
+                Feature = FeatureId, Label = "matcap glow averages", Stage = AtlasMapStage.Overlays, CanRaise = true,
+                Applies = glows.ContainsKey,
+                Apply = content =>
+                {
+                    int i = content.Source, w = content.Width, h = content.Height;
+                    var list = glows[i];
+                    var pixels = content.Map.GetPixels();
+                    using (var baseColor = list.Any(g => g.Mix > 0f) ? BaseColorAt(color, null, i, content.Material, w, h) : null)
+                    {
+                        var bases = baseColor?.GetPixels();
+                        foreach (var glow in list)
+                            using (var mask = AtlasMapEvaluator.ScaledMask(glow.Mask, 1f, w, h, content.Material))
+                            {
+                                var masks = mask.GetPixels();
+                                for (int p = 0; p < pixels.Length; p++)
+                                {
+                                    var b = bases != null ? bases[p] : Color.white;
+                                    float m = masks[p].r;
+                                    pixels[p].r += glow.Color.r * m * Mathf.Lerp(1f, b.r, glow.Mix);
+                                    pixels[p].g += glow.Color.g * m * Mathf.Lerp(1f, b.g, glow.Mix);
+                                    pixels[p].b += glow.Color.b * m * Mathf.Lerp(1f, b.b, glow.Mix);
+                                }
+                            }
+                    }
+                    content.Map.SetPixels(pixels);
+                }
+            });
+            if (request.Carry == null) AtlasEmissionFeature.CarryInStrength(request, target);
+            context.Notes.Add("The matcap glow of " + string.Join(", ", labels) + " is kept as its average in the emission.");
         }
 
         private static void BakeEmission(AtlasFeatureContext context, Dictionary<int, List<AtlasLookupLayer>> layers, Dictionary<int, AtlasLightRig> rigs,
-            Dictionary<int, Vector3> cameras, float strength, System.Func<int, List<AtlasLookupLayer>, int, int, NordicsTextureWrapper> normalsOf)
+            Dictionary<int, Vector3> cameras, float strength, System.Func<int, List<AtlasLookupLayer>, int, int, NordicsTextureWrapper> normalsOf,
+            AtlasMapRequest color)
         {
             var job = context.Job;
-            var request = context.Maps.FirstOrDefault(r => r.Map == AtlasVirtualMap.Emission);
-            AtlasSurfaceLayer output;
-            if (request == null)
-            {
-                request = new AtlasMapRequest
-                {
-                    Map = AtlasVirtualMap.Emission,
-                    Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Color },
-                    Evaluate = (i, m, w, h) => AtlasMapEvaluator.Constant(AtlasVirtualMap.Emission, 0f, w, h)
-                };
-                for (int i = 0; i < job.Sources.Count; i++) request.Sources.Add(i);
-                context.Maps.Add(request);
-                output = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission };
-                output.Source.Map = request.Reference;
-                output.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Emission, AtlasBlend.Add, 1f));
-                context.Output.Layers.Add(output);
-            }
-            else output = context.Output.Layers.OfType<AtlasSurfaceLayer>().FirstOrDefault(l => l.Source.Map == request.Reference);
-            var target = output?.Targets.FirstOrDefault(t => t.Target == AtlasSurfaceTarget.Emission);
+            var request = EmissionMap(context, out var target);
             if (target == null) return;
-            float glowAt = Mathf.Max(target.Opacity, 1e-4f);
-            var inner = request.Evaluate;
-            request.Evaluate = (i, material, w, h) =>
+            // The map gives its value in full, so the glow is added as it is.
+            request.Add(new AtlasMapContribution
             {
-                var result = inner(i, material, w, h);
-                if (!layers.TryGetValue(i, out var list) || job.Sources[i].Surface == null) return result;
-                var sections = job.Sources[i].Surface();
-                if (sections == null || sections.Count == 0) return result;
-                bool mixes = list.Any(l => l.BaseColorMix > 0f);
-                using (var baseColor = mixes ? AtlasColorStack.Evaluate(material, w, h, multiplyColor: true) : null)
-                using (var normals = normalsOf(i, list, w, h))
-                    AtlasMatcapBake.ApplyEmission(result, baseColor, material, list, sections, normals, rigs[i], strength / glowAt, cameras[i]);
-                return result;
-            };
-            // Brighter than the emission's strength: the map is divided by its brightest value,
-            // which goes into the strength.
-            var previous = request.Finish;
-            request.Finish = map =>
-            {
-                previous?.Invoke(map);
-                float peak = AtlasColorFeature.Peak(map);
-                if (peak <= 1f) return;
-                map.ApplyColor(new ColorOperation
+                Feature = FeatureId, Label = "baked matcap glow", Stage = AtlasMapStage.Overlays, CanRaise = true,
+                Applies = i => layers.ContainsKey(i) && job.Sources[i].Surface != null,
+                Apply = content =>
                 {
-                    Opcode = ColorOperationCode.Tint, Parameters = { Color = new Color(1f / peak, 1f / peak, 1f / peak, 1f) }
-                });
-                target.Opacity *= peak;
-            };
+                    int i = content.Source, w = content.Width, h = content.Height;
+                    var sections = job.Sources[i].Surface();
+                    if (sections == null || sections.Count == 0) return;
+                    var list = layers[i];
+                    bool mixes = list.Any(l => l.BaseColorMix > 0f);
+                    using (var baseColor = mixes ? BaseColorAt(color, null, i, content.Material, w, h) : null)
+                    using (var normals = normalsOf(i, list, w, h))
+                        AtlasMatcapBake.ApplyEmission(content.Map, baseColor, content.Material, list, sections, normals, rigs[i], strength, cameras[i]);
+                }
+            });
+            // Brighter than the emission's strength: the map's brightest value goes into the
+            // strength (the map's range step).
+            if (request.Carry == null) AtlasEmissionFeature.CarryInStrength(request, target);
         }
 
         // How alike a slot and a group are, for combining what doesn't fit: doing the same
@@ -608,14 +939,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // An output whose matcaps don't glow adds the glow to the color: one more add layer of
         // the matcap at the glow's strength with its base color mix, as Poiyomi glows by matcap
         // × strength × mask × lerp(1, base color, mix), only after the lighting.
-        private static List<string> GlowAsColor(List<Group> groups)
+        // `litShareOnly`: only the part of the glow that follows the light, where the rest goes
+        // into the emission.
+        private static List<string> GlowAsColor(List<Group> groups, bool litShareOnly = false)
         {
             var labels = new List<string>();
             foreach (var group in groups)
             {
                 foreach (var member in group.Members)
                 {
-                    float glow = Glow(member);
+                    float glow = litShareOnly
+                        ? member.Layers.Sum(l => Mathf.Max(0f, l.EmissionAmount) * (1f - AtlasMatcapBake.GlowShare(l)))
+                        : Glow(member);
                     if (glow <= 0f) continue;
                     var first = member.Layers[0];
                     var added = Copy(first, first.Mask, AtlasBlend.Add, AtlasPlacement.Surface, glow, first.Source.Map, first.Source.Color);
@@ -673,21 +1008,26 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static AtlasBlend Main(List<AtlasLookupLayer> layers) =>
             layers.GroupBy(Nearest).OrderByDescending(g => g.Sum(l => l.Opacity)).First().Key;
 
-        private void Place(AtlasFeatureContext context, List<Group> slot, int index, List<string> approximated)
+        // Places a slot; false where no mask place is left for it, so nothing of it is placed.
+        private bool Place(AtlasFeatureContext context, List<Group> slot, int index, List<string> approximated)
         {
             var job = context.Job;
             var capabilities = context.Capabilities;
             var main = Main(slot.SelectMany(g => g.Members[0].Layers).ToList());
-            bool combined = Combined(slot, capabilities);
+            var view = View(job);
+            bool combined = Combined(slot, capabilities, view);
             // The sources the slot can't show as they are, fitted to (SlotFit) where the output
             // has a base color map; otherwise the base color mix goes into the mask.
             var baseColor = AtlasLiveMasks.Request(context, AtlasVirtualMap.BaseColor);
-            var fits = baseColor != null ? Fits(job, slot, main, combined, capabilities) : null;
+            var fits = baseColor != null ? Fits(job, slot, main, combined, capabilities, view) : null;
             if (fits != null && fits.Count == 0) fits = null;
             // Without a base color mix in the slot, or with matcaps combined that mix differently.
             bool mixesDiffer = combined && slot.Any(g => Mathf.Abs(BaseColorMix(g.Members[0]) - BaseColorMix(slot[0].Members[0])) > 1e-4f);
             bool fold = fits == null && (!capabilities.MatcapBaseColorMix || mixesDiffer) && slot.Any(g => BaseColorMix(g.Members[0]) > 0f);
-            var request = MaskRequest(job, slot, index, fold, capabilities.MatcapMaskInvert, fits);
+            // The slot's shift of the base color, once it is added: the fitted strength reads
+            // the base color as the shift finds it.
+            AtlasMapContribution shift = null;
+            var request = MaskRequest(job, slot, index, fold, capabilities.MatcapMaskInvert, fits, baseColor, () => shift);
             int live = AtlasLiveMasks.Split(context, FeatureId, "matcap slot " + (index + 1), request,
                 i => Member(slot, i) is Instance member ? AtlasLiveMasks.Of(member.Mask) : null);
             var mask = AtlasMaskAllocator.Allocate(context, request);
@@ -695,21 +1035,27 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 fold = false;
                 fits = null;
-                request = MaskRequest(job, slot, index, false, capabilities.MatcapMaskInvert, null);
+                request = MaskRequest(job, slot, index, false, capabilities.MatcapMaskInvert, null, baseColor, () => shift);
                 mask = AtlasMaskAllocator.Allocate(context, request);
             }
             if (fold && !capabilities.MatcapBaseColorMix) approximated.AddRange(slot.Where(g => BaseColorMix(g.Members[0]) > 0f).Select(g => g.Label));
             else if (fold)
                 context.Notes.Add($"Matcap slot {index + 1}: " + string.Join(", ", slot.Where(g => BaseColorMix(g.Members[0]) > 0f).Select(g => g.Label)) +
                                   " mix in the base color differently from the matcaps they're combined with; the mix goes into the mask by the base color's luminance.");
-            if (fits != null) approximated.AddRange(slot.Where(g => g.Members.Any(m => fits.ContainsKey(m.Source))).Select(g => g.Label));
-            if (mask == null)
+            if (mask == null) return false;
+            if (fits != null)
+                approximated.AddRange(slot.Where(g => g.Members.Any(m => fits.TryGetValue(m.Source, out var fit) && fit.Approximated)).Select(g => g.Label));
+            if (mask.IsConstant && mask.Constant <= 0f) return true;
+            if (fits != null)
             {
-                context.Notes.Add($"No mask place is left for matcap slot {index + 1}; " + string.Join(", ", slot.Select(g => g.Label)) + " left out.");
-                return;
+                shift = FitBaseColor(baseColor, fits);
+                context.Plan.BaseColorShifts |= capabilities.VRChatFallback;
+                var shared = fits.Where(f => f.Value.Shared).Select(f => f.Key).OrderBy(i => i).ToList();
+                if (shared.Count > 0)
+                    context.Notes.Add($"Matcap slot {index + 1} shows one averaged texture on different parts; " +
+                                      AtlasLiveMasks.Numbers(shared) + (shared.Count == 1 ? " keeps" : " keep") +
+                                      " the average look of their own matcaps through the base color.");
             }
-            if (mask.IsConstant && mask.Constant <= 0f) return;
-            if (fits != null) FitBaseColor(context, baseColor, fits);
             // Every slot has a mask object of its own, which the writers group its layers by.
             var slotMask = mask.Mask ?? new AtlasMask();
             if (live >= 0) AtlasLiveMasks.Read(slotMask, live);
@@ -717,15 +1063,35 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (slot.Select(g => g.Members.Select(m => m.Source)).SelectMany(s => s).GroupBy(s => s).Any(s => s.Count() > 1))
                 context.Notes.Add($"Matcap slot {index + 1} has several matcaps on one source; the first one's mask is used there.");
 
+            // A lookup fixed to the world looks different from each side, which a slot that
+            // follows the view can't show: how it is shown is the user's choice.
+            var worldFixed = capabilities.MatcapLookup ? new List<string>()
+                : slot.Where(g => WorldFixed(g.Members[0].Layers[0]) && g.Members[0].Layers[0].Source.Map?.Texture != null).Select(g => g.Label).ToList();
+            if (worldFixed.Count > 0)
+            {
+                context.Plan.MatcapViews = true;
+                context.Notes.Add($"Matcap slot {index + 1}: the lookup of " + string.Join(", ", worldFixed) +
+                                  " is fixed to the world, which the output's slot can't follow; " +
+                                  (view == AtlasMatcapView.Front ? "its texture is redrawn as it looks from the front."
+                                      : slot.Any(g => SlotMap(g.Members[0].Layers[0], capabilities, view) != g.Members[0].Layers[0].Source.Map)
+                                          ? "it is looked up by the view instead, without its sideways texture offset."
+                                          : "it is looked up by the view instead."));
+            }
+
             var output = context.Output.Layers;
             int first = output.Count;
             AddLayers(context, slot, index, slotMask, scale, approximated, fits != null);
+            // What the output shows of a world-fixed lookup follows the view.
+            if (!capabilities.MatcapLookup)
+                for (int i = first; i < output.Count; i++)
+                    if (output[i] is AtlasLookupLayer shown && WorldFixed(shown)) shown.Projection = AtlasLookupProjection.ViewStabilized;
             // Folded into the mask or fitted: the slot's layers don't mix in the base color again.
             if (fold || fits != null)
                 for (int i = first; i < output.Count; i++)
                     if (output[i] is AtlasLookupLayer added) added.BaseColorMix = 0f;
             SetGlow(context, slot, index, main, request, mask, combined, fold || fits != null,
                 output.Skip(first).OfType<AtlasLookupLayer>().ToList());
+            return true;
         }
 
         // The slot's glow strength, on its first layer. Poiyomi glows by matcap × strength × mask
@@ -765,7 +1131,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             var job = context.Job;
             var target = layers[0];
-            context.Plan.BeforeWrite.Add(() => target.EmissionAmount = FitGlow(job, slot, request, mask, parts, mixOut));
+            var baseColor = AtlasLiveMasks.Request(context, AtlasVirtualMap.BaseColor);
+            context.Plan.BeforeWrite.Add(() => target.EmissionAmount = FitGlow(job, slot, request, mask, parts, mixOut, baseColor));
         }
 
         // Each matcap's part of the slot's texture: its weight (its blend, or its glow in a slot
@@ -797,7 +1164,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // matcap's strength × mask × lerp(1, b, its mix), with b the base color's luminance
         // before the matcaps.
         private static float FitGlow(AtlasGeneratorJob job, List<Group> slot, AtlasMaskRequest request, AtlasAllocatedMask mask,
-            Dictionary<Instance, float> parts, float mixOut)
+            Dictionary<Instance, float> parts, float mixOut, AtlasMapRequest baseColor)
         {
             double ay = 0.0, aa = 0.0;
             using (AtlasEvaluationCache.Scope())
@@ -807,7 +1174,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     var material = source.Material;
                     double area = Mathf.Max(1e-6f, source.UVRegion.width * source.UVRegion.height) / (GlowSize * GlowSize);
                     using (var written = mask.IsConstant ? null : request.Evaluate(members.Key, material, GlowSize, GlowSize))
-                    using (var color = AtlasColorStack.Evaluate(material, GlowSize, GlowSize, multiplyColor: true))
+                    using (var color = BaseColorAt(baseColor, null, members.Key, material, GlowSize, GlowSize))
                         foreach (var member in members)
                         {
                             float glow = Glow(member), mix = BaseColorMix(member), part = parts[member];
@@ -829,7 +1196,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static float BaseColorMix(Instance instance) => Mathf.Clamp01(instance.Layers[0].BaseColorMix);
 
         private static AtlasMaskRequest MaskRequest(AtlasGeneratorJob job, List<Group> slot, int index, bool fold, bool canInvert,
-            Dictionary<int, SlotFit> fits)
+            Dictionary<int, SlotFit> fits, AtlasMapRequest baseColor, Func<AtlasMapContribution> shift)
         {
             float Mix(int i) => fold && Member(slot, i) is Instance m ? BaseColorMix(m) : 0f;
             bool Fitted(int i) => fits != null && fits.ContainsKey(i);
@@ -852,7 +1219,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     var result = AtlasMapEvaluator.ScaledMask(m.Mask, 1f, w, h, material);
                     float mix = Mix(i);
                     if (mix <= 0f && !Fitted(i)) return result;
-                    using (var color = AtlasColorStack.Evaluate(material, w, h, multiplyColor: true))
+                    using (var color = BaseColorAt(baseColor, Fitted(i) ? shift() : null, i, material, w, h))
                     {
                         if (Fitted(i))
                         {
@@ -883,7 +1250,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var capabilities = context.Capabilities;
             var template = slot[0].Members[0].Layers;
             var output = context.Output.Layers;
-            if (!Combined(slot, capabilities))
+            var view = View(context.Job);
+            if (!Combined(slot, capabilities, view))
             {
                 var shown = Shown(template);
                 bool supported = shown.All(l => (capabilities.MatcapBlends & Flag(l)) != 0);
@@ -920,15 +1288,28 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // A slot that only glows is made from the glows, relative to the strongest.
             bool glows = GlowsOnly(slot);
             float strongest = slot.Max(g => Glow(g.Members[0]));
-            var parts = slot.Select(g => (Map: g.Members[0].Layers[0].Source.Map, g.Members[0].Layers[0].Source.Color,
+            var parts = slot.Select(g => (Map: SlotMap(g.Members[0].Layers[0], capabilities, view), g.Members[0].Layers[0].Source.Color,
                 Weight: TextureWeight(g.Members[0], main, glows, strongest), g.Parts, Area: g.Visible)).ToList();
+            // Each matcap's own lookup, where the slot has only the view-space normal's.
+            var lookups = slot.Select(g => Relooked(g.Members[0].Layers[0], capabilities, view) ? Relook(g.Members[0].Layers[0], view) : null).ToList();
+            var relooked = slot.Where((g, i) => lookups[i] != null).Select(g => g.Label).ToList();
+            if (relooked.Count > 0)
+                context.Notes.Add($"Matcap slot {index + 1}: the output's slot looks up by the view-space normal over the whole texture, so the texture of " +
+                                  string.Join(", ", relooked) + " (another lookup, a border or a rotation) is redrawn for it.");
             var reference = new AtlasTextureReference { Space = AtlasTextureSpace.View, Interpretation = AtlasTextureInterpretation.Color };
             context.Plan.GeneratedTextures.Add(new AtlasGeneratedTexture
             {
                 Reference = reference, Name = "Matcap" + (index + 1), Width = CombinedSize, Height = CombinedSize,
-                Pixels = () => Combine(parts, main, CombinedSize)
+                Pixels = () => Combine(parts, main, CombinedSize, lookups)
             });
             var combined = Copy(template[0], slotMask, main, AtlasPlacement.Surface, glows ? 0f : scale, reference, Color.white);
+            if (!capabilities.MatcapLookup)
+            {
+                // The generated texture is made for the slot's lookup.
+                combined.Projection = AtlasLookupProjection.ViewStabilized;
+                combined.Tiling = Vector2.one;
+                combined.LookupRotation = 0f;
+            }
             output.Add(combined);
         }
 
@@ -936,14 +1317,77 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static float Weight(Instance instance, AtlasBlend main) =>
             Mathf.Min(1f, instance.Layers.Where(l => Nearest(l) == main).Sum(l => l.Opacity));
 
-        // One generated texture for the slot: several groups, or a tint or texture transform the
-        // slot doesn't have.
-        private static bool Combined(List<Group> slot, AtlasOutputCapabilities capabilities)
+        // One generated texture for the slot: several groups, or a tint, texture transform or
+        // lookup the slot doesn't have.
+        private static bool Combined(List<Group> slot, AtlasOutputCapabilities capabilities, AtlasMatcapView view)
         {
             var tint = slot[0].Members[0].Layers[0].Source.Color;
             bool tinted = Mathf.Abs(tint.r - 1f) + Mathf.Abs(tint.g - 1f) + Mathf.Abs(tint.b - 1f) > 1e-3f;
             return slot.Count > 1 || (tinted && !capabilities.MatcapColor) ||
-                   (Transformed(slot[0].Members[0].Layers[0].Source.Map) && !capabilities.MatcapTextureTransform);
+                   (Transformed(slot[0].Members[0].Layers[0].Source.Map) && !capabilities.MatcapTextureTransform) ||
+                   Relooked(slot[0].Members[0].Layers[0], capabilities, view);
+        }
+
+        // A matcap whose texture is redrawn for the slot: the slot looks up by the view-space
+        // normal over the whole texture, the matcap by another projection, a border or a
+        // rotation. A lookup fixed to the world that is looked up by the view needs it only
+        // for its border or rotation.
+        private static bool Relooked(AtlasLookupLayer layer, AtlasOutputCapabilities capabilities, AtlasMatcapView view) =>
+            !capabilities.MatcapLookup && layer.Source.Map?.Texture != null &&
+            !((layer.Projection == AtlasLookupProjection.ViewStabilized || layer.Projection == AtlasLookupProjection.ViewCorrected ||
+               (WorldFixed(layer) && view == AtlasMatcapView.ByView)) &&
+              layer.Tiling == Vector2.one && layer.LookupRotation == 0f);
+
+        // A lookup fixed to the world, not to the view: it looks different from each side.
+        private static bool WorldFixed(AtlasLookupLayer layer) =>
+            layer.Projection == AtlasLookupProjection.ReflectionPlanar || layer.Projection == AtlasLookupProjection.LightHalfVector;
+
+        // A matcap's texture as the slot reads it. A lookup fixed to the world that is looked up
+        // by the view loses its sideways texture offset. That offset shifts the texture along a
+        // world axis, which points the other way from behind; kept by the view, it would pull
+        // one side of the texture (a matcap's dark edge and its corners) into view on the same
+        // side of the surface from everywhere, as a band. The upward offset is the same from
+        // every side and stays.
+        private static AtlasTextureReference SlotMap(AtlasLookupLayer layer, AtlasOutputCapabilities capabilities, AtlasMatcapView view)
+        {
+            var map = layer.Source.Map;
+            if (map == null || capabilities.MatcapLookup || !WorldFixed(layer) || view != AtlasMatcapView.ByView || map.Offset.x == 0f)
+                return map;
+            var shown = new AtlasTextureReference();
+            AtlasFieldwise.Copy(map, shown);
+            shown.Offset = new Vector2(0f, map.Offset.y);
+            return shown;
+        }
+
+        // Where a matcap's own lookup reads its texture for the normal that a view-space normal
+        // lookup has at `uv`, seen from straight in front: the slot's coordinate to the
+        // matcap's. Exact for a lookup that follows the view. A lookup fixed to the world (the
+        // planar reflection, the light's half vector) looks different from each side, which
+        // no slot that follows the view shows:
+        // - By the view: its texture is looked up by the view-space normal, with its border
+        //   and rotation. The texture keeps its place on the surface as any matcap does: its
+        //   middle where the surface faces the viewer, its edge at the outline.
+        // - As seen from the front: its own lookup from straight in front, exact there. The
+        //   planar reflection reads at twice the normal's angle, so the texture's edge lies
+        //   halfway out and the outline reads its middle again, from every side.
+        private static Func<Vector2, Vector2> Relook(AtlasLookupLayer layer, AtlasMatcapView view)
+        {
+            var read = layer;
+            if (WorldFixed(layer) && view == AtlasMatcapView.ByView)
+            {
+                read = new AtlasLookupLayer();
+                AtlasFieldwise.Copy(layer, read);
+                read.Projection = AtlasLookupProjection.ViewStabilized;
+            }
+            var right = Vector3.Cross(Vector3.forward, Vector3.up).normalized;
+            return uv =>
+            {
+                var p = new Vector2(uv.x * 2f - 1f, uv.y * 2f - 1f);
+                // Beyond the disc no normal looks up: the edge's value fills the corners.
+                if (p.sqrMagnitude > 1f) p.Normalize();
+                var normal = right * p.x + Vector3.up * p.y + Vector3.forward * Mathf.Sqrt(Mathf.Max(0f, 1f - p.sqrMagnitude));
+                return AtlasMatcapBake.Rotate(AtlasMatcapBake.Lookup(read, normal, Vector3.forward, AtlasMatcapLook.Light), read.LookupRotation);
+            };
         }
 
         // A matcap texture with its own scale or offset.
@@ -968,6 +1412,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // T0 and T1.
             public float Zero;
             public Color Full = Color.white;
+            // How far the base color may shift, and the source's matcaps on average over the
+            // lookup disc (per channel, 0–1): where its average look lies between the chain
+            // with black matcaps and with full ones.
+            public AtlasBaseColorShift Shift = AtlasBaseColorShift.Full;
+            public Color Mean = Color.white;
+            // The slot can't show the source's matcaps as they are (a blend it lacks, a base
+            // color mix it doesn't have).
+            public bool Approximated;
+            // A slot shared with matcaps on other parts: where its texture's average lies
+            // between T0 and T1 (per channel, 0–1). The fit keeps the source's own average.
+            public bool Shared;
+            public Color SlotMean = Color.white;
             // Poiyomi's chain: the matcap (instance) each layer belongs to, in order.
             public readonly List<(int Matcap, AtlasBlend Blend, float Weight, Color Color, float Mix)> Layers =
                 new List<(int, AtlasBlend, float, Color, float)>();
@@ -978,13 +1434,23 @@ namespace NordicWind.AdvancedAtlaser.Editor
             (layer.Blend == AtlasBlend.Replace || layer.Blend == AtlasBlend.Multiply || layer.Blend == AtlasBlend.Add ||
              layer.Blend == AtlasBlend.Screen || layer.Blend == AtlasBlend.Mixed);
 
-        // The fit of each source the slot can't show as it is. A slot with its own texture and
-        // strength (not combined) is fitted for all of its sources or none.
+        // The fit of each source the slot can't show as it is, and of every source that blends
+        // in a slot shared across parts, which shows none of them its own texture. A slot with its own
+        // texture and strength (not combined) is fitted for all of its sources or none.
         private static Dictionary<int, SlotFit> Fits(AtlasGeneratorJob job, List<Group> slot, AtlasBlend main, bool combined,
-            AtlasOutputCapabilities capabilities)
+            AtlasOutputCapabilities capabilities, AtlasMatcapView view)
         {
+            // An output whose blocked view is the same look has nothing to bound.
+            var shift = capabilities.VRChatFallback ? Shift(job) : AtlasBaseColorShift.Full;
             var result = new Dictionary<int, SlotFit>();
             var ends = combined ? Ends(slot, main) : (Zero: 0f, Full: Color.white);
+            // On different parts, each part shows the slot's averaged texture.
+            bool shared = combined && slot.GroupBy(g => g.Parts ?? "").Count() > 1;
+            var slotMean = shared ? CombinedValue(slot, main, g => Clamped(SlotMeanColor(g, capabilities, view))) : Color.white;
+            // A shared slot shows no source its own texture, so every source that blends is
+            // fitted; not where the slot's differing base color mixes go into its masks (Place).
+            bool mixesDiffer = slot.Any(g => Mathf.Abs(BaseColorMix(g.Members[0]) - BaseColorMix(slot[0].Members[0])) > 1e-4f);
+            bool everySource = shared && !(capabilities.MatcapBaseColorMix && mixesDiffer);
             bool lacking = combined || Lacks(slot[0].Members[0].Layers, capabilities);
             bool all = true;
             foreach (var members in slot.SelectMany(g => g.Members).GroupBy(m => m.Source))
@@ -993,12 +1459,19 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 var ordered = members.OrderBy(m => layers.IndexOf(m.Layers[0])).ToList();
                 bool mix = !capabilities.MatcapBaseColorMix && ordered.Any(m => BaseColorMix(m) > 0f);
                 bool blends = lacking && ordered.Any(m => m.Layers.Any(l => Chained(l) && l.Blend != main));
-                if (!mix && !blends)
+                if (!mix && !blends && !(everySource && ordered.Any(m => m.Layers.Any(Chained))))
                 {
                     all = false;
                     continue;
                 }
-                var fit = new SlotFit { Mask = Member(slot, members.Key).Mask, Add = main != AtlasBlend.Multiply };
+                var fit = new SlotFit
+                {
+                    Mask = Member(slot, members.Key).Mask, Add = main != AtlasBlend.Multiply, Shift = shift, Approximated = mix || blends
+                };
+                // The source's matcaps on average over the lookup disc.
+                var mean = Color.black;
+                foreach (var member in ordered) mean += MeanColor(member.Layers[0]) / ordered.Count;
+                fit.Mean = Clamped(mean);
                 for (int k = 0; k < ordered.Count; k++)
                     foreach (var layer in ordered[k].Layers.Where(Chained))
                         fit.Layers.Add((k, layer.Blend, layer.Opacity, layer.Source.Color, Mathf.Clamp01(layer.BaseColorMix)));
@@ -1006,6 +1479,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 {
                     fit.Zero = ends.Zero;
                     fit.Full = ends.Full;
+                    fit.Shared = shared;
+                    for (int c = 0; c < 3; c++)
+                    {
+                        float span = ends.Full[c] - ends.Zero;
+                        fit.SlotMean[c] = Mathf.Abs(span) > 1e-5f ? Mathf.Clamp01((slotMean[c] - ends.Zero) / span) : fit.Mean[c];
+                    }
                 }
                 else
                 {
@@ -1020,33 +1499,311 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return result;
         }
 
+        /// <summary>Whether a bake would keep clearly more of a matcap's shading than a way that
+        /// loses <paramref name="loss"/> of it: a lighting matcap without a highlight, whose
+        /// bake loses less by more than the margin a way that isn't frozen is preferred by.</summary>
+        public static bool BakeKeepsMore(AtlasMatcapMeasure measure, float loss) =>
+            measure.Role == AtlasMatcapRole.Lighting && !measure.HasHighlight && loss > measure.BakeCost + LiveMargin;
+
+        // A slot that follows the view is preferred to a matcap's average while it costs less
+        // than a quarter of the matcap's shading more: its shading moves with the view, which
+        // the measure of level and contrast doesn't count. A bake is named in the log from the
+        // same margin.
+        private const float LiveMargin = 0.25f;
+
+        // A group's matcap texture × its color (luminance) at the points of the slot's lookup
+        // disc, as the generated texture reads it (SlotMap, Relook).
+        private static float[] DiscValues(Group group, AtlasOutputCapabilities capabilities, AtlasMatcapView view, Dictionary<Group, float[]> known)
+        {
+            if (known.TryGetValue(group, out var values)) return values;
+            var layer = group.Members[0].Layers[0];
+            var color = layer.Source.Color;
+            var map = SlotMap(layer, capabilities, view);
+            var pixels = map?.Texture is Texture2D texture ? AtlasSourceSamples.Small(texture, ContentSize, ContentSize) : null;
+            var lookup = !capabilities.MatcapLookup && Relooked(layer, capabilities, view) ? Relook(layer, view) : null;
+            var list = new List<float>();
+            for (int y = 0; y < ContentSteps; y++)
+                for (int x = 0; x < ContentSteps; x++)
+                {
+                    var uv = new Vector2((x + 0.5f) / ContentSteps, (y + 0.5f) / ContentSteps);
+                    var p = uv * 2f - Vector2.one;
+                    if (p.sqrMagnitude > 1f) continue;
+                    // A slot with the matcap's own lookup reads through its border.
+                    if (capabilities.MatcapLookup) uv = new Vector2(p.x * 0.5f * layer.Tiling.x + 0.5f, p.y * 0.5f * layer.Tiling.y + 0.5f);
+                    else if (lookup != null) uv = lookup(uv);
+                    var sample = pixels != null ? SampleRepeat(pixels, Vector2.Scale(uv, map.Tiling) + map.Offset) : Color.white;
+                    list.Add(Luminance(new Color(color.r * sample.r, color.g * sample.g, color.b * sample.b, 1f)));
+                }
+            return known[group] = list.ToArray();
+        }
+
+        // How far the values lie from their mean on average, as a share of the way from
+        // `zero` to `full`.
+        private static float Deviation(float[] values, float zero, float full)
+        {
+            float span = Mathf.Abs(full - zero);
+            if (span < 1e-5f || values.Length == 0) return 0f;
+            float mean = values.Average();
+            return values.Average(v => Mathf.Abs(v - mean)) / span;
+        }
+
+        // The values' distances from their mean, as shares of the way from `zero` to `full`: a
+        // texture's shape over the lookup disc.
+        private static float[] Shape(float[] values, float zero, float full)
+        {
+            var shape = new float[values.Length];
+            float span = Mathf.Abs(full - zero);
+            if (span < 1e-5f || values.Length == 0) return shape;
+            float mean = values.Average();
+            for (int p = 0; p < values.Length; p++) shape[p] = (values[p] - mean) / span;
+            return shape;
+        }
+
+        // The share of each matcap's look that a slot loses. A slot on one set of parts shows
+        // its matcaps as they are. Shared across parts it shows one averaged texture: each
+        // source keeps its level through its fit, and what varies over the lookup disc
+        // becomes the shared texture's (both between their black and white ends).
+        // - Lighting is judged by its shading (level + contrast, AtlasMatcapLook): its contrast
+        //   becomes the shared texture's, which varies more or less than its own matcaps'
+        //   texture does. An even matcap has no contrast to compare: what the shared texture's
+        //   variation shows as on it is taken from its range.
+        // - A rim or a highlight is where it is, so it is judged point by point
+        //   (AtlasLayerCost): its effect at each point of the disc, its level + its range ×
+        //   its texture's shape there, against the same with the shared texture's shape. What
+        //   the shared texture shows where the matcap shows nothing counts double, so the
+        //   loss can be more than all of it.
+        private static Dictionary<Group, float> SlotLosses(List<Group> slot, AtlasOutputCapabilities capabilities, AtlasMatcapView view,
+            Dictionary<Group, float[]> discs)
+        {
+            var losses = slot.ToDictionary(g => g, g => 0f);
+            var stacks = slot.GroupBy(g => g.Parts ?? "").ToList();
+            if (stacks.Count < 2) return losses;
+            bool add = Main(slot.SelectMany(g => g.Members[0].Layers).ToList()) != AtlasBlend.Multiply;
+            var main = add ? AtlasBlend.Add : AtlasBlend.Multiply;
+            float total = stacks.Sum(StackWeight);
+            float[] shared = null;
+            float zero = 0f, full = 0f;
+            var own = new List<(List<Group> Groups, float[] Values, float Zero, float Full)>();
+            foreach (var stack in stacks)
+            {
+                float share = total > 0f ? StackWeight(stack) / total : 1f / stacks.Count;
+                float[] values = null;
+                float z = add ? 0f : 1f, f = add ? 0f : 1f;
+                foreach (var group in stack)
+                {
+                    float weight = Weight(group.Members[0], main);
+                    var disc = DiscValues(group, capabilities, view, discs);
+                    if (values == null) values = Enumerable.Repeat(add ? 0f : 1f, disc.Length).ToArray();
+                    for (int p = 0; p < disc.Length; p++)
+                        values[p] = add ? values[p] + disc[p] * weight : values[p] * Mathf.Lerp(1f, disc[p], weight);
+                    float white = Luminance(group.Members[0].Layers[0].Source.Color);
+                    f = add ? f + white * weight : f * Mathf.Lerp(1f, white, weight);
+                    if (!add) z *= 1f - weight;
+                }
+                if (shared == null) shared = new float[values.Length];
+                for (int p = 0; p < values.Length; p++) shared[p] += values[p] * share;
+                zero += z * share;
+                full += f * share;
+                own.Add((stack.ToList(), values, z, f));
+            }
+            float spread = Deviation(shared, zero, full);
+            var sharedShape = Shape(shared, zero, full);
+            foreach (var (groups, values, z, f) in own)
+            {
+                float deviation = Deviation(values, z, f);
+                float[] shape = null;
+                foreach (var group in groups)
+                {
+                    var measure = group.Measure;
+                    if (measure.Role == AtlasMatcapRole.Lighting)
+                    {
+                        float shading = measure.Level + measure.Contrast;
+                        if (shading <= 1e-6f) continue;
+                        float shown = deviation > 1e-4f ? measure.Contrast * spread / deviation : measure.Range * spread;
+                        losses[group] = Mathf.Abs(measure.Contrast - shown) / shading;
+                        continue;
+                    }
+                    shape = shape ?? Shape(values, z, f);
+                    var cost = new AtlasLayerCost();
+                    for (int p = 0; p < shape.Length; p++)
+                        cost.Add(measure.SignedLevel + measure.Range * shape[p], measure.SignedLevel + measure.Range * sharedShape[p]);
+                    if (cost.Impact > 1e-6f) losses[group] = cost.Cost / cost.Impact;
+                }
+            }
+            return losses;
+        }
+
+        // What a slot loses of its matcaps' looks, by how visible each is.
+        private static float SlotCost(List<Group> slot, AtlasOutputCapabilities capabilities, AtlasMatcapView view, Dictionary<Group, float[]> discs) =>
+            SlotLosses(slot, capabilities, view, discs).Sum(l => Mathf.Max(0f, l.Key.Visible) * l.Value);
+
+        // A group's matcap texture on average (linear, before its color) as the slot shows it:
+        // over the slot's lookup disc, read as the generated texture reads it (SlotMap, Relook).
+        // A slot with the matcap's own lookup shows what the matcap does.
+        private static Color SlotMeanColor(Group group, AtlasOutputCapabilities capabilities, AtlasMatcapView view)
+        {
+            var layer = group.Members[0].Layers[0];
+            if (capabilities.MatcapLookup) return MeanColor(layer);
+            var map = SlotMap(layer, capabilities, view);
+            if (!(map?.Texture is Texture2D texture)) return Color.white;
+            var lookup = Relooked(layer, capabilities, view) ? Relook(layer, view) : null;
+            var pixels = AtlasSourceSamples.Small(texture, ContentSize, ContentSize);
+            var sum = new Color(0f, 0f, 0f, 0f);
+            int count = 0;
+            for (int y = 0; y < ContentSteps; y++)
+                for (int x = 0; x < ContentSteps; x++)
+                {
+                    var uv = new Vector2((x + 0.5f) / ContentSteps, (y + 0.5f) / ContentSteps);
+                    if ((uv * 2f - Vector2.one).sqrMagnitude > 1f) continue;
+                    if (lookup != null) uv = lookup(uv);
+                    sum += SampleRepeat(pixels, Vector2.Scale(uv, map.Tiling) + map.Offset);
+                    count++;
+                }
+            return sum / count;
+        }
+
+        // Average in color: matcaps without a slot keep their average effect in the base color,
+        // a bake. Each texel's color goes through the matcap's blends with its texture at its
+        // mean over the lookup disc: between the chain with a black matcap and with a white
+        // one (Chain). A blend added after the lighting is added to the color, lit. A source's
+        // matcaps apply in its layer order. What changes with the view is lost.
+        private const string PlacedAverage = "Matcaps kept as their average effect in the base color (Average in color), without a slot: {0}";
+
+        // `note` says why, with {0} for the matcaps. `glowInEmission`: the part of their glow
+        // that doesn't follow the light is in the emission, not in the color.
+        private static void Average(AtlasFeatureContext context, List<Group> groups, string note, bool glowInEmission = false)
+        {
+            if (groups.Count == 0) return;
+            var job = context.Job;
+            string labels = string.Join(", ", groups.Select(g => g.Label));
+            var request = AtlasLiveMasks.Request(context, AtlasVirtualMap.BaseColor);
+            if (request == null)
+            {
+                context.Notes.Add("A matcap's average goes into the base color, which is off; left out: " + labels + ".");
+                foreach (var group in groups) SetWay(context, group, "Left out: the base color is off", true);
+                return;
+            }
+            foreach (var group in groups) SetWay(context, group, WayAveraged);
+            var averages = Averages(job, groups);
+            // A matcap that adds or screens can take the color above 1.
+            request.Add(new AtlasMapContribution
+            {
+                Feature = FeatureId, Label = "matcap averages", Stage = AtlasMapStage.Layers, CanRaise = true,
+                Applies = averages.Has,
+                Apply = content => averages.Apply(content.Map, content.Source, content.Material)
+            });
+            Form(context, groups, glowInEmission, draw: true);
+            // A glow the output's matcaps would show isn't part of the color.
+            bool glows = context.Capabilities.MatcapEmission && groups.Any(g => g.Members.Any(m => Glow(m) > 0f));
+            context.Notes.Add(string.Format(note, labels) + (glows ? ". Their glow is left out." : "."));
+        }
+
+        // The groups' matcaps at their average on a color map of a source (Chain, with each
+        // matcap's texture at its mean over the lookup disc), in the source's layer order: which
+        // sources have any, and the step that applies them.
+        private static (System.Func<int, bool> Has, System.Action<NordicsTextureWrapper, int, AtlasUnifiedMaterial> Apply) Averages(
+            AtlasGeneratorJob job, List<Group> groups)
+        {
+            var averages = new Dictionary<int, List<SlotFit>>();
+            foreach (var members in groups.SelectMany(g => g.Members).GroupBy(m => m.Source))
+            {
+                var layers = job.Sources[members.Key].Material.Layers;
+                var list = new List<SlotFit>();
+                foreach (var member in members.OrderBy(m => layers.IndexOf(m.Layers[0])))
+                {
+                    var average = new SlotFit { Mask = member.Mask, Mean = Clamped(MeanColor(member.Layers[0])) };
+                    foreach (var layer in member.Layers.Where(l => l.Opacity > 0f))
+                        average.Layers.Add((0, layer.Blend, layer.Opacity, layer.Source.Color, Mathf.Clamp01(layer.BaseColorMix)));
+                    if (average.Layers.Count > 0) list.Add(average);
+                }
+                if (list.Count > 0) averages[members.Key] = list;
+            }
+            void Apply(NordicsTextureWrapper map, int source, AtlasUnifiedMaterial material)
+            {
+                foreach (var average in averages[source])
+                    using (var mask = AtlasMapEvaluator.ScaledMask(average.Mask, 1f, map.Width, map.Height, material))
+                        AtlasPixels.Map(map, mask, (c, m) =>
+                        {
+                            var black = Chain(average, m.r, c, 0f);
+                            var full = Chain(average, m.r, c, 1f);
+                            return new Color(Mathf.Lerp(black.r, full.r, average.Mean.r), Mathf.Lerp(black.g, full.g, average.Mean.g),
+                                Mathf.Lerp(black.b, full.b, average.Mean.b), c.a);
+                        });
+            }
+            return (averages.ContainsKey, Apply);
+        }
+
+        // How the groups' matcaps change a source's own color, for what shows the surface
+        // without the output shader's light (AtlasLightFloor): at their average, and with
+        // `draw` (no slot shows them) as they'd be drawn into the color (Bake), with the same
+        // layers, rig and camera at full strength; the form's strength is the bakes' × the
+        // matcaps'.
+        private static void Form(AtlasFeatureContext context, List<Group> groups, bool glowInEmission, bool draw)
+        {
+            if (groups.Count == 0) return;
+            var job = context.Job;
+            var settings = job.Baking ?? new AtlasBakeSettings();
+            var averages = Averages(job, groups);
+            // Each source's own layers (not GlowAsColor's: the bake adds the glow's lit part itself).
+            var drawn = new Dictionary<int, List<AtlasLookupLayer>>();
+            foreach (var members in groups.SelectMany(g => g.Members).GroupBy(m => m.Source))
+            {
+                var layers = job.Sources[members.Key].Material.Layers;
+                drawn[members.Key] = members.OrderBy(m => layers.IndexOf(m.Layers[0])).SelectMany(m => m.Layers.Where(l => !m.Added.Contains(l))).ToList();
+            }
+            var form = new AtlasMatcapForm
+            {
+                Applies = averages.Has, Average = averages.Apply,
+                Strength = draw ? Mathf.Clamp01(settings.strength) * Mathf.Clamp01(settings.matcaps) : 0f
+            };
+            if (draw)
+                form.Draw = (map, i, material) =>
+                {
+                    var source = job.Sources[i];
+                    var sections = source.Surface?.Invoke();
+                    if (sections == null || sections.Count == 0 || !drawn.TryGetValue(i, out var list)) return false;
+                    bool symmetric = AtlasNormalFeature.UsesSymmetricRig(settings, source);
+                    var rig = AtlasLightRig.Create(settings, symmetric);
+                    var camera = symmetric ? AtlasLightRig.Direction(0f, settings.matcapViewHeight) : AtlasMatcapBake.Camera(settings);
+                    using (var normals = list.Any(l => l.SurfaceNormalAmount > 0f) && Normals.IsPresent(source)
+                               ? AtlasMapEvaluator.Normal(source, map.Width, map.Height, 1f) : null)
+                        AtlasMatcapBake.ApplyColor(map, material, list, sections, normals, rig, 1f, glowInEmission, camera);
+                    return true;
+                };
+            context.Plan.MatcapForms.Add(form);
+        }
+
         // The generated texture's value (Combine) with every matcap texture black and white.
-        private static (float Zero, Color Full) Ends(List<Group> slot, AtlasBlend main)
+        private static (float Zero, Color Full) Ends(List<Group> slot, AtlasBlend main) =>
+            (CombinedValue(slot, main, g => Color.black).r, CombinedValue(slot, main, g => Color.white));
+
+        // The generated texture's value (Combine) where each group's matcap texture reads
+        // `texture`: black, white, or its mean over the lookup disc.
+        private static Color CombinedValue(List<Group> slot, AtlasBlend main, Func<Group, Color> texture)
         {
             bool add = main != AtlasBlend.Multiply;
             var stacks = slot.GroupBy(g => g.Parts ?? "").ToList();
             float total = stacks.Sum(StackWeight);
-            float zero = 0f;
-            var full = Color.black;
+            var value = Color.black;
             foreach (var stack in stacks)
             {
                 float share = stacks.Count == 1 ? 1f : total > 0f ? StackWeight(stack) / total : 1f / stacks.Count;
-                float z = add ? 0f : 1f;
                 var f = add ? Color.black : Color.white;
                 foreach (var group in stack)
                 {
                     float weight = Weight(group.Members[0], main);
                     var color = group.Members[0].Layers[0].Source.Color;
+                    var read = texture(group);
                     for (int c = 0; c < 3; c++)
-                        f[c] = add ? f[c] + color[c] * weight : f[c] * Mathf.Lerp(1f, color[c], weight);
-                    if (!add) z *= 1f - weight;
+                        f[c] = add ? f[c] + color[c] * read[c] * weight : f[c] * Mathf.Lerp(1f, color[c] * read[c], weight);
                 }
-                zero += z * share;
-                for (int c = 0; c < 3; c++) full[c] += f[c] * share;
+                for (int c = 0; c < 3; c++) value[c] += f[c] * share;
             }
-            full.a = 1f;
-            return (zero, full);
+            value.a = 1f;
+            return value;
         }
+
+        private static Color Clamped(Color c) => new Color(Mathf.Clamp01(c.r), Mathf.Clamp01(c.g), Mathf.Clamp01(c.b), 1f);
 
         // A stack's weight among those on other parts: how visible its groups are together.
         private static float StackWeight(IEnumerable<Group> stack) => stack.Sum(g => Mathf.Max(0f, g.Visible));
@@ -1089,6 +1846,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var black = Chain(fit, mask, b, 0f);
             var full = Chain(fit, mask, b, 1f);
+            // The source's average look with its own matcaps.
+            var average = Color.black;
+            for (int c = 0; c < 3; c++) average[c] = Mathf.Lerp(black[c], full[c], fit.Mean[c]);
+            if (fit.Shared)
+                // The slot shows the shared texture here, whose average differs from the
+                // source's own matcaps': the ends move by the difference, as far as black
+                // stays a color, so the source keeps its average look and the shared
+                // texture varies it.
+                for (int c = 0; c < 3; c++)
+                {
+                    float moved = Mathf.Max(average[c] - Mathf.Lerp(black[c], full[c], fit.SlotMean[c]), -black[c]);
+                    black[c] += moved;
+                    full[c] += moved;
+                }
             Color rise = Color.black, top = Color.black;
             for (int c = 0; c < 3; c++)
             {
@@ -1111,41 +1882,56 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     ? Mathf.Max(0f, target - strength * half)
                     : Mathf.Max(0f, target) / Mathf.Max(1e-4f, 1f - strength + strength * half);
             }
-            return result;
+            if (fit.Shift == AtlasBaseColorShift.Full) return result;
+
+            // The bounds on the shift, per channel (ATLAS_OUTPUT.md, "Base color shifts"). The
+            // blocked view shows the base color alone, so the map stays where it is right for
+            // that view too.
+            // - Keep: the surface's own color.
+            // - Automatic: between the surface's own color and its average look with the
+            //   matcaps.
+            var bounded = result;
+            bool changed = false;
+            for (int c = 0; c < 3; c++)
+            {
+                float low = b[c], high = b[c];
+                if (fit.Shift == AtlasBaseColorShift.Automatic)
+                {
+                    low = Mathf.Min(b[c], average[c]);
+                    high = Mathf.Max(b[c], average[c]);
+                }
+                bounded[c] = Mathf.Clamp(result[c], low, high);
+                changed |= Mathf.Abs(bounded[c] - result[c]) > 1e-6f;
+            }
+            if (!changed) return result;
+            // The strength for the bounded base color: an adding slot reaches the matcaps'
+            // brightest (base + T1 × s), a multiplying one their darkest (base × lerp(1, T0, s)),
+            // as far as the base color lets it.
+            float level = Luminance(bounded);
+            if (fit.Add) strength = Mathf.Clamp01((Luminance(full) - level) / Mathf.Max(1e-4f, Luminance(fit.Full)));
+            else strength = level > 1e-5f && fit.Zero < 1f - 1e-4f ? Mathf.Clamp01((1f - Luminance(black) / level) / (1f - fit.Zero)) : 0f;
+            return bounded;
         }
 
-        // The base color map as the fits make it where their sources are. Above 1, it is divided
-        // by its brightest value, which goes into the shared color.
-        private static void FitBaseColor(AtlasFeatureContext context, AtlasMapRequest request, Dictionary<int, SlotFit> fits)
+        // The base color map as the fits make it where their sources are: a shift, right only
+        // together with the slot. It can come out above 1 (the map's range step), unless the
+        // base color is kept.
+        private static AtlasMapContribution FitBaseColor(AtlasMapRequest request, Dictionary<int, SlotFit> fits)
         {
-            var inner = request.Evaluate ?? ((i, m, w, h) => AtlasMapEvaluator.Evaluate(AtlasVirtualMap.BaseColor, m, w, h));
-            var output = context.Output.Surface.BaseColor;
-            request.Evaluate = (i, material, w, h) =>
+            var shift = new AtlasMapContribution
             {
-                var result = inner(i, material, w, h);
-                if (!fits.TryGetValue(i, out var fit)) return result;
-                // The map holds the base color without the shared color.
-                var tint = output.Color;
-                using (var mask = AtlasMapEvaluator.ScaledMask(fit.Mask, 1f, w, h, material))
-                    AtlasPixels.Map(result, mask, (c, m) =>
-                    {
-                        var t = Solve(fit, m.r, new Color(c.r * tint.r, c.g * tint.g, c.b * tint.b, c.a), out _);
-                        return new Color(tint.r > 1e-5f ? t.r / tint.r : c.r, tint.g > 1e-5f ? t.g / tint.g : c.g,
-                            tint.b > 1e-5f ? t.b / tint.b : c.b, c.a);
-                    });
-                return result;
-            };
-            if (request.Finish == null)
-                request.Finish = map =>
+                Feature = FeatureId, Label = "matcap slot fit", Stage = AtlasMapStage.Layers, Kind = AtlasContributionKind.Shift,
+                CanRaise = fits.Values.Any(f => f.Shift != AtlasBaseColorShift.Keep),
+                Applies = fits.ContainsKey,
+                Apply = content =>
                 {
-                    float peak = AtlasColorFeature.Peak(map);
-                    if (peak <= 1f) return;
-                    output.Color = new Color(output.Color.r * peak, output.Color.g * peak, output.Color.b * peak, output.Color.a);
-                    map.ApplyColor(new ColorOperation
-                    {
-                        Opcode = ColorOperationCode.Tint, Parameters = { Color = new Color(1f / peak, 1f / peak, 1f / peak, 1f) }
-                    });
-                };
+                    var fit = fits[content.Source];
+                    using (var mask = AtlasMapEvaluator.ScaledMask(fit.Mask, 1f, content.Width, content.Height, content.Material))
+                        AtlasPixels.Map(content.Map, mask, (c, m) => Solve(fit, m.r, c, out _));
+                }
+            };
+            request.Add(shift);
+            return shift;
         }
 
         // The source's member of the slot (the first, if several).
@@ -1175,49 +1961,57 @@ namespace NordicWind.AdvancedAtlaser.Editor
         /// <c>Parts</c>) stacked as <see cref="Combine(IReadOnlyList{ValueTuple{AtlasTextureReference, Color, float}}, AtlasBlend, int)"/>,
         /// the stacks on different parts averaged by their <c>Area</c> (the parts' total: their
         /// area, or how visible they are).</summary>
+        /// <param name="lookups">Per part: where its own lookup reads its texture for the slot's
+        /// coordinate; null where the slot's lookup is its own.</param>
         public static Color[] Combine(IReadOnlyList<(AtlasTextureReference Map, Color Color, float Weight, string Parts, float Area)> parts,
-            AtlasBlend blend, int size)
+            AtlasBlend blend, int size, IReadOnlyList<Func<Vector2, Vector2>> lookups = null)
         {
-            var stacks = parts.GroupBy(p => p.Parts ?? "").ToList();
-            if (stacks.Count == 1) return Stack(parts.Select(p => (p.Map, p.Color, p.Weight)).ToList(), blend, size);
-            float total = stacks.Sum(s => s.Sum(p => Mathf.Max(0f, p.Area)));
+            var indexed = parts.Select((p, i) => (Part: p, Lookup: lookups != null && i < lookups.Count ? lookups[i] : null)).ToList();
+            var stacks = indexed.GroupBy(p => p.Part.Parts ?? "").ToList();
+            if (stacks.Count == 1)
+                return Stack(parts.Select(p => (p.Map, p.Color, p.Weight)).ToList(), blend, size, indexed.Select(p => p.Lookup).ToList());
+            float total = stacks.Sum(s => s.Sum(p => Mathf.Max(0f, p.Part.Area)));
             var result = new Color[size * size];
             foreach (var stack in stacks)
             {
-                float share = total > 0f ? stack.Sum(p => Mathf.Max(0f, p.Area)) / total : 1f / stacks.Count;
-                var pixels = Stack(stack.Select(p => (p.Map, p.Color, p.Weight)).ToList(), blend, size);
+                float share = total > 0f ? stack.Sum(p => Mathf.Max(0f, p.Part.Area)) / total : 1f / stacks.Count;
+                var pixels = Stack(stack.Select(p => (p.Part.Map, p.Part.Color, p.Part.Weight)).ToList(), blend, size, stack.Select(p => p.Lookup).ToList());
                 for (int i = 0; i < result.Length; i++) result[i] += pixels[i] * share;
             }
             for (int i = 0; i < result.Length; i++) result[i].a = 1f;
             return result;
         }
 
-        // The texture as the slot shows it: sampled at the lookup coordinate × scale + offset,
-        // repeated as Poiyomi samples it.
-        private static Color[] Transformed(NordicsTextureWrapper texture, AtlasTextureReference map, int size)
+        // The texture as the slot shows it: sampled at the lookup coordinate (the matcap's own,
+        // where the slot's is another) × scale + offset, repeated as Poiyomi samples it.
+        private static Color[] Transformed(NordicsTextureWrapper texture, AtlasTextureReference map, int size, Func<Vector2, Vector2> lookup = null)
         {
             var result = new Color[size * size];
             for (int y = 0; y < size; y++)
                 for (int x = 0; x < size; x++)
                 {
                     var uv = new Vector2((x + 0.5f) / size, (y + 0.5f) / size);
+                    if (lookup != null) uv = lookup(uv);
                     result[y * size + x] = texture.Sample(Vector2.Scale(uv, map.Tiling) + map.Offset, TextureSamplingMode.Bilinear, TextureWrapMode.Repeat);
                 }
             return result;
         }
 
-        private static Color[] Stack(IReadOnlyList<(AtlasTextureReference Map, Color Color, float Weight)> parts, AtlasBlend blend, int size)
+        private static Color[] Stack(IReadOnlyList<(AtlasTextureReference Map, Color Color, float Weight)> parts, AtlasBlend blend, int size,
+            IReadOnlyList<Func<Vector2, Vector2>> lookups = null)
         {
             var result = new Color[size * size];
             bool add = blend != AtlasBlend.Multiply;
             for (int i = 0; i < result.Length; i++) result[i] = add ? new Color(0f, 0f, 0f, 1f) : Color.white;
-            foreach (var part in parts)
+            for (int k = 0; k < parts.Count; k++)
             {
+                var part = parts[k];
+                var lookup = lookups != null && k < lookups.Count ? lookups[k] : null;
                 Color[] pixels = null;
                 if (part.Map?.Texture is Texture2D texture)
                     using (var loaded = new NordicsTextureWrapper(texture, TextureDataType.Color))
                     using (var sized = loaded.Resize(size, size, sampling: TextureSamplingMode.Area))
-                        pixels = Transformed(part.Map) ? Transformed(sized, part.Map, size) : sized.GetPixels();
+                        pixels = lookup != null || Transformed(part.Map) ? Transformed(sized, part.Map, size, lookup) : sized.GetPixels();
                 for (int i = 0; i < result.Length; i++)
                 {
                     var c = (pixels != null ? pixels[i] : Color.white) * part.Color;

@@ -146,7 +146,8 @@ A second, usually tiled, albedo and normal map, faded in by a mask.
 - **Live or baked:** live.
 - **Unified:** surface response: direct highlights and environment reflections on or off.
   Same as Standard Lite.
-- **Parser:** from the *_OFF* keywords.
+- **Parser:** from the *_OFF* keywords. The highlight strength is π: Unity lights a highlight
+  by D × V × π × N·L, and the unified strength is on the scale of GGX × N·L without π.
 
 ## Lighting
 Unity's physically based lighting: GGX highlights, Lambert diffuse, full light probe ambient,

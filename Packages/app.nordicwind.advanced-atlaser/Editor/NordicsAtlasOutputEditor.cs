@@ -25,7 +25,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                          string.Join(",", unified.Select(u => u == null ? 0 : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(u)));
             if (overview == null || key != overviewKey)
             {
-                overview = AtlasOutputOverview.Build(output.configuration, shader?.Capabilities, materials, unified);
+                overview = AtlasOutputOverview.Build(output.configuration, shader, materials, unified);
                 overviewKey = key;
             }
             return overview;
@@ -44,7 +44,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var config = serializedObject.FindProperty("configuration");
             var owner = output.gameObject;
             var main = owner.GetComponent<NordicsAdvancedAtlaser>();
-            if (main == null) EditorGUILayout.HelpBox("Add Nordic's Advanced Atlaser to this GameObject to enable source discovery and coordination.", MessageType.Warning);
+            if (main == null) EditorGUILayout.HelpBox("Add Nordic's Advanced Atlaser to this object. It finds the materials this output can use.", MessageType.Warning);
             EditorGUILayout.PropertyField(config.FindPropertyRelative("outputName"));
             DrawShaderSelection(config.FindPropertyRelative("shaderId"));
             // Padding separates source regions, so it only applies with two or more sources.
@@ -182,8 +182,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             using (new EditorGUI.DisabledScope(!HasAssignedMaterials(sources) || AtlasShaderRegistry.Output(config.FindPropertyRelative("shaderId").stringValue) == null))
             {
                 if (GUILayout.Button(new GUIContent("Auto Setup",
-                        "Lays out the assigned sources' UV regions by their base color textures, sets the main texture size, " +
-                        "and sets every feature to its default mode. Sources aren't added or removed.")))
+                        "Arranges the source materials in the atlas, picks the texture size and resets every feature to its " +
+                        "default. It doesn't add or remove materials.")))
                 {
                     // Commit pending source assignment, shader selection and UV edits first.
                     serializedObject.ApplyModifiedProperties();
@@ -203,7 +203,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     EditorGUILayout.HelpBox($"{materials[i].name}: {analyses[i].Error}", MessageType.Info);
             serializedObject.ApplyModifiedProperties();
             EditorGUILayout.Space();
-            using (new EditorGUI.DisabledScope(materials.Count == 0 || shader?.FindShader() == null))
+            using (new EditorGUI.DisabledScope(materials.Count == 0 || !AtlasShaderRegistry.IsInstalled(shader)))
                 if (GUILayout.Button("Bake to Assets…"))
                     BakeToAssets(output);
             previewOpen = EditorGUILayout.Foldout(previewOpen, "UV Layout Preview", true);
@@ -213,7 +213,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 AtlasUVPreview.Draw(output.configuration.sources,
                     dimensions != null ? dimensions.width : 1,
                     dimensions != null ? dimensions.height : 1);
-                EditorGUILayout.LabelField("Preview uses main textures; no shader-specific baking or padding is applied.", EditorStyles.wordWrappedMiniLabel);
+                EditorGUILayout.LabelField("Shows where each material's main texture goes. Baking and padding aren't shown.", EditorStyles.wordWrappedMiniLabel);
             }
             if (main != null)
             {
@@ -310,7 +310,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (options.Count == 0)
             {
                 EditorGUILayout.HelpBox("No supported output shader is installed in this project. Install one, " +
-                    "for example Poiyomi Toon 10 or the VRChat SDK's Mobile Toon Standard.", MessageType.Error);
+                    "for example Poiyomi Toon or the VRChat SDK's Mobile Toon Standard.", MessageType.Error);
                 return;
             }
             var labels = options.Select(o => o.DisplayName).ToArray();

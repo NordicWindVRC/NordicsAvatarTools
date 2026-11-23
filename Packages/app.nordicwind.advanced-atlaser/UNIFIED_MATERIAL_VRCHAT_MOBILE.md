@@ -21,6 +21,7 @@ inventoried; properties the inspector doesn't show are listed under *Not visual*
 | Shader | Inspector | Size |
 |---|---|---|
 | Toon Lit | Unity's default: one texture with tiling | 1 feature |
+| Diffuse, Bumped Diffuse | Unity's default: one texture with tiling; Bumped Diffuse adds a normal map | 1 or 2 features |
 | Standard Lite | `StandardLiteShaderGUI`: Main Maps, Secondary Maps, Forward Rendering Options | about 12 features |
 | Toon Standard (and Outline) | `ToonStandardEditor`: foldout sections, most with an on/off toggle | about 15 features |
 
@@ -63,6 +64,47 @@ blocked.
 Nothing; the shader has one property.
 
 **Coverage:** the one property is mapped; nothing is reported.
+
+---
+
+## Diffuse and Bumped Diffuse
+
+Unity's simplified mobile Diffuse as VRChat ships it: Lambert shading of one texture. Bumped
+Diffuse is the same shader with a normal map. Both are always opaque, back-face culled, and
+multiply by vertex color. Toon Lit and Bumped Diffuse fall back to Diffuse.
+
+### Base color
+Texture times vertex color.
+- **Controls:** texture, tiling and offset. No tint color.
+- **Live or baked:** baked. The vertex color stays per-vertex (see *Vertex color* under
+  [Cross-shader notes](#cross-shader-notes)).
+- **Unified:** base color texture; vertex color *multiply color* on, used as stored (not
+  sRGB data). Alpha source *none*: the output is always opaque.
+- **Parser:** mapped as above.
+
+### Normal map (Bumped Diffuse)
+- **Controls:** texture. It has no scale, and no tiling of its own: it uses the base
+  texture's.
+- **Live or baked:** baked; part of normal compositing.
+- **Unified:** primary normal layer at strength 1.
+- **Parser:** read for Bumped Diffuse only, on the base texture's tiling. A Diffuse material
+  that still holds a normal map from another shader has none.
+
+### Lighting
+Lambert: `base × (main light × N·L + ambient)`, with the ambient light sampled along the
+normal (L1 light probes, plus vertex lights). One per-pixel directional light and no add pass,
+so other lights count only through vertex lights and probes. It receives no shadows
+(`noshadow`), and has no highlights or reflections: the shader turns both off.
+- **Controls:** none.
+- **Live or baked:** live.
+- **Unified:** the *physically based* family with *Lambert* diffuse and no surface response.
+- **Parser:** *physically based*, diffuse *Lambert*, ambient *directional*, received shadows
+  off, additional lights 0; direct highlights and environment reflections off.
+
+### Render
+Always opaque, back faces culled, depth written, queue Geometry: the unified render defaults.
+
+**Coverage:** every property is mapped; nothing is reported.
 
 ---
 
@@ -201,7 +243,10 @@ are the matcap, which uses no tiling, and the detail mask, which always uses UV0
 ### Lighting
 Toon shading from a ramp, with controls for how dark and how colored the shadows get.
 Ambient light is flat: the average light-probe color, with no direction. Shadow
-attenuation feeds into the ramp, so received shadows follow the ramp's shape.
+attenuation feeds into the ramp, so received shadows follow the ramp's shape. Without a
+real-time main light, the probes are the light: their color along their dominant direction,
+which is also the direction the ramp shades from, while their average stays the ambient
+light.
 
 - **Controls:**
   - **Shading:** a preset (Flat, Realistic, Realistic Soft, Realistic Very Soft, Toon 2, 3 or 4
@@ -210,14 +255,16 @@ attenuation feeds into the ramp, so received shadows follow the ramp's shape.
   - **Shadow Tint:** colors shadows with the albedo: 0 gives black shadows, 1 gives shadows
     in the albedo's color, so the darkening is a saturated version of the surface color.
   - **Min Brightness:** a floor of up to 0.1 × albedo, added like emission.
-  - **Limit Brightness:** clamps incoming light to 1, so bright worlds don't blow out colors.
-    Default on.
+  - **Limit Brightness:** clamps the light on the surface to 1 (the main light through the
+    ramp + the ambient light), so bright worlds don't blow out colors. Default on.
 - **Live or baked:** live.
 - **Unified:** the ramp toon lighting family, with:
   - a ramp (texture or gradient); the presets could become named ramp shapes, so a writer
     can pick its own equivalent;
-  - shadow lift, shadow color from albedo, minimum brightness, light clamp;
-  - ambient model *flat* (average color, no direction).
+  - shadow lift, shadow color from albedo, minimum brightness, the limit on *the shaded
+    light*;
+  - ambient model *flat* (average color, no direction);
+  - without a main light: *ambient as main light* 1 with the *brightest* stand-in.
 
 ### Specular
 GGX highlights and reflection probe reflections, with a toon option.
@@ -228,7 +275,8 @@ GGX highlights and reflection probe reflections, with a toon option.
   - **Reflectance:** specular strength for non-metals, also multiplied by the gloss map.
 - **Behavior:** dielectric F0 = 0.16 × reflectance² × gloss map, the Filament convention;
   0.5 gives the usual 4%. Metallic darkens the diffuse color. Geometric specular
-  anti-aliasing is always on.
+  anti-aliasing is always on. One fresnel for highlights and reflections,
+  `F0 + (1 − F0)((1 − V·H)(1 − V·N))⁵`, × `saturate((reflectance + metallic) × 4)`.
 - **Live or baked:** maps baked; the highlight is live.
 - **Unified:** surface response: metallic, roughness, reflectance (F0 for non-metals), and a
   highlight style parameter running from smooth to stylized step. Reflectance is
@@ -357,7 +405,8 @@ that's off maps to nothing.
 - **Specular:** metallic and gloss maps with their channels × strengths; reflectance × the gloss
   map (`F0 = 0.16 × r²`, as the unified reflectance); highlight sharpness; specular
   anti-aliasing on (the shader's own geometric roughening, mapped to the unified filtering).
-  Off: no highlights and no reflections.
+  Off: no highlights and no reflections. The fresnel *view-half × view-normal* and a
+  reflectance fade of 0.25 are set whatever the material holds: they are the shader's own.
 - **Matcap:** a lookup layer, projection *view stabilized*, placement *surface* (lit), blend
   add or multiply, strength as opacity, mask with channel; the texture's tiling is ignored, as
   in the shader.
@@ -404,8 +453,9 @@ that's off maps to nothing.
   highlights and reflections toggles: a parser must read the switch first, the values second.
   A value behind a disabled switch isn't covered, it's irrelevant.
 - **Lighting families from these shaders:** *flat* (Toon Lit), *ramp toon* (Toon Standard)
-  and *physically based* (Standard Lite). Each needs an ambient model (flat average or
-  directional), and whether it receives shadows.
+  and *physically based* (Standard Lite; Diffuse and Bumped Diffuse, without highlights or
+  reflections). Each needs an ambient model (flat average or directional), and whether it
+  receives shadows.
 - **Surface response** covers metallic, roughness, reflectance, highlight style, specular
   anti-aliasing, and on/off for direct highlights and environment reflections.
 - **Before or after lighting** is a parameter of matcaps and other overlays (the layer's

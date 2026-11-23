@@ -250,8 +250,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             for (int i = 0; i < source.ColorAdjustments.Count; i++)
             {
                 var adjustment = source.ColorAdjustments[i];
-                // Proximity color's tints and a final color's hue cycling are their own features'.
-                if (proximity.Any(p => p.Adjustment == adjustment)) continue;
+                // Proximity color's tints, a final color's hue cycling and tone mapping are their
+                // own features'.
+                if (proximity.Any(p => p.Adjustment == adjustment) || AtlasToneMappingFeature.Is(adjustment)) continue;
                 if (adjustment.Target == AtlasAdjustmentTarget.FinalColor && AtlasHueCycling.IsCycling(source, i)) continue;
                 if (adjustment.Target == AtlasAdjustmentTarget.FinalColor)
                     notes.Add("Final color adjustments aren't merged yet; they're left out.");

@@ -150,7 +150,9 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 created.Add(material);
                 shader.Write(output, material);
                 var parsed = AtlasShaderRegistry.Detect(material).Parse(material).Surface.VertexColor;
-                Assert.IsTrue(parsed.MultiplyColor, shader.DisplayName);
+                // A shader without vertex colors (Unity Standard) shows none.
+                Assert.AreEqual((support & AtlasVertexColorSupport.Color) != 0, parsed.MultiplyColor, shader.DisplayName);
+                if ((support & AtlasVertexColorSupport.Color) == 0) continue;
                 Assert.AreEqual(vertex.Amount, parsed.Amount, 1e-5f, shader.DisplayName);
                 Assert.AreEqual(vertex.MultiplyAlpha, parsed.MultiplyAlpha, shader.DisplayName);
                 Assert.AreEqual(vertex.SrgbData, parsed.SrgbData, shader.DisplayName);
@@ -158,7 +160,9 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 var without = new Material(shader.FindShader());
                 created.Add(without);
                 shader.Write(new AtlasUnifiedMaterial(), without);
-                Assert.IsFalse(AtlasShaderRegistry.Detect(without).Parse(without).Surface.VertexColor.MultiplyColor, shader.DisplayName + ": none");
+                // A shader without a switch for it always multiplies.
+                Assert.AreEqual((support & AtlasVertexColorSupport.Always) != 0,
+                    AtlasShaderRegistry.Detect(without).Parse(without).Surface.VertexColor.MultiplyColor, shader.DisplayName + ": none");
             }
         }
 

@@ -10,10 +10,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // relative to the largest, which the output uses. Sources without them get no metallic, full
     // roughness and no highlights or reflections. Reflectance is one value in the output, fitted
     // to the sources' highlights and reflections (AtlasSpecularResponse): where the output has no
-    // strengths or masks for them, a lower reflectance is what dims them. Automatic fits all
-    // sources by area; a chosen source is fitted alone.
+    // strengths or masks for them, a lower reflectance is what dims them, and where its shader's
+    // fresnel differs from a source's, the reflectance makes up for it as far as it can.
+    // Automatic fits all sources by area; a chosen source is fitted alone.
     public sealed class AtlasSpecularFeature : IAtlasSharedValueFeature, IAtlasAutomaticReference
     {
+        // For an output of the specular workflow (AtlasSpecularColor).
+        public static readonly AtlasFeatureMode SpecularColor = new AtlasFeatureMode
+        {
+            Id = "specularcolor", Label = "Specular color and smoothness maps", Kind = AtlasFeatureModeKind.Native,
+            RequiredMaps = new[] { AtlasVirtualMap.SpecularColor, AtlasVirtualMap.Roughness }
+        };
+
         private static readonly AtlasFeatureMode[] ModeList =
         {
             new AtlasFeatureMode
@@ -22,6 +30,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 RequiredMaps = new[] { AtlasVirtualMap.Metallic, AtlasVirtualMap.Roughness },
                 OptionalMaps = new[] { AtlasVirtualMap.ReflectionMask, AtlasVirtualMap.SpecularMask }
             },
+            SpecularColor,
             AtlasFeatureMode.Off
         };
 
@@ -32,8 +41,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public IReadOnlyList<AtlasFeatureMode> Modes => ModeList;
         public string SharedValueName => "Reflectance";
         public string AutomaticRule =>
-            "Automatic fits the reflectance that changes the materials' highlights and reflections least, weighted by area. " +
-            "Where the output shader has no strengths for them, they're dimmed through it.";
+            "Automatic uses the value that changes the highlights and reflections of your materials the least.";
 
         public bool SharedValuesDiffer(IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasOutputCapabilities capabilities)
         {
@@ -46,13 +54,14 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Fitted values: within the fit's steps.
         private static bool Close(float a, float b) => Mathf.Abs(a - b) <= 0.01f;
 
-        // Whether the output gives a source its look exactly: its reflectance, and its highlight
-        // and reflection strengths where the output has none.
+        // Whether the output gives a source its look exactly: its reflectance, its highlight and
+        // reflection strengths where the output has none, and the fresnel its own shader has.
+        // A source of another shader is fitted, since the same values look different there.
         private static bool Exact(AtlasUnifiedMaterial source, AtlasOutputCapabilities capabilities)
         {
             var response = source.Surface.Response;
             OutputReflectance(response, capabilities.Reflectance, out bool exact);
-            return exact && (capabilities.Provides(AtlasVirtualMap.SpecularMask) || Full(response.Highlights.Enabled, response.Highlights.Strength, response.Highlights.Mask)) &&
+            return exact && AtlasSpecularResponse.SameShading(response, capabilities) && (capabilities.Provides(AtlasVirtualMap.SpecularMask) || Full(response.Highlights.Enabled, response.Highlights.Strength, response.Highlights.Mask)) &&
                    (capabilities.Provides(AtlasVirtualMap.ReflectionMask) || Full(response.Reflections.Enabled, response.Reflections.Strength, response.Reflections.Mask));
         }
 
@@ -121,6 +130,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var job = context.Job;
             var active = new HashSet<int>(context.Sources);
+            if (context.Mode == SpecularColor)
+            {
+                AtlasSpecularColor.Resolve(context, active);
+                Notes(context, active, specularColor: true);
+                return;
+            }
             float reflections = 0f, highlights = 0f;
             foreach (int i in active)
             {
@@ -303,7 +318,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 Map = map,
                 Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Data },
-                Evaluate = (index, material, width, height) => active.Contains(index) && evaluate != null
+                Content = (index, material, width, height) => active.Contains(index) && evaluate != null
                     ? evaluate(material, width, height)
                     : AtlasMapEvaluator.Constant(map, neutral, width, height)
             };
@@ -312,7 +327,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return request.Reference;
         }
 
-        private static void Notes(AtlasFeatureContext context, IEnumerable<int> active)
+        // `specularColor`: the output keeps a specular color, and the strengths are in it.
+        private static void Notes(AtlasFeatureContext context, IEnumerable<int> active, bool specularColor = false)
         {
             var materials = active.Select(i => context.Job.Sources[i].Material).ToList();
             var responses = materials.Select(m => m.Surface.Response).ToList();
@@ -321,7 +337,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (materials.Any(m => (m.Surface.Response.Highlights.Mask != null && !AtlasMapEvaluator.CanEvaluate(m.Surface.Response.Highlights.Mask, m)) ||
                                    (m.Surface.Response.Reflections.Mask != null && !AtlasMapEvaluator.CanEvaluate(m.Surface.Response.Reflections.Mask, m))))
                 context.Notes.Add("A highlight or reflection mask on another UV or a global mask written by layers or the second pass isn't baked yet; it counts as 1.");
-            if (responses.Any(r => r.SpecularColor != null))
+            if (!specularColor && responses.Any(r => r.SpecularColor != null))
                 context.Notes.Add("The specular workflow's specular color isn't converted yet; the metallic and roughness are used.");
             context.Notes.Add("Highlight and reflection settings other than their strengths and masks (tints, fresnel, steps, anisotropy, cubemaps) aren't merged yet; the output shader's defaults are used.");
         }
@@ -405,21 +421,18 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
                 if (active.Any(i => job.Sources[i].Material.Surface.Response.OcclusionTint?.Map?.Texture != null))
                     context.Notes.Add("An occlusion tint texture isn't baked; its color is used.");
-                // After every feature's edits to the base color: occlusion darkens all of it.
-                context.Plan.AfterResolve.Add(() =>
+                request.Add(new AtlasMapContribution
                 {
-                    var inner = request.Evaluate ?? ((i, m, w, h) => AtlasMapEvaluator.Evaluate(AtlasVirtualMap.BaseColor, m, w, h));
-                    request.Evaluate = (i, material, w, h) =>
+                    Feature = "occlusion", Label = "baked occlusion", Stage = AtlasMapStage.Shading, Applies = shares.ContainsKey,
+                    Apply = content =>
                     {
-                        var result = inner(i, material, w, h);
-                        if (!shares.TryGetValue(i, out var share)) return result;
+                        var material = content.Material;
                         var response = material.Surface.Response;
-                        using (var occlusion = AtlasMapEvaluator.Scalar(response.Occlusion, w, h, material))
-                        using (var metallic = response.MultiBounceOcclusion ? AtlasMapEvaluator.Scalar(response.Metallic, w, h, material) : null)
-                            AtlasOcclusionShading.Apply(result, occlusion, metallic, share,
+                        using (var occlusion = AtlasMapEvaluator.Scalar(response.Occlusion, content.Width, content.Height, material))
+                        using (var metallic = response.MultiBounceOcclusion ? AtlasMapEvaluator.Scalar(response.Metallic, content.Width, content.Height, material) : null)
+                            AtlasOcclusionShading.Apply(content.Map, occlusion, metallic, shares[content.Source],
                                 response.OcclusionTint?.Color ?? Color.black, response.MultiBounceOcclusion, strength);
-                        return result;
-                    };
+                    }
                 });
             }
             BakeIntoReflections(context, active, strength);
@@ -465,26 +478,27 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             var request = context.Maps.LastOrDefault(r => r.Map == AtlasVirtualMap.ReflectionMask && r.Reference == output.Reflections.Mask.Map);
             if (request == null) return;
-            var inner = request.Evaluate;
             if (output.Highlights.Mask?.Map == request.Reference && context.Capabilities.Provides(AtlasVirtualMap.SpecularMask))
             {
+                // The map as it is before the occlusion goes into it.
                 var copy = new AtlasMapRequest
                 {
-                    Map = AtlasVirtualMap.SpecularMask, Evaluate = inner,
+                    Map = AtlasVirtualMap.SpecularMask, Content = request.Snapshot(),
                     Reference = new AtlasTextureReference { Interpretation = request.Reference.Interpretation }
                 };
                 copy.Sources.AddRange(request.Sources);
                 context.Maps.Add(copy);
                 output.Highlights.Mask.Map = copy.Reference;
             }
-            request.Evaluate = (i, material, w, h) =>
+            request.Add(new AtlasMapContribution
             {
-                var result = inner(i, material, w, h);
-                if (!occluded.Contains(i)) return result;
-                using (var factor = Factor(material, w, h))
-                    AtlasPixels.Map(result, factor, (c, f) => new Color(c.r * f.r, c.g * f.r, c.b * f.r, c.a));
-                return result;
-            };
+                Feature = "occlusion", Label = "occlusion of reflections", Stage = AtlasMapStage.Shading, Applies = occluded.Contains,
+                Apply = content =>
+                {
+                    using (var factor = Factor(content.Material, content.Width, content.Height))
+                        AtlasPixels.Map(content.Map, factor, (c, f) => new Color(c.r * f.r, c.g * f.r, c.b * f.r, c.a));
+                }
+            });
         }
     }
 }

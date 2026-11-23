@@ -70,6 +70,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
             lighting.ColorModel = colorMode == 1 ? AtlasLightColorModel.Separate : colorMode == 2 ? AtlasLightColorModel.Floored
                 : colorMode == 3 ? AtlasLightColorModel.SplitProbes : AtlasLightColorModel.MergedProbes;
             lighting.FloorIntensity = Float(m, "_Unlit_Intensity", 1f);
+            // Standard, without a real-time main light: 60% of the ambient light at the normal
+            // stands in for it, and 50% stays ambient (read in 9.3, 10 and 11).
+            if (colorMode == 1)
+            {
+                lighting.Contributions.AmbientAsMainLight = 0.6f;
+                lighting.Contributions.AmbientWithoutMainLight = 0.5f;
+            }
             if (colorMode == 0)
             {
                 // Poi Custom samples the ambient light at the normal × Indirect Uses Normals.

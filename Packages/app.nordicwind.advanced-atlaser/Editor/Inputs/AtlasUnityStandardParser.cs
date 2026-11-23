@@ -9,6 +9,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
     /// </summary>
     public abstract class AtlasUnityStandardParserBase : AtlasParserBase
     {
+        public override string Family => AtlasShaderFamilies.Unity;
         protected abstract bool SpecularSetup { get; }
 
         protected override void Populate(Material m, AtlasUnifiedMaterial d)
@@ -61,8 +62,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
             }
             else response.Roughness.Constant = AtlasMaterialReader.Float(m, "_Glossiness", 0.5f);
 
-            // Forward Rendering Options
+            // Forward Rendering Options. Unity lights a highlight by D × V × π × N·L: π on the
+            // unified scale, which is GGX × N·L without it.
             response.Highlights.Enabled = !Keyword(m, "_SPECULARHIGHLIGHTS_OFF");
+            response.Highlights.Strength = Mathf.PI;
             if (Keyword(m, "_GLOSSYREFLECTIONS_OFF")) response.Reflections.Source = AtlasReflectionSource.AmbientColor;
 
             // Normal Map

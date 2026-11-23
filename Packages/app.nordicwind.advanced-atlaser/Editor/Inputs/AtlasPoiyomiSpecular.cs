@@ -2,6 +2,25 @@ using UnityEngine;
 
 namespace NordicWind.AdvancedAtlaser.Editor
 {
+    // Poiyomi's Fresnel Strength slider s, of reflections and of the clear coat's. Its
+    // reflections rise from F0 toward grazing angles by lerp(F0, 1, s) × s × (1 − N·V)⁵, the
+    // unified ones by (1 − F0) × strength × (1 − N·V)⁵: for a non-metal (F0 4%) they agree at
+    // strength = s × lerp(F0, 1, s) / (1 − F0), which is a little above 1 at the slider's 1.
+    public static class AtlasPoiyomiFresnel
+    {
+        private const float F0 = 0.04f;
+
+        /// <summary>The unified fresnel strength of the slider's value.</summary>
+        public static float Strength(float slider) => slider * Mathf.Lerp(F0, 1f, slider) / (1f - F0);
+
+        /// <summary>The slider's value of a unified fresnel strength.</summary>
+        public static float Slider(float strength)
+        {
+            float rise = 1f - F0;
+            return Mathf.Clamp01((-F0 + Mathf.Sqrt(F0 * F0 + 4f * rise * rise * Mathf.Max(0f, strength))) / (2f * rise));
+        }
+    }
+
     // Poiyomi: Reflections & Specular (with its anisotropics and 2nd specular), Clear Coat, LTCGI.
     internal sealed partial class AtlasPoiyomiReader
     {
@@ -73,7 +92,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             reflections.Mask = PackedStrength(d, map, PackedChannel(m, "_MochieMetallicMapsReflectionMaskChannel", 2),
                 Float(m, "_MochieReflectionStrength", 1f), On(m, "_MochieReflectionMaskInvert"), out reflections.Strength);
             reflections.Tint = TintColor(m, d, "_MochieReflectionTint", "_MochieReflectionTintThemeIndex");
-            reflections.FresnelStrength = Float(m, "_RefSpecFresnelStrength", 0.5f);
+            reflections.FresnelStrength = AtlasPoiyomiFresnel.Strength(Float(m, "_RefSpecFresnelStrength", 0.5f));
             reflections.ExposureOcclusion = Float(m, "_SFExposureOcclusion", 0f);
             Fallback(m, reflections, "_MochieReflCube", "_MochieForceFallback", "_MochieLitFallback");
 
@@ -143,7 +162,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             reflections.Mask = PackedStrength(d, map, PackedChannel(m, "_ClearCoatMapsReflectionMaskChannel", 2),
                 Float(m, "_ClearCoatReflectionStrength", 1f), On(m, "_ClearCoatReflectionMaskInvert"), out reflections.Strength);
             reflections.Tint = TintColor(m, d, "_ClearCoatReflectionTint", "_ClearCoatReflectionTintThemeIndex");
-            reflections.FresnelStrength = Float(m, "_ClearcoatFresnelStrength", 0.5f);
+            reflections.FresnelStrength = AtlasPoiyomiFresnel.Strength(Float(m, "_ClearcoatFresnelStrength", 0.5f));
             reflections.ExposureOcclusion = Float(m, "_ClearcoatExposureOcclusion", 0f);
             Fallback(m, reflections, "_ClearCoatFallback", "_ClearCoatForceFallback", "_ClearCoatLitFallback");
             var highlights = coat.Highlights;

@@ -41,7 +41,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     AtlasSurfaceGeometry.AvatarRoot(output.transform));
             if (job.Sources.Count == 0)
                 throw new InvalidOperationException($"[Nordic's Advanced Atlaser] {output.name}: no source material can be read.");
-            var plan = AtlasOutputPipeline.Resolve(job, shader.Capabilities);
+            var plan = AtlasOutputPipeline.Resolve(job, shader);
             var maps = plan.Maps.Select(r => r.Map).Distinct().ToList();
             var uses = AtlasOutputOverview.TextureUses(config, shader.Capabilities, maps, Array.Empty<AtlasVirtualMap>());
             var enabled = uses.Where(u => u.Enabled).ToList();
@@ -83,7 +83,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             foreach (var step in plan.BeforeWrite) step();
             var material = new Material(unityShader) { name = name };
             shader.Write(plan.Output, material);
-            plan.Notes.AddRange(AtlasLightingFeature.Unkept(plan.Output, material));
+            plan.Notes.AddRange(AtlasKeptMaterial.Notes(job, plan, material));
             var saved = Save(material, materialPath);
             total.Dispose();
             Debug.Log($"[Nordic's Advanced Atlaser] Bake to Assets: {materialPath}. " + string.Join("; ", timings).Replace("[Time] ", "") +
@@ -121,7 +121,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     if (root != null && renderers != null)
                     {
                         var material = entry.material;
-                        source.Surface = () => AtlasSurfaceGeometry.Sections(material, renderers, root);
+                        source.Surface = AtlasSurfaceGeometry.Once(() => AtlasSurfaceGeometry.Sections(material, renderers, root));
                     }
                     job.Sources.Add(source);
                 }

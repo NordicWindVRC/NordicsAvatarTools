@@ -130,14 +130,48 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(1f, Evaluate(plan, AtlasVirtualMap.Mask1, job, 0), 1e-4f);
             Assert.AreEqual(0f, Evaluate(plan, AtlasVirtualMap.Mask1, job, 1), 1e-4f);
 
-            // A matcap takes the slot: the rim shows on every part, listed.
-            var withMatcap = new AtlasUnifiedMaterial();
-            var lookup = new AtlasLookupLayer { Blend = AtlasBlend.Add, Projection = AtlasLookupProjection.ViewCorrected };
-            lookup.Source.Map = new AtlasTextureReference { Texture = Solid(Color.white), Space = AtlasTextureSpace.View };
-            withMatcap.Layers.Add(lookup);
-            job = Job(Material(band), withMatcap);
+            // A matcap takes the slot, and the rim slot has no mask. A rim on most of the atlas
+            // shows on every part, listed: it adds less there than leaving it out would lose.
+            var gray = new Color(0.4f, 0.4f, 0.4f, 1f);
+            AtlasUnifiedMaterial WithRim()
+            {
+                var material = Material(With(new AtlasAngleLayer { Profile = AtlasAngleProfile.Band, Width = 0.3f, Softness = 0.1f }, Color.white));
+                material.Surface.BaseColor.Color = gray;
+                return material;
+            }
+            AtlasUnifiedMaterial WithMatcap()
+            {
+                var material = new AtlasUnifiedMaterial();
+                material.Surface.BaseColor.Color = gray;
+                var lookup = new AtlasLookupLayer { Blend = AtlasBlend.Add, Projection = AtlasLookupProjection.ViewCorrected };
+                lookup.Source.Map = new AtlasTextureReference { Texture = Solid(Color.white), Space = AtlasTextureSpace.View };
+                material.Layers.Add(lookup);
+                return material;
+            }
+            AtlasGeneratorJob Parts(AtlasUnifiedMaterial large, AtlasUnifiedMaterial small)
+            {
+                var parts = Job(large, small);
+                parts.Sources[0].UVRegion = new Rect(0f, 0f, 0.8f, 1f);
+                parts.Sources[1].UVRegion = new Rect(0.8f, 0f, 0.2f, 1f);
+                return parts;
+            }
+            job = Parts(WithRim(), WithMatcap());
+            string key = new AtlasRimFeature().Instances(job, new[] { 0 }).Single().Key;
             plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
-            Assert.AreEqual(1, Rims(plan).Count);
+            Assert.AreEqual(1, Rims(plan).Count, Notes(plan));
+            StringAssert.Contains("shows on every part", Notes(plan));
+            Assert.AreEqual("In rim slot 1, on every part", plan.Ways[(AtlasRimFeature.FeatureId, key)].Text);
+
+            // A rim on a small part would add more on the rest than it keeps: left out, listed.
+            job = Parts(WithMatcap(), WithRim());
+            plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
+            Assert.AreEqual(0, Rims(plan).Count, Notes(plan));
+            StringAssert.Contains("would add more than they keep", Notes(plan));
+            Assert.IsTrue(plan.Ways[(AtlasRimFeature.FeatureId, key)].LeftOut);
+            // In its own slot by the user's choice, it shows on every part.
+            Place(job, key, AtlasInstancePlacement.Own);
+            plan = AtlasOutputPipeline.Resolve(job, ToonStandard);
+            Assert.AreEqual(1, Rims(plan).Count, Notes(plan));
             StringAssert.Contains("shows on every part", Notes(plan));
 
             // Every material has it: the rim itself, exactly.
@@ -176,6 +210,27 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(0f, Evaluate(plan, AtlasVirtualMap.Mask1, job, 2), 1e-4f);
         }
 
+        // A rim's effect is taken over the facing angles, on the sources' base colors. Shown
+        // where there was none, it costs twice what leaving it out does.
+        [Test]
+        public void ARimsEffectSaysWhatShowingItElsewhereCosts()
+        {
+            var points = AtlasReferenceLook.Points(new[] { new Color(0.3f, 0.3f, 0.3f, 1f) }, new AtlasLighting());
+            var band = With(new AtlasAngleLayer { Profile = AtlasAngleProfile.Band, Width = 0.3f, Softness = 0.1f }, Color.white);
+            var effects = AtlasRimResponse.Effects(new[] { (band, 1f) }, points);
+            Assert.AreEqual(points.Count * AtlasRimResponse.Facings, effects.Length);
+            Assert.Greater(effects[0].r, 0.1f, "toward the edge, the rim brightens");
+            Assert.AreEqual(0f, effects[AtlasRimResponse.Facings - 1].r, 1e-5f, "facing the viewer, nothing");
+
+            var own = AtlasRimResponse.Cost(effects, null);
+            Assert.Greater(own.Impact, 0f);
+            Assert.AreEqual(own.Impact, own.Cost, 1e-6f, "left out, it costs what it does");
+            Assert.AreEqual(0f, AtlasRimResponse.Cost(effects, effects).Cost, 1e-6f, "shown as it is, nothing");
+            Assert.AreEqual(2f * own.Impact, AtlasRimResponse.Cost(null, effects).Cost, 1e-5f, "where there was none, what it adds counts double");
+            var half = AtlasRimResponse.Effects(new[] { (band, 0.5f) }, points);
+            Assert.Less(AtlasRimResponse.Cost(effects, half).Cost, own.Impact, "a weaker rim is still the rim");
+        }
+
         private static List<(IReadOnlyList<Color> Bases, float Weight)> Bases(params Color[] colors) =>
             new List<(IReadOnlyList<Color> Bases, float Weight)> { (colors, 1f) };
 
@@ -210,7 +265,15 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsTrue(fit.Lit);
             Assert.Less(fit.Strength, 0.5f);
 
-            // In a build: the slot's rim is the fitted one, listed.
+            // Under an unlit atlas the surface isn't lit, and neither is a rim on it: added as it is.
+            var unlit = Rim(Color.white);
+            unlit.Opacity = 0.4f;
+            fit = AtlasRimResponse.Fit(unlit, 1f, Bases(new Color(0.3f, 0.3f, 0.3f, 1f)), new AtlasLighting { Family = AtlasLightingFamily.Unlit });
+            Assert.IsFalse(fit.Lit, "the atlas's lighting lights the surface the rim is on");
+            Assert.AreEqual(0.4f, fit.Strength, 0.02f);
+
+            // In a build: the slot's rim is the fitted one, listed. What the output shader
+            // shows of a rim is read from a material of the shader, so it has to be installed.
             var first = Material(mixed);
             first.Surface.BaseColor.Color = dark;
             var copy = Rim(Color.white);
@@ -218,6 +281,8 @@ namespace NordicWind.AdvancedAtlaser.Tests
             copy.EmissionAmount = 0.2f;
             var second = Material(copy);
             second.Surface.BaseColor.Color = dark;
+            Assert.AreEqual(AtlasBlend.Mixed, Rims(AtlasOutputPipeline.Resolve(Job(first, second), Poiyomi)).Single().Blend, "Poiyomi keeps it");
+            if (AtlasShaderRegistry.Output("mobiletoon").FindShader() == null) Assert.Ignore("VRChat Mobile Toon Standard is not installed.");
             var plan = AtlasOutputPipeline.Resolve(Job(first, second), ToonStandard);
             var rim = Rims(plan).Single();
             Assert.AreEqual(AtlasPlacement.Overlay, rim.Placement, Notes(plan));
@@ -226,7 +291,26 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(AtlasLightResponse.IgnoreLight, rim.LightResponse);
             Assert.AreEqual(0.2f, rim.Opacity, 0.03f);
             StringAssert.Contains("fitted to it", Notes(plan));
-            Assert.AreEqual(AtlasBlend.Mixed, Rims(AtlasOutputPipeline.Resolve(Job(first, second), Poiyomi)).Single().Blend, "Poiyomi keeps it");
+            StringAssert.Contains("rim is a band", Notes(plan));
+        }
+
+        // What a rim slot shows of a rim is read from a rim written to a material of the
+        // shader: Toon Standard shows any rim as a band added after lighting.
+        [Test]
+        public void WhatARimSlotShowsIsReadFromAWrittenRim()
+        {
+            var shader = AtlasShaderRegistry.Output("mobiletoon");
+            if (shader.FindShader() == null) Assert.Ignore("VRChat Mobile Toon Standard is not installed.");
+            var rim = Rim(Color.white);
+            rim.Blend = AtlasBlend.Mixed;
+            rim.EmissionAmount = 0.2f;
+            var kept = AtlasKeptMaterial.Shown(shader.Capabilities, Material(rim)).Layers.OfType<AtlasAngleLayer>().Single();
+            Assert.AreEqual(AtlasAngleProfile.Band, kept.Profile);
+            Assert.AreEqual(AtlasPlacement.Overlay, kept.Placement);
+            Assert.AreEqual(AtlasBlend.Add, kept.Blend);
+            Assert.AreEqual(0f, kept.EmissionAmount);
+            Assert.IsTrue(AtlasRimResponse.AddsAsIs(kept));
+            Assert.IsNull(AtlasKeptMaterial.Shown(new AtlasOutputCapabilities(), Material(rim)), "capabilities of no registered shader");
         }
 
         private static AtlasAngleLayer EnvironmentalRim(float opacity, AtlasMask mask = null) => new AtlasAngleLayer
@@ -259,6 +343,28 @@ namespace NordicWind.AdvancedAtlaser.Tests
             StringAssert.Contains("also shows on source 3", Notes(toon));
         }
 
+        // Toon Standard's rim is × the scene's light and ambient, brighter than what a reflection
+        // probe shows: its strength is the one that looks most like the probe's rim.
+        [Test]
+        public void TheEnvironmentalRimInTheOutputsRimIsAsStrongAsItLooks()
+        {
+            AtlasAngleLayer Rim(float threshold)
+            {
+                var layer = EnvironmentalRim(0.8f);
+                layer.EnvironmentThreshold = threshold;
+                var material = Material(layer);
+                material.Surface.BaseColor.Color = new Color(0.3f, 0.3f, 0.3f, 1f);
+                var plan = AtlasOutputPipeline.Resolve(Job(material), ToonStandard);
+                StringAssert.Contains("at the strength that looks most like it", Notes(plan));
+                return plan.Output.Layers.OfType<AtlasAngleLayer>().Single();
+            }
+
+            var rim = Rim(0f);
+            Assert.AreEqual(AtlasLightResponse.ScaleByLight, rim.LightResponse);
+            Assert.That(rim.Opacity, Is.InRange(0.05f, 0.4f), "the scene's light is brighter than what its probe shows");
+            Assert.Less(Rim(0.2f).Opacity, rim.Opacity * 0.75f, "less the threshold");
+        }
+
         [Test]
         public void TheBacklightColorPerPartGoesIntoItsMap()
         {
@@ -277,6 +383,71 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(Color.blue, shared.Output.Layers.OfType<AtlasAngleLayer>().Single().Color.Color);
 
             StringAssert.Contains("backlight is drawn by the output's rim", Notes(AtlasOutputPipeline.Resolve(job, ToonStandard)));
+        }
+
+        // Poiyomi 11's lilToon rim has an application stage: on the base color, lit with the
+        // surface, it stays there. Poiyomi 10 has the stage after lighting only.
+        [Test]
+        public void PoiyomiElevenKeepsARimOnTheSurface()
+        {
+            AtlasAngleLayer Edge() => With(new AtlasAngleLayer
+            {
+                Placement = AtlasPlacement.Surface, Profile = AtlasAngleProfile.Step, StepBase = AtlasAngleBase.Edge, Power = 3.5f,
+                Low = 0.3f, High = 0.7f, Blend = AtlasBlend.Add, SourceAlphaIsOpacity = true
+            }, Color.white);
+            bool eleven = AtlasShaderRegistry.Output("poiyomi11").FindShader() != null, ten = AtlasShaderRegistry.Output("poiyomi10").FindShader() != null;
+            if (!eleven && !ten) Assert.Ignore("Poiyomi Toon isn't installed.");
+            if (eleven)
+            {
+                var kept = RoundTrip("poiyomi11", Material(Edge())).Single();
+                Assert.AreEqual(AtlasPlacement.Surface, kept.Placement, "the stage on the base color");
+                Assert.AreEqual(0.3f, kept.Low, 1e-4f);
+                Assert.AreEqual(0.7f, kept.High, 1e-4f);
+                var direct = Edge();
+                direct.Placement = AtlasPlacement.Overlay;
+                direct.LightResponse = AtlasLightResponse.ScaleByDirectLight;
+                kept = RoundTrip("poiyomi11", Material(direct)).Single();
+                Assert.AreEqual(AtlasPlacement.Overlay, kept.Placement);
+                Assert.AreEqual(AtlasLightResponse.ScaleByDirectLight, kept.LightResponse, "after lighting, lit by the direct light alone");
+            }
+            if (ten)
+                Assert.AreEqual(AtlasPlacement.Overlay, RoundTrip("poiyomi10", Material(Edge())).Single().Placement, "Poiyomi 10: after lighting");
+        }
+
+        // Poiyomi 11 has two backlights: a source's second one keeps its settings, and its color
+        // per part goes into a map of its own. Poiyomi 10 has one, so the second is left out
+        // and listed.
+        [Test]
+        public void ASecondBacklightIsKeptWhereTheOutputHasTwo()
+        {
+            var both = Material(Backlight(new Color(2f, 0f, 0f, 1f)), Backlight(Color.blue));
+            var one = Material(Backlight(Color.green));
+            var job = Job(both, one);
+            var plan = AtlasOutputPipeline.Resolve(job, AtlasShaderRegistry.Output("poiyomi11").Capabilities);
+            Assert.AreEqual(2, plan.Output.Layers.OfType<AtlasAngleLayer>().Count(l => l.Source == AtlasAngleSource.Backlight), Notes(plan));
+            Assert.AreEqual(2f, Evaluate(plan, AtlasVirtualMap.BacklightColor, job, 0, 0), 1e-4f, "the first: red × 2");
+            Assert.AreEqual(1f, Evaluate(plan, AtlasVirtualMap.BacklightColor, job, 1, 1), 1e-4f, "green on the second material");
+            Assert.AreEqual(1f, Evaluate(plan, AtlasVirtualMap.BacklightColor2, job, 0, 2), 1e-4f, "the second: blue");
+            Assert.AreEqual(0f, Evaluate(plan, AtlasVirtualMap.BacklightColor2, job, 1, 2), 1e-4f, "none on the second material: black");
+            Assert.IsFalse(plan.Notes.Any(n => n.Contains("further backlights")), Notes(plan));
+
+            var ten = AtlasOutputPipeline.Resolve(job, Poiyomi);
+            Assert.AreEqual(1, ten.Output.Layers.OfType<AtlasAngleLayer>().Count(l => l.Source == AtlasAngleSource.Backlight));
+            StringAssert.Contains("the further backlights of source 1 are left out", Notes(ten));
+
+            // The writer sets both and the parser reads them back.
+            if (AtlasShaderRegistry.Output("poiyomi11").FindShader() == null) return;
+            var second = Backlight(Color.blue);
+            second.Low = 0.3f;
+            second.High = 0.5f;
+            second.Directivity = 2f;
+            var parsed = RoundTrip("poiyomi11", Material(Backlight(Color.red), second)).Where(l => l.Source == AtlasAngleSource.Backlight).ToList();
+            Assert.AreEqual(2, parsed.Count);
+            Assert.AreEqual(1f, parsed[0].Color.Color.r, 1e-3f);
+            Assert.AreEqual(0.3f, parsed[1].Low, 1e-4f);
+            Assert.AreEqual(0.5f, parsed[1].High, 1e-4f);
+            Assert.AreEqual(2f, parsed[1].Directivity, 1e-4f);
+            Assert.AreEqual(1f, parsed[1].Color.Color.b, 1e-3f);
         }
 
         private List<AtlasAngleLayer> RoundTrip(string shaderId, AtlasUnifiedMaterial output)

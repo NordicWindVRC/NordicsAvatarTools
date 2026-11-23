@@ -83,6 +83,38 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(Shader.Find("VRChat/Mobile/Toon Standard") != null, AtlasShaderRegistry.IsInstalled(mobileToon));
         }
 
+        // Its constructor takes an argument, so the registry, which registers every output
+        // shader type it can make without one, leaves it alone.
+        private sealed class Counted : IAtlasOutputShader
+        {
+            public Counted(string id) { ShaderId = id; }
+            public int Lookups;
+            public string ShaderId { get; }
+            public string DisplayName => "Counted";
+            public string Family => null;
+            public int Rank => 0;
+            public Shader FindShader() { Lookups++; return null; }
+            public AtlasOutputCapabilities Capabilities => null;
+            public void Write(AtlasUnifiedMaterial output, Material material) { }
+        }
+
+        // The inspectors ask on every redraw, and a lookup that finds nothing is slow.
+        [Test]
+        public void AnOutputShaderIsLookedUpOnceUntilTheProjectsShadersChange()
+        {
+            var shader = new Counted("counted");
+            Assert.IsNull(AtlasShaderRegistry.Find(shader));
+            Assert.IsFalse(AtlasShaderRegistry.IsInstalled(shader));
+            Assert.AreEqual(1, shader.Lookups, "not installed is kept too");
+            AtlasShaderRegistry.ShadersChanged();
+            Assert.IsNull(AtlasShaderRegistry.Find(shader));
+            Assert.AreEqual(2, shader.Lookups);
+            Assert.AreSame(AtlasShaderRegistry.InstalledOutputShaders, AtlasShaderRegistry.InstalledOutputShaders, "the list is kept");
+            var standard = AtlasShaderRegistry.Output("standard");
+            Assert.AreSame(standard.FindShader(), AtlasShaderRegistry.Find(standard));
+            AtlasShaderRegistry.ShadersChanged();
+        }
+
         [Test]
         public void PoiyomiToon10OutputNeedsVersion10()
         {

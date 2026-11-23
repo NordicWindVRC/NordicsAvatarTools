@@ -7,10 +7,23 @@ namespace NordicWind.AdvancedAtlaser.Editor
 {
     // Emission (ATLAS_OUTPUT.md, "Feature inventory"): each source's static emission layers
     // added up into the output's emission map, relative to the strongest source's emission, which
-    // the output glows at. Sources without emission are dark. Only the native mode: emission
-    // baked into the color wouldn't glow.
+    // the output glows at. Sources without emission are dark. Other features add their glow to
+    // the map in full (a baked matcap's glow, glitter points): the map gives them its value ×
+    // the strength, and what goes above the map's range goes into the strength
+    // (CarryInStrength).
+    // An output without an emission map can have the emission drawn into its base color
+    // instead. That shows what the emission draws, under light, and doesn't glow in the dark,
+    // so it is used only when chosen.
     public sealed class AtlasEmissionFeature : IAtlasOutputFeature
     {
+        public static readonly AtlasFeatureMode InColor = new AtlasFeatureMode
+        {
+            Id = "color", Label = "Drawn into the color", Kind = AtlasFeatureModeKind.Emulated,
+            RequiredMaps = new[] { AtlasVirtualMap.BaseColor },
+            Requires = c => !c.Provides(AtlasVirtualMap.Emission),
+            OptIn = true
+        };
+
         private static readonly AtlasFeatureMode[] ModeList =
         {
             new AtlasFeatureMode
@@ -18,6 +31,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Id = "native", Label = "Emission map", Kind = AtlasFeatureModeKind.Native,
                 RequiredMaps = new[] { AtlasVirtualMap.Emission }
             },
+            InColor,
             AtlasFeatureMode.Off
         };
 
@@ -39,6 +53,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             var job = context.Job;
             var active = new HashSet<int>(context.Sources);
+            if (context.Mode == InColor)
+            {
+                DrawIntoColor(context, active);
+                return;
+            }
             Cycling(context, active);
             float strength = active.Max(i => AtlasColorStack.EmissionStrength(job.Sources[i].Material));
             Notes(context, active);
@@ -47,18 +66,65 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 Map = AtlasVirtualMap.Emission,
                 Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Color },
-                Evaluate = (index, material, width, height) => active.Contains(index)
+                Content = (index, material, width, height) => active.Contains(index)
                     ? AtlasColorStack.EvaluateEmission(material, width, height, strength)
                     : AtlasMapEvaluator.Constant(AtlasVirtualMap.Emission, 0f, width, height)
             };
             for (int i = 0; i < job.Sources.Count; i++) request.Sources.Add(i);
+            // The map is relative to the strength, which the output multiplies it by:
+            // contributions work with the full emission.
+            request.SharedColor = new Color(strength, strength, strength, 1f);
             context.Maps.Add(request);
             // The output's emission: one layer, the map at the strongest source's strength.
             var layer = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission };
             layer.Source.Map = request.Reference;
             layer.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Emission, AtlasBlend.Add, strength));
             context.Output.Layers.Add(layer);
+            CarryInStrength(request, layer.Targets[0]);
             Live(context, request, strength);
+        }
+
+        // Each source's emission added to its base color, after the surface's layers. A hue
+        // that cycles is drawn at its start and AudioLink at rest. Where nothing takes what
+        // the map can't hold (an output without a base color of its own), the sum stops at 1.
+        private static void DrawIntoColor(AtlasFeatureContext context, HashSet<int> active)
+        {
+            Notes(context, active);
+            var request = AtlasLiveMasks.Request(context, AtlasVirtualMap.BaseColor);
+            if (request == null)
+            {
+                context.Notes.Add("Without a base color map the emission has nothing to be drawn into; it's left out.");
+                return;
+            }
+            request.Add(new AtlasMapContribution
+            {
+                Feature = "emission", Label = "emission drawn into the color", Stage = AtlasMapStage.Overlays,
+                Kind = AtlasContributionKind.Bake, CanRaise = true, Applies = active.Contains,
+                Apply = content =>
+                {
+                    bool carried = request.Carry != null;
+                    using (var emission = AtlasColorStack.EvaluateEmission(content.Material, content.Width, content.Height, 1f, clamp: false))
+                        AtlasPixels.Map(content.Map, emission, (c, e) => carried
+                            ? new Color(c.r + e.r, c.g + e.g, c.b + e.b, c.a)
+                            : new Color(Mathf.Min(1f, c.r + e.r), Mathf.Min(1f, c.g + e.g), Mathf.Min(1f, c.b + e.b), c.a));
+                }
+            });
+            context.Notes.Add("The emission of " + AtlasLiveMasks.Numbers(active) +
+                              " is drawn into the base color: it shows under light and doesn't glow in the dark.");
+        }
+
+        /// <summary>Lets an emission map's range go into its strength: where a feature's
+        /// contribution takes the baked map above 1, the map is divided by its brightest value
+        /// and the strength is multiplied by it.</summary>
+        public static void CarryInStrength(AtlasMapRequest request, AtlasLayerTarget target)
+        {
+            float? strength = null;
+            request.Carry = peak =>
+            {
+                // The strength as the features left it, read when the map is first finished.
+                if (strength == null) strength = target.Opacity;
+                target.Opacity = strength.Value * peak;
+            };
         }
 
         // Live global masks (AtlasLiveMasks): the live sources' emission with their channels at 0
@@ -73,16 +139,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (split == null) return;
             int channel = AtlasLiveMasks.Unit(context, split, "emission");
             if (channel < 0) return;
-            var inner = request.Evaluate;
+            var inner = AtlasLiveMasks.OwnPart(request, split);
             var live = new AtlasMapRequest
             {
                 Map = AtlasVirtualMap.EmissionLive,
                 Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Color },
-                Evaluate = (i, material, width, height) => AtlasLiveMasks.Difference(split, i, material, width, height, inner, false, color: true)
+                Content = (i, material, width, height) => AtlasLiveMasks.Difference(split, i, material, width, height, inner, false, color: true)
             };
             for (int i = 0; i < job.Sources.Count; i++) live.Sources.Add(i);
             context.Maps.Add(live);
-            request.Evaluate = AtlasLiveMasks.Own(split, inner);
             AtlasLiveMasks.Kept(context, split);
             var layer = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission, Mask = new AtlasMask { Bus = channel, BusBlend = AtlasMaskBlend.Multiply } };
             layer.Source.Map = live.Reference;
@@ -166,7 +231,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 Map = map,
                     Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Color },
-                    Evaluate = (index, material, width, height) => layers.TryGetValue(index, out var only)
+                    Content = (index, material, width, height) => layers.TryGetValue(index, out var only)
                         ? audio ? AtlasColorStack.EvaluateEmission(material, width, height, peak, only, unitStrength: true)
                             : AtlasColorStack.EvaluateEmission(material, width, height, strength, only)
                         : AtlasMapEvaluator.Constant(AtlasVirtualMap.Emission, 0f, width, height)
@@ -213,6 +278,43 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static AtlasSurfaceLayer LiveOf(AtlasUnifiedMaterial output) =>
             output.Layers.OfType<AtlasSurfaceLayer>().FirstOrDefault(l => l.Targets.Any(t => t.Target == AtlasSurfaceTarget.Emission) &&
                 l.Mask != null && l.Mask.Bus >= 0);
+
+        /// <summary>The output has an emission map and the emission isn't turned off.</summary>
+        public static bool On(AtlasGeneratorJob job, AtlasOutputCapabilities capabilities)
+        {
+            var feature = AtlasOutputFeatures.Find("emission");
+            var choice = job.Features.Find(f => f.FeatureId == "emission");
+            return capabilities.Provides(AtlasVirtualMap.Emission) &&
+                   (feature == null || AtlasOutputFeatures.Effective(feature, choice?.ModeId, capabilities)?.Kind != AtlasFeatureModeKind.Off);
+        }
+
+        /// <summary>The plan's emission map and its layer's emission target, for a feature that
+        /// adds to the emission after this one resolved: this feature's map, or one made here,
+        /// dark, where no source has an emission. The target is null where the map has no
+        /// layer of its own.</summary>
+        public static AtlasMapRequest Map(AtlasGeneratorJob job, AtlasOutputPlan plan, out AtlasLayerTarget target)
+        {
+            var request = plan.Maps.FirstOrDefault(r => r.Map == AtlasVirtualMap.Emission);
+            AtlasSurfaceLayer output;
+            if (request == null)
+            {
+                request = new AtlasMapRequest
+                {
+                    Map = AtlasVirtualMap.Emission,
+                    Reference = new AtlasTextureReference { Interpretation = AtlasTextureInterpretation.Color },
+                    Content = (i, m, w, h) => AtlasMapEvaluator.Constant(AtlasVirtualMap.Emission, 0f, w, h)
+                };
+                for (int i = 0; i < job.Sources.Count; i++) request.Sources.Add(i);
+                plan.Maps.Add(request);
+                output = new AtlasSurfaceLayer { Placement = AtlasPlacement.Emission };
+                output.Source.Map = request.Reference;
+                output.Targets.Add(new AtlasLayerTarget(AtlasSurfaceTarget.Emission, AtlasBlend.Add, 1f));
+                plan.Output.Layers.Add(output);
+            }
+            else output = plan.Output.Layers.OfType<AtlasSurfaceLayer>().FirstOrDefault(l => l.Source.Map == request.Reference);
+            target = output?.Targets.FirstOrDefault(t => t.Target == AtlasSurfaceTarget.Emission);
+            return request;
+        }
 
         // The output's emission layer, if any.
         public static AtlasSurfaceLayer Of(AtlasUnifiedMaterial output) =>

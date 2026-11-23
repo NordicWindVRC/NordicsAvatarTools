@@ -52,7 +52,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // RGB: emissions whose hue cycles, each in an emission slot of its own.
         EmissionCycle1, EmissionCycle2,
         // RGB: the AudioLink emission's color × gain per source, black without (Toon Standard).
-        AudioLinkColor
+        AudioLinkColor,
+        // RGB (4.4): the second backlight's color, as BacklightColor (Poiyomi 11).
+        BacklightColor2,
+        // RGB (2.4): the specular color of an output of the specular workflow, which holds each
+        // source's reflectance, metallic and highlight and reflection strengths
+        // (AtlasSpecularColor); black where a source has neither highlights nor reflections.
+        SpecularColor
     }
 
     // Which channels of a texture a virtual map fills.
@@ -126,15 +132,6 @@ namespace NordicWind.AdvancedAtlaser.Editor
         FollowsSmoothness
     }
 
-    // The fresnel of an output's highlights and reflections (AtlasSpecularResponse).
-    public enum AtlasSpecularFresnel
-    {
-        // Schlick's: f0 + (1 − f0)(1 − V·H)⁵ for highlights, (1 − N·V)⁵ for reflections.
-        Schlick,
-        // One term for both, f0 + (1 − f0)((1 − V·H)(1 − |V·N|))⁵ (Toon Standard).
-        ViewHalfTimesViewNormal
-    }
-
     // What the output shader does with the mesh's vertex colors on the base color.
     [System.Flags]
     public enum AtlasVertexColorSupport
@@ -147,7 +144,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Takes an amount: lerp(1, vertex color, amount).
         Amount = 4,
         // Can decode the vertex colors from sRGB.
-        Srgb = 8
+        Srgb = 8,
+        // Has no switch for it: the base color is always multiplied by the vertex color, so
+        // the sources that don't use theirs get white on the mesh.
+        Always = 16
     }
 
     // The blends an output's matcap slot can take.
@@ -165,10 +165,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
         All = Add | Multiply | Replace | Screen | Mixed | AddToLight
     }
 
-    // What an output shader can express, in unified terms. Feature modes are offered only
-    // when the capabilities they need are here. Grows with the features.
+    // What an output shader can express, in unified terms: counts and what is available.
+    // Feature modes are offered only when the capabilities they need are here. Grows with the
+    // features. How the shader computes what it has no settings for isn't here: its own
+    // parser describes that (AtlasKeptMaterial.Described).
     public sealed class AtlasOutputCapabilities
     {
+        // The output shader the capabilities belong to, set when it is registered; null for
+        // capabilities made by hand.
+        public string ShaderId;
         public readonly List<AtlasOutputTexture> Textures = new List<AtlasOutputTexture>();
         // The surface modes the writer can set.
         public readonly HashSet<AtlasSurfaceMode> SurfaceModes = new HashSet<AtlasSurfaceMode> { AtlasSurfaceMode.Opaque };
@@ -178,11 +183,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // ones (Poiyomi's TransClipping).
         public bool BlendedDepthWrite;
         public AtlasReflectanceSupport Reflectance;
-        // Below this reflectance + metallic, highlights and reflections fade out linearly (Toon
-        // Standard: × saturate((reflectance + metallic) × 4), 0.25); 0: none.
-        public float ReflectanceFade;
-        public AtlasSpecularFresnel SpecularFresnel;
         public AtlasVertexColorSupport VertexColors;
+        // The output multiplies its base color texture by a color. Without one, every source's
+        // color goes into the texture, which cuts off what is brighter than 1.
+        public bool BaseColorTint = true;
         // Hides UV tiles on both sides (Poiyomi's UV tile discard), and on one chosen side.
         public bool TileDiscard;
         public bool FaceTileDiscard;
@@ -214,23 +218,28 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // A slot applies its texture's scale and offset to the lookup coordinate; without, a
         // matcap with them gets a generated texture.
         public bool MatcapTextureTransform;
-        // Rims (4.4): how many view-angle rim slots; whether a slot has a mask; whether a slot only
-        // has the band profile (others are fitted to it).
+        // A slot looks its texture up as the matcap does: by its projection, tiling (border) and
+        // rotation. Without, the slot looks up by the view-space normal over the whole texture,
+        // and a matcap looked up otherwise gets a generated texture redrawn for that lookup.
+        public bool MatcapLookup;
+        // Rims (4.4): how many view-angle rim slots, and whether a slot has a mask. What a slot
+        // shows of a rim (its profile, placement, blend and glow) isn't here: it is read from
+        // a rim written to a material of the shader (AtlasKeptMaterial.Shown).
         public int RimSlots;
         public bool RimMask;
-        public bool RimBandOnly;
-        // A slot only adds its color after lighting, unlit or × (light + ambient), × lerp(1, base,
-        // mix): rims that blend otherwise, sit on the surface or glow are fitted to it
-        // (AtlasRimResponse).
-        public bool RimAddsAfterLighting;
+        // A rim slot can show its color × the scene's light and ambient, so it can stand in
+        // for an environmental rim or a backlight where the output has none.
+        public bool RimFollowsSceneLight;
         // One environmental rim (the probe's color at the edge), with a mask.
         public bool EnvironmentalRim;
-        // One backlight, its color from a texture (BacklightColor).
-        public bool Backlight;
+        // How many backlights, each with its color from a texture (BacklightColor,
+        // BacklightColor2).
+        public int Backlights;
         // Tiled layers kept live (a detail texture, a detail normal): the highest UV channel a
         // detail can read, the detail texture's blends, whether it has a tint and strength of its
-        // own, whether there's a detail normal, and whether the detail mask picks a channel (one
-        // allocated mask for both; otherwise DetailTextureMask and DetailNormalMask).
+        // own, whether there's a detail normal, and whether both details read one mask from a
+        // mask place (the channel the place is in: any on Toon Standard, the detail mask's alpha
+        // on Unity Standard; otherwise DetailTextureMask and DetailNormalMask).
         public int DetailUVChannels;
         public readonly System.Collections.Generic.HashSet<AtlasBlend> DetailTextureBlends = new System.Collections.Generic.HashSet<AtlasBlend>();
         public bool DetailStrength;
@@ -243,6 +252,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
         // Hue cycling (a hue shift with a speed) of the base color (its mask in HueCyclingMask) and
         // the final color (an allocated mask), and of the slots that have their own hue shift.
         public bool HueCycling;
+        // A GT7 tone map of the final color, and a neutral surface emission; neither has a mask.
+        public bool ToneMapping;
+        public bool NeutralEmission;
+        // Shadows from the depth texture, each with a mask by channel (inverted): screen-space
+        // ambient occlusion, and contact shadows.
+        public bool ScreenOcclusion;
+        public bool ContactShadows;
         // Emission slots: the first holds the baked emission, the second the live global mask
         // emission, the rest emissions whose hue cycles.
         public int EmissionSlots = 1;

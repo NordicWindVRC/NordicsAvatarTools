@@ -825,7 +825,10 @@ Thry's locking keeps.
 **Light Data** (catalog 3.4):
 - **Light color mode:** Poi Custom as *merged probes* (with *Indirect Uses Normals* as the
   directional amount), Standard as *separate*, UTS2 as *floored* (with its unlit intensity),
-  OpenLit as *split probes*.
+  OpenLit as *split probes*. Without a real-time main light, Standard takes 60% of the
+  ambient light at the normal as its direct light and keeps 50% as ambient (*ambient as main
+  light* 0.6, *ambient* 0.5; the same in 9.3, 10 and 11). The other modes make their direct
+  light of the probes in every world, so they need no rule of their own.
 - **Light direction mode:** Poi Custom as *probe-blended*, forced local and world as *fixed*,
   UTS2 as *view fallback*, OpenLit as *split probes*, view direction with its yaw and pitch.
 - **Light map mode** as the shading term: Poi Custom as *relative brightness* (half-Lambert under
@@ -837,6 +840,8 @@ Thry's locking keeps.
   different additive detail strengths are reported.
 - Received casted shadows, softness, clean shadows, grayscale lighting, limit brightness (with
   its ceiling and luminance limit), min brightness as *minimum light*, forced light color.
+  The shader raises the direct and the indirect light to the minimum, limits each, and then
+  applies the PP Animations' multiplier and addition.
 - **Additional lights:** pixel and vertex lights on or off, their lighting type and gradient,
   limit, received shadows, grayscale, passthrough, attenuation curve, ignored directional
   lights, mirror vertex lights.
@@ -846,7 +851,10 @@ Thry's locking keeps.
 - **Reflections & Specular** off means no highlights or reflections (Cloth keeps its own; both
   on is reported). On: metallic and smoothness from the packed map's chosen channels (or white)
   times their sliders, with their inverts; the reflection and specular masks with their
-  visibilities (an inverted mask below full strength is noted); tints; fresnel strength;
+  visibilities (an inverted mask below full strength is noted); tints; fresnel strength
+  (the slider `s` raises reflections by `lerp(F0, 1, s) × s × (1 − N·V)⁵`, so the unified
+  strength is `s × lerp(F0, 1, s) / (1 − F0)` at a non-metal's F0 of 4%: 0.27 at the default
+  0.5; the writer converts back);
   exposure occlusion; the fallback cubemap (forced as the source, lit or not); ignore casted
   shadows; 2nd specular as the second lobe; pixel normal mix (0 the mesh normal, between is
   reported); GSAA; GGX anisotropics (amount, map channel or vertex color, reflection stretch,

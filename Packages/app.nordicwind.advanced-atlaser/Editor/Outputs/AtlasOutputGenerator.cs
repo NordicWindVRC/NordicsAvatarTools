@@ -74,7 +74,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 foreach (var step in plan.BeforeWrite) step();
                 result.Material = new Material(unityShader) { name = config.outputName };
                 shader.Write(plan.Output, result.Material);
-                result.Notes.AddRange(AtlasLightingFeature.Unkept(plan.Output, result.Material));
+                result.Notes.AddRange(AtlasKeptMaterial.Notes(job, plan, result.Material));
                 return result;
             }
             catch

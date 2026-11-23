@@ -3,6 +3,38 @@
 Newest first. Versions follow [SemVer](https://semver.org). Early versions were numbered as
 "Revision N", which corresponds to version `0.N.0`.
 
+## 0.40.0-beta.2
+
+EditMode tests pass in Unity 2022.3.22. Verified on builds of a test avatar with NDMF 1.14.8
+and AAO 1.9.19.
+
+**New output shaders**
+- Poiyomi Toon 11, Poiyomi Pro 10 and Poiyomi Pro 11.
+- VRChat Mobile Diffuse.
+- Unity Standard and Unity Standard (Specular setup).
+
+**New input shaders**
+- VRChat Mobile Diffuse and Bumped Diffuse.
+
+**Closer to the original look**
+- The atlas material's lighting is tuned to look like your materials' own lighting on the
+  output shader, and a material that would still come out brighter or darker gets its color
+  adjusted (*Keep each material's brightness*).
+- Matcaps are placed by what they do (lighting, rim or highlight), and a matcap the output
+  can only partly show is made up for through the base color (*Base color shift*).
+- On output shaders without matcap slots, a matcap that lights the surface keeps its overall
+  tint and brightness instead of being drawn into the texture.
+- Materials that stay visible in dark worlds keep doing so on output shaders without that
+  setting (*Minimum light in the emission*).
+- Rim lights are fitted to what the output shader's rim can show.
+
+**Inspector**
+- The output inspector scrolls smoothly again with many output shaders installed.
+- Shorter tooltips and descriptions.
+
+No setting needs to be redone. Builds can look different from 0.40.0-beta.1 where the new
+matching applies. Requires NDMF 1.7.0 or later and Nordic's Texture Wrapper 0.10.0 or later.
+
 ## 0.40.0-beta.1
 
 EditMode tests pass in Unity 2022.3.22. Verified on builds of a test avatar with NDMF 1.14.8

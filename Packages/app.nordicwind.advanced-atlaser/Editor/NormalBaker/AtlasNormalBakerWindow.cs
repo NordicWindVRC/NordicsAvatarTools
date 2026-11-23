@@ -29,8 +29,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private void OnGUI()
         {
             scroll = EditorGUILayout.BeginScrollView(scroll);
-            EditorGUILayout.HelpBox("Bakes the shading of an original mesh onto a current, for example lower-detail, mesh " +
-                "as a normal map. Both must use the same UV layout. Use the result as a source's Pre-baked Normal Map.",
+            EditorGUILayout.HelpBox("Bakes the shading of a detailed mesh onto a simpler version of it, as a normal map. " +
+                "Both must use the same UV layout. Use the result as a material's Pre-baked Normal Map.",
                 MessageType.Info);
 
             var originalSource = Slot("Original", "The detailed mesh whose shading you want.", ref original, ref originalSubmesh);
@@ -45,7 +45,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 height = SizePopup(height);
             }
             maxAngle = EditorGUILayout.Slider(new GUIContent("Max Correction Angle",
-                "Corrections above half of this are compressed smoothly toward it: large ones more likely come from a mismatch than from real shape."),
+                "The largest correction the normal map may hold. Larger ones usually come from meshes that don't line up, and are toned down."),
                 maxAngle, 10f, 90f);
 
             string orientation = AtlasNormalBaker.OrientationWarning(originalSource, currentSource);

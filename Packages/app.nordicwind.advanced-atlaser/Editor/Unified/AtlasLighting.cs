@@ -77,6 +77,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
         Toon
     }
 
+    // Which ambient light stands in for the main light where a world has none.
+    public enum AtlasAmbientStandIn
+    {
+        // The ambient light as the surface gets it (the ambient model's).
+        Ambient,
+        // The probes along their dominant direction: their brightest light.
+        Brightest
+    }
+
     public enum AtlasAmbientModel
     {
         // The ambient light's average color, the same in every direction.
@@ -91,7 +100,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasLightingFamily Family = AtlasLightingFamily.PhysicallyBased;
         public AtlasPhysicalModel PhysicalModel = AtlasPhysicalModel.Standard;
         // Every light color (direct, ambient, additional) × LightMultiplier + LightAddition, at
-        // least 0.
+        // least 0, after the minimum light and the limit.
         public float LightMultiplier = 1f;
         public float LightAddition;
         // Flat: features reading the shading's light map see smoothstep(0.4, 0.6, the half-Lambert
@@ -133,9 +142,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public readonly AtlasSkin Skin = new AtlasSkin();
         // 3.3: cloth (sheen) highlights where its mask is set; null: none.
         public AtlasCloth Cloth;
-        // Clamps the light (direct + ambient) per channel to the ceiling.
+        // Clamps the direct and the ambient light, each per channel, to the ceiling.
         public bool LimitBrightness;
         public float BrightnessCeiling = 1f;
+        // The limit clamps the shaded light instead (the direct light through the shading + the
+        // ambient light), so the lit side never passes the ceiling.
+        public bool LimitTotal;
         // 0–1: the direct light's limit blends from per channel to scaling by luminance, keeping the hue.
         public float LimitByLuminance;
         // The limit scales the color so its brightest channel is at the ceiling, keeping the hue
@@ -394,10 +406,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public float VertexLights = 1f;
         // Ambient and light probes, including the lights Unity folds into them.
         public float Ambient = 1f;
-        // Without a real-time main light (most worlds are lit by probes alone): the ambient color
-        // × AmbientAsMainLight stands in for the main light (0: none), and the ambient light counts
-        // by AmbientWithoutMainLight instead of Ambient.
+        // Without a real-time main light (most worlds are lit by probes alone), in the separate
+        // light color model: the ambient light of AmbientStandIn × AmbientAsMainLight stands in for
+        // the main light (0: none), and the ambient light counts by AmbientWithoutMainLight instead
+        // of Ambient. The other light color models make their direct light of the probes themselves.
         public float AmbientAsMainLight;
         public float AmbientWithoutMainLight = 1f;
+        public AtlasAmbientStandIn AmbientStandIn;
     }
 }

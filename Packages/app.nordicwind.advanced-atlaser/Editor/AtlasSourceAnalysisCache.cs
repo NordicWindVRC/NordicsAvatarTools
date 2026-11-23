@@ -77,6 +77,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
 
     // Raises the cache's version when a texture or shader is imported, moved or deleted: a
     // material reads them, so its analysis can change while the material itself doesn't.
+    // The same events tell the shader registry to look the installed output shaders up again.
     internal sealed class AtlasSourceAnalysisImports : AssetPostprocessor
     {
         private static void OnPostprocessAllAssets(string[] imported, string[] deleted, string[] moved, string[] movedFrom)
@@ -84,17 +85,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (deleted.Length > 0 || moved.Length > 0)
             {
                 AtlasSourceAnalysisCache.Invalidate();
+                AtlasShaderRegistry.ShadersChanged();
                 return;
             }
+            bool textures = false, shaders = false;
             foreach (var path in imported)
             {
                 var type = AssetDatabase.GetMainAssetTypeAtPath(path);
-                if (type != null && (typeof(Texture).IsAssignableFrom(type) || typeof(Shader).IsAssignableFrom(type)))
-                {
-                    AtlasSourceAnalysisCache.Invalidate();
-                    return;
-                }
+                if (type == null) continue;
+                if (typeof(Shader).IsAssignableFrom(type)) shaders = true;
+                else if (typeof(Texture).IsAssignableFrom(type)) textures = true;
+                if (shaders) break;
             }
+            if (textures || shaders) AtlasSourceAnalysisCache.Invalidate();
+            if (shaders) AtlasShaderRegistry.ShadersChanged();
         }
     }
 }

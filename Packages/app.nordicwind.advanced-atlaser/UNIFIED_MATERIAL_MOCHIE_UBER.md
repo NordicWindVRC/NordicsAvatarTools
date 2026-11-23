@@ -164,7 +164,9 @@ Settings.
   [feature catalog](UNIFIED_MATERIAL_FEATURES.md#7-out-of-scope)).
 - **Live or baked:** live.
 - **Unified:** environment reflections with a source (scene probes or a fixed cubemap), tint,
-  strength, fresnel strength, and a roughness override.
+  strength, fresnel strength (the shader raises reflections by `((1 − N·V) × strength)⁵`,
+  so the unified strength is its fifth power; 0 with the fresnel toggle off), and a
+  roughness override.
 
 ### Specular Highlights
 - **Controls:** Off, GGX, Anisotropic, or Combined.

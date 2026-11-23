@@ -12,6 +12,8 @@ Related documents:
 - [NORMAL_BAKER.md](NORMAL_BAKER.md): the normal correction bake that the output reuses.
 - [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md): the implementation plan: what's done, what's
   next and what's later.
+- [ATLAS_OUTPUT_LOOK.md](ATLAS_OUTPUT_LOOK.md): the planned design for matching by look, not
+  built yet.
 
 ---
 
@@ -47,7 +49,7 @@ Where each part of this design lives:
 |---|---|---|
 | Output component | `Runtime/NordicsAtlasOutput.cs` | `AtlasOutputConfiguration`: the output's name and shader, region padding, sources, main texture size, feature, texture and baking settings (see [*Stored settings*](#stored-settings)) |
 | Output shader interface | `Editor/AtlasShaderRegistry.cs` | `IAtlasOutputShader`: ID, display name, family and rank, `FindShader`, `Capabilities`, `Write` |
-| Output shaders | `Editor/Outputs/AtlasOutputShaders.cs` | Poiyomi Toon 10 and VRChat Mobile Toon Standard: their texture layouts and capabilities (see [*Output shaders*](#output-shaders)) |
+| Output shaders | `Editor/Outputs/AtlasOutputShaders.cs` | Poiyomi Toon and Pro, 10 and 11 (one writer, a registration per version and variant), VRChat Mobile Toon Standard and Diffuse, and Unity Standard: their texture layouts and capabilities (see [*Output shaders*](#output-shaders)) |
 | Output model | `Editor/Outputs/AtlasOutputModel.cs`, `AtlasOutputFeature.cs` | Virtual maps, texture layouts, capabilities; `IAtlasOutputFeature` with its modes; the feature registry, available and effective modes |
 | Features | `Editor/Outputs/Atlas*Feature*.cs` | One class per feature of the [*Feature inventory*](#feature-inventory), found through `IAtlasOutputFeature`; `IAtlasSourceAwareFeature` counts a source by more than its material (a pre-baked map, the build's correction) |
 | Resolve | `Editor/Outputs/AtlasOutputPipeline.cs` | Feature choices from the settings, and steps 1 and 2 of the pipeline: the output unified material and its map requests (`AtlasOutputPlan`), with the UV channel and mask allocators' places and the generated textures |
@@ -63,6 +65,8 @@ Where each part of this design lives:
 | Source analysis cache | `Editor/AtlasSourceAnalysisCache.cs` | Each source's parse, kept until the material, its shader or an imported texture or shader changes |
 | Overview | `Editor/Outputs/AtlasOutputOverview.cs`, `AtlasTextureMemory.cs` | What an output uses: features with their modes and sources, the textures they need with sizes and memory |
 | Evaluator | `Editor/Outputs/AtlasMapEvaluator.cs`, `AtlasColorStack.cs` | The bakeable subset over a source's UV 0–1: textures with their placement, color layers, decals, adjustments, masks and the mask bus |
+| Map requests | `Editor/Outputs/AtlasMapRequest.cs` | A virtual map's content, views and contributions by stage, its shared color and its range step (see [*Map contributions*](#map-contributions)) |
+| Look model | `Editor/Outputs/AtlasLook.cs`, `AtlasReferenceLook.cs`, `AtlasKeptMaterial.cs`, `AtlasLightingTuning.cs`, `AtlasLightFloor.cs`, `AtlasLevelCompensation.cs`, `AtlasMatcapLook.cs` | The standard scenes, a lighting's level and contrast, a layer's cost, a view layer's look in the unified evaluation stages, the written material read back and compared with the sources' own looks, the lighting tuned where the output shader shows it differently, the minimum light an output shader can't keep itself added through the emission, and the base color scaled for sources the atlas's lighting shows brighter or darker than their own (see [*The look model*](#the-look-model)), and a matcap's effect measured and named by its role (see [*What a matcap is for*](#what-a-matcap-is-for)) |
 | Map baker | `Editor/Outputs/AtlasMapBaker.cs` | One texture, source by source: each virtual map evaluated at the source's bake size, its UV islands grown over the unused texels, placed in its region |
 | Coverage | `Editor/Outputs/AtlasCoverage.cs` | Each source's UV0 triangles (from the output's renderers in the manual bake, the avatar's in the build), painted at bake size; a triangle in another UV tile counts by whole tiles |
 | Packing | `Editor/Outputs/AtlasTexturePacker.cs` | One output texture from its virtual maps: which channels each map fills (inverted where the texture stores it so), and the neutral value of the rest |
@@ -156,6 +160,61 @@ Bakes depend on each other, so they run in this order per source:
 
 Step 4 only runs for features whose mode bakes them; with none, steps 3–5 are skipped.
 
+### Map contributions
+
+Several features can change one map: the base color takes baked matcaps, the shifts of fitted
+matcap slots, glitter points, normal-map shading, occlusion and level compensation. A map request
+(`AtlasMapRequest`) builds each source's part of the map from three things:
+
+- **Content:** the map's own value, set once by the feature that makes the map (the color
+  stack for the base color).
+- **Views:** scopes the content is evaluated under, such as the global masks with a source's
+  live channels at 0 (see [*Masks*](#masks)). Contributions run outside them.
+- **Contributions:** the other features' changes, each made in place on the source's content.
+  A contribution names its feature, the sources it changes, whether it is a bake (the map
+  still looks right on its own) or a shift (right only together with a live layer), and
+  whether it can raise values.
+
+Contributions run by stage, then in the order they were added, whatever order the features
+resolved in:
+
+| Stage | Holds |
+|---|---|
+| Layers | Baked matcaps, the clear coat's gloss, the shifts of matcap slot fits |
+| Overlays | Glitter points, and the matcap glow baked into the emission |
+| Shading | Normal-map shading, baked occlusion, the occlusion of reflections: the light on everything the stages before put there |
+| Level | Level compensation: the whole of a source's part scaled to the level its own lighting gave it |
+
+The map owns what each feature would otherwise have to know:
+- **What the output multiplies it by.** The base color map leaves out a color that every
+  source shares; it stays in the output's color. The emission map is relative to the
+  emission's strength. Contributions get the content × that color or strength, the
+  surface's real value, and the map divides it out again when they are done, so a feature
+  adds its part in full and needs to know nothing of the scale: a baked matcap's glow and
+  glitter points go into the emission as they are. A source that no contribution changes
+  keeps its content exactly.
+- **The range.** Once the whole map is baked, a map whose content or contributions can go
+  above 1 is divided by its brightest value, which the map's carrier takes: the base color's
+  shared color, a layer's color or strength. A map marked as stretched is divided whatever its
+  brightest value is (see [*What reads a value*](#what-reads-a-value)).
+
+A feature that needs the map as it was before a change takes a snapshot of it: the highlight
+mask copied before the occlusion goes into the reflection mask, the live part of a split map.
+
+A reader that needs the map partway asks the map for its value before a stage, or as one
+contribution finds it, at the size it needs (`Before`), with what the output multiplies the
+map by in it: the base color for a baked matcap glow's base color mix and for a combined
+slot's glow fit, both before the layers stage, and for a fitted matcap slot's strength as
+the slot's shift finds it, so the mask and the shifted base color start from the same
+color. Within a source's evaluation the value is made once per size.
+
+No contribution is kept as a layer of its own: each changes the source's content and releases
+its temporaries before the next one runs (see [*Memory budget*](#memory-budget)). A source's
+mesh surface is made when the first bake asks for it and shared by the bakes after it (the
+matcaps in the color and in the emission, the normal-map shading). Normal maps are
+evaluated by each bake at its own size, since keeping one between stages would hold a
+full-size map.
+
 ---
 
 ## Features and modes
@@ -168,6 +227,7 @@ more unified features and declares:
 | Part | Meaning |
 |---|---|
 | ID, name, section | Stable ID (stored in settings), display name, the UI section it belongs to |
+| Order | Its place within the section, which is also its priority when places run out. Features are listed and resolved by section, then order, then ID, so a feature can rely on the ones before it: baked matcaps add their glow to the map the emission feature made |
 | Presence | Which sources use it, and its instances in each |
 | Modes | The ways it can be produced. Each mode lists the capabilities it needs, the virtual maps it produces (required, and optional with the map each falls back to), and the masks it needs |
 | Settings | Per mode: the fields shown to the user, with defaults |
@@ -198,7 +258,7 @@ The merge strategies are shared building blocks; features combine them.
 | **Shared value** | A setting that applies to the whole material | Equal values pass through. Different values: the value of the **reference source** (*Automatic*: the value that changes the sources' look least where the feature can draw it, as lighting and reflectance do (see [*Matching the look*](#matching-the-look)), otherwise the source with the largest region; or a chosen source, in a drop-down under the feature that appears only when the sources need different values on the output), or the largest or average where the feature says so |
 | **Spatial value** | A setting that differs between sources and the output has a map for | Written per region into a map (for example roughness constants into a roughness map) |
 | **Strength in mask** | A difference that only scales a feature's opacity or strength | Written into the feature's mask: 0 where a source lacks the feature, its strength where it has it |
-| **Slots** | Countable instances: matcaps, rims, decals, outlines | Instances with the same configuration share one slot, told apart by the mask. The user places each instance (*Automatic*, its own slot, combined with another, off), in a list under the feature shown while there is more than one; *Automatic* combines what doesn't fit into the most similar slot and the build log says so |
+| **Slots** | Countable instances: matcaps, rims, decals, outlines | Instances with the same configuration share one slot, told apart by the mask. The user places each instance (*Automatic*, its own slot, combined with another, off), in a list under the feature shown while there is more than one or *Automatic* leaves one out. Each row says in a few words how the instance ends up shown (*In matcap slot 1*, *Shares rim slot 1; keeps most of its look*, *Left out: no slot is free*). *Automatic* combines what doesn't fit with another slot where that costs less than leaving it out (see [*Comparing layers*](#comparing-layers)), and the build log says so |
 | **Exclusive** | Things that can't be combined, such as fur | One source's settings for the material. The user picks the source, and can turn the feature off per source (its mask is 0 there, when the output has a mask) |
 
 **Animated values.** Avatars animate material properties, for example emission toggles,
@@ -258,12 +318,14 @@ originals has shown; new features and fixes follow it.
 
 A shared value, or a setting the output lacks, is chosen by how the result looks:
 
-1. Each source is drawn twice with the **output's own response**: with its own settings, and
-   with the candidate value and only what the output keeps. Drawing both sides with the
-   output's response leaves only the missing part to differ, and a source the output can
-   reproduce costs nothing, so its exact value wins.
-2. The results are compared as **displayed (sRGB) colors** in a few standard scenes (a bright
-   and a dim main light, each with ambient), over the light and view angles, on the source's own
+1. Each source is drawn twice: **as its own shader shows it**, with its own settings, and
+   **as the output shader shows it**, with the candidate value and only what the output
+   keeps. Where the two shaders compute the same way, only the missing part differs, and a
+   source the output can reproduce costs nothing, so its exact value wins. Where they
+   compute differently (another fresnel), the value also makes up for that as far as it
+   can.
+2. The results are compared as **displayed (sRGB) colors** in the standard scenes (see
+   [*The look model*](#the-look-model)), over the light and view angles, on the source's own
    base colors (`AtlasSourceSamples`, 4 × 4 samples). Displayed colors count what the eye sees:
    linear ones would overweight bright parts, and dark sources show differences less.
 3. The cost is the sum over the sources of **area × the mean absolute difference**. Absolute
@@ -275,11 +337,263 @@ A shared value, or a setting the output lacks, is chosen by how the result looks
 | Fit | What it chooses | Where |
 |---|---|---|
 | Automatic lighting | One lighting setup among the sources' | `AtlasLightingResponse` |
-| Reflectance | Toon Standard's `_Reflectance`, carrying the highlight and reflection strengths it has no settings for | `AtlasSpecularResponse` |
+| Reflectance | Toon Standard's `_Reflectance`, carrying the highlight and reflection strengths it has no settings for, and making up for a source shader's other fresnel | `AtlasSpecularResponse` |
 | Matcap glow | A combined slot's one glow strength, by least squares over the sources' texels when the material is written | `AtlasMatcapFeature` |
 | Matcap blends | A slot's strength and base color for blends it lacks, from Poiyomi's chain with black and white textures | `AtlasMatcapFeature` |
 | Band rims | Another rim's midpoint and rise on a writer whose rim is a band | `AtlasRimCurve` |
-| Added rims | Strength, base color mix and lighting for a rim slot that only adds after lighting, from a rim that blends, sits on the surface or glows | `AtlasRimResponse` |
+| Added rims | Strength, base color mix and lighting for a rim slot that only adds after lighting, from a rim that blends, sits on the surface, glows or takes its color from the environment | `AtlasRimResponse` |
+
+### The look model
+
+What the fits and the build's checks share (`AtlasLook`):
+
+- **Scenes.** One set of standard scenes:
+
+  | Scene | Main light | Probes | Why |
+  |---|---|---|---|
+  | Bright | 1 | 0.3, even | A lit world |
+  | Dim | 0.4 | 0.15, even | The same at low light |
+  | Probes only | None | 0.5 on average, 0.25 more along their dominant direction | No main light: each shader turns the probes into light its own way, so shaders differ most here. About as much light as the bright scene gives a surface on average |
+  | Dark | None | 0.02, even | The floors (minimum brightness, minimum light) decide the look |
+
+  Without a main light, the angle to the light is the angle to the probes' dominant
+  direction, and the lighting's light color model says what becomes direct light (catalog
+  3.4): the probes merged, floored or split, or a share of the ambient light standing in
+  for the main light. The lighting's look, *Automatic* lighting and the rim fit use all four
+  scenes. The rim fit lights the surface by the atlas's lighting, which also says what a
+  scene without a main light gives a rim that follows the light. The highlight fit uses all
+  four as well: its diffuse light and the light of its highlights are what each source's
+  own lighting makes of the scene.
+- **Base colors.** A source's look is judged on its base colors. Where layers or
+  adjustments change the base color (a decal, a hue shift), they are the base color stack
+  as it is baked, evaluated at sample size from small copies of its textures, kept by
+  texture and content. Otherwise they are its color × its base color
+  texture where its meshes use it (the UV0 triangles' texels, as up to 16 samples from the
+  darkest to the brightest), `AtlasSourceSamples`. A texture's unused parts, often black and
+  often most of it, would otherwise make a dark material count for almost nothing. The
+  inspector has no meshes for this and samples the whole texture. The highlight fit reads
+  the base color together with the smoothness and the masks at the same place, so it takes
+  the whole texture's samples by position.
+- **A lighting's look.** A lighting setup on a set of base colors has a **level**, the mean
+  displayed brightness over the angles to the light, and a **contrast**, the lit side's mean
+  minus the shadow side's, in each scene.
+- **The reference look.** A view layer (a matcap, a rim) is judged by its effect: the
+  displayed look with it minus the look without it, at a sample point
+  (`AtlasReferenceLook`). A sample point is one of a source's base colors under a light,
+  and its look is computed in the unified evaluation stages:
+
+  | Stage | What happens |
+  |---|---|
+  | S1 | The layers on the surface blend into the base color, in order |
+  | S2 | The light shades the result |
+  | S3–S4 | Overlays blend with the lit color, by the light they follow; lit adds take the direct and ambient light |
+  | S5 | Unlit adds: emission placements and glows |
+
+  A layer says what it shows at the point and at which stages it acts. The matcap
+  measures, the rim fit and the rims' costs describe their layers so, and take the stages
+  and the light from there. A rim is taken over the angles to the light, under the atlas's
+  lighting. A matcap's place on the surface doesn't follow the light, so it takes each
+  scene's light on average over those angles, under its source's own lighting.
+
+  The lighting stage also holds highlights and reflections, which the reflectance fit
+  uses: GGX highlights from the direct light and reflections of an environment as bright
+  as the scene's ambient light, each × its fresnel, `F0 + (1 − F0) × its rise`, and both ×
+  the reflectance fade. The rise follows the surface response's fresnel mode, and for
+  reflections its fresnel strength. A source is drawn with its own shader's and the output
+  with the output shader's (below), each under the source's lighting.
+- **The kept material.** The written material, read back by the output shader's own parser
+  (`AtlasKeptMaterial`): what the shader will show, in unified terms. An output shader is
+  described once, by its parser. Before an atlas's material exists, the kept lighting is
+  read the same way from a scratch material that holds the lighting alone
+  (`AtlasKeptLighting`).
+- **What a shader has no settings for.** How an output shader computes something it has no
+  settings for is a unified mode its parser sets on every material of the shader: the
+  fresnel of its highlights and reflections, and the reflectance below which they fade.
+  A fit reads it from the parser's reading of a material of the shader with nothing set
+  (`AtlasKeptMaterial.Described`); where the shader isn't known, the unified defaults
+  apply. What a slot shows of a layer is read the same way, with the layer written alone
+  to a material of the shader (`AtlasKeptMaterial.Shown`): a rim slot that shows every
+  rim as a band, or as a color added after lighting. The capabilities name their shader
+  and hold counts and what is available, no formulas.
+- **What a source loses.** After writing, each source's own lighting is compared with the
+  kept lighting on the source's own base colors. Where the level or the contrast differs by
+  more than about 8 of the 256 displayed levels in a scene, the build lists the source and the
+  scene, in one line per output. *Lighting from* picks another source's lighting.
+
+#### Tuning the lighting
+
+The chosen lighting is mapped to the output shader by its values. Where the shader keeps it
+as mapped, nothing else happens, so a source the output can reproduce keeps its exact values.
+Where the kept lighting looks different, the build tunes it (`AtlasLightingTuning`):
+
+1. **The difference** is the mean difference in displayed color between the chosen lighting
+   and the kept one, on each source's darkest, average and brightest base color, over the
+   four scenes and the angles to the light, weighted by the sources' areas. Below a third of
+   the visible tolerance the mapped lighting stays.
+2. **The values searched** are those that set how bright the surface is and how much darker
+   its shadow side: the light color model, the light multiplier and addition, the brightness
+   ceiling, the minimum light and brightness, the directional ambient amount, the shadow
+   lift, the ramp and shadow strengths, and the shadow color's brightness (its hue stays).
+   The family, the shading term and the hues are the artist's and aren't searched.
+3. **The search** takes one value at a time: points across its range, then steps that halve
+   around the best, with the kept lighting read back for each candidate. A value the shader
+   doesn't have changes nothing in the kept lighting and stays as mapped, so the search
+   knows no shader.
+4. **The ramp's shape** is fitted for an output that shades only through a generated ramp
+   texture read by half-Lambert (Toon Standard). Such a shader has no family, shading term or
+   shadow strength of its own: the ramp is where the chosen lighting's shading over the angle
+   to the light goes. For each texel of the ramp and each color channel, the fit takes the
+   value that makes the kept lighting show the sources' colors closest to the chosen
+   lighting at that angle, over the four scenes; where the ramp makes no difference it is
+   white. It works at the ramp texture's resolution, with a source's ramp texture read twice
+   as finely, so a sharp edge stays sharp. The ramp is fitted first, then the values, then
+   the ramp again with the values found. The fitted ramp replaces the source's ramp texture
+   or the SDK's preset, and the build generates it.
+5. **The result** replaces the mapped lighting only when it is closer by the same margin, so
+   it doesn't flip on a small change: the fitted ramp against the mapped one, and the values
+   against what the ramp left. The build then names what was tuned and the difference before
+   and after, in one line.
+
+The target is the chosen lighting, not each source's own: which lighting the atlas gets is
+the user's choice (*Lighting from*), and tuning only makes the output shader show that
+choice. The inspector resolves as the build does, with the search's results kept by the
+output shader, the chosen lighting and the sources' colors, so a changed setting elsewhere
+doesn't search again.
+
+#### Minimum light
+
+A lighting's floors (a minimum light, a minimum brightness, a floored light color) keep a
+surface visible without light. An output shader has none (Unity Standard), or one that
+stops below the atlas's (Toon Standard's minimum brightness at 0.1). Where it has an
+emission map, what is missing goes there (`AtlasLightFloor`), after the lighting is tuned
+and before the level compensation:
+
+- **What is missing,** per texel, is what the source shows without light less what the
+  output shader's own floor shows, not below 0:
+  `source color × the atlas's floor − base color as shown × the shader's floor`. The
+  atlas's floor is the one of the lighting the atlas chose, before tuning; the shader's is
+  the kept lighting's, whatever the tuning made of it.
+- **What the source shows without light.** A minimum light shines on a source's color
+  after its matcaps, which often darken it (Poiyomi blends its matcaps into the base color
+  and lights the result). So the source color is its own base color, before the level
+  compensation (which makes up for the lighting under the world's light, not for a floor),
+  with the matcaps the output shows at their average (`AtlasMatcapForm`): those in a slot
+  too.
+- **What the shader's own floor shows** is its base color texture alone: Toon Standard
+  adds its minimum brightness before its matcap. So where a source's matcaps darken, the
+  shader's own floor can already be as bright as the source was, and nothing is added.
+- **In the emission:** the missing part is added to the emission map of every source,
+  since the atlas has one lighting. The kept lighting carries the floor as a minimum
+  brightness, so the level compensation and the comparison after writing count it. It
+  adds to the world's light where a minimum light only raises it (listed).
+- **Shaded by the lit bakes:** the shader lights its normal map and darkens by its
+  occlusion map only what the world's light reaches, so the emission alone would show the
+  surface flat. The source color is shaded as the baked modes shade the base color (see
+  [*Virtual light rigs*](#virtual-light-rigs)): each source's normal-map shading and
+  occlusion, where the atlas keeps them (as maps or baked), with the *Baking* section's rig
+  and strengths, which shows while they apply.
+- **Matcaps no slot shows** (kept as their average on an output without slots, after
+  losing their slot or placed *Average in color*; or baked) shade it too. Under the world's
+  light the output shader shades the form itself, which is why the color has only their
+  average; in the floor nothing else does. The source color is multiplied by the matcaps
+  drawn as the virtual view sees them over their average, so it keeps its level and gets
+  the form; the ratio stops at 4 and is lerped from 1 by the *Matcaps* strength. As any
+  baked matcap, it is seen from the *Baking* section's matcap view and stays in place from
+  every side. A matcap in a slot isn't drawn: the live one follows the view.
+- **The control:** where no source glows, the floor is what the atlas has an emission
+  texture for, so the user can turn it off (*Minimum light in the emission*, with the
+  lighting's settings, shown while the output shader can't keep the whole floor). Off, the
+  atlas is darker without light than the sources were.
+- An output without an emission map (VRChat Mobile Diffuse), or with the emission turned
+  off, stays dark without light.
+
+#### Level compensation
+
+The atlas has one lighting. A source that the kept lighting shows brighter or darker than
+its own lighting did gets its part of the base color map scaled (`AtlasLevelCompensation`),
+after the lighting is tuned:
+
+- **The scale** is the one that makes the source's darkest, average and brightest base color
+  under the kept lighting look closest to its own look, over the four scenes and the angles
+  to the light, between a half and double. A source whose look is kept, or that no scale
+  brings closer by the tuning margin, isn't scaled.
+- **It applies to the whole of the source's part,** as the map's last contribution (the
+  *Level* stage), since the lighting lights everything in the map.
+- **A raise stays within the map's range,** so it takes no levels from the other sources
+  (see [*What reads a value*](#what-reads-a-value)). Where it fits (the source's brightest
+  texel in the texture stays within 1), every texel gets it. Where it doesn't, the texels
+  that stay below a knee of 0.8 get it in full, and the range from the knee to the raised
+  peak is drawn onto the knee to 1 by a curve that leaves the knee at the raise's own slope
+  (`Raised`): brighter texels are raised less, none goes above 1, and they keep their order
+  and hue. So a bright part of a texture (white horns on a dark body) doesn't hold the rest
+  back, and a bright texture keeps its detail. Lowering has no such bound.
+- **Side effects.** Every feature that reads the base color reads the scaled one, and
+  viewers who block the avatar's shaders see it where the fallback shows the base color.
+- **The control.** *Keep each material's brightness* under the lighting, on by default,
+  shown while a source would be scaled. Off leaves the base colors as they are.
+- **Reporting.** The build names the scaled sources with their scales in one line. The
+  comparison after writing takes each source as the atlas shows it, with the scale its
+  colors got on the whole.
+
+#### Comparing layers
+
+A layer (a matcap, a rim) is compared by its effect: the look with it minus the look without
+it, per sample point (`AtlasLayerCost`).
+
+- **Kept:** what the output's effect and the source's have in common: the same direction, up
+  to the source's size.
+- **Missing:** what the source shows and the output doesn't.
+- **Added:** what the output shows and the source doesn't.
+
+The cost is missing + 2 × added. Something the artist didn't put there reads as a fault,
+while a weaker effect reads as a subtler material, so added counts double. Leaving a layer out
+costs its impact, kept + missing, so a way of showing a layer is worth using when it keeps
+more than twice what it adds.
+
+A matcap that stands in for the light is compared by its **shading** instead: its
+**level**, the size of its average effect, and its **contrast**, how far its effect lies
+from that average on average, seen from around the avatar. A way of showing it loses the
+share of level + contrast by which its own level and contrast differ, wherever the shading
+sits. Point by point, a lit sphere frozen by a bake or replaced by another lit sphere costs
+more than leaving it out, though it still reads as shading. By its shading:
+
+- **left out** loses all of it;
+- **its average in the color** keeps its level and loses its contrast;
+- **a bake** loses what the frozen level and contrast differ by (a matcap's *bake cost* is
+  this for lighting, and the point-by-point loss for a rim, a highlight and lighting with a
+  highlight, whose spot would stay in place);
+- **a slot shared across parts** keeps each source's level through its fit, and its contrast
+  becomes the shared texture's: the texture's variation over the lookup disc, between its
+  black and white ends, against that of the source's own matcaps. An even matcap has no
+  contrast to compare, so what the shared texture's variation shows as on it is taken from
+  its range, its effect from a black texture to a white one.
+
+*Automatic* places a lighting matcap without a slot of its own by this (see the matcaps'
+row of the [*Feature inventory*](#feature-inventory)).
+
+A rim or a highlight is where it is, so a way that shows it elsewhere or as another is
+compared point by point:
+
+- **a matcap that is a rim or a highlight, in a slot shared across parts:** its effect at
+  each point of the lookup disc, its level + its range × its texture's distance from its
+  mean there, against the same with the shared texture. The shared texture shows a share
+  of it on its own parts and the rest on the others', so sharing usually costs more than
+  it keeps;
+- **a rim in a rim slot it shares:** the slot's rim shows in its place;
+- **a rim in a rim slot without a mask:** it is added on every part that didn't have it;
+- **rims drawn into one matcap slot on different parts:** each part shows every part's
+  rims at its share of the area.
+
+A rim's effect is taken on its sources' darkest, average and brightest base color under
+the atlas's lighting, in the four scenes, at five angles to the light and twelve facing
+angles that each stand for an equal share of the surface a viewer sees of a round form
+(`AtlasRimResponse.Effects`), and weighed by the area its mask covers. A layer's light
+side is taken after its curve; shaping before the step and shrinking in shadow aren't part
+of it.
+
+*Automatic* uses such a way only where it costs less than leaving the layer out, and among
+the slots a layer can share it takes the one that costs the least. What the user places
+goes where the user put it.
 
 ### Reading intent from content
 
@@ -288,11 +602,137 @@ is measured as the output will use it:
 - **What a texture shows where it's used.** Matcaps are sampled through the lookup disc with
   their texture's scale and offset, as the slot reads them. One that changes nothing (black
   where it adds, white where it multiplies) is left out, which frees a slot.
-- **Effect or environment.** A matcap with half its light in its brightest tenth, or the
-  reflection projection, is an effect (shine, glints) and keeps a slot of its own. Soft
-  shading can be combined. When slots run out, the weakest effects go first.
-- **Visibility, not counts.** Priorities and shares weigh what shows: area × the blend's effect
-  × the mask's average × the base color mix's darkening.
+- **Effect or environment.** A matcap whose role is highlight (see below) is an effect and
+  keeps a slot of its own. The others can be combined. When slots run out, the weakest
+  effects go first.
+- **Guarded.** Lighting with a highlight takes its own slot before the other environment
+  matcaps do, and they share its slot only where no other will do. Out of slots it shares,
+  since most of what it does is its body.
+- **What shows, not counts.** Slots go to the matcaps with the most measured impact, by the
+  area their masks cover. Shares of a combined texture weigh what each matcap adds to it:
+  area × the blend's effect × the mask's average × the base color mix's darkening.
+
+#### What a matcap is for
+
+Each matcap is also measured by its effect (`AtlasMatcapLook`): the look with it minus the
+look without it, as displayed, on its largest source's darkest, average and brightest base
+color, under that source's own lighting in the four scenes. The effect is taken on a sphere
+of normals, looked up as the layer's projection does, seen from the front and from around
+the avatar in 45° steps:
+
+| Measure | Meaning |
+|---|---|
+| Impact | The mean size of its effect where it shows |
+| Direction | The share of its effect that brightens; the rest darkens |
+| Level, contrast | Its shading seen from around the avatar: the size of its average effect, and how far its effect lies from that average on average |
+| Average loss | The share of its shading (level + contrast) lost as its average alone: its contrast |
+| Bake shading loss | The share of its shading lost frozen at the virtual view: how far the frozen level and contrast are from its own |
+| Range | How far its effect goes from a black texture to a white one |
+| Bake loss | What freezing it at the virtual view costs seen from around the avatar, over its impact (see [*Comparing layers*](#comparing-layers)). From 1, leaving it out costs less |
+| Spread | The share of its effect in its strongest tenth, seen from the front |
+| Evenness | 1: the same effect all over. 0: as much variation as effect |
+| Edge weight | The share of its effect on the outer ring, beyond three quarters of the disc's radius. An even matcap has 0.44 there |
+| Around | How much of the way around the outer ring shows the effect: the share of directions with a quarter of the ring's average or more |
+| Detail | The share of its variation that is fine: what is left after each point is averaged with its neighbors |
+| Standout | How far its sharpest features stand out: what its neighbors' average leaves of the sharpest fiftieth of the disc, over how much the matcap varies (at least a quarter of its effect) |
+| Tint | How colored the matcap is where it shows: its saturation, weighted by its effect |
+
+The **role** is the first that holds:
+
+| Role | What it does | Measured as |
+|---|---|---|
+| Rim | Lights or darkens the edges: a rim light, soft shading toward the silhouette | An edge weight of 0.6 or more, around 0.65 of the ring or more |
+| Highlight | Gloss, shine, glints, and reflections, which usually come with them | A spread of 0.5 or more, or a detail of 0.5 or more on a matcap that varies (an evenness below 0.75) |
+| Lighting | Stands in for the world's light: a lit sphere, sky and ground, light from a side, a soft glow, one color or shade all over | The rest |
+
+Two modifiers say what a matcap does besides its role:
+- **With a highlight**, on lighting: its sharpest features stand out by 0.95 or more. A pearl
+  and a lit sphere with a hot spot are both a soft body with a highlight on it, and no
+  measure at this size tells them apart: an artist called the pearls highlights and the lit
+  spheres lighting, and found the line hard to draw.
+- **Tints**, on any role: a tint of 0.25 or more colors the surface (a red glint, a blue silk
+  sheen). A warm white (0.2) doesn't.
+
+A matcap whose impact is below half a displayed level has no role: it shows as having no
+visible effect (a texture scale of 0, which reads one texel, makes one).
+
+Three things don't decide the role:
+- **The lookup.** Poiyomi's *Double Sided* mode looks the texture up by the reflection, and
+  is used for every kind of matcap.
+- **The bake loss.** An ordinary lit-sphere matcap changes enough with the view to cost more
+  frozen than left out, so the loss says how a bake would look, not what the matcap is for.
+
+- **The evenness.** How even a matcap is depends on the base colors it is on: a multiply
+  mixed with a dark base color darkens almost evenly. An even matcap is lighting; that a
+  bake keeps it shows in its bake loss.
+
+There is no reflection role: highlights and reflections usually come together and are hard
+to tell apart, by eye as by measure.
+
+The limits are each on a measure of the matcap's own effect, checked against the matcaps in
+use on one avatar and two collections of 184: an artist's, sorted into gems, glass, metal,
+pearl, rubber, shine and silk, and Poiyomi's samples. Gems and facets measure a detail of
+0.53 and up and soft lit spheres 0.35 and below; pearls and silks come out as lighting, gems,
+glass and shine as highlights, and thin rings as rims. Metals split: chrome with a hot spot
+is a highlight, a gold sphere lighting that tints. The inspector
+shows each matcap with its texture (tinted by its color; a click shows it in the Project
+window), and under its name the role with its modifiers, whether it brightens or darkens,
+how it ends up shown with the settings as they are, and the materials it is on. The build
+lists the roles in one line. *Automatic* placement follows
+the role: highlights are effects, and lighting with a highlight is guarded.
+
+#### Base color shifts
+
+A slot with one blend at a time shows one side of a matcap: its multiply can only darken, its
+add can only brighten. A matcap that does both is shown through a **base color shift**: the
+base color is raised and the slot multiplies it down, or lowered and the slot adds to it
+(the slot fit, `AtlasMatcapFeature`). The shift is right only together with the slot.
+
+- **The blocked view.** VRChat draws an avatar whose shaders a viewer has blocked with a
+  fallback shader, chosen by the material's `VRCFallback` tag, and copies the standard
+  properties to it: the main texture and color, the emission, the normal map and others. A
+  matcap slot isn't among them.
+
+  | The output's fallback | The blocked view shows |
+  |---|---|
+  | The output shader itself (Toon Standard: its tag names it, and every property is copied) | The same look |
+  | A fallback the writer sets (a Poiyomi output: Toon, Unlit or Standard) | The base color map × the color, without the matcaps |
+
+- **How far a shift goes.** Where the blocked view shows the same look, the shift goes as far
+  as the matcap needs. Where it shows the base color alone, the base color is right for that
+  view anywhere between the surface's own color and its average look with the matcap, and
+  the user chooses (*Base color shift*, shown while a slot is fitted):
+
+  | Choice | The base color | With the shader | Blocked |
+  |---|---|---|---|
+  | *Automatic* | Shifted no further than the average look | The side the slot's blend can't show is weaker: a multiplying slot reaches the average at its brightest, an adding one at its darkest | As bright as the material is on average |
+  | *Keep the base color* | The surface's own | One side of the matcap only | The surface's own color |
+  | *Full* | Shifted as far as the matcap needs | Exact where the matcap is black or full | Too bright with a raised base, too dark with a lowered one |
+
+  *Automatic* stops at the average because every step past it costs the blocked view in
+  full, while it gives the look with the shader only the matcap's average share of it.
+- **The slot's strength** follows the base color: a multiplying slot still reaches the
+  matcaps' darkest, an adding one their brightest, as far as the base color lets it.
+- **The average look** is taken from the matcap's mean color over the lookup disc, between
+  the look with black matcaps and with full ones.
+- **A shared slot.** A slot shared by matcaps on different parts shows their averaged
+  texture on every part, which is brighter than one part's own matcap and darker than
+  another's. Every source whose matcaps blend there is fitted, also one whose matcaps the
+  slot could show as they are (not where the slot's differing base color mixes go into its
+  masks), and keeps its own average look (**average in color**): its fit is moved by
+  the difference between its own matcaps' average and the shared texture's as the slot
+  shows it, as far as its darkest stays a color, so the base color takes the difference and
+  the shared texture varies the look around the right level (listed). The bounds above
+  apply as to any shift.
+- **Without a slot.** A matcap can be kept as its average effect alone (*Average in
+  color*), a bake: each texel's color goes through the matcap's blends with its texture at
+  its mean over the lookup disc, where its mask is, and what changes with the view is lost.
+  The user places a matcap so, which takes no slot. A lighting matcap that ends up without
+  a slot (no mask place is left for it) is kept so (listed); a rim's or a highlight's
+  average would light the whole surface, so those are left out. A glow the output's
+  matcaps would show isn't part of it (listed).
+- **Range.** A shift above 1 goes into the shared color, by the map's range step (see [*Map
+  contributions*](#map-contributions)).
 
 ### Versions
 
@@ -457,7 +897,10 @@ tilings per source share a channel.
 each keep one slot live: the sources whose last static tiled layer of the kind looks like the
 reference source's (*Automatic*: the look on the largest area). Each source's strength
 (relative to the strongest, where the slot has a strength) × its mask goes into the detail
-mask, 0 where a source has none. The base color and normal bakes skip layers kept live
+mask, 0 where a source has none. An output with one detail mask for both details (Toon
+Standard's by channel, Unity Standard's alpha) keeps the detail normal live only where its
+mask is the detail texture's, and one with a single tiling for both (Unity Standard) only on
+the same tiling; otherwise it is baked. The base color and normal bakes skip layers kept live
 (`AtlasLiveLayers`); *Off* leaves them out. A layer that is rotated, followed by a layer of
 the same kind, adjusted (its own or the surface color's adjustments), in a blend the output
 lacks, or tinted or stronger than an output without a tint and strength can show, is baked,
@@ -887,12 +1330,12 @@ allocator (see [*Masks*](#masks)). *Merge* uses the strategies above.
 
 | Feature | Unified | Modes | Maps | Merge and notes |
 |---|---|---|---|---|
-| **Color** | 2.1 base color<br>4.1 surface layers targeting color (details, decals, recolor regions)<br>1.10 static adjustments | 1. Native | base color **(Required)**<br>decal textures → base color<br>detail color maps → base color | Bake. Decals and details keep maps of their own only in the output's slots for them. A layer that tiles in UV0 can't stay on the atlas UVs, where its tiling would differ per region: it keeps a map of its own on a preserved UV channel (see [*UV channels*](#uv-channels)), or is baked. Vertex color is its own feature (below) |
+| **Color** | 2.1 base color<br>4.1 surface layers targeting color (details, decals, recolor regions)<br>1.10 static adjustments | 1. Native | base color **(Required)**<br>decal textures → base color<br>detail color maps → base color | Bake. Decals and details keep maps of their own only in the output's slots for them. A layer that tiles in UV0 can't stay on the atlas UVs, where its tiling would differ per region: it keeps a map of its own on a preserved UV channel (see [*UV channels*](#uv-channels)), or is baked. Vertex color is its own feature (below). An output without a color of its own (VRChat Mobile Diffuse) gets every source's color in the texture, also one all sources share; a color brighter than 1 is cut off there (listed) |
 | **Alpha** | 2.2 alpha, modifiers<br>6 surface mode, cutoff | 1. Base color alpha (native)<br>2. Off | alpha **(Required)**, in the base color's alpha, when the surface mode uses it | Only modes that give a real see-through effect are offered; there are no emulations. A transparent source either keeps its transparency (when the output can blend it, see *Surface mode*) or is drawn solid. Each source's alpha is baked (its source, mask, offset and strength) and converted to the output's surface mode: under *cutout*, a cutout source's cutoff is moved linearly to the shared cutoff 0.5; under a blended or dithered mode, a cutout source's alpha becomes 0 or 1 at its cutoff. Sources without alpha get 1. Fades, vertex alpha, dithering and masks on the mask bus, vertex colors or levels aren't baked yet; the build lists them |
 | **Normal maps** | 2.3 normals<br>the normal correction and the pre-baked normal<br>4.1 layers targeting the normal | 1. Native<br>2. Baked into color (normal-map shading)<br>3. Off | main normal **(Required)**<br>secondary normal → main normal<br>detail normal → main normal | Bake, combined in the order of [*Normal correction*](#normal-correction). A secondary or detail layer is offered a map of its own when every source using it has the same texture and a preserved UV channel is available for it; otherwise it is baked into the main normal. Normal maps shrunk into a source's bake size or region are averaged by area and flattened where the normals a texel covers disagree (`AreaFlatten`), so detail finer than the texel turns flat instead of into noise, which a toon ramp shows as speckles. *Baked into color* makes no normal map: each source's combined normals are baked into its base color as normal-map shading under the virtual light rig (see [*Virtual light rigs*](#virtual-light-rigs)), the default where the output has no normal map; sources whose meshes aren't known are listed |
 | **Color adjustments** | 1.10 | 1. Baked (static adjustments, always)<br>2. Native (live adjustments, where the output has the operation) | hue cycling mask, for the base color's hue cycling | Static adjustments are baked into the maps they target. A cycling hue (a hue shift with a speed) is baked at its start, and *Hue Cycling* keeps the turning live on top: one rate from the reference source (*Hue Cycling from*), the base color's in the hue cycling mask, the final color's in an allocated mask, 0 where a source doesn't cycle. Slots with a hue shift of their own (matcaps, rims, glitter) copy their layer's; an emission whose hue cycles takes an emission slot of its own. Other live adjustments (AudioLink) come with AudioLink |
-| **Vertex colors** | 2.1 vertex color on the base color and alpha<br>1.4 masks reading vertex color<br>1.5 vertex color steps of the mask bus<br>other uses (transition space, anisotropy, outline and fur directions) | 1. Live<br>2. Baked<br>3. Off | base color, alpha and mask maps, when baked | Shown when a source's material uses vertex colors; the user chooses. *Live*: the vertex colors stay on the mesh and the output multiplies its base color (and alpha, where it can) by them, with one setting (amount, sRGB decoding). The remap rewrites each source's vertex colors so that setting gives what its own did: sources that don't use them get white, and other amounts are solved exactly; a different sRGB decoding matches at the vertices and can differ slightly between them (when the sources disagree on it, the user picks the output's: *Vertex colors as sRGB*). Masks and mask bus steps reading vertex colors are baked. *Baked*: the vertex colors are painted in UV space (`AtlasVertexColors.cs`) into the maps they affect; texels shared by triangles with different colors get the average. *Off*: they are ignored (read as white) |
-| **Reflection and specular** | 2.4 metallic, roughness, reflectance, specular color, highlights, reflections<br>4.3 cubemap lookups | 1. Native<br>2. Off | cubemaps **(Required)**, for cubemap lookups<br>metallic → constant<br>roughness → constant<br>reflectance → constant<br>specular color → constant | Constants that differ become maps (spatial). Reflectance is one value on the current outputs: fixed at 0.5 in Poiyomi's Reflections & Specular, and Toon Standard's gloss map × `_Reflectance`, where each source needs its reflectance over its smoothness. The value is fitted (`AtlasSpecularResponse`): each source is drawn with the output's own response (GGX highlights and environment reflections, its fresnel and Toon Standard's fade below reflectance 0.25) with its own reflectance and strengths, and with the output's value and the strengths the output keeps (1 without a mask), and the displayed results are compared over two scenes and the light and view angles; Automatic takes the value with the least difference over all sources by area, a chosen source is fitted alone, and sources the output can give exactly keep their exact value. Without highlight and reflection strengths (Toon Standard), a lower reflectance (F0 = 0.16 × r²) is what dims them. Highlight and reflection groups are shared values with their strengths in a mask. The unified highlight strength is on the scale of GGX × N·L without π, as Poiyomi lights its highlights before 10.0.26 and in 11; Poiyomi 10.0.26 to 10.0.29 multiply them by π, so their parser reads × π and their writer writes ÷ π, by the full version in the shader's master label (`AtlasPoiyomiVersionDetector.HighlightsTimesPi`; checked in 8.1.167 to 11.0.50). A cubemap is a lookup layer and takes a slot |
+| **Vertex colors** | 2.1 vertex color on the base color and alpha<br>1.4 masks reading vertex color<br>1.5 vertex color steps of the mask bus<br>other uses (transition space, anisotropy, outline and fur directions) | 1. Live<br>2. Baked<br>3. Off | base color, alpha and mask maps, when baked | Shown when a source's material uses vertex colors; the user chooses. *Live*: the vertex colors stay on the mesh and the output multiplies its base color (and alpha, where it can) by them, with one setting (amount, sRGB decoding). The remap rewrites each source's vertex colors so that setting gives what its own did: sources that don't use them get white, and other amounts are solved exactly; a different sRGB decoding matches at the vertices and can differ slightly between them (when the sources disagree on it, the user picks the output's: *Vertex colors as sRGB*). Masks and mask bus steps reading vertex colors are baked. *Baked*: the vertex colors are painted in UV space (`AtlasVertexColors.cs`) into the maps they affect; texels shared by triangles with different colors get the average. *Off*: they are ignored (read as white). An output that always multiplies by the vertex colors (VRChat Mobile Diffuse) shows them in every mode, so the sources whose colors no mode rewrote (baked, off or unused) get white on the mesh. A mesh whose colors all come out white stores none |
+| **Reflection and specular** | 2.4 metallic, roughness, reflectance, specular color, highlights, reflections<br>4.3 cubemap lookups | 1. Native (metallic and smoothness maps)<br>2. Specular color and smoothness maps (outputs of the specular workflow)<br>3. Off | cubemaps **(Required)**, for cubemap lookups<br>metallic → constant<br>roughness → constant<br>reflectance → constant<br>specular color → constant | Constants that differ become maps (spatial). Reflectance is one value on the current outputs: fixed at 0.5 in Poiyomi's Reflections & Specular and in Unity Standard, and Toon Standard's gloss map × `_Reflectance`, where each source needs its reflectance over its smoothness. The value is fitted (`AtlasSpecularResponse`): each source is drawn as its own shader shows it (GGX highlights and environment reflections with its shader's fresnel, the fresnel strength of its reflections and its reflectance fade, its own reflectance and strengths) and as the output shader shows it (the output's value, the strengths the output keeps, 1 without a mask, and the output shader's fresnel: Toon Standard's one term and its fade below reflectance 0.25), both under the source's own lighting, and the displayed results are compared over the four scenes and the light and view angles; Automatic takes the value with the least difference over all sources by area, a chosen source is fitted alone, and sources the output can give exactly keep their exact value: those whose shader computes highlights and reflections as the output's does. A source of another shader is always fitted, since the same values look different there. Without highlight and reflection strengths (Toon Standard), a lower reflectance (F0 = 0.16 × r²) is what dims them. An output with neither strengths nor a reflectance value (Unity Standard's metallic setup) shows them at full strength; the weaker ones are listed. An output of the specular workflow (Unity Standard's specular setup) has a specular color map in place of metallic (`AtlasSpecularColor`): what the surface reflects at normal incidence, per texel. It holds a source's reflectance (F0 = 0.16 × r² where it isn't metallic), its metallic converted (`lerp(F0, base color, metallic)`, the base color read before the level compensation), a specular workflow source's own specular color, and its highlight and reflection strengths and masks relative to the output shader's own (read from the shader as its parser describes it), × the color. One color scales both, so where the output shows both, a source gets the mean of its two (listed where they differ), and a source without either gets black, which shows none at all. The shader takes the specular color's brightest channel off the diffuse (`albedo × (1 − max(specular))`), so the base color is scaled as its last step before the level compensation to give the source's own diffuse: a metallic source's base × (1 − F0) × (1 − metallic), a specular source's base × (1 − its own specular's brightest channel), over what the output's specular color leaves. Highlight and reflection groups are shared values with their strengths in a mask. The unified highlight strength is on the scale of GGX × N·L without π, as Poiyomi lights its highlights before 10.0.26 and in 11; Poiyomi 10.0.26 to 10.0.29 multiply them by π, so their parser reads × π and their writer writes ÷ π, by the full version in the shader's master label (`AtlasPoiyomiVersionDetector.HighlightsTimesPi`; checked in 8.1.167 to 11.0.50). A cubemap is a lookup layer and takes a slot |
 | **Clear coat** | 2.4 clear coat | 1. Native<br>2. Into the gloss map (outputs without a coat)<br>3. Off | clear coat strength and roughness **(Required)**, native<br>clear coat reflection and highlight masks, native<br>metallic and roughness **(Required)**, into the gloss map | Spatial value for strength and roughness (no coat: strength 0); strength in mask for the reflection and highlight strengths, relative to the strongest (one value everywhere: no mask; a highlight mask equal to the reflection mask reads its channel). The rest is a shared value from the reference source (*Clear Coat from*). *Into the gloss map* approximates the coat with the output's one specular layer: in coated parts the gloss is raised toward the coat's, `lerp(base, max(base, coat), coat strength × coat reflection strength)`, never lowered, so they get real, sharper highlights and probe reflections; without highlights in any source, the feature asks for the metallic and roughness maps itself. A surface under the coat becomes as glossy as the coat there, and the coat's tints and normal map amount aren't kept (listed) |
 | **Ambient occlusion** | 2.4 occlusion | 1. Native<br>2. Baked into color<br>3. Off | occlusion **(Required)**, for the native mode | Bake. *Baked into color* is for sources with an occlusion map when the output has none, or to save the texture. See below |
 
@@ -900,7 +1343,7 @@ allocator (see [*Masks*](#masks)). *Merge* uses the strategies above.
 
 | Feature | Unified | Modes | Maps | Merge and notes |
 |---|---|---|---|---|
-| **Shading, lighting and shadows** | 3.1–3.4 | 1. Native (the writer maps the family and parameters to its own modes)<br>2. Baked full light (outputs that don't light)<br>3. Baked form shading (outputs that light flatly) | shadow color → reference values<br>ramp masks → reference values | Exclusive: one lighting setup, from the reference source. *Automatic* takes the setup that changes the sources' look least (`AtlasLightingResponse`): each source's base colors (its color × a 4 × 4 copy of its base color texture) are lit by white light in two scenes (a bright and a dim main light, each with ambient) over the angle to the light, by its own lighting and by each candidate's, following the unified formulas for the main and ambient light; the cost is the sum of area × the mean difference of the displayed (sRGB) colors, so dark sources count for little. Among equal costs, the largest region. The writer maps unified families to its shader's lighting modes, for example the ramp toon special cases (3.2) to Poiyomi's modes. Spatial values (shadow tint, ramp strength) become maps when the output has them |
+| **Shading, lighting and shadows** | 3.1–3.4 | 1. Native (the writer maps the family and parameters to its own modes)<br>2. Baked full light (outputs that don't light)<br>3. Baked form shading (outputs that light flatly) | shadow color → reference values<br>ramp masks → reference values | Exclusive: one lighting setup, from the reference source. *Automatic* takes the setup that changes the sources' look least (`AtlasLightingResponse`): each source's base colors (its color × a 4 × 4 copy of its base color texture) are lit by white light in the standard scenes (*The look model*) over the angle to the light, by its own lighting and by each candidate's, following the unified formulas for the main and ambient light; the cost is the sum of area × the mean difference of the displayed (sRGB) colors, so dark sources count for little. Among equal costs, the largest region. The writer maps unified families to its shader's lighting modes, for example the ramp toon special cases (3.2) to Poiyomi's modes. Spatial values (shadow tint, ramp strength) become maps when the output has them |
 | **Light volumes** | 3.5 | 1. Native<br>2. Off | — | Part of the lighting setup: the reference source's |
 | **LTCGI** | 3.5 | 1. Native<br>2. Off | — | As light volumes |
 
@@ -908,12 +1351,12 @@ allocator (see [*Masks*](#masks)). *Merge* uses the strategies above.
 
 | Feature | Unified | Modes | Maps | Merge and notes |
 |---|---|---|---|---|
-| **Matcaps** | 4.3 lookup layers with a 2D texture | 1. Matcap slots<br>2. Baked into color (surface placement) or emission (overlay and emission placements)<br>3. Off | generated matcap textures, square, for combined slots<br>masks (allocated), one per slot | Slots. A source's matcap is its consecutive lookup layers sharing texture and mask (one per blend weight). Matcaps that look the same in several sources share a slot. What a matcap shows is measured as its slot looks it up (its texture over the lookup disc, through its scale and offset): one that reads black where it adds, screens, mixes or glows, or white where it multiplies without base color mix, changes nothing and is left out (listed). An **effect** (shine, glints, reflections) has at least half its light in its brightest tenth, or uses the reflection projection; the others are **environment** matcaps (shading, soft light). A shared slot shows its one texture on all its members' parts, which an effect can't share without moving its highlights, so effects get their own slots, the most visible first, keeping one slot for the environment matcaps where none has one yet; where the slots run out the weakest effects are left out (listed; placing one in its own slot keeps it). The user places each one; *Automatic* combines matcaps on the same parts with the same lookup, gives the most visible environment matcaps their own slots (area × each weight's effect, the shown brightness where it adds, screens or glows and its darkness where it multiplies, × the mask's average × the base color mix's darkening `lerp(1, luminance(base), mix)` over the source's base colors, `AtlasSourceSamples`), and combines the rest into the most similar slot: one whose matcaps do the same (blend, glow or both) first, since a slot has one blend and one glow strength, then the same lookup, the same main blend and the nearest color. A combined slot gets a generated texture: matcaps on the same parts stack (textures × colors × weights added for *add*, `lerp(1, texture × color, weight)` multiplied for *multiply*; in a slot that only glows, the weights are the glows relative to the strongest); stacks on different parts are averaged by how visible they are (as above), since each part shows the one texture. Combined matcaps that mix in the base color differently get none in the slot: each one's mix goes into its mask, as without a base color mix. The glow (Poiyomi's matcap emission: matcap × strength × mask × `lerp(1, base color, mix)`) is kept as it is where the slot shows one matcap with its own mask and mix, scaled by a constant mask. In a combined slot, or one whose base color mix went into the mask or the fit, the one strength is fitted when the material is written: least squares over the sources' texels of strength × texture part × written mask × the slot's mix against each matcap's own glow, and listed where they differ. Matcaps that only glow but share a slot with a blend show the blend too, and are listed. An output whose matcaps don't glow (Toon Standard) gets the glow added to the color: one more *add* of the matcap at the glow's strength with its base color mix, lit rather than glowing (listed). A slot that takes one blend at a time gets a matcap with several weights merged (the same blend summed) or fitted, not only its first weight. An output without a matcap color also gets one for a tinted matcap, and an output whose slot has no texture transform for a matcap whose texture has a scale or offset. The texture keeps its own scale and offset (Poiyomi samples at `(projection × border + 0.5) × scale + offset`); generated textures are sampled with them. Blends the output lacks are approximated: add, add to light, screen and mixed brighten, so they add; replace and multiply multiply; several weights take the heaviest. Where a slot can't show a source's matcaps as they are (blends it lacks, base color mix it doesn't have), it is fitted to them per texel: Poiyomi's chain (each matcap's replace, multiply, add, screen and mixed in turn, its color × matcap × `lerp(1, the base color so far, mix)` by weight × mask) is matched with the slot's texture black and white (T0, T1). From the rise k = (white − black) / (T1 − T0), the strength goes into the slot's mask and the rest into the base color map: for a multiplying slot `t = black − k T0 + k`, `s = k / t`; for an adding one `s = k`, `t = black − k T0`. The base color can come out brighter than the source's (a screen over a multiply). Exact for a single layer on a gray base; the strength is one value, so it takes the channels' luminance, and each channel of t matches halfway between T0 and T1. Without a base color map, base color mix goes into the mask: the mask × `lerp(1, luminance(base color), mix)`. Approximations, combinations and left-out matcaps are listed. *Baked* (`AtlasMatcapBake`): a matcap placed *Baked into color*, or every matcap in the *Baked into color* mode (the default without matcap slots), is drawn into the textures as the virtual view sees it instead of taking a slot: each texel's lookup by the layer's projection as Poiyomi computes it (view-stabilized, where the corrected projection is the same for a view along the texel's own direction; planar reflection; gradient; the light half vector with the rig's key light), from the mesh normal or the normal map by its surface normal amount, through its tiling, rotation and the texture's scale and offset, with its circle mask, × its color, base color mix and mask. Surface matcaps blend into the base color by their blend, in layer order, before the lit bakes, with a light mask (Poiyomi's mask × `lerp(1, lit, light mask)`) at its average under the rig, `lerp(1, (1 + wrap) / 2, light mask)`: a toon ramp lights the directions with N·L above −wrap, and the output's own shadow already darkens the rest; overlay matcaps that add and matcap glows are split by how they follow the light: Poiyomi multiplies them by `lerp(1, light color, light color mix)` and `lerp(1, lit, light mask)`, so the share `(1 − light color mix) × (1 − light mask)` shows without light and goes into the emission (made where the emission feature has none, normalized to its brightest value), and the rest is added to the base color, which the world's light shades (all of it where the output has no emission turned on); overlay matcaps that multiply go into the color. Surfaces are evaluated per UV winding, so mirrored halves are looked up apart and averaged. *Automatic* in the baked mode leaves out effects that brighten (their heaviest blend adds, or they only glow; listed): a baked highlight stays in place from every view; placing one *Baked* keeps it. An effect that mostly multiplies is shading, even through the reflection projection, and is baked. Lookups blended toward a mesh UV, turned view directions, blur, a matcap's own normal map and panning are left as they are (listed). A *Matcaps* strength in the *Baking* section |
-| **Rim lighting** | 4.4 angle layers, edge source view angle | 1. Rim slots<br>2. Baked<br>3. Off | generated matcaps, square, for rims in matcap slots<br>masks (allocated), one per slot | Slots, placed per rim like matcaps, with *As matcap* added. A rim that depends only on `N·V` (band, power band or step, no light side, no texture) is drawn exactly into a generated matcap (`AtlasRimCurve`): alone, its color with the rim × opacity in alpha where the slot reads alpha as opacity; otherwise premultiplied, rims on the same parts stacked and on different parts averaged by area. *Automatic*: a rim slot while one is free (on an output whose rim has no mask, only for a rim that is the same everywhere), then a free matcap slot, then a rim slot shown on every part (listed), then combined with the most similar slot. Combined in a rim slot, the slot's rim shows on each member's parts. A writer whose rim is a band fits other rims to it: the same midpoint and the same rise from 10% to 90%. A rim slot that only adds its color after lighting (Toon Standard: unlit, or × light + ambient when environmental, × `lerp(1, base, mix)`) can't blend, sit on the surface or glow, so a rim that does is fitted by its look (`AtlasRimResponse`): the source's rim at its peak, by its placement (on the surface it blends into the base color before lighting and is lit with it; lit and overlay rims blend with the lit color by their light response), its blend and its emission amount, against the added rim's strength, base color mix and lighting, on the slot's sources' base colors (listed). A rim already added after lighting is kept as it is |
-| **Environmental rim** | 4.4 color source environment | 1. Native<br>2. In the rim (outputs whose rim adds after lighting and can be lit by the scene: Toon Standard)<br>3. Off | mask (allocated) | Shared value: the settings from the reference source (*Environmental Rim from*), each source's strength in the mask relative to the strongest. *In the rim*: where rim lighting leaves the output's rim free, the reference source's rim draws it, × the scene's light and ambient (Toon Standard's *Environmental*) instead of the reflection probe; its curve is fitted to the band by the writer. Without a mask, it shows on every part (listed); otherwise the note says what takes the rim |
-| **Backlight** | 4.4 edge source backlight | 1. Native<br>2. Baked with the rig's back light (form shading)<br>3. Off | backlight color, half size, where the sources' colors differ | Shared value: the settings from the reference source (*Backlight from*); each source's color × texture in the backlight color map (black without), normalized to its brightest value. Light dependent, so no matcap emulation. *In the rim*: where the output's rim is free (after rim lighting and the environmental rim), a band fitted (`AtlasRimCurve.FitBand`) to the backlight's strength at each facing under the rig's back light, seen from the front, where it shows (the brightest direction around the view, × the directivity), × the scene's light, in the reference source's color. It shows on every lit edge, not only against a light behind (listed) |
-| **Emission** | 4.1 layers targeting emission<br>emission amounts of other layers | 1. Native<br>2. Off | emission **(Required)**, for the native mode | Bake, relative to the strongest source's emission, which the output glows at. An emission that takes the base color (*source times base color*) takes it at the end of S1, as Poiyomi does: after the surface layers, with the matcaps and rims on the surface at their average look over the view (`AtlasViewLayers`: a matcap's mean over its lookup disc × its color; a rim's strength averaged over the visible surface, ∫ rim(f) 2f df). An emission that also overrides the base color is baked into both: the emission map, and the base color map as its last step, `lerp(b, saturate(e), max(e))`. No *baked into color*: it wouldn't glow, so it isn't the effect (see *Decisions*). Live parts (blinking, scrolling, audio) stay native only where the output has the same modulator; otherwise they are left out |
-| **Glitter and sparkle** | 4.6 glitter pattern<br>2.4 glints | 1. Native<br>2. Points in the maps (outputs without glitter; only when chosen, so the default there is Off)<br>3. Off | mask (allocated), native<br>a preserved UV channel, native<br>emission, metallic and roughness, base color, points | Native: a shared value from the reference source (*Glitter from*); the cells read a preserved UV channel holding each source's UV × (its density ÷ the output's), so each source keeps its particle size; opacity × mask in the mask. *Points in the maps* draws the cells as still points in UV space (`AtlasGlitterPattern`) into any of three targets, each with its own strength (*Glow*, *Shine*, *Color*): glowing points in the emission map (the emission strength raised to the glitter's brightness), metallic and smooth points that catch the light and reflections, the glitter's color in the base color. A target whose map the output lacks is left out; the points don't twinkle, and the shape texture, color map and rotation aren't drawn (listed) |
+| **Matcaps** | 4.3 lookup layers with a 2D texture | 1. Matcap slots<br>2. Average in color (outputs without matcap slots, the default there)<br>3. Baked into color (surface placement) or emission (overlay and emission placements)<br>4. Off | generated matcap textures, square, for combined slots<br>masks (allocated), one per slot | Slots. A source's matcap is its consecutive lookup layers sharing texture and mask (one per blend weight). Matcaps that look the same in several sources share a slot. What a matcap shows is measured as its slot looks it up (its texture over the lookup disc, through its scale and offset): one that reads black where it adds, screens, mixes or glows, or white where it multiplies without base color mix, changes nothing and is left out (listed). An **effect** is a matcap whose role is highlight (shine, glints, facets; see *What a matcap is for*); the others are **environment** matcaps (lighting, rims). Lighting with a highlight is guarded: it takes its own slot before the other environment matcaps, which share its slot only where no other will do. A shared slot shows its one texture on all its members' parts, which an effect can't share without moving its highlights, so effects get their own slots, those with the most impact first, keeping one slot for the environment matcaps where none has one yet; where the slots run out the weakest effects are left out (listed; placing one in its own slot keeps it). The user places each one (in its own slot, combined with another, baked, kept as its average in the base color, see *Base color shifts*, or off); *Automatic* combines matcaps on the same parts with the same lookup, gives the environment matcaps with the most impact their own slots (a matcap's measured impact × the area its masks cover, see *What a matcap is for*), and combines the rest into the most similar slot: one whose matcaps do the same (blend, glow or both) first, since a slot has one blend and one glow strength, then the same lookup, the same main blend and the nearest color. A lighting matcap that blends is placed by its shading instead (see *Comparing layers*): among the slots that do what it does, it joins the one that loses the least of its members' level and contrast, each weighed by how visible it is (as for a combined texture, below), and where joining would lose more than its average does by over a quarter of its shading, it is kept as its average in the base color and the slot stays as it was (listed; a slot that follows the view is preferred up to that quarter, since its shading moves with the view, which level and contrast don't count). The log says what a slot shared across parts keeps of each lighting matcap's level and contrast. A rim or a highlight without a slot of its own is where it is, so it is judged point by point instead: it joins the slot that costs the least, and is left out where sharing would cost more than it keeps (listed; placing it combined with another shares the slot). *Automatic* doesn't bake in this mode: a bake stays in place from every side and is made with the virtual light rig's settings, so it is the user's choice; where one would keep more of a lighting matcap's shading than the way chosen, by over that quarter, the log names it. A combined slot gets a generated texture: matcaps on the same parts stack (textures × colors × weights added for *add*, `lerp(1, texture × color, weight)` multiplied for *multiply*; in a slot that only glows, the weights are the glows relative to the strongest); stacks on different parts are averaged by how visible they are (area × each weight's effect, the shown brightness where it adds, screens or glows and its darkness where it multiplies, × the mask's average × the base color mix's darkening `lerp(1, luminance(base), mix)` over the source's base colors, `AtlasSourceSamples`), since each part shows the one texture. Combined matcaps that mix in the base color differently get none in the slot: each one's mix goes into its mask, as without a base color mix. The glow (Poiyomi's matcap emission: matcap × strength × mask × `lerp(1, base color, mix)`) is kept as it is where the slot shows one matcap with its own mask and mix, scaled by a constant mask. In a combined slot, or one whose base color mix went into the mask or the fit, the one strength is fitted when the material is written: least squares over the sources' texels of strength × texture part × written mask × the slot's mix against each matcap's own glow, and listed where they differ. Matcaps that only glow but share a slot with a blend show the blend too, and are listed. An output whose matcaps don't glow (Toon Standard) gets the glow added to the color: one more *add* of the matcap at the glow's strength with its base color mix, lit rather than glowing (listed). A slot that takes one blend at a time gets a matcap with several weights merged (the same blend summed) or fitted, not only its first weight. An output without a matcap color also gets one for a tinted matcap, and an output whose slot has no texture transform for a matcap whose texture has a scale or offset. An output whose slot looks up by the view-space normal over the whole texture (Toon Standard) gets one for a matcap looked up otherwise (Poiyomi's *Double Sided* mode, which reads by the reflection; a border; a rotation): for each point of the slot's lookup, the texture is read where the matcap's own lookup reads it for that normal, seen from straight in front (listed). A lookup that follows the view is exact that way. One fixed to the world (the planar reflection, the light's half vector) looks different from each side, which a slot that follows the view can't show, so the user chooses (*World-fixed matcaps*, shown while one is in such a slot, listed): *Follow the view*, the default, looks the texture up by the view-space normal with its border and rotation, as any matcap: its middle where the surface faces the viewer and its edge at the outline, which keeps a shading matcap's form on the surface. Its sideways texture offset is left out: that shifts the texture along a world axis, which points the other way from behind, and kept by the view it would pull one side of the texture (a matcap's dark edge and its corners) into view as a band on the same side of the surface from everywhere; the upward offset is the same from every side and stays. *As seen from the front* redraws the texture for its own lookup from straight in front, exact there: the planar reflection reads at twice the normal's angle, so the texture's edge lies halfway out and the outline reads its middle again, from every side. The texture keeps its own scale and offset (Poiyomi samples at `(projection × border + 0.5) × scale + offset`); generated textures are sampled with them. Blends the output lacks are approximated: add, add to light, screen and mixed brighten, so they add; replace and multiply multiply; several weights take the heaviest. Where a slot can't show a source's matcaps as they are (blends it lacks, base color mix it doesn't have), it is fitted to them per texel: Poiyomi's chain (each matcap's replace, multiply, add, screen and mixed in turn, its color × matcap × `lerp(1, the base color so far, mix)` by weight × mask) is matched with the slot's texture black and white (T0, T1). From the rise k = (white − black) / (T1 − T0), the strength goes into the slot's mask and the rest into the base color map: for a multiplying slot `t = black − k T0 + k`, `s = k / t`; for an adding one `s = k`, `t = black − k T0`. The base color can come out brighter than the source's (a screen over a multiply). Exact for a single layer on a gray base; the strength is one value, so it takes the channels' luminance, and each channel of t matches halfway between T0 and T1. Without a base color map, base color mix goes into the mask: the mask × `lerp(1, luminance(base color), mix)`. Approximations, combinations and left-out matcaps are listed. *Average in color*, the mode of an output without matcap slots: a lighting matcap keeps its average effect in the base color (as one that ends up without a slot, above), and the output's own lighting shades the form; baked as shading it would shade the form a second time and stay in place from every view. A rim or a highlight has no average to keep and is left out (listed). An averaged matcap's glow keeps its average the same way, in the emission map where the output has one turned on: the matcap's mean × its color × the glow's strength × its mask × `lerp(1, base color, mix)`, for the share that doesn't follow the light, so it still glows in the dark; the rest of it, and all of it without an emission map, is added to the color, lit. Placing a matcap *Baked into color*, or the *Baked into color* mode, draws it instead. *Baked* (`AtlasMatcapBake`): a matcap placed *Baked into color*, or every matcap in the *Baked into color* mode, is drawn into the textures as the virtual view sees it instead of taking a slot: each texel's lookup by the layer's projection as Poiyomi computes it (view-stabilized, where the corrected projection is the same for a view along the texel's own direction; planar reflection; gradient; the light half vector with the rig's key light), from the mesh normal or the normal map by its surface normal amount, through its tiling, rotation and the texture's scale and offset, with its circle mask, × its color, base color mix and mask. Surface matcaps blend into the base color by their blend, in layer order, before the lit bakes, with a light mask (Poiyomi's mask × `lerp(1, lit, light mask)`) at its average under the rig, `lerp(1, (1 + wrap) / 2, light mask)`: a toon ramp lights the directions with N·L above −wrap, and the output's own shadow already darkens the rest; overlay matcaps that add and matcap glows are split by how they follow the light: Poiyomi multiplies them by `lerp(1, light color, light color mix)` and `lerp(1, lit, light mask)`, so the share `(1 − light color mix) × (1 − light mask)` shows without light and goes into the emission (made where the emission feature has none, normalized to its brightest value), and the rest is added to the base color, which the world's light shades (all of it where the output has no emission turned on); overlay matcaps that multiply go into the color. Surfaces are evaluated per UV winding, so mirrored halves are looked up apart and averaged. *Automatic* in the baked mode leaves out effects that brighten (their heaviest blend adds, or they only glow; listed): a baked highlight stays in place from every view; placing one *Baked* keeps it. An effect that mostly multiplies is shading, and is baked. Lookups blended toward a mesh UV, turned view directions, blur, a matcap's own normal map and panning are left as they are (listed). A *Matcaps* strength in the *Baking* section |
+| **Rim lighting** | 4.4 angle layers, edge source view angle | 1. Rim slots<br>2. Baked<br>3. Off | generated matcaps, square, for rims in matcap slots<br>masks (allocated), one per slot | Slots, placed per rim like matcaps, with *As matcap* added. A rim that depends only on `N·V` (band, power band or step, no light side, no texture) is drawn exactly into a generated matcap (`AtlasRimCurve`): alone, its color with the rim × opacity in alpha where the slot reads alpha as opacity; otherwise premultiplied, rims on the same parts stacked and on different parts averaged by area. *Automatic*: a rim slot while one is free (on an output whose rim has no mask, only for a rim that is the same everywhere), then a free matcap slot, then a rim slot that shows it on every part (listed), then combined with another slot. The last two show the rim otherwise than it is, so *Automatic* uses them only where that costs less than leaving the rim out (see *Comparing layers*): a rim on most of the atlas shows on every part, one on a small part is left out (listed; its own slot by the user's choice shows it on every part), and among the slots a rim can share it joins the one that costs the least, or is left out (listed; placing it combined with another shares the slot). Combined in a rim slot, the slot's rim shows on each member's parts. The inspector shows each rim with its color, and under its name how it ends up shown. What a rim slot shows of a rim is read from the rim written to a material of the output shader and read back by its parser (see *The look model*). A writer whose rim is a band fits other rims to it: the same midpoint and the same rise from 10% to 90% (listed where the rim read back is a band and the source's isn't). A rim slot that shows a rim as a color added after lighting (Toon Standard: unlit, or × light + ambient when environmental, × `lerp(1, base, mix)`) can't blend, sit on the surface or glow, so a rim that does is fitted by its look (`AtlasRimResponse`): the source's rim at its peak, by its placement (on the surface it blends into the base color before lighting and is lit with it; lit and overlay rims blend with the lit color by their light response), its blend and its emission amount, against the added rim's strength, base color mix and lighting, on the slot's sources' base colors (listed). A rim already added after lighting is kept as it is |
+| **Environmental rim** | 4.4 color source environment | 1. Native<br>2. In the rim (outputs whose rim adds after lighting and can be lit by the scene: Toon Standard)<br>3. Off | mask (allocated) | Shared value: the settings from the reference source (*Environmental Rim from*), each source's strength in the mask relative to the strongest. *In the rim*: where rim lighting leaves the output's rim free, the reference source's rim draws it, × the scene's light and ambient (Toon Standard's *Environmental*) instead of the reflection probe; its curve is fitted to the band by the writer. Its strength and base color mix are the ones that look most like the probe's rim on the sources that have it (`AtlasRimResponse`, listed): the probe along the normal is taken as the scene's ambient light, less the rim's threshold, where the output's rim is × the light and the ambient together. Without a mask, it shows on every part (listed); otherwise the note says what takes the rim |
+| **Backlight** | 4.4 edge source backlight | 1. Native<br>2. Baked with the rig's back light (form shading)<br>3. Off | backlight color, half size, where the sources' colors differ | Shared value: the settings from the reference source (*Backlight from*); each source's color × texture in the backlight color map (black without), normalized to its brightest value. An output with two backlights (Poiyomi 11) keeps a source's second one the same way, in a second color map; its settings come from the reference source or, where that has no second backlight, from the largest source that has one. Backlights beyond the output's are left out (listed). Light dependent, so no matcap emulation. *In the rim*: where the output's rim is free (after rim lighting and the environmental rim), a band fitted (`AtlasRimCurve.FitBand`) to the backlight's strength at each facing under the rig's back light, seen from the front, where it shows (the brightest direction around the view, × the directivity), × the scene's light, in the reference source's color. It shows on every lit edge, not only against a light behind (listed) |
+| **Emission** | 4.1 layers targeting emission<br>emission amounts of other layers | 1. Native<br>2. Drawn into the color (outputs without an emission map; only when chosen, so the default there is Off)<br>3. Off | emission **(Required)**, for the native mode | Bake, relative to the strongest source's emission, which the output glows at. An emission that takes the base color (*source times base color*) takes it at the end of S1, as Poiyomi does: after the surface layers, with the matcaps and rims on the surface at their average look over the view (`AtlasViewLayers`: a matcap's mean over its lookup disc × its color; a rim's strength averaged over the visible surface, ∫ rim(f) 2f df). An emission that also overrides the base color is baked into both: the emission map, and the base color map as its last step, `lerp(b, saturate(e), max(e))`. No *baked into color*: it wouldn't glow, so it isn't the effect (see *Decisions*). Live parts (blinking, scrolling, audio) stay native only where the output has the same modulator; otherwise they are left out. *Drawn into the color*: each source's emission is added to its base color after the surface's layers, a cycling hue at its start and AudioLink at rest; where the output has no color of its own to take what the texture can't hold, the sum stops at 1. It shows what the emission draws, under light, and doesn't glow in the dark |
+| **Glitter and sparkle** | 4.6 glitter pattern<br>2.4 glints | 1. Native<br>2. Points in the maps (outputs without glitter; only when chosen, so the default there is Off)<br>3. Off | mask (allocated), native<br>a preserved UV channel, native<br>emission, metallic and roughness, base color, points | Native: a shared value from the reference source (*Glitter from*); the cells read a preserved UV channel holding each source's UV × (its density ÷ the output's), so each source keeps its particle size; opacity × mask in the mask. *Points in the maps* draws the cells as still points in UV space (`AtlasGlitterPattern`) into any of three targets, each with its own strength (*Glow*, *Shine*, *Color*): glowing points in the emission map (added in full; an emission made for them glows at the glitter's brightness, and what goes above the map's range goes into the strength), metallic and smooth points that catch the light and reflections, the glitter's color in the base color. A target whose map the output lacks is left out; the points don't twinkle, and the shape texture, color map and rotation aren't drawn (listed) |
 | **Subsurface scattering** | 4.5 subsurface | 1. Native<br>2. Off | subsurface color and thickness **(Required)** | Shared value from the reference source (*Subsurface from*); spatial values for each source's color × strength (relative to the strongest; black where a source has none, which turns it off there) and thickness (relative to the smallest offset). Too dependent on the light to bake or emulate |
 
 ### Effects and render
@@ -921,6 +1364,9 @@ allocator (see [*Masks*](#masks)). *Merge* uses the strategies above.
 | Feature | Unified | Modes | Maps | Merge and notes |
 |---|---|---|---|---|
 | **Proximity color** | 1.9 a modulator with source *camera distance*, driving a color adjustment | 1. Native<br>2. Off | — | Shared value from the reference source (*Proximity Color from*). Poiyomi's has no mask, so it covers the whole atlas; when some sources don't have it, that's listed and *Off* is the choice |
+| **Tone mapping** | 1.10 color adjustments: the GT7 tone map of the final color, the neutral surface emission | 1. Native<br>2. Off | — | Shared value from the reference source (*Tone Mapping from*). The output's has no mask, so it covers the whole atlas; when some sources don't have it, that's listed and *Off* is the choice. An operation the output lacks (the neutral surface emission before Poiyomi Pro 11) is left out, listed |
+| **Screen-space ambient occlusion** | 3.6 as a pattern layer | 1. Native<br>2. Off | a mask place, when it differs between sources | Shared value from the reference source (*Screen-space AO from*). It follows the view and the depth texture, so there is nothing to bake. Each source's mask goes into an allocated mask place, 0 where a source has none, so the occlusion shows where it did; a mask that is one value everywhere goes into the intensity. A color map sampled by the occlusion as a ramp is kept; one on the source's UVs isn't baked yet, and the color is used (listed) |
+| **Contact shadows** | 3.6 as a pattern layer | 1. Native<br>2. Off | a mask place, when it differs between sources | As screen-space ambient occlusion: the reference source's setup (*Contact shadows from*) and each source's mask |
 | **AudioLink** | 1.3 AudioLink themes<br>1.9 audio modulators<br>4.6 audio patterns | 1. Per feature (outputs whose sections have AudioLink)<br>2. AudioLink emission (outputs with one)<br>3. Off (the feature keeps its rest value) | AudioLink color, for an AudioLink emission | A modulator that leaves its target as it is without music is baked at rest (`AtlasAudio`). Per feature: slots copy their layer's modulators (matcaps, rims, glitter), an audio-driven emission takes an emission slot of its own (slots whose maps come out the same, such as emissions that differ only in their band, share one map); parts without a slot stay at rest, listed. AudioLink emission: the reference source's (*AudioLink from*), each kept source's emission × its audio gain in the AudioLink color map, stretched to its brightest value (a dim emission keeps its precision through 8 bits and compression), the level in the layer's color (Toon Standard: above 1 in the intensity, below 1 in the tint, since an intensity below 1 also lowers the tint's alpha); with smoothing 0, Poiyomi reads the raw level, Toon Standard only the filtered ones (its least filtered lags about 0.1 s); scroll and bar run along the atlas's UVs (listed). AudioLink modes keyed to UV tiles read a preserved UV channel (see [*UV channels*](#uv-channels)) |
 | **Surface mode and render queue** | 6 | 1. Automatic: the most see-through mode among the sources that the output supports (opaque, cutout, dithered, transparent, fade, in that order). When transparent or fade sources mix with others, a **fade with depth writes** (Poiyomi's TransClipping): the solid parts, at alpha 1, sort like opaque ones and the transparent sources keep their alpha; a plain blended mode would make the whole avatar sort wrongly. An output that can't do that gets the most see-through of the other sources' modes, and the transparent sources are drawn solid (alpha 1), never cut or dithered. A source whose alpha is turned off counts as opaque<br>2. A chosen mode, including *Fade with Depth* | — | Always on. The queue follows the mode (the writer's queue for it); a queue override isn't there yet. Additive, multiplicative and custom blends aren't merged yet: their sources count as opaque |
 | **Fallback shader** | 6 (not typed) | 1. Automatic: the writer's choice<br>2. Toon, Unlit, Standard or Hidden | — | Always on, where the writer sets one. The writer follows the surface mode and culling (Poiyomi: `VRCFallback`, such as `ToonCutout` or `ToonFadeDoubleSided`) |
@@ -973,7 +1419,7 @@ These are covered by the same model and come after the initial features: outline
 slots and exclusive values), fur (5.2, exclusive with a length mask), transition and dissolve
 (4.2), the other procedural patterns (4.6), refraction (4.7), highlight layers (4.8, slots),
 parallax (2.5, height map baked per region), deformations and geometry effects (5.3, 5.4),
-second pass and visibility (6), screen-space lighting (3.6).
+second pass and visibility (6).
 
 ---
 
@@ -998,12 +1444,72 @@ unified meaning) in its own section.
 A new output shader is its capabilities, its texture layout and its writer; merging, baking,
 allocation, UI and export are shared. Where the shader is also an input, the parser and its
 inventory already document every property's meaning, so the writer is largely the parser in
-reverse, and round-trip tests (parse, write, parse, compare) check it.
+reverse, and round-trip tests (parse, write, parse, compare) check it. How the shader
+computes what it has no settings for comes from its parser too (see [*The look
+model*](#the-look-model)), so an output shader needs one.
+
+**Poiyomi** has one writer for its versions and variants (`PoiyomiOutputShader`), since
+Poiyomi 11 keeps 10's property names and Pro has Toon's: they share the texture layout, the
+capabilities and the writer, and each one's registration says its major version and its
+variant. The writer sets every property by name, and a property a version doesn't declare
+isn't set on its material, so what a newer version adds needs no branch; Pro's own sections
+are written on Pro only. A shader is found by its name, the same in every version (under
+*Old Versions* next to a newer one), and its master label. Pro is a paid shader: its writer
+describes it in its own words, as its parser does, and it is offered only where Pro is
+installed.
+
+| Version | What it adds as an output |
+|---|---|
+| Toon 10 | The base: see the [*Feature inventory*](#feature-inventory) |
+| Toon 11 | Global mask contacts kept live (a touch written into a channel); a lilToon-style rim's application stage, so one on the base color stays there; a second backlight with a color map of its own; the rendering presets also turn the sharpened alpha to coverage off |
+| Pro 10 | Toon 10, and Pro's own sections: GT7 tone mapping, screen-space ambient occlusion and contact shadows |
+| Pro 11 | Toon 11 and Pro 10, and the neutral surface emission |
+
+**VRChat Mobile Diffuse** has one texture and no other setting: the base color × the mesh's
+vertex colors, lit by Lambert, always opaque. Its capabilities are the base color map, no
+color of its own and vertex colors it can't turn off, so an atlas for it is that one texture:
+
+| Part | On Diffuse |
+|---|---|
+| Base color, color adjustments, details, decals | In the texture, each source's color included |
+| Normal maps, ambient occlusion | Baked into the texture by their baked modes |
+| Matcaps | Lighting matcaps as their average effect in the texture; rims and highlights left out; baked as shading when chosen |
+| Vertex colors | Live on the mesh or baked; white on the sources that don't use theirs |
+| Lighting | The shader's own. The sources it shows brighter or darker than their own lighting did get their base color scaled (see [*Level compensation*](#level-compensation)) |
+| Hidden UV tiles, world AO blocker | Removed from the mesh |
+| Emission | Off, or drawn into the texture when chosen |
+| Alpha, reflections and highlights, rims, backlight, glitter, subsurface | Left out, listed |
+
+**Unity Standard** is written as its parser reads it, in both setups (one writer, a
+registration per setup). The albedo is `_Color` × `_MainTex`, with the alpha in the texture's
+alpha. Its keywords, blend state and emission flag are the ones the shader's inspector derives
+from a material's values, so a written material stays as it is when the inspector validates
+it. The setups differ in what holds the reflectivity:
+
+| Setup | Textures | Highlights and reflections |
+|---|---|---|
+| Metallic | One surface texture serves the metallic map (metallic in red, smoothness in alpha) and the occlusion map (green); the detail mask in its own | On where any source has them, each at full strength; the reflectance is the shader's 4% on everything that isn't metal, which shows as a gray sheen on dark, rough surfaces whose sources had weaker highlights or none. Without the maps both are off and the surface is rough |
+| Specular | The specular color (sRGB) with the smoothness in alpha; one texture for the occlusion map (green) and the detail mask (alpha) | Each source's reflectance, metallic and strengths in the specular color (see [*Feature inventory*](#feature-inventory)), black where a source has none. Without the map the specular color is black and both are off |
+
+| Part | On Unity Standard |
+|---|---|
+| Base color, alpha, normal map, smoothness, occlusion, emission | Its own maps |
+| Surface mode | Opaque, cutout, fade and transparent. It can't fade while writing depth, so transparent sources next to solid ones are drawn solid |
+| Detail texture and detail normal | Kept live on UV1: the albedo × 2 without a tint or strength, one tiling and one mask (the detail mask's alpha) for both |
+| Lighting | The shader's own, physically based. The sources it shows brighter or darker than their own lighting did get their base color scaled (see [*Level compensation*](#level-compensation)), and a minimum light goes into the emission (see [*Minimum light*](#minimum-light)) |
+| Vertex colors | Baked into the textures |
+| Matcaps | Lighting matcaps as their average effect in the base color; rims and highlights left out; baked as shading when chosen |
+| Clear coat | Into the gloss map on the metallic setup; left out on the specular setup, listed |
+| Glitter | Off, or points in the maps when chosen |
+| Hidden UV tiles, world AO blocker | Removed from the mesh |
+| Rims, backlight, subsurface | Left out, listed |
 
 | Output | Work |
 |---|---|
-| Poiyomi Toon 11 | Extends the Poiyomi 10 writer, since 11 keeps 10's property names: 11's added capabilities, and the features new in 11 |
-| Poiyomi Pro | Extends the Poiyomi 11 writer: more slots (three outlines, for example) and the Pro-only features. Offered only where Pro is installed. Pro is a paid shader: its writer describes it in our own words, as its parser does |
+| Unity Standard, the rest | The height map with parallax; the clear coat into the gloss map on the specular setup |
+| VRChat Mobile Diffuse, the rest | Whether rims and highlights are drawn into the color texture too, as modes used when chosen |
+| Poiyomi Toon 11, the rest | The PBR lighting type as the output's lighting. It replaces Reflections & Specular and the clear coat with its own controls, so what the output can express changes with the lighting chosen |
+| Poiyomi Pro, the rest | The Pro features that wait for others: the constellation pattern with the other procedural patterns, TPS and squish with the deformations, three outlines and the outline bake with the outlines |
 | Mochie Uber | A new writer, mostly the existing Uber parser in reverse |
 
 What adds work is a feature or mode that no shared feature covers yet (built once, then
@@ -1045,6 +1551,10 @@ kept too:
 - **The overview** (features, modes, items, textures and memory), per output inspector, until
   its settings (as JSON), its output shader, a source's analysis or the scene changes.
 - **Overlapping UVs** in the *Baking* section, per material, until the scene changes.
+- **The installed output shaders** (`AtlasShaderRegistry.Find`, `InstalledOutputShaders`),
+  until a shader is imported, moved or deleted. Each output shader is looked up by name, and
+  a lookup that finds nothing is slow, so the shader drop-down doesn't look them up on
+  every redraw.
 
 ### Stored settings
 
@@ -1073,7 +1583,8 @@ Output name, output shader, sources ("Source 1 (Body)") and UV regions
     Lighting          Shading · Light volumes · LTCGI
     Layers            Matcaps · Rim lighting · Environmental rim · Backlight ·
                       Emission · Glitter · Subsurface
-    Effects           Proximity color · AudioLink
+    Effects           Proximity color · Tone mapping · Screen-space ambient occlusion ·
+                      Contact shadows · AudioLink
     Render            Surface mode and queue · Fallback
 ▸ Masks               where each mask went (read only)
 ▸ Baking              light rig, strengths, lights, view     (only when a mode bakes)
@@ -1090,7 +1601,9 @@ Output name, output shader, sources ("Source 1 (Body)") and UV regions
 - The memory figures sit in fixed, right-aligned columns, so they don't clip in a narrow
   inspector.
 - Auto setup chooses a default mode per feature: native when supported, the cheapest
-  emulation when not, off when neither.
+  emulation when not, off when neither. A mode that doesn't show the real effect (glitter as
+  still points, emission drawn into the color) is used only when chosen; a feature that is
+  off because that is its output's only mode is listed.
 
 ### Auto setup
 
@@ -1098,19 +1611,21 @@ Output name, output shader, sources ("Source 1 (Body)") and UV regions
 Atlaser's *Add Atlas Output* button, the *Add Component* menu, or any other way it appears
 without a shader chosen). It never changes a shader chosen before.
 - Every parser and output shader belongs to a **family**: Poiyomi (Toon and Pro, every
-  version) and VRChat Mobile. Input shaders without an output of their own (Unity Standard,
-  Mochie Uber until it gets a writer, the fallback) belong to none.
+  version), Unity (Standard, both setups) and VRChat Mobile. Input shaders without an output
+  of their own (Mochie Uber until it gets a writer, the fallback) belong to none.
 - The materials the Atlaser found that no other output uses vote for their family (all the
   materials it found, when every one is already used). The family with the most votes and an
   installed output shader wins; a tie goes to the family whose ID comes first alphabetically
-  (Poiyomi before VRChat).
+  (Poiyomi, Unity, VRChat).
 - Within the family, the installed output shader of the **highest version** is chosen. At the
   same version, Pro comes before Toon: it is a superset, and it's only installed where the
   user has it.
 - Without a winning family, the installed output shader of the alphabetically first family,
-  at its highest version, is chosen; without any, none is, and the inspector says that no
-  supported output shader is installed.
-- The rank is the major version × 10, plus 1 for Pro: Poiyomi Toon 10 is 100, Pro 11 is 111.
+  at its highest version, is chosen. Unity Standard is built in, so there is always one.
+- The rank is the major version × 10, plus 1 for Pro: Poiyomi Toon 10 is 100, Toon 11 is
+  110, Pro 11 is 111. In the VRChat Mobile family the shader that keeps more ranks higher:
+  Toon Standard is 10, Diffuse is 1. In the Unity family the specular setup is 20 and the
+  metallic setup 10: the specular color keeps what the metallic setup has no control for.
 
 **The Auto Setup button** sets up the output for the sources already assigned to it, in one
 Undo step. It never adds or removes sources, and never runs by itself: a new output has no
@@ -1189,8 +1704,126 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
   and maps (equal instances share a slot, different ones don't, overflow follows the mode).
 - **Capabilities:** a test output shader with chosen capabilities offers exactly the modes they
   allow.
+- **Map contributions:** contributions run by stage whatever order they were added in, a
+  map's content is set once, a contribution works on the color with the shared color in
+  it, and a reader gets the map's value before a stage or as a contribution finds it;
+  glitter points are added in full to an emission of any strength.
+- **Base colors with layers:** a layer on the base color is part of the base colors, by
+  position and where the mesh uses the texture, read from small copies.
 - **Bakes:** small synthetic meshes (a quad, a sphere, mirrored halves) give the expected
   values at known texels.
+- **The look model:** a lighting's level and contrast in a scene, the sources listed where
+  the kept lighting looks different from their own, and a layer's cost for a weaker, a stronger
+  and an opposite effect.
+- **The reference look:** a layer on the surface is lit with it, an overlay blends with the
+  lit color with or without the light, lit and unlit adds, the base color mix, and the
+  effect as displayed.
+- **Layers by cost:** a rim's effect lies toward the edge, and showing it where there was
+  none costs twice what leaving it out does; where the rim slot has no mask, a rim on most
+  of the atlas shows on every part and one on a small part is left out unless the user
+  gives it the slot; a rim matcap is left out rather than shared with a matcap on other
+  parts, unless the user combines them; and the plan says how each one ends up shown.
+- **Base color shifts:** where the blocked view shows the base color, a shift stops at the
+  average look, the kept base color shows the darkening side alone, and *Full* goes as far as
+  the matcap needs, as an output whose blocked view is the same look always does; the
+  inspector offers the choice while a slot is fitted.
+- **Matcap lookups:** a matcap with a border or a planar reflection lookup is redrawn for a
+  slot that looks up by the view-space normal; fixed to the world, it is looked up by the
+  view (without its sideways texture offset) or redrawn as seen from the front by the
+  user's choice, which the inspector offers while one is in such a slot.
+- **Environmental rim in the rim:** weaker than its own strength where the output's rim is
+  lit by the scene, and weaker still with a threshold.
+- **Shared slots:** two shading matcaps on different materials in one slot each keep the
+  average look of their own, also where the slot could show each as it is.
+- **Matcaps by their shading:** an even matcap's average and bake lose nothing of its level
+  and contrast, a sky's average loses its contrast, and a highlight's bake is judged point
+  by point; an even matcap is kept as its average instead of sharing a shaded matcap's
+  slot; two shaded matcaps share one, and the log says how much each keeps; a bake is named
+  only where it would keep clearly more of a lighting matcap without a highlight.
+- **Slot order:** a faint add on a white base comes after a similar one on a dark base
+  that covers less of the atlas, since it changes the look less.
+- **Average in color:** a matcap placed so takes no slot and its average effect is in the
+  base color; a lighting matcap without a slot keeps its average where its mask is.
+- **Matcaps without slots:** on an output without matcap slots a lighting matcap keeps its
+  average effect in the base color and a highlight is left out, both listed; nothing is
+  baked until the user chooses the baked mode; the mode isn't offered where there are slots;
+  its glow keeps its average in the emission, dark on the sources without one, and a glow
+  that follows the light goes into the color.
+- **Matcap roles:** a small bright spot is a highlight that a bake would freeze, as is fine
+  detail all over; an effect toward the edges all around is a rim; the rest is lighting (an
+  even matcap, which a bake keeps; sky above ground; light from a side), with a highlight
+  where a soft body has a crisp spot. A colored matcap tints whatever its role, the lookup
+  doesn't decide the role, and a matcap that changes nothing says so. Placement follows the
+  role: facets are left out of a shared slot, and lighting with a highlight takes its own
+  slot while plain lighting shares another.
+- **Base colors:** sampled where the mesh uses the texture, not in its unused parts.
+- **Tuning:** the kept lighting read from a scratch material equals the written material's;
+  an output of the source's own shader keeps the mapped lighting; a value that looks closer
+  replaces the mapped one; a generated ramp's edge moves to where the chosen lighting puts
+  it; and tuning never leaves the lighting farther from the chosen one.
+- **Minimum light:** on Unity Standard a source's minimum light adds its own color × the
+  floor to the emission, without the base color's level compensation, and the kept
+  lighting carries it as a minimum brightness;
+  there is none without a floor or with the emission turned off; turned off by its control,
+  the floor is still known to be missing, so the control stays; on Toon Standard the part
+  its own floor can't hold is added, and the two together are the atlas's floor; the floor
+  is darker where a source's occlusion map is and names its lit bakes, flat with their
+  strengths at 0, occluded the same whether the occlusion is a map or baked into the
+  color, and not with the occlusion off; a matcap kept as its average darkens the floor
+  where it is dark from the front while the color keeps the average, and not with the
+  matcaps' strength at 0; on Toon Standard a matcap in the slot isn't drawn, and the
+  emission is never more than the source's color with that matcap at the floor.
+- **Level compensation:** a source the atlas lights darker is scaled by what its own lighting
+  had over it, and none of its texels goes above 1; a raise that doesn't fit is applied in
+  full below the knee and less above it, in order and without a step, so a white part of a
+  texture doesn't hold a dark body back; turned off, the base colors stay;
+  a scaled source is compared as the atlas shows it; and the inspector shows the control
+  while a source would be scaled.
+- **The output shader described by its parser:** Toon Standard's fresnel and reflectance
+  fade are read from a material of the shader with nothing set, once, and capabilities of
+  no registered shader have none; a rim that blends into the surface and glows is read
+  back from Toon Standard as a band added after lighting.
+- **A source's own fresnel:** a Toon Standard source costs nothing on Toon Standard at its
+  own values, a source with Schlick's fresnel looks different there and is fitted, and
+  one whose reflections rise less is closer; Poiyomi's fresnel strength slider converts to
+  the unified strength and back.
+- **Poiyomi 11 as an output:** it keeps contacts live where 10 has none, and writes and
+  reads back a contact; a lilToon-style rim on the base color stays there on 11 and comes
+  back after lighting on 10; a source's second backlight is kept on 11, with its color in
+  a second map, and left out on 10 (listed); both versions write each surface mode as its
+  preset; every writer round trip runs on each installed output shader.
+- **Poiyomi Pro as an output:** Pro is an output of its own per version, ranked just above
+  Toon of that version, with Toon's capabilities and its own; tone mapping comes from the
+  reference source and covers the atlas, an operation the output lacks is listed, and an
+  output without tone mapping says so once; screen-space ambient occlusion gets a mask that
+  is 0 on the sources without it and its own copy of the settings; contact shadows on every
+  source need no mask; the writer's Pro sections are read back by the parser on each
+  installed Pro version.
+- **VRChat Mobile Diffuse as an output:** it has one color texture, ranks below Toon
+  Standard, and offers the baked modes of normal maps and occlusion, and matcaps as their
+  averages, while highlights and rims aren't offered; emission is off and listed until the user chooses to
+  have it drawn into the color, where it is added to each source's base color and stops at
+  1; every source's color goes into the texture, also a
+  shared one, and a color above 1 is listed; what has no control is left out and listed;
+  sources that don't use their vertex colors get white ones, and a mesh whose colors all
+  turn white stores none; the writer sets the texture, and the kept lighting is the
+  shader's whatever the atlas chose. The round trips of a map run on the outputs that have it.
+- **Unity Standard (Specular setup) as an output:** it ranks above the metallic setup, has
+  the specular color with the smoothness in its alpha and the occlusion with the detail mask,
+  and resolves highlights in the specular color mode while the metallic setup keeps its own;
+  the writer's specular map is read back by the parser, and without one the specular color
+  is black with highlights and reflections off; a source's strengths go into the color as
+  their mean (listed), a source without either gets black and keeps its base color, a metal
+  reflects its base color and has no diffuse, a specular source keeps its color and its
+  diffuse, and a full-strength source its reflectance.
+- **Unity Standard as an output:** its own maps are native, with metallic, occlusion and
+  smoothness in one texture, and what it has no control for is baked or not offered; the
+  writer's main maps, keywords and emission flag are read back by the parser; without
+  metallic and smoothness maps highlights and reflections are off; each surface mode is set
+  up as the inspector does, also on a material written before in another mode; both details
+  read one mask in the detail mask's alpha on UV1, and a detail normal on another tiling is
+  baked; a plan resolves against the shader with the shader's own lighting, and a
+  transparent source next to solid ones is drawn solid; its materials vote for its family.
 - **Fits:** a source the output can reproduce gets its exact value back; a fit with nothing
   missing finds that same value; a weaker setting gives the expected direction (weaker
   highlights, a lower reflectance); shared values follow the source whose look changes most.
@@ -1205,7 +1838,8 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
   output shader's own parser and compares its lighting with what the plan asked for (in a
   canonical form, settings without effect in the setup at their defaults). What differs is
   listed, so a writer's approximations are reported without rules of their own. A same-shader
-  round trip lists nothing.
+  round trip lists nothing. The same read-back gives the lighting each source ends up with,
+  which is compared with its own (see [*The look model*](#the-look-model)).
 
 - **Only modes that give the effect:** a mode is offered only when its result is the feature
   as the user would recognize it. Emission isn't baked into the color, since it wouldn't
@@ -1221,6 +1855,11 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
   automatic choice stays the default, and the build log says what it chose. Parts that
   aren't merged yet are listed in the diagnostics until they are.
 
+- **A layer right, or not there:** *Automatic* shows a matcap or a rim otherwise than it is
+  (on parts that didn't have it, or as another's) only where that costs less than leaving
+  it out, with what it adds counting double. The user's placement overrides it, and the
+  inspector shows the placement while *Automatic* leaves a layer out.
+
 - **Crunch fallback:** when crunch saves less than 10%, the texture keeps normal compression
   without crunch.
 - **Light rigs:** two rigs, classic and symmetric. Sources with overlapping UVs are always
@@ -1228,6 +1867,9 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
 - **Light roles:** each light has its own temperature, softness, and diffuse and specular
   weights. Each bake uses only the light terms its purpose needs. Baked light color is
   limited by a color influence, and every bake has its own strength slider.
+- **One Poiyomi writer:** Poiyomi's versions and variants share one writer, registered once
+  per version and variant; each adds capabilities and the properties only it declares, never
+  a writer of its own.
 - **First writers:** Poiyomi Toon 10 and VRChat Mobile Toon Standard, both from the first
   milestone.
 - **Compound textures:** an output shader's texture can provide several virtual maps in its

@@ -42,7 +42,9 @@ The build log lists what couldn't be kept, or was only approximated.
 
 **Normal Baker** (**Tools → NordicWind → Advanced Atlaser**) bakes a normal map for a
 lower-detail mesh from its detailed original, for a source's *Pre-baked Normal Map*.
-**Verbose Logging** in the same menu shows the build's diagnostics.
+**Verbose Logging** in the same menu writes the build's diagnostics to Unity's console and to
+`Diagnostics.txt` in the debug output folder (**Open Debug Output Folder** in the same menu).
+The NDMF Console lists only what needs attention.
 
 ## Supported shaders
 
@@ -56,17 +58,23 @@ Logging*.
 | Poiyomi Pro 9.x, 10.x, 11.x, and its variants | Everything Toon reads, plus the Pro features |
 | Poiyomi Toon 7.3, 8.x, 9.x, and unversioned | Read with Poiyomi 10's meaning; differences are listed |
 | VRChat Mobile Toon Standard (and Outline) | Every section |
-| VRChat Mobile Toon Lit, Standard Lite | Every setting |
+| VRChat Mobile Toon Lit, Standard Lite, Diffuse, Bumped Diffuse | Every setting |
 | Mochie Uber (and Outline) | Every section of the free version; Uber X is unsupported |
 | Unity Standard, Standard (Specular setup) | Every setting |
 | Any other shader | Common property names: base color, alpha, normal, metallic or specular, smoothness, occlusion, emission, culling and blending |
 
-**Output:** the shaders an atlas can be made for. They must be installed.
+**Output:** the shaders an atlas can be made for. The one you pick must be installed.
 
 | Shader | Notes |
 |---|---|
-| Poiyomi Toon 10 | Found under its usual name, or under *Old Versions* when Poiyomi Pro or 11 is installed |
-| VRChat Mobile Toon Standard | Opaque only; what it lacks is approximated, baked or left out |
+| Poiyomi Toon 10 | Keeps nearly everything your materials do. The closest match for Poiyomi materials |
+| Poiyomi Toon 11 | Keeps nearly everything your materials do, for projects on Poiyomi 11 |
+| Poiyomi Pro 10 | For Poiyomi Pro 10. Keeps nearly everything, including Pro's tone mapping and depth-based shadows |
+| Poiyomi Pro 11 | For Poiyomi Pro 11. Keeps nearly everything, including Pro's tone mapping and depth-based shadows |
+| VRChat Mobile Toon Standard | For Quest and mobile avatars. Toon shading with one matcap, one rim light and emission. Solid materials only: transparency is not kept |
+| VRChat Mobile Diffuse | The lightest choice for Quest: one color texture with simple lighting. No shine, glow or transparency |
+| Unity Standard | Realistic lighting for PC. Keeps color, transparency, normal maps, shine and emission. Toon effects such as matcaps and rim lights are averaged into the color or left out |
+| Unity Standard (Specular setup) | Realistic lighting for PC, with shine set per material: materials without shine stay matte. The better of the two Standard choices for materials that come from a toon shader |
 
 ## Limitations
 

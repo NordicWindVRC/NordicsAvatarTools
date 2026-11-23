@@ -142,6 +142,15 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public bool FlatShading;
     }
 
+    // 2.4: the fresnel of highlights and reflections.
+    public enum AtlasFresnel
+    {
+        // Schlick's: F0 + (1 − F0)(1 − V·H)⁵ for highlights, (1 − N·V)⁵ for reflections.
+        Schlick,
+        // One term for both: F0 + (1 − F0)((1 − V·H)(1 − N·V))⁵.
+        ViewHalfTimesViewNormal
+    }
+
     // 2.4: the inputs of the surface's light response.
     public sealed class AtlasSurfaceResponse
     {
@@ -164,6 +173,11 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public AtlasColorInput OcclusionTint;
         public readonly AtlasHighlights Highlights = new AtlasHighlights();
         public readonly AtlasReflections Reflections = new AtlasReflections();
+        // How highlights and reflections grow toward grazing angles, from F0.
+        public AtlasFresnel Fresnel = AtlasFresnel.Schlick;
+        // Highlights and reflections × saturate((reflectance + metallic) / this): they fade
+        // out below it. 0: no fade.
+        public float ReflectanceFade;
         // Highlights, reflections, matcaps and rims use the mesh normal, not the normal map.
         public bool SpecularFromMeshNormal;
         public readonly AtlasSpecularAntiAliasing SpecularAntiAliasing = new AtlasSpecularAntiAliasing();
@@ -325,7 +339,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public UnityEngine.Color Tint = UnityEngine.Color.white;
         // Null: everywhere.
         public AtlasMask Mask;
-        // 1 = full fresnel falloff, 0 = none.
+        // How far reflections rise from F0 toward grazing angles: F0 + (1 − F0) × this ×
+        // (1 − N·V)⁵. 1: all the way; 0: no rise. Parsers convert their shader's setting.
         public float FresnelStrength = 1f;
         public bool RoughnessOverride;
         public float Roughness = 0.5f;

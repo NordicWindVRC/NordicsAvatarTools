@@ -287,12 +287,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 // 8 bits per channel where the mesh had them so (or had none) and the results fit
                 // 0–1: floats take four times the room for no visible difference.
                 bool bytes = original == null || mesh.GetVertexAttributeFormat(VertexAttribute.Color) == VertexAttributeFormat.UNorm8;
-                for (int i = 0; bytes && i < colors.Length; i++)
+                bool white = true;
+                for (int i = 0; i < colors.Length && (bytes || white); i++)
                 {
                     var c = colors[i];
-                    bytes = c.r >= 0f && c.r <= 1f && c.g >= 0f && c.g <= 1f && c.b >= 0f && c.b <= 1f && c.a >= 0f && c.a <= 1f;
+                    bytes &= c.r >= 0f && c.r <= 1f && c.g >= 0f && c.g <= 1f && c.b >= 0f && c.b <= 1f && c.a >= 0f && c.a <= 1f;
+                    white &= c.r == 1f && c.g == 1f && c.b == 1f && c.a == 1f;
                 }
-                if (bytes)
+                // All white is what a mesh without colors gives: none are stored.
+                if (white) { }
+                else if (bytes)
                 {
                     var packed = new Color32[colors.Length];
                     for (int i = 0; i < colors.Length; i++) packed[i] = colors[i];

@@ -43,8 +43,12 @@ namespace NordicWind.AdvancedAtlaser.Tests
             var d = Parse();
             Assert.AreEqual(AtlasLightingFamily.RampToon, d.Lighting.Family);
             Assert.AreEqual(AtlasAmbientModel.Average, d.Lighting.Ambient);
+            Assert.AreEqual(1f, d.Lighting.Contributions.AmbientAsMainLight, "without a main light, the probes are the light");
+            Assert.AreEqual(AtlasAmbientStandIn.Brightest, d.Lighting.Contributions.AmbientStandIn, "along their dominant direction");
+            Assert.AreEqual(1f, d.Lighting.Contributions.AmbientWithoutMainLight, "their average stays the ambient light");
             Assert.AreEqual(0f, d.Lighting.ReceiveShadows);
             Assert.IsTrue(d.Lighting.LimitBrightness);
+            Assert.IsTrue(d.Lighting.LimitTotal, "the shaded light is clamped, not each light color");
             Assert.AreEqual(0.5f, d.Lighting.Ramp.ShadowTint.Color.r, 1e-5f);
             Assert.AreEqual(1f, d.Lighting.Ramp.ShadowColorFromBase);
             Assert.AreEqual(1f, d.Lighting.Ramp.UntintedAmbient);
@@ -54,6 +58,8 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsFalse(d.Surface.VertexColor.MultiplyColor);
             Assert.IsFalse(d.Surface.Response.Highlights.Enabled);
             Assert.IsFalse(d.Surface.Response.Reflections.Enabled);
+            Assert.AreEqual(AtlasFresnel.ViewHalfTimesViewNormal, d.Surface.Response.Fresnel, "the shader's own fresnel, whatever is set");
+            Assert.AreEqual(0.25f, d.Surface.Response.ReflectanceFade, 1e-6f);
             Assert.IsNull(d.Surface.Normal.Map);
             Assert.IsEmpty(d.Layers);
             Assert.IsEmpty(d.ColorAdjustments);
@@ -93,6 +99,20 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.AreEqual(0.3f, lighting.Ramp.ShadowLift, 1e-5f);
             Assert.AreEqual(0.05f, lighting.MinimumBrightness, 1e-5f);
             Assert.IsFalse(lighting.LimitBrightness);
+        }
+
+        // The output's capabilities hold no formulas: how the shader computes its fresnel is
+        // what its parser reads of a material with nothing set.
+        [Test]
+        public void TheOutputShaderIsDescribedByItsParser()
+        {
+            var capabilities = AtlasShaderRegistry.Output("mobiletoon").Capabilities;
+            Assert.AreEqual("mobiletoon", capabilities.ShaderId);
+            var described = AtlasKeptMaterial.Described(capabilities);
+            Assert.AreEqual(AtlasFresnel.ViewHalfTimesViewNormal, described.Surface.Response.Fresnel);
+            Assert.AreEqual(0.25f, described.Surface.Response.ReflectanceFade, 1e-6f);
+            Assert.AreSame(described, AtlasKeptMaterial.Described(capabilities), "read once");
+            Assert.IsNull(AtlasKeptMaterial.Described(new AtlasOutputCapabilities()), "capabilities of no registered shader");
         }
 
         [Test]
