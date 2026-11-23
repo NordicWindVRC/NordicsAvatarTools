@@ -727,6 +727,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 }
             }
             foreach (var g in apart.Concat(stranded)) Hint(g, g.Measure.AverageLoss);
+            // The matcaps in slots, for what shows the surface without the shader's light.
+            Form(context, slots.Where((s, k) => !unplaced.Contains(k)).SelectMany(s => s).ToList(), false, draw: false);
             if (bakes.Count > 0)
                 context.Notes.Add("A bake would keep more of the shading of " + string.Join(", ", bakes) +
                                   ". Placing one Baked into color does that; its shading then stays where it is drawn, from every side.");
@@ -749,6 +751,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             foreach (var group in groups) SetWay(context, group, WayBaked);
             if (strength <= 0f) return;
             bool emissionOn = EmissionOn(context);
+            Form(context, groups, emissionOn, draw: true);
             // Each source's baked layers in its layer order (not GlowAsColor's: the bake splits a
             // glow between the emission and the color itself).
             var layers = new Dictionary<int, List<AtlasLookupLayer>>();
@@ -1685,6 +1688,26 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 return;
             }
             foreach (var group in groups) SetWay(context, group, WayAveraged);
+            var averages = Averages(job, groups);
+            // A matcap that adds or screens can take the color above 1.
+            request.Add(new AtlasMapContribution
+            {
+                Feature = FeatureId, Label = "matcap averages", Stage = AtlasMapStage.Layers, CanRaise = true,
+                Applies = averages.Has,
+                Apply = content => averages.Apply(content.Map, content.Source, content.Material)
+            });
+            Form(context, groups, glowInEmission, draw: true);
+            // A glow the output's matcaps would show isn't part of the color.
+            bool glows = context.Capabilities.MatcapEmission && groups.Any(g => g.Members.Any(m => Glow(m) > 0f));
+            context.Notes.Add(string.Format(note, labels) + (glows ? ". Their glow is left out." : "."));
+        }
+
+        // The groups' matcaps at their average on a color map of a source (Chain, with each
+        // matcap's texture at its mean over the lookup disc), in the source's layer order: which
+        // sources have any, and the step that applies them.
+        private static (System.Func<int, bool> Has, System.Action<NordicsTextureWrapper, int, AtlasUnifiedMaterial> Apply) Averages(
+            AtlasGeneratorJob job, List<Group> groups)
+        {
             var averages = new Dictionary<int, List<SlotFit>>();
             foreach (var members in groups.SelectMany(g => g.Members).GroupBy(m => m.Source))
             {
@@ -1711,29 +1734,20 @@ namespace NordicWind.AdvancedAtlaser.Editor
                                 Mathf.Lerp(black.b, full.b, average.Mean.b), c.a);
                         });
             }
-            // A matcap that adds or screens can take the color above 1.
-            request.Add(new AtlasMapContribution
-            {
-                Feature = FeatureId, Label = "matcap averages", Stage = AtlasMapStage.Layers, CanRaise = true,
-                Applies = averages.ContainsKey,
-                Apply = content => Apply(content.Map, content.Source, content.Material)
-            });
-            Form(context, groups, averages.ContainsKey, Apply, glowInEmission);
-            // A glow the output's matcaps would show isn't part of the color.
-            bool glows = context.Capabilities.MatcapEmission && groups.Any(g => g.Members.Any(m => Glow(m) > 0f));
-            context.Notes.Add(string.Format(note, labels) + (glows ? ". Their glow is left out." : "."));
+            return (averages.ContainsKey, Apply);
         }
 
-        // The averaged matcaps as they'd be drawn into the color (Bake), for what shows the
-        // surface without the output shader's light (AtlasLightFloor): the same layers, rig and
-        // camera, at full strength; the form's strength is the bakes' × the matcaps'.
-        private static void Form(AtlasFeatureContext context, List<Group> groups, System.Func<int, bool> averaged,
-            System.Action<NordicsTextureWrapper, int, AtlasUnifiedMaterial> average, bool glowInEmission)
+        // How the groups' matcaps change a source's own color, for what shows the surface
+        // without the output shader's light (AtlasLightFloor): at their average, and with
+        // `draw` (no slot shows them) as they'd be drawn into the color (Bake), with the same
+        // layers, rig and camera at full strength; the form's strength is the bakes' × the
+        // matcaps'.
+        private static void Form(AtlasFeatureContext context, List<Group> groups, bool glowInEmission, bool draw)
         {
+            if (groups.Count == 0) return;
             var job = context.Job;
             var settings = job.Baking ?? new AtlasBakeSettings();
-            float strength = Mathf.Clamp01(settings.strength) * Mathf.Clamp01(settings.matcaps);
-            if (strength <= 0f) return;
+            var averages = Averages(job, groups);
             // Each source's own layers (not GlowAsColor's: the bake adds the glow's lit part itself).
             var drawn = new Dictionary<int, List<AtlasLookupLayer>>();
             foreach (var members in groups.SelectMany(g => g.Members).GroupBy(m => m.Source))
@@ -1741,26 +1755,26 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 var layers = job.Sources[members.Key].Material.Layers;
                 drawn[members.Key] = members.OrderBy(m => layers.IndexOf(m.Layers[0])).SelectMany(m => m.Layers.Where(l => !m.Added.Contains(l))).ToList();
             }
-            context.Plan.MatcapForms.Add(new AtlasMatcapForm
+            var form = new AtlasMatcapForm
             {
-                Applies = i => averaged(i) && drawn.ContainsKey(i),
-                Strength = strength,
-                Average = average,
-                Draw = (map, i, material) =>
+                Applies = averages.Has, Average = averages.Apply,
+                Strength = draw ? Mathf.Clamp01(settings.strength) * Mathf.Clamp01(settings.matcaps) : 0f
+            };
+            if (draw)
+                form.Draw = (map, i, material) =>
                 {
                     var source = job.Sources[i];
                     var sections = source.Surface?.Invoke();
-                    if (sections == null || sections.Count == 0) return false;
+                    if (sections == null || sections.Count == 0 || !drawn.TryGetValue(i, out var list)) return false;
                     bool symmetric = AtlasNormalFeature.UsesSymmetricRig(settings, source);
                     var rig = AtlasLightRig.Create(settings, symmetric);
                     var camera = symmetric ? AtlasLightRig.Direction(0f, settings.matcapViewHeight) : AtlasMatcapBake.Camera(settings);
-                    var list = drawn[i];
                     using (var normals = list.Any(l => l.SurfaceNormalAmount > 0f) && Normals.IsPresent(source)
                                ? AtlasMapEvaluator.Normal(source, map.Width, map.Height, 1f) : null)
                         AtlasMatcapBake.ApplyColor(map, material, list, sections, normals, rig, 1f, glowInEmission, camera);
                     return true;
-                }
-            });
+                };
+            context.Plan.MatcapForms.Add(form);
         }
 
         // The generated texture's value (Combine) with every matcap texture black and white.

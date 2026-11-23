@@ -322,10 +322,11 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 .Targets.Single(t => t.Target == AtlasSurfaceTarget.Emission);
             var color = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor);
             using (var glow = emission.Evaluate(0, lit, 4, 4))
-            using (var shown = color.Shown(0, lit, 4, 4))
+            using (var own = color.Before(AtlasMapStage.Layers, 0, lit, 4, 4))
             {
-                Assert.Greater(shown.GetPixel(1, 1).r, 0.1f);
-                Assert.AreEqual(shown.GetPixel(1, 1).r * 0.2f, glow.GetPixel(1, 1).r * target.Opacity, 2e-3f, "the base color as shown × the floor");
+                // The source's own color: the level compensation of the base color isn't in it.
+                Assert.AreEqual(0.5f, own.GetPixel(1, 1).r, 1e-3f);
+                Assert.AreEqual(0.5f * 0.2f, glow.GetPixel(1, 1).r * target.Opacity, 2e-3f, "the source's color × the floor");
             }
 
             // Without a floor, or with the emission turned off, there is none.
@@ -383,9 +384,9 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 var target = plan.Output.Layers.OfType<AtlasSurfaceLayer>().Single(l => l.Source.Map == emission.Reference)
                     .Targets.Single(t => t.Target == AtlasSurfaceTarget.Emission);
                 using (var glow = emission.Evaluate(0, lit, 4, 4))
-                using (var shown = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Shown(0, lit, 4, 4))
+                using (var own = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Before(AtlasMapStage.Layers, 0, lit, 4, 4))
                 {
-                    flat = shown.GetPixel(1, 1).r * plan.LightFloor;
+                    flat = own.GetPixel(1, 1).r * plan.LightFloor;
                     return glow.GetPixel(1, 1).r * target.Opacity;
                 }
             }
@@ -394,7 +395,8 @@ namespace NordicWind.AdvancedAtlaser.Tests
             CollectionAssert.AreEquivalent(new[] { AtlasLitBake.NormalShading, AtlasLitBake.Occlusion }, shaded.LightFloorBakes);
             StringAssert.Contains("with normal-map shading and occlusion baked in", Notes(shaded));
             StringAssert.Contains("shading need the meshes", Notes(shaded), "no meshes in this job");
-            Assert.Less(Glow(shaded, out float unshaded), unshaded - 1e-3f, "darker where the occlusion map is");
+            float shadedGlow = Glow(shaded, out float unshaded);
+            Assert.Less(shadedGlow, unshaded - 1e-3f, "darker where the occlusion map is");
 
             // Turned down in the Baking section, the floor is flat.
             job.Baking = new AtlasBakeSettings { occlusion = 0f, normalShading = 0f };
@@ -402,12 +404,19 @@ namespace NordicWind.AdvancedAtlaser.Tests
             Assert.IsEmpty(plain.LightFloorBakes);
             Assert.AreEqual(Glow(plain, out unshaded), unshaded, 2e-3f);
 
-            // Baked into the base color, the color as shown is occluded already.
+            // The floor starts from the source's own color, so it is occluded the same whether
+            // the atlas keeps the occlusion as a map or bakes it into the base color.
             job.Baking = null;
             job.Features.Add(new AtlasFeatureChoice { FeatureId = "occlusion", ModeId = "baked" });
             var baked = AtlasOutputPipeline.Resolve(job, Shader);
-            CollectionAssert.DoesNotContain(baked.LightFloorBakes, AtlasLitBake.Occlusion);
-            Assert.AreEqual(Glow(baked, out unshaded), unshaded, 2e-3f, "not occluded twice");
+            CollectionAssert.Contains(baked.LightFloorBakes, AtlasLitBake.Occlusion);
+            Assert.AreEqual(shadedGlow, Glow(baked, out _), 2e-3f, "occluded once either way");
+
+            // Turned off, the occlusion isn't in the floor either.
+            job.Features[job.Features.Count - 1].ModeId = "off";
+            var off = AtlasOutputPipeline.Resolve(job, Shader);
+            CollectionAssert.DoesNotContain(off.LightFloorBakes, AtlasLitBake.Occlusion);
+            Assert.AreEqual(Glow(off, out unshaded), unshaded, 2e-3f);
         }
 
         // What Standard has no control for goes into its textures or is left out, and its

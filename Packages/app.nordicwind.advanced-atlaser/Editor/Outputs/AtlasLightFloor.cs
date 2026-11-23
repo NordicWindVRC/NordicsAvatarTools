@@ -8,22 +8,29 @@ namespace NordicWind.AdvancedAtlaser.Editor
     // The minimum light an output shader can't keep (ATLAS_OUTPUT.md, "Minimum light"). The
     // lighting's floors (AtlasLightingFeature.Floor) keep a surface visible without light. An
     // output shader has none (Unity Standard), or one that stops below the atlas's (Toon
-    // Standard's minimum brightness at 0.1). Where it has an emission map, the rest goes there:
-    // the base color as the atlas shows it × the rest is added to the emission, which is what a
-    // minimum brightness is (AtlasLighting.MinimumBrightness). It adds to the world's light
-    // where a minimum light only raises it, so the kept lighting carries it: the level
+    // Standard's minimum brightness at 0.1). Where it has an emission map, what is missing goes
+    // there, per texel:
+    //
+    //   the surface's color as the source shows it × the atlas's floor
+    //   − the base color as the atlas shows it × the shader's own floor, not below 0.
+    //
+    // - The first is what a source shows without light: a minimum light shines on its color
+    //   after its matcaps, which often darken it. So it is the source's own color (before the
+    //   base color's level compensation, which makes up for the lighting under the world's
+    //   light) with the matcaps the output shows at their average (AtlasMatcapForm), and those
+    //   no slot shows drawn as the virtual view sees them: under the world's light the output
+    //   shader shades the form itself, in the floor nothing else does.
+    // - It is shaded by the lit bakes (ATLAS_OUTPUT.md, "Virtual light rigs"): each source's
+    //   normal-map shading and occlusion, with the Baking section's rig and strengths, since the
+    //   shader lights its normal map and darkens by its occlusion map only what the world's
+    //   light reaches.
+    // - The second is what the output shader's own floor shows: its base color texture alone
+    //   (Toon Standard's floor is added before its matcap).
+    //
+    // It adds to the world's light where a minimum light only raises it, so the kept lighting
+    // carries it as a minimum brightness (AtlasLighting.MinimumBrightness): the level
     // compensation and the comparison after writing count it. It can be the only reason an
     // atlas has an emission texture, so the user can turn it off.
-    //
-    // The shader lights its normal map and darkens by its occlusion map only what the world's
-    // light reaches, so the emission would show the surface flat. The floor is shaded by the
-    // lit bakes instead (ATLAS_OUTPUT.md, "Virtual light rigs"): the normal-map shading and
-    // the occlusion of the sources whose normal and occlusion maps the output keeps as maps,
-    // with the Baking section's rig and strengths. Where they are baked into the base color,
-    // the base color as shown has them already. A matcap that is in the base color as its
-    // average (AtlasMatcapForm) shades the floor as it would drawn from the virtual view:
-    // under the world's light the output shader shades the form itself, in the floor nothing
-    // else does.
     public static class AtlasLightFloor
     {
         // Stored with the lighting feature's settings.
@@ -66,12 +73,12 @@ namespace NordicWind.AdvancedAtlaser.Editor
             float normalShading = Mathf.Clamp01(settings.strength) * Mathf.Clamp01(settings.normalShading);
             float occlusion = Mathf.Clamp01(settings.strength) * Mathf.Clamp01(settings.occlusion);
             var normals = new AtlasNormalFeature();
-            // The sources whose normals and occlusion the output keeps as maps.
-            var bent = new HashSet<int>(Sources(job).Where(i => normalShading > 0f && AsMap(job, plan, "normal", i) && normals.IsPresent(job.Sources[i])));
-            var occluded = new HashSet<int>(Sources(job).Where(i => occlusion > 0f && AsMap(job, plan, "occlusion", i) && Occluded(job.Sources[i].Material)));
-            // The sources with matcaps kept as their average.
-            var forms = plan.MatcapForms.Where(f => f.Strength > 0f).ToList();
-            var formed = new HashSet<int>(Sources(job).Where(i => forms.Any(f => f.Applies(i))));
+            // The sources with normals and occlusion the atlas keeps, as maps or baked.
+            var bent = new HashSet<int>(Sources(job).Where(i => normalShading > 0f && Kept(job, plan, "normal", i) && normals.IsPresent(job.Sources[i])));
+            var occluded = new HashSet<int>(Sources(job).Where(i => occlusion > 0f && Kept(job, plan, "occlusion", i) && Occluded(job.Sources[i].Material)));
+            // The sources with matcaps drawn as shading: those no slot shows.
+            var forms = plan.MatcapForms;
+            var formed = new HashSet<int>(Sources(job).Where(i => forms.Any(f => f.Draw != null && f.Strength > 0f && f.Applies(i))));
             if (bent.Count > 0) plan.LightFloorBakes.Add(AtlasLitBake.NormalShading);
             if (occluded.Count > 0) plan.LightFloorBakes.Add(AtlasLitBake.Occlusion);
             if (formed.Count > 0) plan.LightFloorBakes.Add(AtlasLitBake.Matcaps);
@@ -86,13 +93,28 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 Applies = i => job.Sources[i].Material != null,
                 Apply = content =>
                 {
-                    int i = content.Source;
-                    using (var shown = color.Shown(i, content.Material, content.Width, content.Height))
+                    int i = content.Source, w = content.Width, h = content.Height;
+                    // The source's own color, as it shows it without light.
+                    using (var wanted = color.Before(AtlasMapStage.Layers, i, content.Material, w, h))
                     {
-                        if (formed.Contains(i)) Form(shown, color, forms, i, content.Material);
-                        if (occluded.Contains(i)) Occlude(shown, job.Sources[i], settings, occlusion);
-                        if (bent.Contains(i)) Bend(shown, job.Sources[i], settings, normalShading, content.Placed);
-                        AtlasPixels.Map(content.Map, shown, (c, b) => new Color(c.r + b.r * rest, c.g + b.g * rest, c.b + b.b * rest, c.a));
+                        Matcaps(wanted, forms, i, content.Material);
+                        if (occluded.Contains(i)) Occlude(wanted, job.Sources[i], settings, occlusion);
+                        if (bent.Contains(i)) Bend(wanted, job.Sources[i], settings, normalShading, content.Placed);
+                        // What the shader's own floor shows of the base color texture.
+                        using (var shown = own > 0f ? color.Shown(i, content.Material, w, h) : null)
+                        {
+                            var pixels = content.Map.GetPixels();
+                            var source = wanted.GetPixels();
+                            var kept = shown?.GetPixels();
+                            for (int p = 0; p < pixels.Length; p++)
+                            {
+                                var held = kept != null ? kept[p] : Color.black;
+                                pixels[p].r += Mathf.Max(0f, source[p].r * floor - held.r * own);
+                                pixels[p].g += Mathf.Max(0f, source[p].g * floor - held.g * own);
+                                pixels[p].b += Mathf.Max(0f, source[p].b * floor - held.b * own);
+                            }
+                            content.Map.SetPixels(pixels);
+                        }
                     }
                 }
             });
@@ -104,45 +126,48 @@ namespace NordicWind.AdvancedAtlaser.Editor
             string shaded = names.Count == 0 ? ""
                 : ", with " + (names.Count == 1 ? names[0] : string.Join(", ", names.Take(names.Count - 1)) + " and " + names[names.Count - 1]) + " baked in";
             plan.Notes.Add((own > 0f
-                               ? $"The output shader keeps {Number(own)} of the atlas's minimum light of {Number(floor)}, so the base color × {Number(rest)}"
-                               : $"The output shader has no minimum light, so the base color × {Number(rest)}") +
+                               ? $"The output shader's minimum light stops at {Number(own)} of the atlas's {Number(floor)}, so what that leaves of the materials' color × {Number(floor)}"
+                               : $"The output shader has no minimum light, so the materials' color × {Number(floor)}") +
                            $" is added to the emission{shaded}: the material stays visible without light. It adds to the world's light, where a minimum light only raises it.");
         }
 
         private static IEnumerable<int> Sources(AtlasGeneratorJob job) =>
             Enumerable.Range(0, job.Sources.Count).Where(i => job.Sources[i].Material != null);
 
-        // The feature is kept by the output shader's own map on this source: the plan has it in
-        // a native mode, and the user didn't turn it off for the source.
-        private static bool AsMap(AtlasGeneratorJob job, AtlasOutputPlan plan, string featureId, int source) =>
-            plan.Modes.TryGetValue(featureId, out var mode) && mode.Kind == AtlasFeatureModeKind.Native &&
+        // The atlas keeps the feature on this source: the plan has it in a mode that isn't off,
+        // and the user didn't turn it off for the source.
+        private static bool Kept(AtlasGeneratorJob job, AtlasOutputPlan plan, string featureId, int source) =>
+            plan.Modes.TryGetValue(featureId, out var mode) && mode.Kind != AtlasFeatureModeKind.Off &&
             !(job.Features.Find(f => f.FeatureId == featureId)?.DisabledSources.Contains(source) ?? false);
 
         // A drawn matcap can't brighten the floor without limit where its average is dark.
         private const float MaxGain = 4f;
 
-        // The floor × each form's matcaps drawn as shading over their average, both from the
-        // base color before its matcaps, lerped from 1 by the form's strength.
-        private static void Form(NordicsTextureWrapper map, AtlasMapRequest color, List<AtlasMatcapForm> forms, int source, AtlasUnifiedMaterial material)
+        // The source's color with the matcaps the output shows: each form's average, and for
+        // those no slot shows, × its matcaps drawn as shading over that average, lerped from 1 by
+        // the form's strength.
+        private static void Matcaps(NordicsTextureWrapper map, List<AtlasMatcapForm> forms, int source, AtlasUnifiedMaterial material)
         {
             foreach (var form in forms.Where(f => f.Applies(source)))
-                using (var drawn = color.Before(AtlasMapStage.Layers, source, material, map.Width, map.Height))
-                using (var averaged = color.Before(AtlasMapStage.Layers, source, material, map.Width, map.Height))
+            {
+                bool draw = form.Draw != null && form.Strength > 0f;
+                using (var drawn = draw ? map.Clone() : null)
                 {
-                    if (!form.Draw(drawn, source, material)) continue;
-                    form.Average(averaged, source, material);
+                    form.Average(map, source, material);
+                    if (!draw || !form.Draw(drawn, source, material)) continue;
                     float strength = form.Strength;
                     var shading = drawn.GetPixels();
-                    var mean = averaged.GetPixels();
                     var pixels = map.GetPixels();
                     for (int p = 0; p < pixels.Length; p++)
                     {
-                        pixels[p].r *= Mathf.LerpUnclamped(1f, Gain(shading[p].r, mean[p].r), strength);
-                        pixels[p].g *= Mathf.LerpUnclamped(1f, Gain(shading[p].g, mean[p].g), strength);
-                        pixels[p].b *= Mathf.LerpUnclamped(1f, Gain(shading[p].b, mean[p].b), strength);
+                        var mean = pixels[p];
+                        pixels[p].r = mean.r * Mathf.LerpUnclamped(1f, Gain(shading[p].r, mean.r), strength);
+                        pixels[p].g = mean.g * Mathf.LerpUnclamped(1f, Gain(shading[p].g, mean.g), strength);
+                        pixels[p].b = mean.b * Mathf.LerpUnclamped(1f, Gain(shading[p].b, mean.b), strength);
                     }
                     map.SetPixels(pixels);
                 }
+            }
         }
 
         private static float Gain(float drawn, float mean) => mean > 1e-5f ? Mathf.Clamp(drawn / mean, 0f, MaxGain) : 1f;

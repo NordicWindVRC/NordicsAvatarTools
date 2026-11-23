@@ -465,33 +465,41 @@ doesn't search again.
 A lighting's floors (a minimum light, a minimum brightness, a floored light color) keep a
 surface visible without light. An output shader has none (Unity Standard), or one that
 stops below the atlas's (Toon Standard's minimum brightness at 0.1). Where it has an
-emission map, the rest goes there (`AtlasLightFloor`), after the lighting is tuned and
-before the level compensation:
+emission map, what is missing goes there (`AtlasLightFloor`), after the lighting is tuned
+and before the level compensation:
 
-- **The rest** is the floor of the lighting the atlas chose, before tuning, less the floor
-  the kept lighting has. The shader's own floor and the emission's together are the
-  atlas's, whatever the tuning made of the shader's.
-- **In the emission:** the base color as the atlas shows it × the rest is added to the
-  emission map of every source, since the atlas has one lighting. That is what a minimum
-  brightness is (Toon Standard's own floor works so), so the kept lighting carries it as
-  one, and the level compensation and the comparison after writing count it. It adds to
-  the world's light where a minimum light only raises it (listed).
+- **What is missing,** per texel, is what the source shows without light less what the
+  output shader's own floor shows, not below 0:
+  `source color × the atlas's floor − base color as shown × the shader's floor`. The
+  atlas's floor is the one of the lighting the atlas chose, before tuning; the shader's is
+  the kept lighting's, whatever the tuning made of it.
+- **What the source shows without light.** A minimum light shines on a source's color
+  after its matcaps, which often darken it (Poiyomi blends its matcaps into the base color
+  and lights the result). So the source color is its own base color, before the level
+  compensation (which makes up for the lighting under the world's light, not for a floor),
+  with the matcaps the output shows at their average (`AtlasMatcapForm`): those in a slot
+  too.
+- **What the shader's own floor shows** is its base color texture alone: Toon Standard
+  adds its minimum brightness before its matcap. So where a source's matcaps darken, the
+  shader's own floor can already be as bright as the source was, and nothing is added.
+- **In the emission:** the missing part is added to the emission map of every source,
+  since the atlas has one lighting. The kept lighting carries the floor as a minimum
+  brightness, so the level compensation and the comparison after writing count it. It
+  adds to the world's light where a minimum light only raises it (listed).
 - **Shaded by the lit bakes:** the shader lights its normal map and darkens by its
   occlusion map only what the world's light reaches, so the emission alone would show the
-  surface flat. The floor is shaded as the baked modes shade the base color (see [*Virtual
-  light rigs*](#virtual-light-rigs)): each source's normal-map shading and occlusion, where
-  the output keeps them as maps, with the *Baking* section's rig and strengths, which shows
-  while they apply. Where they are baked into the base color, the color as shown has them
-  already.
-- **Matcaps kept as their average** (an output without slots, a matcap that lost its slot,
-  one placed *Average in color*) shade the floor too. Under the world's light the output
-  shader shades the form itself, which is why the color has only their average; in the
-  floor nothing else does. The floor is multiplied by the matcaps drawn as the virtual view
-  sees them over their average (`AtlasMatcapForm`), both from the base color before its
-  matcaps, so the floor keeps its level and gets the form; the ratio stops at 4 and is
-  lerped from 1 by the *Matcaps* strength. As any baked matcap, it is seen from the
-  *Baking* section's matcap view and stays in place from every side. A matcap in a slot
-  isn't drawn: the live one follows the view.
+  surface flat. The source color is shaded as the baked modes shade the base color (see
+  [*Virtual light rigs*](#virtual-light-rigs)): each source's normal-map shading and
+  occlusion, where the atlas keeps them (as maps or baked), with the *Baking* section's rig
+  and strengths, which shows while they apply.
+- **Matcaps no slot shows** (kept as their average on an output without slots, after
+  losing their slot or placed *Average in color*; or baked) shade it too. Under the world's
+  light the output shader shades the form itself, which is why the color has only their
+  average; in the floor nothing else does. The source color is multiplied by the matcaps
+  drawn as the virtual view sees them over their average, so it keeps its level and gets
+  the form; the ratio stops at 4 and is lerped from 1 by the *Matcaps* strength. As any
+  baked matcap, it is seen from the *Baking* section's matcap view and stays in place from
+  every side. A matcap in a slot isn't drawn: the live one follows the view.
 - **The control:** where no source glows, the floor is what the atlas has an emission
   texture for, so the user can turn it off (*Minimum light in the emission*, with the
   lighting's settings, shown while the output shader can't keep the whole floor). Off, the
@@ -1748,15 +1756,18 @@ The phases and milestones are in [ATLAS_OUTPUT_PLAN.md](ATLAS_OUTPUT_PLAN.md).
   an output of the source's own shader keeps the mapped lighting; a value that looks closer
   replaces the mapped one; a generated ramp's edge moves to where the chosen lighting puts
   it; and tuning never leaves the lighting farther from the chosen one.
-- **Minimum light:** on Unity Standard a source's minimum light adds the base color as shown
-  × the floor to the emission, and the kept lighting carries it as a minimum brightness;
+- **Minimum light:** on Unity Standard a source's minimum light adds its own color × the
+  floor to the emission, without the base color's level compensation, and the kept
+  lighting carries it as a minimum brightness;
   there is none without a floor or with the emission turned off; turned off by its control,
   the floor is still known to be missing, so the control stays; on Toon Standard the part
   its own floor can't hold is added, and the two together are the atlas's floor; the floor
   is darker where a source's occlusion map is and names its lit bakes, flat with their
-  strengths at 0, and not occluded twice where the occlusion is baked into the color; a
-  matcap kept as its average darkens the floor where it is dark from the front while the
-  color keeps the average, and not with the matcaps' strength at 0.
+  strengths at 0, occluded the same whether the occlusion is a map or baked into the
+  color, and not with the occlusion off; a matcap kept as its average darkens the floor
+  where it is dark from the front while the color keeps the average, and not with the
+  matcaps' strength at 0; on Toon Standard a matcap in the slot isn't drawn, and the
+  emission is never more than the source's color with that matcap at the floor.
 - **Level compensation:** a source the atlas lights darker is scaled by what its own lighting
   had over it, and none of its texels goes above 1; a raise that doesn't fit is applied in
   full below the knee and less above it, in order and without a step, so a white part of a

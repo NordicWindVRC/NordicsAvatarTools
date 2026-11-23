@@ -507,10 +507,11 @@ namespace NordicWind.AdvancedAtlaser.Tests
                 var emission = plan.Maps.Single(m => m.Map == AtlasVirtualMap.Emission);
                 var target = plan.Output.Layers.OfType<AtlasSurfaceLayer>().Single(l => l.Source.Map == emission.Reference)
                     .Targets.Single(t => t.Target == AtlasSurfaceTarget.Emission);
+                // The color with the matcap's average, before the level compensation.
                 using (var glow = emission.Evaluate(0, material, Size, Size))
-                using (var shown = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Shown(0, material, Size, Size))
+                using (var averaged = plan.Maps.Single(m => m.Map == AtlasVirtualMap.BaseColor).Before(AtlasMapStage.Level, 0, material, Size, Size))
                 {
-                    flat = shown.GetPixel(Size / 2, Size / 2).r * plan.LightFloor;
+                    flat = averaged.GetPixel(Size / 2, Size / 2).r * plan.LightFloor;
                     return glow.GetPixel(Size / 2, Size / 2).r * target.Opacity;
                 }
             }
@@ -529,6 +530,44 @@ namespace NordicWind.AdvancedAtlaser.Tests
             plan = AtlasOutputPipeline.Resolve(job, shader);
             CollectionAssert.DoesNotContain(plan.LightFloorBakes, AtlasLitBake.Matcaps);
             Assert.AreEqual(Glow(plan, out flat), flat, 2e-3f);
+        }
+
+        // A minimum light shines on a source's color after its matcaps. Toon Standard's own
+        // floor is added before its matcap, and its slot's matcap is live, so the emission makes
+        // up only what is missing: the source's color with the matcap at its average × the
+        // atlas's floor, less what the shader's own floor shows. A matcap that darkens leaves
+        // little or nothing to add.
+        [Test]
+        public void TheFloorInTheEmissionCountsTheMatcapInASlot()
+        {
+            var toon = AtlasShaderRegistry.Output("mobiletoon");
+            if (toon.FindShader() == null) Assert.Ignore("VRChat Mobile Toon Standard is not installed.");
+            AtlasUnifiedMaterial Lit(float matcap)
+            {
+                var material = new AtlasUnifiedMaterial();
+                material.Surface.BaseColor.Color = new Color(0.5f, 0.5f, 0.5f, 1f);
+                material.Lighting.MinimumLight = 0.2f;
+                if (matcap < 1f) material.Layers.Add(Matcap(new Color(matcap, matcap, matcap, 1f), AtlasBlend.Multiply));
+                return material;
+            }
+            float Glow(AtlasUnifiedMaterial material, out AtlasOutputPlan plan)
+            {
+                var job = new AtlasGeneratorJob();
+                job.Sources.Add(new AtlasGeneratorSource { Material = material, UVRegion = new Rect(0f, 0f, 1f, 1f), Surface = () => new[] { Square() } });
+                plan = AtlasOutputPipeline.Resolve(job, toon);
+                var emission = plan.Maps.Single(m => m.Map == AtlasVirtualMap.Emission);
+                var target = plan.Output.Layers.OfType<AtlasSurfaceLayer>().Single(l => l.Source.Map == emission.Reference)
+                    .Targets.Single(t => t.Target == AtlasSurfaceTarget.Emission);
+                using (var glow = emission.Evaluate(0, material, Size, Size))
+                    return glow.GetPixel(Size / 2, Size / 2).r * target.Opacity;
+            }
+            float plain = Glow(Lit(1f), out _);
+            float dark = Glow(Lit(0.25f), out var with);
+            Assert.AreEqual(1, with.MatcapSlotsUsed, "the matcap is live in the slot");
+            CollectionAssert.DoesNotContain(with.LightFloorBakes, AtlasLitBake.Matcaps, "a slot's matcap isn't drawn");
+            Assert.LessOrEqual(dark, plain + 1e-4f, "the matcap darkens what the source shows without light");
+            // Never more than the source's color with its matcap, at the floor.
+            Assert.LessOrEqual(dark, 0.5f * 0.25f * 0.2f + 2e-3f);
         }
 
         [Test]
