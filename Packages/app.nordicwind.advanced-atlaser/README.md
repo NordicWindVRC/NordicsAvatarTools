@@ -63,18 +63,18 @@ Logging*.
 | Unity Standard, Standard (Specular setup) | Every setting |
 | Any other shader | Common property names: base color, alpha, normal, metallic or specular, smoothness, occlusion, emission, culling and blending |
 
-**Output:** the shaders an atlas can be made for. They must be installed.
+**Output:** the shaders an atlas can be made for. The one you pick must be installed.
 
 | Shader | Notes |
 |---|---|
-| Poiyomi Toon 10 | Found under its usual name, or under *Old Versions* when Poiyomi Pro or 11 is installed |
-| Poiyomi Toon 11 | As Toon 10, and it keeps global mask contacts live and a second backlight |
-| Poiyomi Pro 10 | As Toon 10, and it keeps GT7 tone mapping, screen-space ambient occlusion and contact shadows |
-| Poiyomi Pro 11 | As Toon 11 and Pro 10, and it keeps the neutral surface emission |
-| VRChat Mobile Toon Standard | Opaque only; what it lacks is approximated, baked or left out |
-| VRChat Mobile Diffuse | One color texture, opaque only: normal maps and occlusion are baked into it, matcaps that light the surface as their average, and emission when you choose so; rims and highlights are left out |
-| Unity Standard | Its own maps and surface modes, with its own lighting; matcaps that light the surface are kept as their average in the color, vertex colors are baked, rims are left out. Everything that isn't metal reflects 4% at full strength |
-| Unity Standard (Specular setup) | As Unity Standard, and its specular color keeps each material's reflectance and highlight and reflection strengths, including none |
+| Poiyomi Toon 10 | Keeps nearly everything your materials do. The closest match for Poiyomi materials |
+| Poiyomi Toon 11 | Keeps nearly everything your materials do, for projects on Poiyomi 11 |
+| Poiyomi Pro 10 | For Poiyomi Pro 10. Keeps nearly everything, including Pro's tone mapping and depth-based shadows |
+| Poiyomi Pro 11 | For Poiyomi Pro 11. Keeps nearly everything, including Pro's tone mapping and depth-based shadows |
+| VRChat Mobile Toon Standard | For Quest and mobile avatars. Toon shading with one matcap, one rim light and emission. Solid materials only: transparency is not kept |
+| VRChat Mobile Diffuse | The lightest choice for Quest: one color texture with simple lighting. No shine, glow or transparency |
+| Unity Standard | Realistic lighting for PC. Keeps color, transparency, normal maps, shine and emission. Toon effects such as matcaps and rim lights are averaged into the color or left out |
+| Unity Standard (Specular setup) | Realistic lighting for PC, with shine set per material: materials without shine stay matte. The better of the two Standard choices for materials that come from a toon shader |
 
 ## Limitations
 

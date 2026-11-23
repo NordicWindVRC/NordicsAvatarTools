@@ -40,10 +40,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static AtlasConflictSwitch Switch => new AtlasConflictSwitch
         {
             Id = SwitchId, Label = "Minimum light in the emission", Default = true,
-            Tooltip = "The materials have a minimum light, which keeps them visible in the dark, and the output shader can't keep all of it. " +
-                      "On: the rest is added to the emission, as the base color at that brightness, with normal-map shading, occlusion " +
-                      "and the shading of matcaps kept as their average baked in by the Baking section's settings. Where nothing else glows, this is what the atlas has an emission texture " +
-                      "for. Off: the atlas is darker without light than the materials were."
+            Tooltip = "Your materials stay visible in dark worlds, and the output shader can't do all of that by itself. On: the missing " +
+                      "part is added as a faint glow, which can need an emission texture. Off: the avatar is darker in dark worlds than before."
         };
 
         /// <summary>Whether the user left it on.</summary>

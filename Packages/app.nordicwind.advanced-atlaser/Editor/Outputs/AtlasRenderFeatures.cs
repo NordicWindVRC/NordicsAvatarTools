@@ -26,8 +26,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static readonly AtlasConflictSwitch AlphaToCoverage = new AtlasConflictSwitch
         {
             Id = "alpha-to-coverage", Label = "Alpha to coverage", Default = true,
-            Tooltip = "Some cutout materials use alpha to coverage (smoother cutout edges with MSAA) and some don't. " +
-                      "The atlas material has one setting for all of them."
+            Tooltip = "Smoother cutout edges with anti-aliasing. Some of your cutout materials use it and some don't, and the atlas " +
+                      "material has one setting for all of them."
         };
         // The output's shared cutoff: each cutout source's alpha is remapped so its own cutoff
         // lands here (AtlasAlphaFeature).

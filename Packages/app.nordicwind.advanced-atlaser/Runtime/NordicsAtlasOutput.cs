@@ -10,13 +10,11 @@ namespace NordicWind.AdvancedAtlaser
     {
         public Material material;
         public Rect uvRegion = new Rect(0, 0, 1, 1);
-        [Tooltip("Bake a normal map that restores the original mesh's shading on the reduced mesh. " +
-                 "Turn off to skip it for this material, for example when its mesh isn't reduced.")]
+        [Tooltip("Bakes a normal map that brings back the shading lost when this material's mesh is simplified " +
+                 "during the build. Turn it off if the mesh isn't simplified.")]
         public bool normalCorrection = true;
-        [Tooltip("Optional normal map baked for this mesh, for example for a lower-detail (Quest) version " +
-                 "of a PC mesh. It's applied at strength 1, beneath the build's normal correction and the " +
-                 "material's own normal maps. It doesn't replace the build's correction, which only sees " +
-                 "changes made during the build.")]
+        [Tooltip("Optional. A normal map you baked for this mesh, for example for a lower-detail Quest version " +
+                 "of a PC mesh. It is combined with the material's own normal maps.")]
         public Texture2D prebakedNormalMap;
     }
 

@@ -28,9 +28,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public static AtlasConflictSwitch Switch => new AtlasConflictSwitch
         {
             Id = SwitchId, Label = "Keep each material's brightness", Default = true,
-            Tooltip = "The atlas material has one lighting. On: a material that this lighting shows brighter or darker than its own did " +
-                      "gets its base color scaled to make up for it. No texel is raised above 1: where a raise doesn't fit, the brightest " +
-                      "texels are raised less. Viewers who block the avatar's shaders see the scaled colors. Off: the base colors stay as they are."
+            Tooltip = "The atlas material has one lighting setup for all of its materials. On: a material that would look brighter or " +
+                      "darker with it gets its color adjusted, so it looks as bright as before. Off: the colors stay as they are."
         };
 
         /// <summary>Whether the user left level compensation on.</summary>

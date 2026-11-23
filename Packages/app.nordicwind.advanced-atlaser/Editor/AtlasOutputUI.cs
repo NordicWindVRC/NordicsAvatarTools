@@ -73,15 +73,13 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     using (new IndentReset())
                     {
                         EditorGUI.LabelField(name, new GUIContent("Total (estimate)",
-                            "GPU memory of the compressed textures with their full mip chain, as VRChat's performance rank counts it. " +
-                            "The mipmaps stream, so fewer levels may be loaded at a distance, but the rank counts the full texture. " +
-                            "Crunch only changes the download size."), EditorStyles.boldLabel);
+                            "Texture memory, as VRChat's performance rank counts it."), EditorStyles.boldLabel);
                         EditorGUI.LabelField(pc, AtlasTextureMemory.Label(overview.PcBytes), RightBold);
                         EditorGUI.LabelField(android, AtlasTextureMemory.Label(overview.AndroidBytes), RightBold);
                     }
                 }
                 if (Fold("formats", new GUIContent("GPU Compression Formats",
-                        "The block compression each kind of texture is stored with, per platform. The memory above follows them."), false))
+                        "How each kind of texture is compressed on PC and on Android. This decides the memory above."), false))
                     using (new EditorGUI.IndentLevelScope())
                     {
                         Formats(config.FindPropertyRelative("pcFormats"), "PC");
@@ -126,7 +124,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 return;
             }
             string holds = string.Join(", ", use.Maps.Select(m => ObjectNames.NicifyVariableName(m.ToString()).ToLowerInvariant()));
-            var label = new GUIContent(texture.Label, "Holds: " + holds + (use.Required ? ". Required by the chosen modes." : ". Optional."));
+            var label = new GUIContent(texture.Label, "Holds: " + holds + (use.Required ? ". Needed by the features in use." : ". Optional."));
             Columns(out var name, out var size, out var pc, out var android);
             using (new IndentReset())
             {
@@ -190,9 +188,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
         private static void OtherTextureRow(AtlasTextureUse use)
         {
             string tooltip = use.Source != null
-                ? "A material's own texture, which the atlas material uses as it is. Its memory is as imported; on Android, " +
-                  "its Android override, or otherwise the Android format for its kind."
-                : "Made by the build at this size, compressed with the format for its kind.";
+                ? "One of your materials' own textures, used as it is."
+                : "Made by the build, at a fixed size.";
             Columns(out var name, out var size, out var pc, out var android);
             using (new IndentReset())
             {
@@ -257,7 +254,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                     Description("Add source materials to see their features.");
                     return;
                 }
-                Description("How the atlas material reproduces what the source materials do.");
+                Description("How each feature of your materials is kept in the atlas material.");
                 var states = overview.Features.Where(s => s.Present.Count > 0).ToList();
                 bool headings = states.Select(s => s.Feature.Section).Distinct().Count() > 1;
                 foreach (AtlasFeatureSection section in Enum.GetValues(typeof(AtlasFeatureSection)))
@@ -298,49 +295,48 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (!Fold("baking", "Baking", false, true)) return;
             using (new EditorGUI.IndentLevelScope())
             {
-                Description("The virtual lights that baked shading is made with. The avatar faces them from the front.");
+                Description("The lights used for shading that is baked into the textures. They light the avatar from the front.");
                 var baking = config.FindPropertyRelative("baking");
                 var rig = baking.FindPropertyRelative("rig");
                 EditorGUILayout.PropertyField(rig, new GUIContent("Light Rig",
-                    "Classic: the key light from one side and the fill from the other. Symmetric: every light centered, " +
-                    "so both halves of the avatar get the same light."));
+                    "Classic: the main light from one side and a softer light from the other. Symmetric: all lights centered, " +
+                    "so both halves of the avatar look the same."));
                 if (rig.enumValueIndex == (int)AtlasLightRigKind.Classic)
                 {
                     var overlapping = materials.Where(m => Overlaps(m, renderers)).Select(m => m.name).ToList();
                     if (overlapping.Count > 0)
-                        Description("Overlapping UVs, baked with the symmetric rig so mirrored halves match: " + string.Join(", ", overlapping) + ".");
+                        Description("Always baked with the symmetric rig, because both halves share one texture area: " + string.Join(", ", overlapping) + ".");
                 }
                 EditorGUILayout.PropertyField(baking.FindPropertyRelative("strength"), new GUIContent("Strength",
-                    "Scales every baked shading."));
+                    "Overall strength of all baked shading."));
                 EditorGUILayout.PropertyField(baking.FindPropertyRelative("colorInfluence"), new GUIContent("Light Color",
-                    "How much of the lights' color is baked. A baked color stays in every world, so a little is usually enough."));
+                    "How much of the lights' color is baked in. Keep it low: a baked color shows in every world."));
                 foreach (var bake in bakes)
                     switch (bake)
                     {
                         case AtlasLitBake.Matcaps:
                             EditorGUILayout.PropertyField(baking.FindPropertyRelative("matcaps"), new GUIContent("Matcaps",
-                                "How strongly matcaps show where they are baked: into the color, or as shading in the minimum light's emission."));
+                                "Strength of baked matcaps."));
                             EditorGUILayout.PropertyField(baking.FindPropertyRelative("matcapViewSide"), new GUIContent("Matcap View Side",
-                                "Where baked matcaps are seen from, in degrees to the side: positive is to your left as you face the avatar. " +
-                                "Materials whose UVs overlap are seen from the middle, so mirrored halves match."));
+                                "The angle baked matcaps are seen from, in degrees to the side. Positive is to your left when you face the avatar."));
                             EditorGUILayout.PropertyField(baking.FindPropertyRelative("matcapViewHeight"), new GUIContent("Matcap View Height",
-                                "Where baked matcaps are seen from, in degrees above straight in front."));
+                                "The angle baked matcaps are seen from, in degrees above eye level."));
                             break;
                         case AtlasLitBake.NormalShading:
                             EditorGUILayout.PropertyField(baking.FindPropertyRelative("normalShading"), new GUIContent("Normal-Map Shading",
-                                "How strongly the shading of normal maps shows where it is baked: into the color, or into the minimum light's emission."));
+                                "Strength of the baked shading from normal maps."));
                             break;
                         case AtlasLitBake.Occlusion:
                             EditorGUILayout.PropertyField(baking.FindPropertyRelative("occlusion"), new GUIContent("Occlusion",
-                                "How strongly ambient occlusion darkens where it is baked: the color, or the minimum light's emission."));
+                                "Strength of baked ambient occlusion."));
                             break;
                     }
                 if (Fold("baking.lights", "Lights", false))
                     using (new EditorGUI.IndentLevelScope())
                     {
-                        BakeLight(baking.FindPropertyRelative("key"), "Key Light", "The main light: the form and the main highlight.");
-                        BakeLight(baking.FindPropertyRelative("fill"), "Fill Light", "Lifts the shadow side without a second highlight.");
-                        BakeLight(baking.FindPropertyRelative("back"), "Back Light", "A crisp edge on the silhouette and highlights on hair tops.");
+                        BakeLight(baking.FindPropertyRelative("key"), "Key Light", "The main light. It gives the avatar its form.");
+                        BakeLight(baking.FindPropertyRelative("fill"), "Fill Light", "Brightens the shadow side.");
+                        BakeLight(baking.FindPropertyRelative("back"), "Back Light", "Lights the outline from behind.");
                     }
             }
         }
@@ -362,9 +358,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             {
                 EditorGUILayout.PropertyField(light.FindPropertyRelative("intensity"), new GUIContent("Intensity"));
                 EditorGUILayout.PropertyField(light.FindPropertyRelative("temperature"), new GUIContent("Temperature (K)",
-                    "The light's color temperature: lower is warmer, higher is cooler."));
+                    "The light's color: lower is warmer, higher is cooler."));
                 EditorGUILayout.PropertyField(light.FindPropertyRelative("softness"), new GUIContent("Softness",
-                    "Softens the edge between the lit and the shadow side, and widens highlights."));
+                    "Softens the edge between light and shadow."));
             }
         }
 
@@ -399,8 +395,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             if (several && state.Active.Count < state.Present.Count)
                 name += $" ({state.Active.Count} of {state.Present.Count} materials)";
             var label = new GUIContent(name, several
-                ? "Unfold to turn this feature off for single materials."
-                : "The mode decides how the atlas material makes this feature.");
+                ? "How this feature is kept in the atlas material. Unfold to turn it off for single materials."
+                : "How this feature is kept in the atlas material.");
             var row = EditorGUILayout.GetControlRect();
             var labelRect = new Rect(row.x, row.y, EditorGUIUtility.labelWidth, row.height);
             var fieldRect = new Rect(row.x + EditorGUIUtility.labelWidth, row.y, row.width - EditorGUIUtility.labelWidth, row.height);
@@ -454,8 +450,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             // A chosen source that is turned off or gone shows as automatic, as the build uses it.
             int index = choices.IndexOf(reference.objectReferenceValue as Material) + 1;
             var label = new GUIContent(feature.SharedValueName + " from",
-                "The materials' " + feature.SharedValueName.ToLowerInvariant() + " differs, and the atlas material has one. " +
-                (feature is IAtlasAutomaticReference rule ? rule.AutomaticRule : "Automatic takes it from the material with the largest area in the atlas."));
+                "Your materials have different settings for this, and the atlas material can have only one. Pick the material to take it from. " +
+                (feature is IAtlasAutomaticReference rule ? rule.AutomaticRule : "Automatic uses the material that covers the most of the atlas."));
             int next = PopupRow(label, index, options.ToArray());
             if (next != index) reference.objectReferenceValue = next == 0 ? null : choices[next - 1];
         }
@@ -470,8 +466,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
             options.AddRange(state.LiveSetups.Select(i => "Source " + (i + 1) + " (" + materials[i].name + ")"));
             int index = state.LiveSetups.IndexOf(chosen) + 1;
             var label = new GUIContent("Live from",
-                "The materials' global masks that change live (back faces, mirrors, cameras, distance, blacklights) differ, and the atlas " +
-                "keeps one setup live. Automatic keeps the one on the largest area; the others are baked as normally seen.");
+                "Your materials have different masks that react live (to mirrors, cameras, distance and similar), and the atlas " +
+                "material can keep only one set working. Automatic keeps the one that covers the most of the atlas; the others " +
+                "are fixed in their normal state.");
             int next = PopupRow(label, index, options.ToArray());
             if (next == index) return;
             if (stored == null) stored = AddValue(setting, AtlasLiveMasks.LiveFromId);
@@ -557,17 +554,16 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 else index = Math.Max(0, placements.IndexOf(mode));
             }
             string what = instance.Label + ". ";
-            string averaged = canAverage ? " Average in color keeps its average effect in the base color without a slot; what changes with the view is lost." : "";
+            string averaged = canAverage ? " Average in color keeps only its overall tint and brightness." : "";
             var label = new GUIContent(instance.Label, (bakedMode
-                ? what + "Automatic bakes it into the color as seen from the front, unless it's a highlight that brightens (shine, glints), " +
-                  "which would stay in place from every view; the build log says which."
+                ? what + "Automatic draws it into the textures as seen from the front. Highlights are left out, " +
+                  "because a drawn highlight would not move with the view."
                 : averagedMode
-                ? what + "Automatic keeps the average effect of a matcap that lights the surface, and leaves a rim or a highlight out; " +
-                  "the build log says which. Baked into color draws it into the textures as seen from the front, where it stays in place " +
-                  "from every view."
-                : what + "Automatic combines it with others on the same parts, or gives it a slot while one is free, " +
-                  "and otherwise combines it with the most similar one; the build log says which." +
-                  (canBake ? " Baked into color draws it into the textures as seen from the front, instead of sharing a slot." : "")) + averaged);
+                ? what + "Automatic keeps the overall tint and brightness of a matcap that lights the surface, and leaves rims and " +
+                  "highlights out. Baked into color draws it into the textures as seen from the front; it then stays in place " +
+                  "from every angle."
+                : what + "Automatic gives it a slot of its own while one is free, and otherwise combines it with the most similar one." +
+                  (canBake ? " Baked into color draws it into the textures as seen from the front, without using a slot." : "")) + averaged);
             int next = instance.HasPreview ? PreviewRow(label, instance, materials, index, options.ToArray()) : PopupRow(label, index, options.ToArray());
             if (next == index) return;
             if (stored == null) stored = AddValue(setting, AtlasInstancePlacements.Id(instance.Key));

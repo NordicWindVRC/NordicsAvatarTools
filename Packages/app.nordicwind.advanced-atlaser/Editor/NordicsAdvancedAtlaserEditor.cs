@@ -64,20 +64,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var hidden = serializedObject.FindProperty("excludeHiddenGeometry");
             if (!AtlasOutputUI.Fold("atlaser.geometry", "Geometry Baking", true, true)) return;
             EditorGUI.indentLevel++;
-            EditorGUILayout.PropertyField(enabled, new GUIContent("Enable Geometry Baking"));
-            EditorGUILayout.HelpBox("Geometry baking reduces visual artifacts on decimated meshes by baking a normal map " +
-                "that compensates for the removed detail. Its resolution follows each material's area in the atlas.", MessageType.Info);
+            EditorGUILayout.PropertyField(enabled, new GUIContent("Enable Geometry Baking",
+                "Bakes a normal map that brings back the shading lost when a mesh is simplified during the build."));
             if (enabled.boolValue)
             {
                 EditorGUI.indentLevel++;
                 EditorGUILayout.PropertyField(hidden, new GUIContent("Exclude Hidden Geometry (Depth Test)",
-                    "Where several surfaces share the same UVs, surfaces lying behind another one (for example a body part " +
-                    "hidden inside the mesh) are left out of the bake, so it follows what the avatar shows. Mirrored halves " +
-                    "aren't affected. Your avatar's mesh isn't changed."));
+                    "Leaves out surfaces hidden behind another one in the same texture area, such as body parts inside " +
+                    "the mesh, so the bake follows what is visible."));
                 EditorGUILayout.LabelField("Excluded Blend Shapes", EditorStyles.boldLabel);
-                EditorGUILayout.LabelField("Mesh parts moved by these blend shapes are left out of the bake, so details " +
-                    "from parts you remove on purpose (for example clothing hidden by a blend shape) aren't baked into " +
-                    "the normal map. Your avatar's mesh isn't changed.", EditorStyles.wordWrappedMiniLabel);
+                EditorGUILayout.LabelField("Parts moved by these blend shapes are left out of the bake. Use it for parts you " +
+                    "hide on purpose, such as clothing shrunk away by a blend shape.", EditorStyles.wordWrappedMiniLabel);
                 var discoveredRenderers = AtlasMaterialDiscovery.Cached(((NordicsAdvancedAtlaser)target).gameObject).Renderers;
                 {
                     for (int i = 0; i < excluded.arraySize; ++i)
@@ -132,9 +129,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
                                 shapeProp.stringValue = shapeChoice == 0 ? "" : shapes[shapeChoice];
                             if (!string.IsNullOrEmpty(shapeProp.stringValue) && selectedShape == 0)
                                 EditorGUILayout.HelpBox("The selected blend shape is missing from this renderer.", MessageType.Warning);
-                            EditorGUILayout.PropertyField(thresholdProp, new GUIContent("Threshold", "Minimum vertex position movement (mesh-local units) for exclusion."));
+                            EditorGUILayout.PropertyField(thresholdProp, new GUIContent("Threshold", "How far a vertex must move to count as moved by the blend shape."));
                             if (thresholdProp.floatValue < 0f) thresholdProp.floatValue = 0f;
-                            EditorGUILayout.PropertyField(modeProp, new GUIContent("Selection Mode", "Any Vertex excludes a triangle when one vertex qualifies; All Vertices requires all three."));
+                            EditorGUILayout.PropertyField(modeProp, new GUIContent("Selection Mode", "Any Vertex: a triangle is left out when one of its corners moves. All Vertices: only when all three move."));
                         }
                     }
                     if (GUILayout.Button("Add Blend Shape"))

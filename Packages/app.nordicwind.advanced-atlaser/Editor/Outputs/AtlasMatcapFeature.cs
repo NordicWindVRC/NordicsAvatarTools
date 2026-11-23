@@ -115,12 +115,10 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             Id = ShiftOptionId, Label = "Base color shift", Default = 0f, Max = 2f,
             Choices = new[] { "Automatic", "Keep the base color", "Full" },
-            Tooltip = "A matcap slot that can only brighten or only darken shows a matcap that does both by shifting the base color: " +
-                      "raised so the slot darkens it back, or lowered so the slot adds to it. Viewers who block the avatar's shaders " +
-                      "see the base color without the matcap. Automatic shifts no further than the material's average look with " +
-                      "the matcap, so they see it as bright as it is on average; the matcap then shows weaker. Keep the base color " +
-                      "shows only the side of the matcap the slot can. Full shifts as far as the matcap needs: exact with the " +
-                      "shader, too bright or too dark without it."
+            Tooltip = "Some matcaps both brighten and darken, and the output shader's matcap can only do one of the two. The base color " +
+                      "is adjusted to make up for it. Automatic: a balanced adjustment that also looks right to viewers who have " +
+                      "your shaders blocked. Keep the base color: no adjustment, so part of the matcap is lost. Full: exact with " +
+                      "the shader, but too bright or too dark for viewers who block it."
         };
 
         private static AtlasBaseColorShift Shift(AtlasGeneratorJob job)
@@ -138,11 +136,9 @@ namespace NordicWind.AdvancedAtlaser.Editor
         {
             Id = ViewOptionId, Label = "World-fixed matcaps", Default = 0f, Max = 1f,
             Choices = new[] { "Follow the view", "As seen from the front" },
-            Tooltip = "A matcap looked up in the world rather than by the view looks different from each side; the output's " +
-                      "matcap follows the view. Follow the view looks its texture up by the view, like any matcap: the middle " +
-                      "of the texture where the surface faces the viewer, its edge at the outline; a sideways shift of the " +
-                      "texture is left out, since it points the other way from behind. As seen from the front " +
-                      "keeps its exact look from straight in front, and shows that pattern from the other sides too."
+            Tooltip = "Some of your matcaps are fixed to the world instead of following the view, which the output shader can't do. " +
+                      "Follow the view: they work like any other matcap. As seen from the front: they look exact from the front, " +
+                      "and show the same pattern from every other side."
         };
 
         private static AtlasMatcapView View(AtlasGeneratorJob job)

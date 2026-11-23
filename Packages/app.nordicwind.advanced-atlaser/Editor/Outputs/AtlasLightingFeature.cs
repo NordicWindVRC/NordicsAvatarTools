@@ -27,8 +27,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public IReadOnlyList<AtlasFeatureMode> Modes => ModeList;
         public string SharedValueName => "Lighting";
         public string AutomaticRule =>
-            "Automatic takes the lighting that changes the materials' look least: each material's colors lit by it, compared with " +
-            "their own lighting and weighted by area. Dark materials show lighting differences less.";
+            "Automatic uses the lighting that changes the look of your materials the least.";
 
         public bool IsPresent(AtlasUnifiedMaterial source) => source != null;
 

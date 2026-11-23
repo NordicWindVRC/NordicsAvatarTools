@@ -44,7 +44,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
             var config = serializedObject.FindProperty("configuration");
             var owner = output.gameObject;
             var main = owner.GetComponent<NordicsAdvancedAtlaser>();
-            if (main == null) EditorGUILayout.HelpBox("Add Nordic's Advanced Atlaser to this GameObject to enable source discovery and coordination.", MessageType.Warning);
+            if (main == null) EditorGUILayout.HelpBox("Add Nordic's Advanced Atlaser to this object. It finds the materials this output can use.", MessageType.Warning);
             EditorGUILayout.PropertyField(config.FindPropertyRelative("outputName"));
             DrawShaderSelection(config.FindPropertyRelative("shaderId"));
             // Padding separates source regions, so it only applies with two or more sources.
@@ -182,8 +182,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             using (new EditorGUI.DisabledScope(!HasAssignedMaterials(sources) || AtlasShaderRegistry.Output(config.FindPropertyRelative("shaderId").stringValue) == null))
             {
                 if (GUILayout.Button(new GUIContent("Auto Setup",
-                        "Lays out the assigned sources' UV regions by their base color textures, sets the main texture size, " +
-                        "and sets every feature to its default mode. Sources aren't added or removed.")))
+                        "Arranges the source materials in the atlas, picks the texture size and resets every feature to its " +
+                        "default. It doesn't add or remove materials.")))
                 {
                     // Commit pending source assignment, shader selection and UV edits first.
                     serializedObject.ApplyModifiedProperties();
@@ -213,7 +213,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
                 AtlasUVPreview.Draw(output.configuration.sources,
                     dimensions != null ? dimensions.width : 1,
                     dimensions != null ? dimensions.height : 1);
-                EditorGUILayout.LabelField("Preview uses main textures; no shader-specific baking or padding is applied.", EditorStyles.wordWrappedMiniLabel);
+                EditorGUILayout.LabelField("Shows where each material's main texture goes. Baking and padding aren't shown.", EditorStyles.wordWrappedMiniLabel);
             }
             if (main != null)
             {

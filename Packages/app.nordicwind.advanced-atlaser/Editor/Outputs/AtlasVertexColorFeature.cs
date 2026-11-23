@@ -67,8 +67,8 @@ namespace NordicWind.AdvancedAtlaser.Editor
             return new AtlasConflictSwitch
             {
                 Id = "srgb", Label = "Vertex colors as sRGB", Default = srgb * 2 >= colored.Count,
-                Tooltip = "Some materials read their vertex colors as sRGB and some as linear values, and the atlas material reads them one way. " +
-                          "The others' vertex colors are converted on the mesh, which matches at the vertices and can differ slightly between them."
+                Tooltip = "Your materials read vertex colors in two different ways, and the atlas material can use only one. The others " +
+                          "are converted on the mesh, which can look slightly different between vertices."
             };
         }
 

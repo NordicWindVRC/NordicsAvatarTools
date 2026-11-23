@@ -41,8 +41,7 @@ namespace NordicWind.AdvancedAtlaser.Editor
         public IReadOnlyList<AtlasFeatureMode> Modes => ModeList;
         public string SharedValueName => "Reflectance";
         public string AutomaticRule =>
-            "Automatic fits the reflectance that changes the materials' highlights and reflections least, weighted by area. " +
-            "Where the output shader has no strengths for them, they're dimmed through it.";
+            "Automatic uses the value that changes the highlights and reflections of your materials the least.";
 
         public bool SharedValuesDiffer(IReadOnlyList<AtlasUnifiedMaterial> sources, AtlasOutputCapabilities capabilities)
         {

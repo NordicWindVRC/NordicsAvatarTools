@@ -205,7 +205,8 @@ write and the surface mode from the blend factors.
 
 Shaders common on VRChat avatars that don't have a parser yet, in suggested order. Until one
 does, its materials go to the fallback parser. A parser starts with an inventory of the
-shader's inspector, as the existing `UNIFIED_MATERIAL_*.md` documents do.
+shader's inspector, as the existing `UNIFIED_MATERIAL_*.md` documents do. The phases and the
+steps for each parser are in the [implementation plan](ATLAS_OUTPUT_PLAN.md) (M7).
 
 **VRChat Mobile (Quest avatars).** Android and Quest avatars may only use the shaders that ship
 with the current VRChat SDK, under `VRChat/Mobile/` (see VRChat's

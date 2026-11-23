@@ -38,17 +38,17 @@ namespace NordicWind.AdvancedAtlaser.Editor
             new AtlasFeatureOption
             {
                 Id = EmissionOption, Label = "Glow", Default = 1f,
-                Tooltip = "How strongly the points glow in the emission map, as additive glitter does (0: not at all)."
+                Tooltip = "How strongly the glitter points glow."
             },
             new AtlasFeatureOption
             {
                 Id = GlossOption, Label = "Shine", Default = 1f,
-                Tooltip = "How metallic and glossy the points are, so they catch the light and reflections (0: not at all)."
+                Tooltip = "How shiny the glitter points are."
             },
             new AtlasFeatureOption
             {
                 Id = ColorOption, Label = "Color", Default = 0f,
-                Tooltip = "How much the points take the glitter's color in the base color (0: not at all)."
+                Tooltip = "How much of the glitter's color the points get."
             }
         };
 
